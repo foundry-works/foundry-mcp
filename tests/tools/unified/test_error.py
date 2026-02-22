@@ -4,16 +4,7 @@ Tests that _dispatch_error_action catches exceptions and returns error responses
 instead of crashing the MCP server.
 """
 
-from unittest.mock import MagicMock, patch
-
-import pytest
-
-
-@pytest.fixture
-def mock_config():
-    """Create a mock ServerConfig."""
-    config = MagicMock()
-    return config
+from unittest.mock import patch
 
 
 class TestErrorDispatchExceptionHandling:
@@ -23,9 +14,8 @@ class TestErrorDispatchExceptionHandling:
         """_dispatch_error_action should catch exceptions and return error response."""
         from foundry_mcp.tools.unified.error import _dispatch_error_action
 
-        with patch(
-            "foundry_mcp.tools.unified.error._ERROR_ROUTER"
-        ) as mock_router:
+        with patch("foundry_mcp.tools.unified.error._ERROR_ROUTER") as mock_router:
+            mock_router.allowed_actions.return_value = ["list"]
             mock_router.dispatch.side_effect = RuntimeError("Database connection failed")
 
             result = _dispatch_error_action(
@@ -45,9 +35,8 @@ class TestErrorDispatchExceptionHandling:
         """_dispatch_error_action should handle exceptions with empty messages."""
         from foundry_mcp.tools.unified.error import _dispatch_error_action
 
-        with patch(
-            "foundry_mcp.tools.unified.error._ERROR_ROUTER"
-        ) as mock_router:
+        with patch("foundry_mcp.tools.unified.error._ERROR_ROUTER") as mock_router:
+            mock_router.allowed_actions.return_value = ["list"]
             mock_router.dispatch.side_effect = RuntimeError()
 
             result = _dispatch_error_action(
@@ -67,9 +56,8 @@ class TestErrorDispatchExceptionHandling:
         from foundry_mcp.tools.unified.error import _dispatch_error_action
 
         with caplog.at_level(logging.ERROR):
-            with patch(
-                "foundry_mcp.tools.unified.error._ERROR_ROUTER"
-            ) as mock_router:
+            with patch("foundry_mcp.tools.unified.error._ERROR_ROUTER") as mock_router:
+                mock_router.allowed_actions.return_value = ["list"]
                 mock_router.dispatch.side_effect = ValueError("test error")
 
                 _dispatch_error_action(

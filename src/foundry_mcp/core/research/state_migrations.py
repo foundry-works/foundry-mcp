@@ -43,10 +43,8 @@ CURRENT_SCHEMA_VERSION = 1
 SCHEMA_VERSION_KEY = "_schema_version"
 
 
-class MigrationError(Exception):
-    """Raised when a state migration fails."""
-
-    pass
+# Error class (canonical definition in foundry_mcp.core.errors.storage)
+from foundry_mcp.core.errors.storage import MigrationError  # noqa: E402
 
 
 class MigrationWarning:
@@ -187,9 +185,7 @@ def migrate_state(
 
     # Validate migration path exists
     if current_version > target_version:
-        raise MigrationError(
-            f"Cannot downgrade state from v{current_version} to v{target_version}"
-        )
+        raise MigrationError(f"Cannot downgrade state from v{current_version} to v{target_version}")
 
     # Apply migrations sequentially
     migrated = deepcopy(state)
@@ -199,9 +195,7 @@ def migrate_state(
         migration_key = (version, version + 1)
 
         if migration_key not in MIGRATIONS:
-            raise MigrationError(
-                f"No migration path from v{version} to v{version + 1}"
-            )
+            raise MigrationError(f"No migration path from v{version} to v{version + 1}")
 
         migration_fn = MIGRATIONS[migration_key]
 
@@ -212,10 +206,7 @@ def migrate_state(
 
         except Exception as e:
             # Migration failed - attempt recovery
-            logger.warning(
-                f"Migration v{version} -> v{version + 1} failed: {e}. "
-                "Attempting recovery with defaults."
-            )
+            logger.warning(f"Migration v{version} -> v{version + 1} failed: {e}. Attempting recovery with defaults.")
 
             try:
                 migrated = _recover_state(state, target_version)
@@ -233,15 +224,12 @@ def migrate_state(
                         },
                     )
                 )
-                logger.info(
-                    f"State recovery successful: v{current_version} -> v{target_version}"
-                )
+                logger.info(f"State recovery successful: v{current_version} -> v{target_version}")
                 return migrated, warnings
 
             except Exception as recovery_error:
                 raise MigrationError(
-                    f"Migration failed at v{version} -> v{version + 1} and recovery "
-                    f"failed: {recovery_error}"
+                    f"Migration failed at v{version} -> v{version + 1} and recovery failed: {recovery_error}"
                 ) from e
 
     return migrated, warnings
@@ -275,9 +263,7 @@ def _recover_state(
 
     for field in essential_fields:
         if field not in recovered:
-            raise MigrationError(
-                f"Cannot recover state: missing essential field '{field}'"
-            )
+            raise MigrationError(f"Cannot recover state: missing essential field '{field}'")
 
     # Apply all migrations' default values up to target version
     if target_version >= 1:

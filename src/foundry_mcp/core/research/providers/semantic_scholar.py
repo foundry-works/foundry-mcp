@@ -32,12 +32,14 @@ from typing import Any, Optional
 
 import httpx
 
-from foundry_mcp.core.research.models import ResearchSource, SourceType
-from foundry_mcp.core.research.providers.base import (
+from foundry_mcp.core.errors.search import (
     AuthenticationError,
     RateLimitError,
-    SearchProvider,
     SearchProviderError,
+)
+from foundry_mcp.core.research.models.sources import ResearchSource, SourceType
+from foundry_mcp.core.research.providers.base import (
+    SearchProvider,
     SearchResult,
 )
 from foundry_mcp.core.research.providers.resilience import (
@@ -65,10 +67,7 @@ DEFAULT_RATE_LIMIT = 0.9  # requests per second (slightly under 1 RPS across end
 
 # Fields to request from the API
 # See: https://api.semanticscholar.org/api-docs/graph#tag/Paper-Data/operation/get_graph_paper_relevance_search
-DEFAULT_FIELDS = (
-    "paperId,title,abstract,authors,citationCount,year,"
-    "externalIds,url,openAccessPdf,publicationDate"
-)
+DEFAULT_FIELDS = "paperId,title,abstract,authors,citationCount,year,externalIds,url,openAccessPdf,publicationDate"
 
 # Extended fields including TLDR and additional metadata
 EXTENDED_FIELDS = (
@@ -79,28 +78,32 @@ EXTENDED_FIELDS = (
 
 # Valid publication types for filtering
 # See: https://api.semanticscholar.org/api-docs/graph#tag/Paper-Data
-VALID_PUBLICATION_TYPES = frozenset({
-    "Review",
-    "JournalArticle",
-    "Conference",
-    "CaseReport",
-    "ClinicalTrial",
-    "Dataset",
-    "Editorial",
-    "LettersAndComments",
-    "MetaAnalysis",
-    "News",
-    "Study",
-    "Book",
-    "BookSection",
-})
+VALID_PUBLICATION_TYPES = frozenset(
+    {
+        "Review",
+        "JournalArticle",
+        "Conference",
+        "CaseReport",
+        "ClinicalTrial",
+        "Dataset",
+        "Editorial",
+        "LettersAndComments",
+        "MetaAnalysis",
+        "News",
+        "Study",
+        "Book",
+        "BookSection",
+    }
+)
 
 # Valid sort fields for search results
-VALID_SORT_FIELDS = frozenset({
-    "paperId",
-    "publicationDate",
-    "citationCount",
-})
+VALID_SORT_FIELDS = frozenset(
+    {
+        "paperId",
+        "publicationDate",
+        "citationCount",
+    }
+)
 
 # Default sorting when sort_order is provided without sort_by
 DEFAULT_SORT_BY = "publicationDate"
@@ -126,21 +129,15 @@ def _validate_search_params(
         invalid_types = set(publication_types) - VALID_PUBLICATION_TYPES
         if invalid_types:
             raise ValueError(
-                f"Invalid publication_types: {sorted(invalid_types)}. "
-                f"Must be from: {sorted(VALID_PUBLICATION_TYPES)}"
+                f"Invalid publication_types: {sorted(invalid_types)}. Must be from: {sorted(VALID_PUBLICATION_TYPES)}"
             )
 
     if sort_by is not None:
         if sort_by not in VALID_SORT_FIELDS:
-            raise ValueError(
-                f"Invalid sort_by: {sort_by!r}. "
-                f"Must be one of: {sorted(VALID_SORT_FIELDS)}"
-            )
+            raise ValueError(f"Invalid sort_by: {sort_by!r}. Must be one of: {sorted(VALID_SORT_FIELDS)}")
 
     if sort_order is not None and sort_order not in ("asc", "desc"):
-        raise ValueError(
-            f"Invalid sort_order: {sort_order!r}. Must be 'asc' or 'desc'"
-        )
+        raise ValueError(f"Invalid sort_order: {sort_order!r}. Must be 'asc' or 'desc'")
 
 
 class SemanticScholarProvider(SearchProvider):
@@ -339,11 +336,17 @@ class SemanticScholarProvider(SearchProvider):
                     raise RateLimitError(provider="semantic_scholar", retry_after=parse_retry_after(response))
                 if response.status_code >= 400:
                     error_msg = extract_error_message(response)
-                    raise SearchProviderError(provider="semantic_scholar", message=f"API error {response.status_code}: {error_msg}", retryable=response.status_code >= 500)
+                    raise SearchProviderError(
+                        provider="semantic_scholar",
+                        message=f"API error {response.status_code}: {error_msg}",
+                        retryable=response.status_code >= 500,
+                    )
                 return response.json()
 
         executor = create_resilience_executor(
-            "semantic_scholar", self.resilience_config, self.classify_error,
+            "semantic_scholar",
+            self.resilience_config,
+            self.classify_error,
         )
         return await executor(make_request, timeout=self._timeout)
 

@@ -7,13 +7,12 @@ supporting thread creation, continuation, and message history management.
 import logging
 from typing import Any, Optional
 
-from foundry_mcp.config import ResearchConfig
+from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.research.memory import ResearchMemory
-from foundry_mcp.core.research.models import (
-    ConversationMessage,
+from foundry_mcp.core.research.models.conversations import (
     ConversationThread,
-    ThreadStatus,
 )
+from foundry_mcp.core.research.models.enums import ThreadStatus
 from foundry_mcp.core.research.workflows.base import ResearchWorkflowBase, WorkflowResult
 
 logger = logging.getLogger(__name__)
@@ -178,9 +177,7 @@ class ChatWorkflow(ResearchWorkflowBase):
             Formatted context string
         """
         # Get recent messages (respecting max_messages config)
-        messages = thread.get_context_messages(
-            max_messages=self.config.max_messages_per_thread
-        )
+        messages = thread.get_context_messages(max_messages=self.config.max_messages_per_thread)
 
         # Format messages for context
         parts = []

@@ -267,103 +267,17 @@ class EmbeddingResponse:
 
 
 # =============================================================================
-# Exceptions
+# Exceptions (canonical definitions in foundry_mcp.core.errors.llm)
 # =============================================================================
 
-
-class LLMError(Exception):
-    """Base exception for LLM operations.
-
-    Attributes:
-        message: Human-readable error description
-        provider: Name of the provider that raised the error
-        retryable: Whether the operation can be retried
-        status_code: HTTP status code if applicable
-    """
-
-    def __init__(
-        self,
-        message: str,
-        *,
-        provider: Optional[str] = None,
-        retryable: bool = False,
-        status_code: Optional[int] = None,
-    ):
-        super().__init__(message)
-        self.provider = provider
-        self.retryable = retryable
-        self.status_code = status_code
-
-
-class RateLimitError(LLMError):
-    """Rate limit exceeded error.
-
-    Attributes:
-        retry_after: Seconds to wait before retrying
-    """
-
-    def __init__(
-        self,
-        message: str = "Rate limit exceeded",
-        *,
-        provider: Optional[str] = None,
-        retry_after: Optional[float] = None,
-    ):
-        super().__init__(message, provider=provider, retryable=True, status_code=429)
-        self.retry_after = retry_after
-
-
-class AuthenticationError(LLMError):
-    """Authentication failed error."""
-
-    def __init__(
-        self,
-        message: str = "Authentication failed",
-        *,
-        provider: Optional[str] = None,
-    ):
-        super().__init__(message, provider=provider, retryable=False, status_code=401)
-
-
-class InvalidRequestError(LLMError):
-    """Invalid request error (bad parameters, etc.)."""
-
-    def __init__(
-        self,
-        message: str,
-        *,
-        provider: Optional[str] = None,
-        param: Optional[str] = None,
-    ):
-        super().__init__(message, provider=provider, retryable=False, status_code=400)
-        self.param = param
-
-
-class ModelNotFoundError(LLMError):
-    """Requested model not found or not accessible."""
-
-    def __init__(
-        self,
-        message: str,
-        *,
-        provider: Optional[str] = None,
-        model: Optional[str] = None,
-    ):
-        super().__init__(message, provider=provider, retryable=False, status_code=404)
-        self.model = model
-
-
-class ContentFilterError(LLMError):
-    """Content was filtered due to policy violation."""
-
-    def __init__(
-        self,
-        message: str = "Content filtered",
-        *,
-        provider: Optional[str] = None,
-    ):
-        super().__init__(message, provider=provider, retryable=False, status_code=400)
-
+from foundry_mcp.core.errors.llm import (  # noqa: E402
+    AuthenticationError,
+    ContentFilterError,
+    InvalidRequestError,
+    LLMError,
+    ModelNotFoundError,
+    RateLimitError,
+)
 
 # =============================================================================
 # Abstract Base Class
@@ -444,9 +358,7 @@ class LLMProvider(ABC):
         """
         pass
 
-    async def stream_chat(
-        self, request: ChatRequest
-    ) -> AsyncIterator[ChatResponse]:
+    async def stream_chat(self, request: ChatRequest) -> AsyncIterator[ChatResponse]:
         """Stream chat completion tokens.
 
         Default implementation yields a single complete response.
@@ -464,9 +376,7 @@ class LLMProvider(ABC):
         response = await self.chat(request)
         yield response
 
-    async def stream_complete(
-        self, request: CompletionRequest
-    ) -> AsyncIterator[CompletionResponse]:
+    async def stream_complete(self, request: CompletionRequest) -> AsyncIterator[CompletionResponse]:
         """Stream completion tokens.
 
         Default implementation yields a single complete response.
@@ -623,11 +533,11 @@ class OpenAIProvider(LLMProvider):
         if self._client is None:
             try:
                 from openai import AsyncOpenAI
-            except ImportError:
+            except ImportError as e:
                 raise LLMError(
                     "openai package not installed. Install with: pip install openai",
                     provider=self.name,
-                )
+                ) from e
 
             if not self.api_key:
                 raise AuthenticationError(
@@ -651,10 +561,9 @@ class OpenAIProvider(LLMProvider):
         if "rate_limit" in error_str.lower() or error_type == "RateLimitError":
             # Try to extract retry-after
             retry_after = None
-            if hasattr(error, "response"):
-                retry_after = getattr(error.response.headers, "get", lambda x: None)(
-                    "retry-after"
-                )
+            resp = getattr(error, "response", None)
+            if resp is not None:
+                retry_after = getattr(resp.headers, "get", lambda x: None)("retry-after")
                 if retry_after:
                     try:
                         retry_after = float(retry_after)
@@ -852,7 +761,9 @@ class OpenAIProvider(LLMProvider):
                             role=ChatRole.ASSISTANT,
                             content=delta.content,
                         ),
-                        finish_reason=self._map_finish_reason(choice.finish_reason) if choice.finish_reason else FinishReason.STOP,
+                        finish_reason=self._map_finish_reason(choice.finish_reason)
+                        if choice.finish_reason
+                        else FinishReason.STOP,
                         model=chunk.model,
                     )
 
@@ -955,11 +866,11 @@ class AnthropicProvider(LLMProvider):
         if self._client is None:
             try:
                 from anthropic import AsyncAnthropic
-            except ImportError:
+            except ImportError as e:
                 raise LLMError(
                     "anthropic package not installed. Install with: pip install anthropic",
                     provider=self.name,
-                )
+                ) from e
 
             if not self.api_key:
                 raise AuthenticationError(
@@ -982,8 +893,9 @@ class AnthropicProvider(LLMProvider):
 
         if "rate_limit" in error_str.lower() or error_type == "RateLimitError":
             retry_after = None
-            if hasattr(error, "response") and error.response:
-                retry_after_str = error.response.headers.get("retry-after")
+            resp = getattr(error, "response", None)
+            if resp is not None:
+                retry_after_str = resp.headers.get("retry-after")
                 if retry_after_str:
                     try:
                         retry_after = float(retry_after_str)
@@ -1020,14 +932,18 @@ class AnthropicProvider(LLMProvider):
                 system_message = msg.content
             elif msg.role == ChatRole.TOOL:
                 # Tool results in Anthropic format
-                converted.append({
-                    "role": "user",
-                    "content": [{
-                        "type": "tool_result",
-                        "tool_use_id": msg.tool_call_id,
-                        "content": msg.content,
-                    }],
-                })
+                converted.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": msg.tool_call_id,
+                                "content": msg.content,
+                            }
+                        ],
+                    }
+                )
             elif msg.role == ChatRole.ASSISTANT and msg.tool_calls:
                 # Assistant message with tool calls
                 content: List[Dict[str, Any]] = []
@@ -1035,19 +951,24 @@ class AnthropicProvider(LLMProvider):
                     content.append({"type": "text", "text": msg.content})
                 for tc in msg.tool_calls:
                     import json
-                    content.append({
-                        "type": "tool_use",
-                        "id": tc.id,
-                        "name": tc.name,
-                        "input": json.loads(tc.arguments) if tc.arguments else {},
-                    })
+
+                    content.append(
+                        {
+                            "type": "tool_use",
+                            "id": tc.id,
+                            "name": tc.name,
+                            "input": json.loads(tc.arguments) if tc.arguments else {},
+                        }
+                    )
                 converted.append({"role": "assistant", "content": content})
             else:
                 # Regular user/assistant message
-                converted.append({
-                    "role": msg.role.value,
-                    "content": msg.content or "",
-                })
+                converted.append(
+                    {
+                        "role": msg.role.value,
+                        "content": msg.content or "",
+                    }
+                )
 
         return system_message, converted
 
@@ -1129,11 +1050,14 @@ class AnthropicProvider(LLMProvider):
                     content_text = (content_text or "") + block.text
                 elif block.type == "tool_use":
                     import json
-                    tool_calls.append(ToolCall(
-                        id=block.id,
-                        name=block.name,
-                        arguments=json.dumps(block.input),
-                    ))
+
+                    tool_calls.append(
+                        ToolCall(
+                            id=block.id,
+                            name=block.name,
+                            arguments=json.dumps(block.input),
+                        )
+                    )
 
             usage = TokenUsage(
                 prompt_tokens=response.usage.input_tokens,
@@ -1212,11 +1136,13 @@ class AnthropicProvider(LLMProvider):
         for tool in tools:
             if tool.get("type") == "function":
                 func = tool.get("function", {})
-                converted.append({
-                    "name": func.get("name"),
-                    "description": func.get("description", ""),
-                    "input_schema": func.get("parameters", {"type": "object", "properties": {}}),
-                })
+                converted.append(
+                    {
+                        "name": func.get("name"),
+                        "description": func.get("description", ""),
+                        "input_schema": func.get("parameters", {"type": "object", "properties": {}}),
+                    }
+                )
         return converted
 
     def _map_stop_reason(self, reason: Optional[str]) -> FinishReason:
@@ -1239,6 +1165,7 @@ class AnthropicProvider(LLMProvider):
         """
         try:
             from anthropic import Anthropic
+
             client = Anthropic(api_key=self.api_key or "dummy")
             return client.count_tokens(text)
         except (ImportError, Exception):
@@ -1306,11 +1233,11 @@ class LocalProvider(LLMProvider):
         if self._client is None:
             try:
                 from openai import AsyncOpenAI
-            except ImportError:
+            except ImportError as e:
                 raise LLMError(
                     "openai package not installed. Install with: pip install openai",
                     provider=self.name,
-                )
+                ) from e
 
             self._client = AsyncOpenAI(
                 api_key=self.api_key,
@@ -1325,8 +1252,7 @@ class LocalProvider(LLMProvider):
 
         if "connection" in error_str.lower() or "refused" in error_str.lower():
             raise LLMError(
-                f"Cannot connect to local server at {self.base_url}. "
-                "Ensure Ollama is running: ollama serve",
+                f"Cannot connect to local server at {self.base_url}. Ensure Ollama is running: ollama serve",
                 provider=self.name,
                 retryable=True,
             )
@@ -1500,7 +1426,9 @@ class LocalProvider(LLMProvider):
                             role=ChatRole.ASSISTANT,
                             content=delta.content,
                         ),
-                        finish_reason=self._map_finish_reason(choice.finish_reason) if choice.finish_reason else FinishReason.STOP,
+                        finish_reason=self._map_finish_reason(choice.finish_reason)
+                        if choice.finish_reason
+                        else FinishReason.STOP,
                         model=chunk.model,
                     )
 
@@ -1524,6 +1452,7 @@ class LocalProvider(LLMProvider):
         """Check if local server is accessible."""
         try:
             import httpx
+
             async with httpx.AsyncClient() as client:
                 # Check Ollama-style health endpoint
                 response = await client.get(

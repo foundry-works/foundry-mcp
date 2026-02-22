@@ -9,9 +9,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from foundry_mcp.core.error_collection import (
-    ErrorRecord,
-    ErrorFingerprinter,
     ErrorCollector,
+    ErrorFingerprinter,
+    ErrorRecord,
     get_error_collector,
     reset_error_collector,
 )
@@ -20,7 +20,6 @@ from foundry_mcp.core.error_store import (
     get_error_store,
     reset_error_store,
 )
-
 
 # =============================================================================
 # Fixtures

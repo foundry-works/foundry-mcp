@@ -11,9 +11,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-
 class TestVerifyToolchain:
-    """Tests for sdd_verify_toolchain function logic."""
+    """Tests for foundry_verify_toolchain function logic."""
 
     def test_check_tool_available(self):
         """Test that check_tool correctly identifies available tools."""
@@ -35,8 +34,9 @@ class TestVerifyToolchain:
         # Mock all tools as available
         mock_which.return_value = "/usr/bin/tool"
 
-        from foundry_mcp.core.responses import success_response
         from dataclasses import asdict
+
+        from foundry_mcp.core.responses.builders import success_response
 
         required_tools = ["python", "git"]
         required_status = {tool: True for tool in required_tools}
@@ -68,8 +68,9 @@ class TestVerifyToolchain:
 
         mock_which.side_effect = which_side_effect
 
-        from foundry_mcp.core.responses import error_response
         from dataclasses import asdict
+
+        from foundry_mcp.core.responses.builders import error_response
 
         data = {
             "required": {"python": True, "git": False},
@@ -92,7 +93,7 @@ class TestVerifyToolchain:
 
 
 class TestInitWorkspace:
-    """Tests for sdd_init_workspace function logic."""
+    """Tests for foundry_init_workspace function logic."""
 
     def test_create_specs_directory_structure(self):
         """Test that workspace initialization creates correct directory structure."""
@@ -137,8 +138,9 @@ class TestInitWorkspace:
 
     def test_permission_error_handling(self):
         """Test that permission errors are handled gracefully."""
-        from foundry_mcp.core.responses import error_response
         from dataclasses import asdict
+
+        from foundry_mcp.core.responses.builders import error_response
 
         result = asdict(
             error_response(
@@ -155,7 +157,7 @@ class TestInitWorkspace:
 
 
 class TestDetectTopology:
-    """Tests for sdd_detect_topology function logic."""
+    """Tests for foundry_detect_topology function logic."""
 
     def test_detect_python_project(self):
         """Test detection of Python project markers."""
@@ -246,7 +248,7 @@ class TestDetectTopology:
 
 
 class TestVerifyEnvironment:
-    """Tests for sdd_verify_environment function logic."""
+    """Tests for foundry_verify_environment function logic."""
 
     def test_python_version_check(self):
         """Test Python version detection."""
@@ -271,7 +273,6 @@ class TestVerifyEnvironment:
         """Test Git availability check."""
         mock_which.return_value = "/usr/bin/git"
 
-
         git_path = mock_which("git")
         assert git_path is not None
 
@@ -279,7 +280,6 @@ class TestVerifyEnvironment:
     def test_git_not_available(self, mock_which):
         """Test handling when Git is not available."""
         mock_which.return_value = None
-
 
         git_path = mock_which("git")
         issues = []
@@ -313,8 +313,9 @@ class TestVerifyEnvironment:
 
     def test_all_valid_environment(self):
         """Test response when all environment checks pass."""
-        from foundry_mcp.core.responses import success_response
         from dataclasses import asdict
+
+        from foundry_mcp.core.responses.builders import success_response
 
         data = {
             "runtimes": {
@@ -330,8 +331,9 @@ class TestVerifyEnvironment:
 
     def test_invalid_environment_with_issues(self):
         """Test error response when environment validation fails."""
-        from foundry_mcp.core.responses import error_response
         from dataclasses import asdict
+
+        from foundry_mcp.core.responses.builders import error_response
 
         issues = ["Git not found in PATH", "Required package not found: nonexistent"]
 
@@ -349,12 +351,13 @@ class TestVerifyEnvironment:
         assert len(result["data"]["issues"]) == 2
 
 
-class TestSddSetup:
-    """Tests for sdd_setup function logic."""
+class TestFoundrySetup:
+    """Tests for foundry_setup function logic."""
 
     def test_fresh_project_setup(self):
         """Test setup on a project with no existing config."""
         import json
+
         from foundry_mcp.tools.unified.environment import (
             _init_specs_directory,
             _update_permissions,
@@ -396,6 +399,7 @@ class TestSddSetup:
     def test_merge_existing_permissions(self):
         """Test that existing permissions are preserved during merge."""
         import json
+
         from foundry_mcp.tools.unified.environment import _update_permissions
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -450,8 +454,9 @@ class TestSddSetup:
 
     def test_invalid_preset_validation(self):
         """Test validation of invalid permissions preset."""
-        from foundry_mcp.core.responses import error_response
         from dataclasses import asdict
+
+        from foundry_mcp.core.responses.builders import error_response
 
         invalid_preset = "invalid_preset"
         result = asdict(
@@ -468,8 +473,9 @@ class TestSddSetup:
 
     def test_path_not_found_validation(self):
         """Test validation when path does not exist."""
-        from foundry_mcp.core.responses import error_response
         from dataclasses import asdict
+
+        from foundry_mcp.core.responses.builders import error_response
 
         nonexistent_path = "/nonexistent/path/xyz123"
         result = asdict(
@@ -486,8 +492,9 @@ class TestSddSetup:
 
     def test_response_envelope_compliance(self):
         """Test that success response follows v2 contract."""
-        from foundry_mcp.core.responses import success_response
         from dataclasses import asdict
+
+        from foundry_mcp.core.responses.builders import success_response
 
         data = {
             "specs_dir": "/tmp/test/specs",
@@ -521,6 +528,7 @@ class TestSddSetup:
     def test_idempotent_setup(self):
         """Test that running setup twice is safe (idempotent)."""
         import json
+
         from foundry_mcp.tools.unified.environment import (
             _init_specs_directory,
             _update_permissions,
@@ -567,12 +575,14 @@ class TestDetectTestRunner:
 
             for marker in python_primary:
                 if (base_path / marker).exists():
-                    detected_runners.append({
-                        "runner_name": "pytest",
-                        "project_type": "python",
-                        "confidence": "high",
-                        "reason": f"{marker} found",
-                    })
+                    detected_runners.append(
+                        {
+                            "runner_name": "pytest",
+                            "project_type": "python",
+                            "confidence": "high",
+                            "reason": f"{marker} found",
+                        }
+                    )
                     break
 
             assert len(detected_runners) == 1
@@ -596,23 +606,27 @@ class TestDetectTestRunner:
             # Check primary first
             for marker in python_primary:
                 if (base_path / marker).exists():
-                    detected_runners.append({
-                        "runner_name": "pytest",
-                        "project_type": "python",
-                        "confidence": "high",
-                        "reason": f"{marker} found",
-                    })
+                    detected_runners.append(
+                        {
+                            "runner_name": "pytest",
+                            "project_type": "python",
+                            "confidence": "high",
+                            "reason": f"{marker} found",
+                        }
+                    )
                     break
             else:
                 # Check secondary
                 for marker in python_secondary:
                     if (base_path / marker).exists():
-                        detected_runners.append({
-                            "runner_name": "pytest",
-                            "project_type": "python",
-                            "confidence": "medium",
-                            "reason": f"{marker} found",
-                        })
+                        detected_runners.append(
+                            {
+                                "runner_name": "pytest",
+                                "project_type": "python",
+                                "confidence": "medium",
+                                "reason": f"{marker} found",
+                            }
+                        )
                         break
 
             assert len(detected_runners) == 1
@@ -629,12 +643,14 @@ class TestDetectTestRunner:
 
             detected_runners = []
             if (base_path / "go.mod").exists():
-                detected_runners.append({
-                    "runner_name": "go",
-                    "project_type": "go",
-                    "confidence": "high",
-                    "reason": "go.mod found",
-                })
+                detected_runners.append(
+                    {
+                        "runner_name": "go",
+                        "project_type": "go",
+                        "confidence": "high",
+                        "reason": "go.mod found",
+                    }
+                )
 
             assert len(detected_runners) == 1
             assert detected_runners[0]["runner_name"] == "go"
@@ -659,12 +675,14 @@ class TestDetectTestRunner:
 
             for jest_config in jest_configs:
                 if (base_path / jest_config).exists():
-                    detected_runners.append({
-                        "runner_name": "jest",
-                        "project_type": "node",
-                        "confidence": "high",
-                        "reason": f"{jest_config} found",
-                    })
+                    detected_runners.append(
+                        {
+                            "runner_name": "jest",
+                            "project_type": "node",
+                            "confidence": "high",
+                            "reason": f"{jest_config} found",
+                        }
+                    )
                     break
 
             assert len(detected_runners) == 1
@@ -690,12 +708,14 @@ class TestDetectTestRunner:
                     pkg_content = json.load(f)
 
                 if "jest" in pkg_content:
-                    detected_runners.append({
-                        "runner_name": "jest",
-                        "project_type": "node",
-                        "confidence": "high",
-                        "reason": "jest key in package.json",
-                    })
+                    detected_runners.append(
+                        {
+                            "runner_name": "jest",
+                            "project_type": "node",
+                            "confidence": "high",
+                            "reason": "jest key in package.json",
+                        }
+                    )
 
             assert len(detected_runners) == 1
             assert detected_runners[0]["runner_name"] == "jest"
@@ -727,12 +747,14 @@ class TestDetectTestRunner:
                 if not jest_detected:
                     scripts = pkg_content.get("scripts", {})
                     if "test" in scripts:
-                        detected_runners.append({
-                            "runner_name": "npm",
-                            "project_type": "node",
-                            "confidence": "high",
-                            "reason": "test script in package.json",
-                        })
+                        detected_runners.append(
+                            {
+                                "runner_name": "npm",
+                                "project_type": "node",
+                                "confidence": "high",
+                                "reason": "test script in package.json",
+                            }
+                        )
 
             assert len(detected_runners) == 1
             assert detected_runners[0]["runner_name"] == "npm"
@@ -762,24 +784,28 @@ class TestDetectTestRunner:
                     pkg_content = json.load(f)
 
                 if "jest" in pkg_content:
-                    detected_runners.append({
-                        "runner_name": "jest",
-                        "project_type": "node",
-                        "confidence": "high",
-                        "reason": "jest key in package.json",
-                    })
+                    detected_runners.append(
+                        {
+                            "runner_name": "jest",
+                            "project_type": "node",
+                            "confidence": "high",
+                            "reason": "jest key in package.json",
+                        }
+                    )
                     jest_detected = True
 
                 # npm only if jest not detected
                 if not jest_detected:
                     scripts = pkg_content.get("scripts", {})
                     if "test" in scripts:
-                        detected_runners.append({
-                            "runner_name": "npm",
-                            "project_type": "node",
-                            "confidence": "high",
-                            "reason": "test script in package.json",
-                        })
+                        detected_runners.append(
+                            {
+                                "runner_name": "npm",
+                                "project_type": "node",
+                                "confidence": "high",
+                                "reason": "test script in package.json",
+                            }
+                        )
 
             # Should only have jest, not npm
             assert len(detected_runners) == 1
@@ -799,12 +825,14 @@ class TestDetectTestRunner:
             makefile_exists = (base_path / "Makefile").exists()
 
             if cargo_exists and makefile_exists:
-                detected_runners.append({
-                    "runner_name": "make",
-                    "project_type": "rust",
-                    "confidence": "medium",
-                    "reason": "Cargo.toml + Makefile found",
-                })
+                detected_runners.append(
+                    {
+                        "runner_name": "make",
+                        "project_type": "rust",
+                        "confidence": "medium",
+                        "reason": "Cargo.toml + Makefile found",
+                    }
+                )
 
             assert len(detected_runners) == 1
             assert detected_runners[0]["runner_name"] == "make"
@@ -823,12 +851,14 @@ class TestDetectTestRunner:
             makefile_exists = (base_path / "Makefile").exists()
 
             if cargo_exists and makefile_exists:
-                detected_runners.append({
-                    "runner_name": "make",
-                    "project_type": "rust",
-                    "confidence": "medium",
-                    "reason": "Cargo.toml + Makefile found",
-                })
+                detected_runners.append(
+                    {
+                        "runner_name": "make",
+                        "project_type": "rust",
+                        "confidence": "medium",
+                        "reason": "Cargo.toml + Makefile found",
+                    }
+                )
 
             # Should NOT detect make
             assert len(detected_runners) == 0
@@ -850,12 +880,14 @@ class TestDetectTestRunner:
 
             # Python detection
             if (base_path / "pyproject.toml").exists():
-                detected_runners.append({
-                    "runner_name": "pytest",
-                    "project_type": "python",
-                    "confidence": "high",
-                    "reason": "pyproject.toml found",
-                })
+                detected_runners.append(
+                    {
+                        "runner_name": "pytest",
+                        "project_type": "python",
+                        "confidence": "high",
+                        "reason": "pyproject.toml found",
+                    }
+                )
 
             # Node detection (no jest, so npm)
             package_json_path = base_path / "package.json"
@@ -865,12 +897,14 @@ class TestDetectTestRunner:
 
                 scripts = pkg_content.get("scripts", {})
                 if "test" in scripts:
-                    detected_runners.append({
-                        "runner_name": "npm",
-                        "project_type": "node",
-                        "confidence": "high",
-                        "reason": "test script in package.json",
-                    })
+                    detected_runners.append(
+                        {
+                            "runner_name": "npm",
+                            "project_type": "node",
+                            "confidence": "high",
+                            "reason": "test script in package.json",
+                        }
+                    )
 
             assert len(detected_runners) == 2
             runner_names = [r["runner_name"] for r in detected_runners]
@@ -894,12 +928,14 @@ class TestDetectTestRunner:
 
             # Go detection
             if (base_path / "go.mod").exists():
-                detected_runners.append({
-                    "runner_name": "go",
-                    "project_type": "go",
-                    "confidence": "high",
-                    "reason": "go.mod found",
-                })
+                detected_runners.append(
+                    {
+                        "runner_name": "go",
+                        "project_type": "go",
+                        "confidence": "high",
+                        "reason": "go.mod found",
+                    }
+                )
 
             # Node detection
             package_json_path = base_path / "package.json"
@@ -909,12 +945,14 @@ class TestDetectTestRunner:
 
                 scripts = pkg_content.get("scripts", {})
                 if "test" in scripts:
-                    detected_runners.append({
-                        "runner_name": "npm",
-                        "project_type": "node",
-                        "confidence": "high",
-                        "reason": "test script in package.json",
-                    })
+                    detected_runners.append(
+                        {
+                            "runner_name": "npm",
+                            "project_type": "node",
+                            "confidence": "high",
+                            "reason": "test script in package.json",
+                        }
+                    )
 
             # Determine recommended default (go has higher precedence than npm)
             precedence_order = ["pytest", "go", "jest", "npm", "make"]
@@ -958,6 +996,7 @@ class TestDetectTestRunner:
 
             if package_json_path.exists():
                 import json as json_mod
+
                 try:
                     with open(package_json_path, "r") as f:
                         json_mod.load(f)
@@ -974,13 +1013,13 @@ class TestDiscoveryMetadata:
 
     def test_environment_tool_metadata_exists(self):
         """Test that environment tool metadata is defined."""
-        from foundry_mcp.core.discovery import ENVIRONMENT_TOOL_METADATA
+        from foundry_mcp.core.discovery.metadata import ENVIRONMENT_TOOL_METADATA
 
         expected_tools = [
-            "sdd-verify-toolchain",
-            "sdd-init-workspace",
-            "sdd-detect-topology",
-            "sdd-verify-environment",
+            "foundry-verify-toolchain",
+            "foundry-init-workspace",
+            "foundry-detect-topology",
+            "foundry-verify-environment",
         ]
 
         for tool_name in expected_tools:
@@ -988,14 +1027,14 @@ class TestDiscoveryMetadata:
 
     def test_environment_feature_flags_exist(self):
         """Test that environment feature flags are defined."""
-        from foundry_mcp.core.discovery import ENVIRONMENT_FEATURE_FLAGS
+        from foundry_mcp.core.discovery.metadata import ENVIRONMENT_FEATURE_FLAGS
 
         assert "environment_tools" in ENVIRONMENT_FEATURE_FLAGS
         assert "env_auto_fix" in ENVIRONMENT_FEATURE_FLAGS
 
     def test_environment_tools_flag_is_beta(self):
         """Test environment_tools flag is in beta state."""
-        from foundry_mcp.core.discovery import ENVIRONMENT_FEATURE_FLAGS
+        from foundry_mcp.core.discovery.metadata import ENVIRONMENT_FEATURE_FLAGS
 
         flag = ENVIRONMENT_FEATURE_FLAGS["environment_tools"]
         assert flag.state == "beta"
@@ -1004,7 +1043,7 @@ class TestDiscoveryMetadata:
 
     def test_env_auto_fix_flag_is_experimental(self):
         """Test env_auto_fix flag is in experimental state."""
-        from foundry_mcp.core.discovery import ENVIRONMENT_FEATURE_FLAGS
+        from foundry_mcp.core.discovery.metadata import ENVIRONMENT_FEATURE_FLAGS
 
         flag = ENVIRONMENT_FEATURE_FLAGS["env_auto_fix"]
         assert flag.state == "experimental"
@@ -1014,7 +1053,7 @@ class TestDiscoveryMetadata:
 
     def test_get_environment_capabilities(self):
         """Test get_environment_capabilities returns correct structure."""
-        from foundry_mcp.core.discovery import get_environment_capabilities
+        from foundry_mcp.core.discovery.metadata import get_environment_capabilities
 
         capabilities = get_environment_capabilities()
 
@@ -1025,26 +1064,26 @@ class TestDiscoveryMetadata:
 
     def test_is_environment_tool(self):
         """Test is_environment_tool helper function."""
-        from foundry_mcp.core.discovery import is_environment_tool
+        from foundry_mcp.core.discovery.metadata import is_environment_tool
 
-        assert is_environment_tool("sdd-verify-toolchain") is True
-        assert is_environment_tool("sdd-init-workspace") is True
+        assert is_environment_tool("foundry-verify-toolchain") is True
+        assert is_environment_tool("foundry-init-workspace") is True
         assert is_environment_tool("nonexistent_tool") is False
 
     def test_get_environment_tool_metadata(self):
         """Test get_environment_tool_metadata helper function."""
-        from foundry_mcp.core.discovery import get_environment_tool_metadata
+        from foundry_mcp.core.discovery.metadata import get_environment_tool_metadata
 
-        metadata = get_environment_tool_metadata("sdd-verify-toolchain")
+        metadata = get_environment_tool_metadata("foundry-verify-toolchain")
         assert metadata is not None
-        assert metadata.name == "sdd-verify-toolchain"
+        assert metadata.name == "foundry-verify-toolchain"
         assert metadata.category == "environment"
 
         assert get_environment_tool_metadata("nonexistent") is None
 
     def test_tool_metadata_has_required_fields(self):
         """Test that tool metadata has all required fields."""
-        from foundry_mcp.core.discovery import ENVIRONMENT_TOOL_METADATA
+        from foundry_mcp.core.discovery.metadata import ENVIRONMENT_TOOL_METADATA
 
         for tool_name, metadata in ENVIRONMENT_TOOL_METADATA.items():
             assert metadata.name == tool_name

@@ -17,19 +17,19 @@ from unittest.mock import patch
 import pytest
 
 from foundry_mcp.core.research.providers.resilience import (
+    PROVIDER_CONFIGS,
     ErrorClassification,
     ErrorType,
     ProviderResilienceConfig,
     ProviderStatus,
-    PROVIDER_CONFIGS,
     RateLimitWaitError,
     TimeBudgetExceededError,
+    _default_classify_error,
     async_retry_with_backoff,
     execute_with_resilience,
     get_provider_config,
     get_resilience_manager,
     reset_resilience_manager_for_testing,
-    _default_classify_error,
 )
 from foundry_mcp.core.resilience import CircuitBreakerError, CircuitState
 
@@ -269,6 +269,7 @@ class TestAsyncRetryWithBackoff:
     @pytest.mark.asyncio
     async def test_success_on_first_attempt(self):
         """Successful call returns immediately."""
+
         async def success():
             return "result"
 
@@ -298,6 +299,7 @@ class TestAsyncRetryWithBackoff:
     @pytest.mark.asyncio
     async def test_max_retries_exhausted(self):
         """Exception raised when max retries exhausted."""
+
         async def always_fail():
             raise ValueError("permanent error")
 
@@ -447,6 +449,7 @@ class TestCircuitBreakerStateTransitions:
 
         # Wait for recovery timeout
         import time
+
         time.sleep(0.02)
 
         # First request transitions to HALF_OPEN
@@ -466,6 +469,7 @@ class TestCircuitBreakerStateTransitions:
 
         # Wait for recovery timeout
         import time
+
         time.sleep(0.02)
 
         # First call: transitions to HALF_OPEN, counter stays 0
@@ -529,6 +533,7 @@ class TestRateLimiterTokenAcquisition:
 
         # Wait for refill (1 RPS = 1 token/second)
         import time
+
         time.sleep(1.1)
 
         result = limiter.check()
@@ -544,6 +549,7 @@ class TestExecuteWithResilience:
     @pytest.mark.asyncio
     async def test_success_execution(self):
         """Successful execution returns result."""
+
         async def success():
             return "result"
 
@@ -571,6 +577,7 @@ class TestExecuteWithResilience:
     @pytest.mark.asyncio
     async def test_time_budget_exceeded(self):
         """Time budget exceeded raises TimeBudgetExceededError."""
+
         async def slow_func():
             await asyncio.sleep(1.0)
             return "done"
@@ -741,7 +748,7 @@ class TestExecuteWithResilience:
         async def always_fail():
             raise Exception("429 Too Many Requests")
 
-        with patch("foundry_mcp.core.research.providers.resilience.asyncio.sleep", fake_sleep):
+        with patch("foundry_mcp.core.research.providers.resilience.execution.asyncio.sleep", fake_sleep):
             with pytest.raises(Exception):
                 await execute_with_resilience(
                     always_fail,
@@ -784,7 +791,7 @@ class TestDeterministicJitterIntegration:
             return "success"
 
         # Patch asyncio.sleep at module level
-        with patch("foundry_mcp.core.research.providers.resilience.asyncio.sleep", tracking_sleep):
+        with patch("foundry_mcp.core.research.providers.resilience.execution.asyncio.sleep", tracking_sleep):
             result = await execute_with_resilience(
                 fail_twice,
                 "tavily",
@@ -797,16 +804,15 @@ class TestDeterministicJitterIntegration:
         # Verify jitter range: base_delay=1.0, so first retry ~1.0 * [0.5, 1.5]
         # Second retry: 2.0 * [0.5, 1.5]
         for i, delay in enumerate(sleep_times):
-            base = 1.0 * (2.0 ** i)  # base_delay * exponential_base^attempt
+            base = 1.0 * (2.0**i)  # base_delay * exponential_base^attempt
             min_delay = base * 0.5
             max_delay = base * 1.5
-            assert min_delay <= delay <= max_delay, (
-                f"Delay {delay} outside expected range [{min_delay}, {max_delay}]"
-            )
+            assert min_delay <= delay <= max_delay, f"Delay {delay} outside expected range [{min_delay}, {max_delay}]"
 
     @pytest.mark.asyncio
     async def test_async_retry_multiple_runs_same_seed_same_delays(self):
         """Multiple executions with same seed produce identical delays."""
+
         async def fail_many():
             raise RuntimeError("fail")
 
@@ -982,7 +988,7 @@ class TestRateLimiterIntegration:
         # Should allow burst_limit (3) immediate acquisitions
         for i in range(3):
             result = limiter.acquire()
-            assert result.allowed is True, f"Burst request {i+1} should be allowed"
+            assert result.allowed is True, f"Burst request {i + 1} should be allowed"
 
         # Fourth should be throttled
         result = limiter.acquire()
@@ -1063,6 +1069,7 @@ class TestTimeBudgetIntegration:
     @pytest.mark.asyncio
     async def test_time_budget_cancels_slow_operation(self):
         """Operation cancelled when exceeding time budget."""
+
         async def slow_func():
             await asyncio.sleep(10.0)  # Much longer than budget
             return "done"
@@ -1085,6 +1092,7 @@ class TestTimeBudgetIntegration:
 
         async def slow_fail():
             import time
+
             call_count[0] += 1
             call_times.append(time.monotonic())
             # Each call takes 0.05s before failing

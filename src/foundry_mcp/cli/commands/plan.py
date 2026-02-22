@@ -1,4 +1,4 @@
-"""Plan review commands for SDD CLI.
+"""Plan review commands for Foundry CLI.
 
 Provides commands for reviewing markdown implementation plans
 before converting them to formal JSON specifications.
@@ -14,29 +14,19 @@ import click
 from foundry_mcp.cli.logging import cli_command, get_cli_logger
 from foundry_mcp.cli.output import emit_error, emit_success
 from foundry_mcp.cli.resilience import (
-    SLOW_TIMEOUT,
     MEDIUM_TIMEOUT,
-    with_sync_timeout,
+    SLOW_TIMEOUT,
     handle_keyboard_interrupt,
+    with_sync_timeout,
 )
 from foundry_mcp.core.spec import find_specs_directory
-from foundry_mcp.core.llm_config import get_consultation_config
 
 logger = get_cli_logger()
 
 # Default AI consultation timeout
 DEFAULT_AI_TIMEOUT = 360.0
 
-# Review types supported
-REVIEW_TYPES = ["quick", "full", "security", "feasibility"]
-
-# Map review types to MARKDOWN_PLAN_REVIEW templates
-REVIEW_TYPE_TO_TEMPLATE = {
-    "full": "MARKDOWN_PLAN_REVIEW_FULL_V1",
-    "quick": "MARKDOWN_PLAN_REVIEW_QUICK_V1",
-    "security": "MARKDOWN_PLAN_REVIEW_SECURITY_V1",
-    "feasibility": "MARKDOWN_PLAN_REVIEW_FEASIBILITY_V1",
-}
+_PLAN_REVIEW_TEMPLATE_ID = "MARKDOWN_PLAN_REVIEW_FULL_V1"
 
 
 def _extract_plan_name(plan_path: str) -> str:
@@ -133,13 +123,6 @@ def plan_group() -> None:
 @plan_group.command("review")
 @click.argument("plan_path")
 @click.option(
-    "--type",
-    "review_type",
-    type=click.Choice(REVIEW_TYPES),
-    default=None,
-    help="Type of review to perform (defaults to config value, typically 'full').",
-)
-@click.option(
     "--ai-provider",
     help="Explicit AI provider selection (e.g., gemini, cursor-agent).",
 )
@@ -166,7 +149,6 @@ def plan_group() -> None:
 def plan_review_cmd(
     ctx: click.Context,
     plan_path: str,
-    review_type: Optional[str],
     ai_provider: Optional[str],
     ai_timeout: float,
     no_consultation_cache: bool,
@@ -175,22 +157,14 @@ def plan_review_cmd(
     """Review a markdown implementation plan with AI feedback.
 
     Analyzes markdown plans before they become formal JSON specifications.
-    Writes review output to specs/.plan-reviews/<plan-name>-<review-type>.md.
+    Writes review output to specs/.plan-reviews/<plan-name>-review.md.
 
     Examples:
 
-        sdd plan review ./PLAN.md
+        foundry plan review ./PLAN.md
 
-        sdd plan review ./PLAN.md --type security
-
-        sdd plan review ./PLAN.md --ai-provider gemini
+        foundry plan review ./PLAN.md --ai-provider gemini
     """
-    # Get default review_type from config if not provided
-    if review_type is None:
-        consultation_config = get_consultation_config()
-        workflow_config = consultation_config.get_workflow_config("markdown_plan_review")
-        review_type = workflow_config.default_review_type
-
     start_time = time.perf_counter()
 
     llm_status = _get_llm_status()
@@ -241,7 +215,6 @@ def plan_review_cmd(
             {
                 "plan_path": str(plan_file),
                 "plan_name": plan_name,
-                "review_type": review_type,
                 "dry_run": True,
                 "llm_status": llm_status,
                 "message": "Dry run - review skipped",
@@ -262,14 +235,14 @@ def plan_review_cmd(
         return
 
     # Build consultation request
-    template_id = REVIEW_TYPE_TO_TEMPLATE[review_type]
+    template_id = _PLAN_REVIEW_TEMPLATE_ID
 
     try:
         from foundry_mcp.core.ai_consultation import (
             ConsultationOrchestrator,
             ConsultationRequest,
-            ConsultationWorkflow,
             ConsultationResult,
+            ConsultationWorkflow,
         )
 
         orchestrator = ConsultationOrchestrator()
@@ -316,9 +289,7 @@ def plan_review_cmd(
                 return
 
             review_content = result.primary_content
-            provider_used = (
-                result.responses[0].provider_id if result.responses else "unknown"
-            )
+            provider_used = result.responses[0].provider_id if result.responses else "unknown"
 
     except ImportError:
         emit_error(
@@ -355,7 +326,7 @@ def plan_review_cmd(
     plan_reviews_dir = specs_dir / ".plan-reviews"
     try:
         plan_reviews_dir.mkdir(parents=True, exist_ok=True)
-        review_file = plan_reviews_dir / f"{plan_name}-{review_type}.md"
+        review_file = plan_reviews_dir / f"{plan_name}-review.md"
         review_file.write_text(review_content, encoding="utf-8")
     except Exception as e:
         emit_error(
@@ -372,7 +343,6 @@ def plan_review_cmd(
         {
             "plan_path": str(plan_file),
             "plan_name": plan_name,
-            "review_type": review_type,
             "review_path": str(review_file),
             "summary": summary,
             "inline_summary": inline_summary,
@@ -383,79 +353,69 @@ def plan_review_cmd(
     )
 
 
-# Plan templates
-PLAN_TEMPLATES = {
-    "simple": """# {name}
+# Plan template
+PLAN_TEMPLATE = """# {name}
 
-## Objective
+## Mission
 
-[Describe the primary goal of this plan]
+[Single sentence describing the primary goal — becomes metadata.mission]
 
-## Scope
+## Objectives
 
-[What is included/excluded from this plan]
-
-## Tasks
-
-1. [Task 1]
-2. [Task 2]
-3. [Task 3]
+- [Objective 1 — each becomes an array item in metadata.objectives]
+- [Objective 2]
 
 ## Success Criteria
 
-- [ ] [Criterion 1]
-- [ ] [Criterion 2]
-""",
-    "detailed": """# {name}
+- [ ] [Measurable criterion 1 — becomes metadata.success_criteria]
+- [ ] [Measurable criterion 2]
 
-## Objective
+## Assumptions
 
-[Describe the primary goal of this plan]
+- [What we believe to be true — becomes metadata.assumptions]
 
-## Scope
+## Constraints
 
-### In Scope
-- [Item 1]
-- [Item 2]
+- [Hard limits we must work within — becomes metadata.constraints]
 
-### Out of Scope
-- [Item 1]
+## Risks
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|------------|--------|------------|
+| [Risk 1] | [low/medium/high] | [low/medium/high] | [Mitigation strategy] |
+
+## Open Questions
+
+- [Unresolved question — becomes metadata.open_questions]
+
+## Dependencies
+
+- [External/internal dependencies]
 
 ## Phases
 
 ### Phase 1: [Phase Name]
 
-**Purpose**: [Why this phase exists]
+**Goal:** [What this phase accomplishes — becomes phase purpose]
 
-**Tasks**:
-1. [Task 1]
-2. [Task 2]
+**Description:** [Detailed description — becomes phase description]
 
-**Verification**: [How to verify phase completion]
+#### Tasks
 
-### Phase 2: [Phase Name]
+- **[Task title]** `[task_category]` `[complexity]`
+  - Description: [What to do]
+  - File: [repo-relative path, or "N/A" for investigation/research/decision]
+  - Acceptance criteria:
+    - [How to verify this task is done]
+    - [Another criterion]
+  - Depends on: [other task titles, or "none"]
 
-**Purpose**: [Why this phase exists]
+#### Verification
 
-**Tasks**:
-1. [Task 1]
-2. [Task 2]
-
-**Verification**: [How to verify phase completion]
-
-## Risks and Mitigations
-
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| [Risk 1] | [High/Medium/Low] | [Mitigation strategy] |
-
-## Success Criteria
-
-- [ ] [Criterion 1]
-- [ ] [Criterion 2]
-- [ ] [Criterion 3]
-""",
-}
+- **Run tests:** [test command]
+- **Fidelity review:** Compare implementation to spec
+- **Manual checks:** [any manual steps, or "none"]
+"""
 
 
 def _slugify(name: str) -> str:
@@ -468,12 +428,6 @@ def _slugify(name: str) -> str:
 
 @plan_group.command("create")
 @click.argument("name")
-@click.option(
-    "--template",
-    type=click.Choice(["simple", "detailed"]),
-    default="detailed",
-    help="Plan template to use.",
-)
 @click.pass_context
 @cli_command("create")
 @handle_keyboard_interrupt()
@@ -481,17 +435,16 @@ def _slugify(name: str) -> str:
 def plan_create_cmd(
     ctx: click.Context,
     name: str,
-    template: str,
 ) -> None:
     """Create a new markdown implementation plan.
 
-    Creates a plan file in specs/.plans/ with the specified template.
+    Creates a plan file in specs/.plans/ using the standard template.
 
     Examples:
 
-        sdd plan create "Add user authentication"
+        foundry plan create "Add user authentication"
 
-        sdd plan create "Refactor database layer" --template simple
+        foundry plan create "Refactor database layer"
     """
     start_time = time.perf_counter()
 
@@ -535,7 +488,7 @@ def plan_create_cmd(
         return
 
     # Generate plan content from template
-    plan_content = PLAN_TEMPLATES[template].format(name=name)
+    plan_content = PLAN_TEMPLATE.format(name=name)
 
     # Write plan file
     try:
@@ -556,7 +509,6 @@ def plan_create_cmd(
             "plan_name": name,
             "plan_slug": plan_slug,
             "plan_path": str(plan_file),
-            "template": template,
         },
         telemetry={"duration_ms": round(duration_ms, 2)},
     )
@@ -574,7 +526,7 @@ def plan_list_cmd(ctx: click.Context) -> None:
 
     Examples:
 
-        sdd plan list
+        foundry plan list
     """
     start_time = time.perf_counter()
 
@@ -599,9 +551,7 @@ def plan_list_cmd(ctx: click.Context) -> None:
                 "count": 0,
                 "plans_dir": str(plans_dir),
             },
-            telemetry={
-                "duration_ms": round((time.perf_counter() - start_time) * 1000, 2)
-            },
+            telemetry={"duration_ms": round((time.perf_counter() - start_time) * 1000, 2)},
         )
         return
 
@@ -622,9 +572,7 @@ def plan_list_cmd(ctx: click.Context) -> None:
     reviews_dir = specs_dir / ".plan-reviews"
     for plan in plans:
         plan_name = plan["name"]
-        review_files = (
-            list(reviews_dir.glob(f"{plan_name}-*.md")) if reviews_dir.exists() else []
-        )
+        review_files = list(reviews_dir.glob(f"{plan_name}-*.md")) if reviews_dir.exists() else []
         plan["reviews"] = [rf.stem for rf in review_files]
         plan["has_review"] = len(review_files) > 0
 

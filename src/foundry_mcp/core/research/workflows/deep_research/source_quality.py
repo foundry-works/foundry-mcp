@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-from foundry_mcp.core.research.models import (
+from foundry_mcp.core.research.models.sources import (
     DOMAIN_TIERS,
     ResearchMode,
     SourceQuality,
@@ -33,6 +33,7 @@ def _extract_domain(url: str) -> Optional[str]:
             url = "https://" + url
         # Extract domain using simple parsing
         from urllib.parse import urlparse
+
         parsed = urlparse(url)
         domain = parsed.netloc.lower()
         # Remove www. prefix
@@ -59,6 +60,7 @@ def _extract_hostname(url: str) -> Optional[str]:
         if "://" not in url:
             url = "https://" + url
         from urllib.parse import urlparse
+
         parsed = urlparse(url)
         return parsed.netloc.lower() if parsed.netloc else None
     except Exception:

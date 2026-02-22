@@ -7,14 +7,17 @@ mutate it.
 
 from dataclasses import asdict
 from pathlib import Path
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Any, Dict, List, Optional, Tuple
 
+from foundry_mcp.core.responses.builders import (
+    error_response,
+    success_response,
+)
 from foundry_mcp.core.spec import (
-    load_spec,
     find_spec_file,
     get_node,
+    load_spec,
 )
-from foundry_mcp.core.responses import success_response, error_response
 
 
 def is_unblocked(spec_data: Dict[str, Any], task_id: str, task_data: Dict[str, Any]) -> bool:
@@ -161,10 +164,12 @@ def get_next_task(spec_data: Dict[str, Any]) -> Optional[Tuple[str, Dict[str, An
         # Prefer leaf tasks (no children) over parent tasks
         candidates = []
         for key, value in hierarchy.items():
-            if (value.get("type") in ["task", "subtask", "verify"] and
-                value.get("status") == "pending" and
-                is_unblocked(spec_data, key, value) and
-                is_in_current_phase(spec_data, key, current_phase)):
+            if (
+                value.get("type") in ["task", "subtask", "verify"]
+                and value.get("status") == "pending"
+                and is_unblocked(spec_data, key, value)
+                and is_in_current_phase(spec_data, key, current_phase)
+            ):
                 has_children = len(value.get("children", [])) > 0
                 candidates.append((key, value, has_children))
 
@@ -209,41 +214,47 @@ def check_dependencies(spec_data: Dict[str, Any], task_id: str) -> Dict[str, Any
         "can_start": is_unblocked(spec_data, task_id, task),
         "blocked_by": [],
         "soft_depends": [],
-        "blocks": []
+        "blocks": [],
     }
 
     # Get info for blocking tasks
     for dep_id in blocked_by:
         dep_task = hierarchy.get(dep_id)
         if dep_task:
-            result["blocked_by"].append({
-                "id": dep_id,
-                "title": dep_task.get("title", ""),
-                "status": dep_task.get("status", ""),
-                "file": dep_task.get("metadata", {}).get("file_path", "")
-            })
+            result["blocked_by"].append(
+                {
+                    "id": dep_id,
+                    "title": dep_task.get("title", ""),
+                    "status": dep_task.get("status", ""),
+                    "file": dep_task.get("metadata", {}).get("file_path", ""),
+                }
+            )
 
     # Get info for soft dependencies
     for dep_id in depends:
         dep_task = hierarchy.get(dep_id)
         if dep_task:
-            result["soft_depends"].append({
-                "id": dep_id,
-                "title": dep_task.get("title", ""),
-                "status": dep_task.get("status", ""),
-                "file": dep_task.get("metadata", {}).get("file_path", "")
-            })
+            result["soft_depends"].append(
+                {
+                    "id": dep_id,
+                    "title": dep_task.get("title", ""),
+                    "status": dep_task.get("status", ""),
+                    "file": dep_task.get("metadata", {}).get("file_path", ""),
+                }
+            )
 
     # Get info for tasks this blocks
     for dep_id in blocks:
         dep_task = hierarchy.get(dep_id)
         if dep_task:
-            result["blocks"].append({
-                "id": dep_id,
-                "title": dep_task.get("title", ""),
-                "status": dep_task.get("status", ""),
-                "file": dep_task.get("metadata", {}).get("file_path", "")
-            })
+            result["blocks"].append(
+                {
+                    "id": dep_id,
+                    "title": dep_task.get("title", ""),
+                    "status": dep_task.get("status", ""),
+                    "file": dep_task.get("metadata", {}).get("file_path", ""),
+                }
+            )
 
     return result
 
@@ -258,11 +269,7 @@ def _get_sibling_ids(
     if isinstance(children, list) and children:
         return [child_id for child_id in children if child_id in hierarchy]
 
-    return [
-        node_id
-        for node_id, node in hierarchy.items()
-        if node.get("parent") == parent_id
-    ]
+    return [node_id for node_id, node in hierarchy.items() if node.get("parent") == parent_id]
 
 
 def _get_latest_journal_excerpt(
@@ -273,9 +280,7 @@ def _get_latest_journal_excerpt(
     if not journal_entries:
         return None
 
-    filtered = [
-        entry for entry in journal_entries if entry.get("task_id") == task_id
-    ]
+    filtered = [entry for entry in journal_entries if entry.get("task_id") == task_id]
     if not filtered:
         return None
 
@@ -393,11 +398,7 @@ def get_parent_context(spec_data: Dict[str, Any], task_id: str) -> Optional[Dict
         return None
 
     parent_metadata = parent.get("metadata", {}) or {}
-    description = (
-        parent_metadata.get("description")
-        or parent_metadata.get("note")
-        or parent.get("description")
-    )
+    description = parent_metadata.get("description") or parent_metadata.get("note") or parent.get("description")
 
     children_ids = _get_sibling_ids(hierarchy, parent_id, parent)
     children_entries = [
@@ -466,11 +467,7 @@ def get_phase_context(spec_data: Dict[str, Any], task_id: str) -> Optional[Dict[
             break
 
     phase_metadata = phase_node.get("metadata", {}) or {}
-    summary = (
-        phase_metadata.get("description")
-        or phase_metadata.get("note")
-        or phase_node.get("description")
-    )
+    summary = phase_metadata.get("description") or phase_metadata.get("note") or phase_node.get("description")
     blockers = phase_node.get("dependencies", {}).get("blocked_by", []) or []
 
     completed = phase_node.get("completed_tasks")
@@ -518,10 +515,7 @@ def get_task_journal_summary(
         return {"entry_count": 0, "entries": []}
 
     journal = spec_data.get("journal", []) or []
-    filtered = [
-        entry for entry in journal
-        if entry.get("task_id") == task_id
-    ]
+    filtered = [entry for entry in journal if entry.get("task_id") == task_id]
 
     if not filtered:
         return {"entry_count": 0, "entries": []}
@@ -530,13 +524,15 @@ def get_task_journal_summary(
     entries = []
     for entry in filtered[:max_entries]:
         summary = (entry.get("content") or "").strip()
-        entries.append({
-            "timestamp": entry.get("timestamp"),
-            "entry_type": entry.get("entry_type"),
-            "title": entry.get("title"),
-            "summary": summary,
-            "author": entry.get("author"),
-        })
+        entries.append(
+            {
+                "timestamp": entry.get("timestamp"),
+                "entry_type": entry.get("entry_type"),
+                "title": entry.get("title"),
+                "summary": summary,
+                "author": entry.get("author"),
+            }
+        )
 
     return {
         "entry_count": len(filtered),
@@ -653,18 +649,12 @@ def prepare_task(
         if not next_task:
             # Check if spec is complete
             hierarchy = spec_data.get("hierarchy", {})
-            all_tasks = [
-                node for node in hierarchy.values()
-                if node.get("type") in ["task", "subtask", "verify"]
-            ]
+            all_tasks = [node for node in hierarchy.values() if node.get("type") in ["task", "subtask", "verify"]]
             completed = sum(1 for t in all_tasks if t.get("status") == "completed")
             pending = sum(1 for t in all_tasks if t.get("status") == "pending")
 
             if pending == 0 and completed > 0:
-                return asdict(success_response(
-                    task_id=None,
-                    spec_complete=True
-                ))
+                return asdict(success_response(task_id=None, spec_complete=True))
             else:
                 return asdict(error_response("No actionable tasks found"))
 
@@ -689,11 +679,13 @@ def prepare_task(
     # Compute autonomous mode hints
     auto_mode_hints = _compute_auto_mode_hints(spec_data, task_id, task_data)
 
-    return asdict(success_response(
-        task_id=task_id,
-        task_data=task_data,
-        dependencies=deps,
-        spec_complete=False,
-        context=context,
-        auto_mode_hints=auto_mode_hints,
-    ))
+    return asdict(
+        success_response(
+            task_id=task_id,
+            task_data=task_data,
+            dependencies=deps,
+            spec_complete=False,
+            context=context,
+            auto_mode_hints=auto_mode_hints,
+        )
+    )

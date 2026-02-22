@@ -1,26 +1,25 @@
 """
-Shared constants for SDD spec operations.
+Shared constants for Foundry spec operations.
 
 These constants are used across spec sub-modules. Import from here
 rather than defining inline to avoid duplication.
 """
 
 # Valid templates and categories for spec creation
-# Note: Only 'empty' template is supported. Use phase templates to add structure.
 TEMPLATES = ("empty",)
 TEMPLATE_DESCRIPTIONS = {
-    "empty": "Blank spec with no phases - use phase templates to add structure",
+    "empty": "Blank spec with no phases - use phase-add-bulk to add structure",
 }
 CATEGORIES = ("investigation", "implementation", "refactoring", "decision", "research")
+
+# Valid complexity levels for task nodes
+COMPLEXITY_LEVELS = ("low", "medium", "high")
 
 # Valid verification types for verify nodes
 # - run-tests: Automated tests via mcp__foundry-mcp__test-run
 # - fidelity: Implementation-vs-spec comparison via mcp__foundry-mcp__spec-review-fidelity
 # - manual: Manual verification steps
 VERIFICATION_TYPES = ("run-tests", "fidelity", "manual")
-
-# Valid phase templates for reusable phase structures
-PHASE_TEMPLATES = ("planning", "implementation", "testing", "security", "documentation")
 
 # Default retention policy for versioned backups
 DEFAULT_MAX_BACKUPS = 10
@@ -39,11 +38,7 @@ FRONTMATTER_KEYS = (
     "description",
     "mission",
     "objectives",
-    "complexity",
-    "estimated_hours",
-    "owner",
     "status",
-    "category",
     "progress_percentage",
     "current_phase",
 )

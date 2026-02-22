@@ -11,21 +11,16 @@ import logging
 import threading
 import time
 import traceback
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-from foundry_mcp.core.background_task import BackgroundTask, TaskStatus
 from foundry_mcp.core import task_registry
-from foundry_mcp.core.research.models import DeepResearchState
+from foundry_mcp.core.background_task import BackgroundTask, TaskStatus
+from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research.infrastructure import (
     _active_research_sessions,
     _active_sessions_lock,
 )
-
-if TYPE_CHECKING:
-    from foundry_mcp.core.research.workflows.deep_research.core import (
-        DeepResearchWorkflow,
-    )
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +35,19 @@ class BackgroundTaskMixin:
     - memory (inherited from ResearchWorkflowBase)
     """
 
+    memory: Any
+    _tasks: dict[str, BackgroundTask]
+    _tasks_lock: threading.Lock
+
+    if TYPE_CHECKING:
+
+        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
+        def _record_workflow_error(self, *args: Any, **kwargs: Any) -> None: ...
+        def _flush_state(self, *args: Any, **kwargs: Any) -> None: ...
+        async def _execute_workflow_async(self, *args: Any, **kwargs: Any) -> Any: ...
+
     def _start_background_task(
-        self: DeepResearchWorkflow,
+        self,
         state: DeepResearchState,
         provider_id: Optional[str],
         timeout_per_operation: float,
@@ -76,6 +82,7 @@ class BackgroundTaskMixin:
         def run_in_thread() -> None:
             """Thread target that runs the async workflow."""
             try:
+
                 async def run_workflow() -> WorkflowResult:
                     """Execute the full workflow asynchronously."""
                     try:
@@ -158,10 +165,7 @@ class BackgroundTaskMixin:
 
             except Exception as exc:
                 # Log the exception with full traceback
-                logger.exception(
-                    "Background task failed for research %s: %s",
-                    state.id, exc
-                )
+                logger.exception("Background task failed for research %s: %s", state.id, exc)
                 bg_task.status = TaskStatus.FAILED
                 bg_task.error = str(exc)
                 bg_task.completed_at = time.time()
@@ -226,12 +230,12 @@ class BackgroundTaskMixin:
             },
         )
 
-    def get_background_task(self: DeepResearchWorkflow, research_id: str) -> Optional[BackgroundTask]:
+    def get_background_task(self, research_id: str) -> Optional[BackgroundTask]:
         """Get a background task by research ID."""
         with self._tasks_lock:
             return self._tasks.get(research_id)
 
-    def _cleanup_completed_task(self: DeepResearchWorkflow, research_id: str) -> None:
+    def _cleanup_completed_task(self, research_id: str) -> None:
         """Remove a completed task from the registry to free memory.
 
         Called when a background task finishes (success, failure, or timeout).
@@ -253,14 +257,14 @@ class BackgroundTaskMixin:
             Number of tasks removed
         """
         import time
+
         now = time.time()
         removed = 0
         with cls._tasks_lock:
             stale_ids = [
                 task_id
                 for task_id, task in cls._tasks.items()
-                if task.is_done and task.completed_at
-                and (now - task.completed_at) > max_age_seconds
+                if task.is_done and task.completed_at and (now - task.completed_at) > max_age_seconds
             ]
             for task_id in stale_ids:
                 del cls._tasks[task_id]

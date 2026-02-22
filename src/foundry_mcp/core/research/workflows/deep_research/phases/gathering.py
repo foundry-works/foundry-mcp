@@ -13,30 +13,23 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Optional
 
 from foundry_mcp.core.observability import audit_log, get_metrics
-from foundry_mcp.core.research.models import (
-    DeepResearchState,
-    SourceQuality,
-)
+from foundry_mcp.core.research.models.deep_research import DeepResearchState
+from foundry_mcp.core.research.models.sources import SourceQuality
 from foundry_mcp.core.research.providers import (
-    SearchProvider,
-    SearchProviderError,
     GoogleSearchProvider,
     PerplexitySearchProvider,
+    SearchProvider,
+    SearchProviderError,
     SemanticScholarProvider,
-    TavilySearchProvider,
     TavilyExtractProvider,
+    TavilySearchProvider,
 )
 from foundry_mcp.core.research.providers.resilience import get_resilience_manager
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research.source_quality import (
-    get_domain_quality,
     _normalize_title,
+    get_domain_quality,
 )
-
-if TYPE_CHECKING:
-    from foundry_mcp.core.research.workflows.deep_research.core import (
-        DeepResearchWorkflow,
-    )
 
 logger = logging.getLogger(__name__)
 
@@ -50,13 +43,20 @@ class GatheringPhaseMixin:
     - _write_audit_event(), _check_cancellation() (cross-cutting methods)
     """
 
+    config: Any
+    memory: Any
+    _search_providers: dict[str, Any]
+
+    if TYPE_CHECKING:
+
+        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
+        def _check_cancellation(self, *args: Any, **kwargs: Any) -> None: ...
+
     # ------------------------------------------------------------------
     # Search provider configuration
     # ------------------------------------------------------------------
 
-    def _get_tavily_search_kwargs(
-        self: DeepResearchWorkflow, state: DeepResearchState
-    ) -> dict[str, Any]:
+    def _get_tavily_search_kwargs(self, state: DeepResearchState) -> dict[str, Any]:
         """Build Tavily search kwargs based on config and research mode.
 
         Applies parameter precedence:
@@ -100,10 +100,7 @@ class GatheringPhaseMixin:
         config = self.config
         default_topic = "general"
 
-        if (
-            getattr(config, "tavily_search_depth_configured", False)
-            or config.tavily_search_depth != "basic"
-        ):
+        if getattr(config, "tavily_search_depth_configured", False) or config.tavily_search_depth != "basic":
             kwargs["search_depth"] = config.tavily_search_depth
         if config.tavily_topic != default_topic or config.tavily_news_days is not None:
             kwargs["topic"] = config.tavily_topic
@@ -112,10 +109,7 @@ class GatheringPhaseMixin:
         kwargs["include_favicon"] = False  # Not typically needed for research
         if config.tavily_auto_parameters:
             kwargs["auto_parameters"] = True
-        if (
-            getattr(config, "tavily_chunks_per_source_configured", False)
-            or config.tavily_chunks_per_source != 3
-        ):
+        if getattr(config, "tavily_chunks_per_source_configured", False) or config.tavily_chunks_per_source != 3:
             kwargs["chunks_per_source"] = config.tavily_chunks_per_source
 
         # Only include optional parameters when explicitly set
@@ -131,9 +125,7 @@ class GatheringPhaseMixin:
 
         return kwargs
 
-    def _get_perplexity_search_kwargs(
-        self: DeepResearchWorkflow, state: DeepResearchState
-    ) -> dict[str, Any]:
+    def _get_perplexity_search_kwargs(self, state: DeepResearchState) -> dict[str, Any]:
         """Build Perplexity search kwargs based on config.
 
         Applies config values for Perplexity-specific parameters.
@@ -168,9 +160,7 @@ class GatheringPhaseMixin:
 
         return kwargs
 
-    def _get_semantic_scholar_search_kwargs(
-        self: DeepResearchWorkflow, state: DeepResearchState
-    ) -> dict[str, Any]:
+    def _get_semantic_scholar_search_kwargs(self, state: DeepResearchState) -> dict[str, Any]:
         """Build Semantic Scholar search kwargs based on config.
 
         Applies config values for Semantic Scholar-specific parameters.
@@ -208,9 +198,7 @@ class GatheringPhaseMixin:
     # Search provider factory
     # ------------------------------------------------------------------
 
-    def _get_search_provider(
-        self: DeepResearchWorkflow, provider_name: str
-    ) -> Optional[SearchProvider]:
+    def _get_search_provider(self, provider_name: str) -> Optional[SearchProvider]:
         """Get or create a search provider instance.
 
         Args:
@@ -255,7 +243,7 @@ class GatheringPhaseMixin:
     # ------------------------------------------------------------------
 
     async def _execute_gathering_async(
-        self: DeepResearchWorkflow,
+        self,
         state: DeepResearchState,
         provider_id: Optional[str],
         timeout: float,
@@ -323,9 +311,7 @@ class GatheringPhaseMixin:
             available_providers.append(provider)
 
         configured_providers = list(available_providers)
-        configured_provider_names = [
-            provider.get_provider_name() for provider in configured_providers
-        ]
+        configured_provider_names = [provider.get_provider_name() for provider in configured_providers]
 
         # Filter out providers with OPEN circuit breakers
         # HALF_OPEN providers are allowed to enable recovery probes
@@ -352,8 +338,7 @@ class GatheringPhaseMixin:
             if circuit_breaker_filtered:
                 # All configured providers have open circuit breakers
                 breaker_states = {
-                    name: resilience_manager.get_breaker_state(name).value
-                    for name in configured_provider_names
+                    name: resilience_manager.get_breaker_state(name).value for name in configured_provider_names
                 }
                 audit_log(
                     "all_providers_circuit_open",
@@ -362,9 +347,7 @@ class GatheringPhaseMixin:
                     configured_providers=configured_provider_names,
                     unavailable_providers=unavailable_providers,
                 )
-                logger.error(
-                    f"All providers have open circuit breakers: {breaker_states}"
-                )
+                logger.error(f"All providers have open circuit breakers: {breaker_states}")
                 return WorkflowResult(
                     success=False,
                     content="",
@@ -380,15 +363,13 @@ class GatheringPhaseMixin:
                     success=False,
                     content="",
                     error=(
-                        "No search providers available. Configure API keys for "
-                        "Tavily, Google, or Semantic Scholar."
+                        "No search providers available. Configure API keys for Tavily, Google, or Semantic Scholar."
                     ),
                 )
 
         # Capture circuit breaker states at start of gathering
         circuit_breaker_states_start = {
-            name: resilience_manager.get_breaker_state(name).value
-            for name in configured_provider_names
+            name: resilience_manager.get_breaker_state(name).value for name in configured_provider_names
         }
 
         # Semaphore for concurrency control
@@ -410,6 +391,7 @@ class GatheringPhaseMixin:
         failed_queries = 0
 
         try:
+
             async def execute_sub_query(sub_query) -> tuple[int, Optional[str]]:
                 """Execute a single sub-query and return (sources_added, error)."""
                 async with semaphore:
@@ -490,9 +472,7 @@ class GatheringPhaseMixin:
                                         seen_urls.add(source.url)
                                         # Apply domain-based quality scoring
                                         if source.quality == SourceQuality.UNKNOWN:
-                                            source.quality = get_domain_quality(
-                                                source.url, state.research_mode
-                                            )
+                                            source.quality = get_domain_quality(source.url, state.research_mode)
 
                                     # Add source to state
                                     state.sources.append(source)
@@ -530,9 +510,7 @@ class GatheringPhaseMixin:
                                 level="warning",
                             )
                         except asyncio.TimeoutError:
-                            provider_errors.append(
-                                f"{provider_name}: timeout after {timeout}s"
-                            )
+                            provider_errors.append(f"{provider_name}: timeout after {timeout}s")
                             self._write_audit_event(
                                 state,
                                 "gathering_provider_result",
@@ -561,9 +539,7 @@ class GatheringPhaseMixin:
                             )
 
                     if added > 0:
-                        sub_query.mark_completed(
-                            findings=f"Found {added} sources"
-                        )
+                        sub_query.mark_completed(findings=f"Found {added} sources")
                         logger.debug(
                             "Sub-query '%s' completed: %d sources",
                             sub_query.query[:50],
@@ -622,8 +598,7 @@ class GatheringPhaseMixin:
 
         # Capture circuit breaker states at end of gathering
         circuit_breaker_states_end = {
-            name: resilience_manager.get_breaker_state(name).value
-            for name in configured_provider_names
+            name: resilience_manager.get_breaker_state(name).value for name in configured_provider_names
         }
 
         # Save state (normal execution path after finally block)
@@ -709,7 +684,7 @@ class GatheringPhaseMixin:
     # ------------------------------------------------------------------
 
     async def _execute_extract_followup_async(
-        self: DeepResearchWorkflow,
+        self,
         state: DeepResearchState,
         max_urls: int = 5,
     ) -> Optional[dict[str, Any]]:
@@ -737,10 +712,7 @@ class GatheringPhaseMixin:
         import os
 
         # Get sources that have URLs but no content yet
-        sources_with_urls = [
-            s for s in state.sources
-            if s.url and not s.content
-        ]
+        sources_with_urls = [s for s in state.sources if s.url and not s.content]
 
         if not sources_with_urls:
             logger.debug("No sources need content extraction")

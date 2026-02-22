@@ -8,20 +8,19 @@ Tests cover:
 
 from __future__ import annotations
 
-import asyncio
 import time
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import patch
 
 import pytest
 
-from foundry_mcp.config import ResearchConfig
-from foundry_mcp.core.background_task import BackgroundTask, TaskStatus
-from foundry_mcp.core.research.models import (
-    DeepResearchState,
+from foundry_mcp.config.research import ResearchConfig
+from foundry_mcp.core.background_task import BackgroundTask
+from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
-    SubQuery,
+    DeepResearchState,
 )
+from foundry_mcp.core.research.models.sources import SubQuery
 from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
 
 

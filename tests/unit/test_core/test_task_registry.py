@@ -13,10 +13,10 @@ import asyncio
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from unittest.mock import MagicMock
 
 import pytest
 
+from foundry_mcp.core.background_task import BackgroundTask, TaskStatus
 from foundry_mcp.core.task_registry import (
     cleanup_stale_tasks,
     cleanup_stale_tasks_async,
@@ -31,7 +31,6 @@ from foundry_mcp.core.task_registry import (
     reset_task_registry,
     reset_task_registry_async,
 )
-from foundry_mcp.core.background_task import BackgroundTask, TaskStatus
 
 
 @pytest.fixture(autouse=True)
@@ -407,6 +406,7 @@ class TestTaskRegistryCleanup:
 
     def test_cleanup_removes_old_cancelled_tasks(self):
         """Should remove old cancelled tasks."""
+
         # Create a thread to cancel (needs a thread to cancel properly)
         def worker():
             time.sleep(0.01)

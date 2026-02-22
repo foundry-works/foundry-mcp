@@ -80,6 +80,59 @@ disabled_tools = ["error", "health"]
 # Example: FOUNDRY_MCP_DISABLED_TOOLS=error,research
 
 # =============================================================================
+# Feature Flag Configuration
+# =============================================================================
+#
+# Feature flags can be set in TOML and overridden by env vars.
+# Precedence:
+# 1) FOUNDRY_MCP_FEATURE_FLAG_<NAME> (per-flag)
+# 2) FOUNDRY_MCP_FEATURE_FLAGS (bulk, comma-separated)
+# 3) [feature_flags] section below
+
+[feature_flags]
+# Autonomy session APIs
+autonomy_sessions = false
+
+# Phase fidelity gate APIs (depends on autonomy_sessions)
+autonomy_fidelity_gates = false
+
+# =============================================================================
+# Autonomy Posture Profiles
+# =============================================================================
+#
+# Fixed profile enum (not extensible):
+# - unattended : headless-safe defaults (autonomy_runner + no escape hatches)
+# - supervised : human-in-the-loop defaults with standard guardrails
+# - debug      : maximum flexibility for manual troubleshooting
+#
+# Operators can still configure direct flags below for custom behavior.
+
+[autonomy_posture]
+profile = "unattended"
+# profile = "supervised"
+# profile = "debug"
+
+[autonomy_security]
+# Explicit role for authorization checks.
+role = "autonomy_runner"
+
+# Escape hatch controls.
+allow_lock_bypass = false
+allow_gate_waiver = false
+
+# Required gate invariant enforcement.
+enforce_required_phase_gates = true
+
+[autonomy_session_defaults]
+# Defaults used when task(action="session", command="start", ...) omits these fields.
+gate_policy = "strict"
+stop_on_phase_completion = true
+auto_retry_fidelity_gate = true
+max_tasks_per_session = 100
+max_consecutive_errors = 3
+max_fidelity_review_cycles_per_phase = 3
+
+# =============================================================================
 # Observability Configuration
 # =============================================================================
 #

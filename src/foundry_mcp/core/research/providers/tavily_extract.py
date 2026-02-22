@@ -32,12 +32,12 @@ from urllib.parse import urlparse
 
 import httpx
 
-from foundry_mcp.core.research.models import ResearchSource, SourceType
-from foundry_mcp.core.research.providers.base import (
+from foundry_mcp.core.errors.search import (
     AuthenticationError,
     RateLimitError,
     SearchProviderError,
 )
+from foundry_mcp.core.research.models.sources import ResearchSource, SourceType
 from foundry_mcp.core.research.providers.resilience import (
     ErrorClassification,
     ProviderResilienceConfig,
@@ -95,20 +95,8 @@ VALID_EXTRACT_DEPTHS = frozenset(["basic", "advanced"])
 VALID_FORMATS = frozenset(["markdown", "text"])
 
 
-class UrlValidationError(ValueError):
-    """Raised when URL validation fails (SSRF protection).
-
-    Attributes:
-        url: The URL that failed validation.
-        reason: Human-readable explanation of the failure.
-        error_code: Machine-readable error code (INVALID_URL or BLOCKED_HOST).
-    """
-
-    def __init__(self, url: str, reason: str, error_code: str = "INVALID_URL"):
-        self.url = url
-        self.reason = reason
-        self.error_code = error_code
-        super().__init__(f"URL validation failed for {url!r}: {reason}")
+# Error class (canonical definition in foundry_mcp.core.errors.research)
+from foundry_mcp.core.errors.research import UrlValidationError  # noqa: E402
 
 
 def _is_private_ip(ip_str: str) -> bool:
@@ -147,28 +135,26 @@ def _resolve_hostname(hostname: str, timeout: float = DNS_TIMEOUT) -> list[str]:
     old_timeout = socket.getdefaulttimeout()
     try:
         socket.setdefaulttimeout(timeout)
-        addr_info = socket.getaddrinfo(
-            hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM
-        )
+        addr_info = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
         return list({str(info[4][0]) for info in addr_info})
-    except socket.timeout:
+    except socket.timeout as e:
         raise UrlValidationError(
             hostname,
             f"DNS resolution timed out after {timeout}s",
             error_code="INVALID_URL",
-        )
+        ) from e
     except socket.gaierror as e:
         raise UrlValidationError(
             hostname,
             f"DNS resolution failed: {e}",
             error_code="INVALID_URL",
-        )
+        ) from e
     except OSError as e:
         raise UrlValidationError(
             hostname,
             f"DNS resolution failed: {e}",
             error_code="INVALID_URL",
-        )
+        ) from e
     finally:
         socket.setdefaulttimeout(old_timeout)
 
@@ -189,24 +175,24 @@ async def _resolve_hostname_async(
             timeout=timeout,
         )
         return list({str(info[4][0]) for info in addr_info})
-    except asyncio.TimeoutError:
+    except asyncio.TimeoutError as e:
         raise UrlValidationError(
             hostname,
             f"DNS resolution timed out after {timeout}s",
             error_code="INVALID_URL",
-        )
+        ) from e
     except socket.gaierror as e:
         raise UrlValidationError(
             hostname,
             f"DNS resolution failed: {e}",
             error_code="INVALID_URL",
-        )
+        ) from e
     except OSError as e:
         raise UrlValidationError(
             hostname,
             f"DNS resolution failed: {e}",
             error_code="INVALID_URL",
-        )
+        ) from e
 
 
 def _normalize_hostname(hostname: str) -> str:
@@ -230,7 +216,7 @@ def _validate_extract_url_base(url: str) -> Optional[str]:
     try:
         parsed = urlparse(url)
     except Exception as e:
-        raise UrlValidationError(url, f"Failed to parse URL: {e}", error_code="INVALID_URL")
+        raise UrlValidationError(url, f"Failed to parse URL: {e}", error_code="INVALID_URL") from e
 
     # Scheme validation: only http/https allowed
     if parsed.scheme not in ("http", "https"):
@@ -248,9 +234,7 @@ def _validate_extract_url_base(url: str) -> Optional[str]:
 
     # Block known localhost/loopback addresses
     if hostname in BLOCKED_HOSTS:
-        raise UrlValidationError(
-            url, f"Blocked host: {hostname}", error_code="BLOCKED_HOST"
-        )
+        raise UrlValidationError(url, f"Blocked host: {hostname}", error_code="BLOCKED_HOST")
 
     # Block hostname patterns (.local, .internal, etc.)
     for pattern in BLOCKED_HOSTNAME_PATTERNS:
@@ -331,23 +315,14 @@ def _validate_extract_params(
         ValueError: If any parameter is invalid.
     """
     if extract_depth not in VALID_EXTRACT_DEPTHS:
-        raise ValueError(
-            f"Invalid extract_depth: {extract_depth!r}. "
-            f"Must be one of: {sorted(VALID_EXTRACT_DEPTHS)}"
-        )
+        raise ValueError(f"Invalid extract_depth: {extract_depth!r}. Must be one of: {sorted(VALID_EXTRACT_DEPTHS)}")
 
     if format not in VALID_FORMATS:
-        raise ValueError(
-            f"Invalid format: {format!r}. "
-            f"Must be one of: {sorted(VALID_FORMATS)}"
-        )
+        raise ValueError(f"Invalid format: {format!r}. Must be one of: {sorted(VALID_FORMATS)}")
 
     if chunks_per_source is not None:
         if not isinstance(chunks_per_source, int) or chunks_per_source < 1 or chunks_per_source > 5:
-            raise ValueError(
-                f"Invalid chunks_per_source: {chunks_per_source!r}. "
-                "Must be an integer between 1 and 5."
-            )
+            raise ValueError(f"Invalid chunks_per_source: {chunks_per_source!r}. Must be an integer between 1 and 5.")
 
 
 class TavilyExtractProvider:
@@ -396,8 +371,7 @@ class TavilyExtractProvider:
         self._api_key = api_key or os.environ.get("TAVILY_API_KEY")
         if not self._api_key:
             raise ValueError(
-                "Tavily API key required. Provide via api_key parameter "
-                "or TAVILY_API_KEY environment variable."
+                "Tavily API key required. Provide via api_key parameter or TAVILY_API_KEY environment variable."
             )
 
         self._base_url = base_url.rstrip("/")
@@ -484,9 +458,7 @@ class TavilyExtractProvider:
         if not urls:
             raise ValueError("At least one URL is required")
         if len(urls) > MAX_URLS_PER_REQUEST:
-            raise ValueError(
-                f"Too many URLs: {len(urls)}. Maximum is {MAX_URLS_PER_REQUEST}."
-            )
+            raise ValueError(f"Too many URLs: {len(urls)}. Maximum is {MAX_URLS_PER_REQUEST}.")
 
         # Validate each URL for SSRF protection
         if validate_urls:
@@ -537,11 +509,17 @@ class TavilyExtractProvider:
                     raise RateLimitError(provider="tavily_extract", retry_after=parse_retry_after(response))
                 if response.status_code >= 400:
                     error_msg = extract_error_message(response)
-                    raise SearchProviderError(provider="tavily_extract", message=f"API error {response.status_code}: {error_msg}", retryable=response.status_code >= 500)
+                    raise SearchProviderError(
+                        provider="tavily_extract",
+                        message=f"API error {response.status_code}: {error_msg}",
+                        retryable=response.status_code >= 500,
+                    )
                 return response.json()
 
         executor = create_resilience_executor(
-            "tavily_extract", self.resilience_config, self.classify_error,
+            "tavily_extract",
+            self.resilience_config,
+            self.classify_error,
         )
         return await executor(make_request, timeout=self._timeout)
 

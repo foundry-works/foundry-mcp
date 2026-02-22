@@ -40,7 +40,7 @@ import logging
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
 if TYPE_CHECKING:
     from foundry_mcp.core.ai_consultation import ConsultationWorkflow
@@ -106,7 +106,7 @@ class PromptTemplate:
             Set of variable names found in {variable} placeholders
         """
         # Find all {variable} patterns, excluding {{ and }}
-        pattern = r'\{([a-zA-Z_][a-zA-Z0-9_]*)\}'
+        pattern = r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}"
         return set(re.findall(pattern, self.user_template))
 
     def validate_context(self, context: Dict[str, Any]) -> List[str]:
@@ -149,9 +149,7 @@ class PromptTemplate:
         # Validate required context
         missing = self.validate_context(context)
         if missing and strict:
-            raise ValueError(
-                f"Missing required context keys for template '{self.id}': {missing}"
-            )
+            raise ValueError(f"Missing required context keys for template '{self.id}': {missing}")
 
         # Build render context with defaults
         render_context = dict(defaults or {})
@@ -165,9 +163,7 @@ class PromptTemplate:
         try:
             return self.user_template.format(**render_context)
         except KeyError as exc:
-            raise ValueError(
-                f"Missing context key for template '{self.id}': {exc}"
-            ) from exc
+            raise ValueError(f"Missing context key for template '{self.id}': {exc}") from exc
 
 
 # =============================================================================
@@ -224,10 +220,7 @@ class PromptRegistry:
             ValueError: If template ID already registered and replace=False
         """
         if template.id in self._templates and not replace:
-            raise ValueError(
-                f"Template '{template.id}' is already registered. "
-                "Use replace=True to overwrite."
-            )
+            raise ValueError(f"Template '{template.id}' is already registered. Use replace=True to overwrite.")
 
         self._templates[template.id] = template
         logger.debug(
@@ -264,9 +257,7 @@ class PromptRegistry:
         template = self._templates.get(template_id)
         if template is None:
             available = ", ".join(sorted(self._templates.keys())) or "(none)"
-            raise KeyError(
-                f"Template '{template_id}' not found. Available: {available}"
-            )
+            raise KeyError(f"Template '{template_id}' not found. Available: {available}")
         return template
 
     def list_templates(self) -> List[str]:
@@ -429,9 +420,9 @@ def get_prompt_builder(workflow: "ConsultationWorkflow") -> PromptBuilder:
     """
     # Import here to avoid circular imports
     from foundry_mcp.core.ai_consultation import ConsultationWorkflow
-    from foundry_mcp.core.prompts.plan_review import PlanReviewPromptBuilder
     from foundry_mcp.core.prompts.fidelity_review import FidelityReviewPromptBuilder
     from foundry_mcp.core.prompts.markdown_plan_review import MarkdownPlanReviewPromptBuilder
+    from foundry_mcp.core.prompts.plan_review import PlanReviewPromptBuilder
 
     builders: Dict[ConsultationWorkflow, type[PromptBuilder]] = {
         ConsultationWorkflow.PLAN_REVIEW: PlanReviewPromptBuilder,

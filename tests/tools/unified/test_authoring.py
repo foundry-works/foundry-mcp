@@ -4,16 +4,7 @@ Tests that _dispatch_authoring_action catches exceptions and returns error respo
 instead of crashing the MCP server.
 """
 
-from unittest.mock import MagicMock, patch
-
-import pytest
-
-
-@pytest.fixture
-def mock_config():
-    """Create a mock ServerConfig."""
-    config = MagicMock()
-    return config
+from unittest.mock import patch
 
 
 class TestAuthoringDispatchExceptionHandling:
@@ -24,15 +15,18 @@ class TestAuthoringDispatchExceptionHandling:
         from foundry_mcp.tools.unified.authoring_handlers import _dispatch_authoring_action
 
         with patch(
-            "foundry_mcp.tools.unified.authoring_handlers._AUTHORING_ROUTER"
-        ) as mock_router:
-            mock_router.dispatch.side_effect = RuntimeError("Database connection failed")
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            with patch("foundry_mcp.tools.unified.authoring_handlers._AUTHORING_ROUTER") as mock_router:
+                mock_router.allowed_actions.return_value = ["spec-create"]
+                mock_router.dispatch.side_effect = RuntimeError("Database connection failed")
 
-            result = _dispatch_authoring_action(
-                action="spec-create",
-                payload={"name": "test"},
-                config=mock_config,
-            )
+                result = _dispatch_authoring_action(
+                    action="spec-create",
+                    payload={"name": "test"},
+                    config=mock_config,
+                )
 
         # Should return error response, not raise exception
         assert result["success"] is False
@@ -46,15 +40,18 @@ class TestAuthoringDispatchExceptionHandling:
         from foundry_mcp.tools.unified.authoring_handlers import _dispatch_authoring_action
 
         with patch(
-            "foundry_mcp.tools.unified.authoring_handlers._AUTHORING_ROUTER"
-        ) as mock_router:
-            mock_router.dispatch.side_effect = RuntimeError()
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            with patch("foundry_mcp.tools.unified.authoring_handlers._AUTHORING_ROUTER") as mock_router:
+                mock_router.allowed_actions.return_value = ["spec-create"]
+                mock_router.dispatch.side_effect = RuntimeError()
 
-            result = _dispatch_authoring_action(
-                action="spec-create",
-                payload={"name": "test"},
-                config=mock_config,
-            )
+                result = _dispatch_authoring_action(
+                    action="spec-create",
+                    payload={"name": "test"},
+                    config=mock_config,
+                )
 
         # Should use class name when message is empty
         assert result["success"] is False
@@ -68,14 +65,17 @@ class TestAuthoringDispatchExceptionHandling:
 
         with caplog.at_level(logging.ERROR):
             with patch(
-                "foundry_mcp.tools.unified.authoring_handlers._AUTHORING_ROUTER"
-            ) as mock_router:
-                mock_router.dispatch.side_effect = ValueError("test error")
+                "foundry_mcp.tools.unified.common.get_server_role",
+                return_value="maintainer",
+            ):
+                with patch("foundry_mcp.tools.unified.authoring_handlers._AUTHORING_ROUTER") as mock_router:
+                    mock_router.allowed_actions.return_value = ["spec-create"]
+                    mock_router.dispatch.side_effect = ValueError("test error")
 
-                _dispatch_authoring_action(
-                    action="spec-create",
-                    payload={"name": "test"},
-                    config=mock_config,
-                )
+                    _dispatch_authoring_action(
+                        action="spec-create",
+                        payload={"name": "test"},
+                        config=mock_config,
+                    )
 
         assert "test error" in caplog.text

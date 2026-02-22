@@ -9,7 +9,7 @@ Tests cover:
 
 import pytest
 
-from foundry_mcp.config import ResearchConfig
+from foundry_mcp.config.research import ResearchConfig
 
 
 class TestTavilySearchConfigParsing:
@@ -17,79 +17,57 @@ class TestTavilySearchConfigParsing:
 
     def test_parse_tavily_search_depth_basic(self):
         """Test tavily_search_depth='basic' is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "tavily_search_depth": "basic"
-        })
+        config = ResearchConfig.from_toml_dict({"tavily_search_depth": "basic"})
         assert config.tavily_search_depth == "basic"
 
     def test_parse_tavily_search_depth_advanced(self):
         """Test tavily_search_depth='advanced' is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "tavily_search_depth": "advanced"
-        })
+        config = ResearchConfig.from_toml_dict({"tavily_search_depth": "advanced"})
         assert config.tavily_search_depth == "advanced"
 
     def test_parse_tavily_search_depth_fast(self):
         """Test tavily_search_depth='fast' is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "tavily_search_depth": "fast"
-        })
+        config = ResearchConfig.from_toml_dict({"tavily_search_depth": "fast"})
         assert config.tavily_search_depth == "fast"
 
     def test_parse_tavily_search_depth_ultra_fast(self):
         """Test tavily_search_depth='ultra_fast' is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "tavily_search_depth": "ultra_fast"
-        })
+        config = ResearchConfig.from_toml_dict({"tavily_search_depth": "ultra_fast"})
         assert config.tavily_search_depth == "ultra_fast"
 
     def test_parse_tavily_topic_general(self):
         """Test tavily_topic='general' is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "tavily_topic": "general"
-        })
+        config = ResearchConfig.from_toml_dict({"tavily_topic": "general"})
         assert config.tavily_topic == "general"
 
     def test_parse_tavily_topic_news(self):
         """Test tavily_topic='news' is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "tavily_topic": "news"
-        })
+        config = ResearchConfig.from_toml_dict({"tavily_topic": "news"})
         assert config.tavily_topic == "news"
 
     def test_parse_tavily_news_days(self):
         """Test tavily_news_days is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "tavily_news_days": 7
-        })
+        config = ResearchConfig.from_toml_dict({"tavily_news_days": 7})
         assert config.tavily_news_days == 7
 
     def test_parse_tavily_include_images(self):
         """Test tavily_include_images is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "tavily_include_images": True
-        })
+        config = ResearchConfig.from_toml_dict({"tavily_include_images": True})
         assert config.tavily_include_images is True
 
     def test_parse_tavily_country(self):
         """Test tavily_country is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "tavily_country": "US"
-        })
+        config = ResearchConfig.from_toml_dict({"tavily_country": "US"})
         assert config.tavily_country == "US"
 
     def test_parse_tavily_chunks_per_source(self):
         """Test tavily_chunks_per_source is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "tavily_chunks_per_source": 3
-        })
+        config = ResearchConfig.from_toml_dict({"tavily_chunks_per_source": 3})
         assert config.tavily_chunks_per_source == 3
 
     def test_parse_tavily_auto_parameters(self):
         """Test tavily_auto_parameters is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "tavily_auto_parameters": True
-        })
+        config = ResearchConfig.from_toml_dict({"tavily_auto_parameters": True})
         assert config.tavily_auto_parameters is True
 
 
@@ -98,37 +76,27 @@ class TestTavilyExtractConfigParsing:
 
     def test_parse_tavily_extract_depth_basic(self):
         """Test tavily_extract_depth='basic' is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "tavily_extract_depth": "basic"
-        })
+        config = ResearchConfig.from_toml_dict({"tavily_extract_depth": "basic"})
         assert config.tavily_extract_depth == "basic"
 
     def test_parse_tavily_extract_depth_advanced(self):
         """Test tavily_extract_depth='advanced' is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "tavily_extract_depth": "advanced"
-        })
+        config = ResearchConfig.from_toml_dict({"tavily_extract_depth": "advanced"})
         assert config.tavily_extract_depth == "advanced"
 
     def test_parse_tavily_extract_include_images(self):
         """Test tavily_extract_include_images is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "tavily_extract_include_images": True
-        })
+        config = ResearchConfig.from_toml_dict({"tavily_extract_include_images": True})
         assert config.tavily_extract_include_images is True
 
     def test_parse_tavily_extract_in_deep_research(self):
         """Test tavily_extract_in_deep_research is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "tavily_extract_in_deep_research": True
-        })
+        config = ResearchConfig.from_toml_dict({"tavily_extract_in_deep_research": True})
         assert config.tavily_extract_in_deep_research is True
 
     def test_parse_tavily_extract_max_urls(self):
         """Test tavily_extract_max_urls is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "tavily_extract_max_urls": 10
-        })
+        config = ResearchConfig.from_toml_dict({"tavily_extract_max_urls": 10})
         assert config.tavily_extract_max_urls == 10
 
 
@@ -250,11 +218,13 @@ class TestTavilyConfigPrecedence:
 
     def test_explicit_value_overrides_default(self):
         """Test explicitly set values override defaults."""
-        config = ResearchConfig.from_toml_dict({
-            "tavily_search_depth": "advanced",
-            "tavily_topic": "news",
-            "tavily_news_days": 30,
-        })
+        config = ResearchConfig.from_toml_dict(
+            {
+                "tavily_search_depth": "advanced",
+                "tavily_topic": "news",
+                "tavily_news_days": 30,
+            }
+        )
 
         assert config.tavily_search_depth == "advanced"  # overridden
         assert config.tavily_topic == "news"  # overridden
@@ -263,9 +233,11 @@ class TestTavilyConfigPrecedence:
 
     def test_partial_override_preserves_other_defaults(self):
         """Test partial override preserves other default values."""
-        config = ResearchConfig.from_toml_dict({
-            "tavily_extract_depth": "advanced",
-        })
+        config = ResearchConfig.from_toml_dict(
+            {
+                "tavily_extract_depth": "advanced",
+            }
+        )
 
         assert config.tavily_extract_depth == "advanced"  # overridden
         assert config.tavily_extract_include_images is False  # default preserved
@@ -274,21 +246,23 @@ class TestTavilyConfigPrecedence:
 
     def test_all_tavily_fields_combined(self):
         """Test all Tavily fields can be set together."""
-        config = ResearchConfig.from_toml_dict({
-            # Search fields
-            "tavily_search_depth": "advanced",
-            "tavily_topic": "news",
-            "tavily_news_days": 7,
-            "tavily_include_images": True,
-            "tavily_country": "US",
-            "tavily_chunks_per_source": 5,
-            "tavily_auto_parameters": True,
-            # Extract fields
-            "tavily_extract_depth": "advanced",
-            "tavily_extract_include_images": True,
-            "tavily_extract_in_deep_research": True,
-            "tavily_extract_max_urls": 10,
-        })
+        config = ResearchConfig.from_toml_dict(
+            {
+                # Search fields
+                "tavily_search_depth": "advanced",
+                "tavily_topic": "news",
+                "tavily_news_days": 7,
+                "tavily_include_images": True,
+                "tavily_country": "US",
+                "tavily_chunks_per_source": 5,
+                "tavily_auto_parameters": True,
+                # Extract fields
+                "tavily_extract_depth": "advanced",
+                "tavily_extract_include_images": True,
+                "tavily_extract_in_deep_research": True,
+                "tavily_extract_max_urls": 10,
+            }
+        )
 
         # Search fields
         assert config.tavily_search_depth == "advanced"

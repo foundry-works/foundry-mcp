@@ -3,21 +3,22 @@ Lifecycle operations for SDD spec files.
 Provides spec status transitions: move, activate, complete, archive.
 """
 
+import json
+import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-import json
-import shutil
-
 
 # Data structures
+
 
 @dataclass
 class MoveResult:
     """
     Result of moving a spec between status folders.
     """
+
     success: bool
     spec_id: str
     from_folder: str
@@ -32,6 +33,7 @@ class LifecycleState:
     """
     Current lifecycle state of a spec.
     """
+
     spec_id: str
     folder: str  # pending, active, completed, archived
     status: str  # from spec-root
@@ -56,6 +58,7 @@ FOLDER_TRANSITIONS = {
 
 
 # Main lifecycle functions
+
 
 def move_spec(
     spec_id: str,
@@ -87,7 +90,7 @@ def move_spec(
     # Find current location
     current_folder, current_path = _find_spec_location(spec_id, specs_dir)
 
-    if not current_path:
+    if not current_path or not current_folder:
         return MoveResult(
             success=False,
             spec_id=spec_id,
@@ -233,7 +236,7 @@ def get_lifecycle_state(spec_id: str, specs_dir: Path) -> Optional[LifecycleStat
     """
     folder, path = _find_spec_location(spec_id, specs_dir)
 
-    if not path:
+    if not path or not folder:
         return None
 
     try:
@@ -306,15 +309,17 @@ def list_specs_by_folder(
                 total = root.get("total_tasks", 0)
                 completed = root.get("completed_tasks", 0)
 
-                specs.append({
-                    "spec_id": data.get("spec_id", spec_file.stem),
-                    "title": metadata.get("title") or root.get("title", "Untitled"),
-                    "status": root.get("status", "pending"),
-                    "total_tasks": total,
-                    "completed_tasks": completed,
-                    "progress": (completed / total * 100) if total > 0 else 0,
-                    "path": str(spec_file),
-                })
+                specs.append(
+                    {
+                        "spec_id": data.get("spec_id", spec_file.stem),
+                        "title": metadata.get("title") or root.get("title", "Untitled"),
+                        "status": root.get("status", "pending"),
+                        "total_tasks": total,
+                        "completed_tasks": completed,
+                        "progress": (completed / total * 100) if total > 0 else 0,
+                        "path": str(spec_file),
+                    }
+                )
             except (OSError, json.JSONDecodeError):
                 continue
 
@@ -339,6 +344,7 @@ def get_folder_for_spec(spec_id: str, specs_dir: Path) -> Optional[str]:
 
 
 # Helper functions
+
 
 def _find_spec_location(
     spec_id: str,

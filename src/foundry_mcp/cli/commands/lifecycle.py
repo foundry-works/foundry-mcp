@@ -1,19 +1,18 @@
-"""Spec lifecycle commands for SDD CLI.
+"""Spec lifecycle commands for Foundry CLI.
 
 Provides commands for spec lifecycle transitions: activate, complete, archive.
 """
-
 
 import click
 
 from foundry_mcp.cli.logging import cli_command, get_cli_logger
 from foundry_mcp.cli.output import emit_error, emit_success
+from foundry_mcp.cli.registry import get_context
 from foundry_mcp.cli.resilience import (
-    handle_keyboard_interrupt,
     MEDIUM_TIMEOUT,
+    handle_keyboard_interrupt,
     with_sync_timeout,
 )
-from foundry_mcp.cli.registry import get_context
 
 logger = get_cli_logger()
 from foundry_mcp.core.lifecycle import (
@@ -50,8 +49,8 @@ def activate_spec_cmd(ctx: click.Context, spec_id: str) -> None:
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
 
     result = activate_spec(spec_id, specs_dir)
@@ -78,9 +77,7 @@ def activate_spec_cmd(ctx: click.Context, spec_id: str) -> None:
 
 @lifecycle.command("complete")
 @click.argument("spec_id")
-@click.option(
-    "--force", "-f", is_flag=True, help="Force completion even with incomplete tasks."
-)
+@click.option("--force", "-f", is_flag=True, help="Force completion even with incomplete tasks.")
 @click.pass_context
 @cli_command("complete")
 @handle_keyboard_interrupt()
@@ -100,8 +97,8 @@ def complete_spec_cmd(ctx: click.Context, spec_id: str, force: bool) -> None:
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
 
     result = complete_spec(spec_id, specs_dir, force=force)
@@ -151,8 +148,8 @@ def archive_spec_cmd(ctx: click.Context, spec_id: str) -> None:
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
 
     result = archive_spec(spec_id, specs_dir)
@@ -179,9 +176,7 @@ def archive_spec_cmd(ctx: click.Context, spec_id: str) -> None:
 
 @lifecycle.command("move")
 @click.argument("spec_id")
-@click.argument(
-    "to_folder", type=click.Choice(["pending", "active", "completed", "archived"])
-)
+@click.argument("to_folder", type=click.Choice(["pending", "active", "completed", "archived"]))
 @click.pass_context
 @cli_command("move")
 @handle_keyboard_interrupt()
@@ -200,8 +195,8 @@ def move_spec_cmd(ctx: click.Context, spec_id: str, to_folder: str) -> None:
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
 
     result = move_spec(spec_id, to_folder, specs_dir)
@@ -249,8 +244,8 @@ def lifecycle_state_cmd(ctx: click.Context, spec_id: str) -> None:
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
 
     state = get_lifecycle_state(spec_id, specs_dir)
@@ -260,7 +255,7 @@ def lifecycle_state_cmd(ctx: click.Context, spec_id: str) -> None:
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs list",
+            remediation="Verify the spec ID exists using: foundry specs list",
             details={"spec_id": spec_id},
         )
 

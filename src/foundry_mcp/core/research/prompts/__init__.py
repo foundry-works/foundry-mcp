@@ -111,9 +111,7 @@ def get_summarization_prompt(
 
     # Get level instruction
     level_lower = level.lower()
-    level_instruction = LEVEL_INSTRUCTIONS.get(
-        level_lower, LEVEL_INSTRUCTIONS["key_points"]
-    )
+    level_instruction = LEVEL_INSTRUCTIONS.get(level_lower, LEVEL_INSTRUCTIONS["key_points"])
 
     # Build source provenance section
     if source_id:

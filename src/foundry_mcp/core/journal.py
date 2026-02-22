@@ -3,20 +3,21 @@ Journal and blocker operations for SDD spec files.
 Provides journal entry management, task blocking, and unblocking.
 """
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-import json
-
 
 # Data structures
+
 
 @dataclass
 class JournalEntry:
     """
     A journal entry in the spec file.
     """
+
     timestamp: str
     entry_type: str  # status_change, deviation, blocker, decision, note
     title: str
@@ -31,6 +32,7 @@ class BlockerInfo:
     """
     Information about a task blocker.
     """
+
     blocked_at: str
     blocker_type: str  # dependency, technical, resource, decision
     description: str
@@ -43,6 +45,7 @@ class ResolvedBlocker:
     """
     Information about a resolved blocker.
     """
+
     blocked_at: str
     blocker_type: str
     description: str
@@ -59,6 +62,7 @@ VALID_STATUSES = {"pending", "in_progress", "completed", "blocked"}
 
 
 # Journal operations
+
 
 def add_journal_entry(
     spec_data: Dict[str, Any],
@@ -245,15 +249,17 @@ def bulk_journal(
 
         spec_data["journal"].append(journal_entry)
 
-        created_entries.append(JournalEntry(
-            timestamp=timestamp,
-            entry_type=entry_type,
-            title=title,
-            content=content,
-            author=author,
-            task_id=task_id,
-            metadata=metadata,
-        ))
+        created_entries.append(
+            JournalEntry(
+                timestamp=timestamp,
+                entry_type=entry_type,
+                title=title,
+                content=content,
+                author=author,
+                task_id=task_id,
+                metadata=metadata,
+            )
+        )
 
     # Update last_updated timestamp once
     spec_data["last_updated"] = timestamp
@@ -284,6 +290,7 @@ def get_latest_journal_entry(
 
 
 # Blocker operations
+
 
 def mark_blocked(
     spec_data: Dict[str, Any],
@@ -369,14 +376,16 @@ def unblock(
     # Move blocker info to resolved_blockers
     if "blocker_description" in metadata:
         resolved_blockers = metadata.setdefault("resolved_blockers", [])
-        resolved_blockers.append({
-            "blocked_at": metadata.get("blocked_at"),
-            "blocker_type": metadata.get("blocker_type"),
-            "description": metadata.get("blocker_description"),
-            "ticket": metadata.get("blocker_ticket"),
-            "resolved_at": timestamp,
-            "resolution": resolution or "Blocker resolved",
-        })
+        resolved_blockers.append(
+            {
+                "blocked_at": metadata.get("blocked_at"),
+                "blocker_type": metadata.get("blocker_type"),
+                "description": metadata.get("blocker_description"),
+                "ticket": metadata.get("blocker_ticket"),
+                "resolved_at": timestamp,
+                "resolution": resolution or "Blocker resolved",
+            }
+        )
 
         # Remove active blocker fields
         for key in ["blocked_at", "blocker_type", "blocker_description", "blocker_ticket", "blocked_by_external"]:
@@ -480,19 +489,22 @@ def list_blocked_tasks(spec_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     for node_id, node in hierarchy.items():
         if node.get("status") == "blocked":
             metadata = node.get("metadata", {})
-            blocked.append({
-                "task_id": node_id,
-                "title": node.get("title", ""),
-                "blocker_type": metadata.get("blocker_type", "unknown"),
-                "blocker_description": metadata.get("blocker_description", ""),
-                "blocked_at": metadata.get("blocked_at", ""),
-                "ticket": metadata.get("blocker_ticket"),
-            })
+            blocked.append(
+                {
+                    "task_id": node_id,
+                    "title": node.get("title", ""),
+                    "blocker_type": metadata.get("blocker_type", "unknown"),
+                    "blocker_description": metadata.get("blocker_description", ""),
+                    "blocked_at": metadata.get("blocked_at", ""),
+                    "ticket": metadata.get("blocker_ticket"),
+                }
+            )
 
     return blocked
 
 
 # Status update with journaling
+
 
 def update_task_status(
     spec_data: Dict[str, Any],
@@ -516,10 +528,23 @@ def update_task_status(
         return False
 
     hierarchy = spec_data.get("hierarchy", {})
-    if task_id not in hierarchy:
+    task: Optional[Dict[str, Any]] = None
+
+    if task_id in hierarchy:
+        task = hierarchy[task_id]
+    else:
+        # Fall back to phases array (denormalized format used by some specs/tests)
+        for phase in spec_data.get("phases", []):
+            for t in phase.get("tasks", []):
+                if t.get("id") == task_id:
+                    task = t
+                    break
+            if task is not None:
+                break
+
+    if task is None:
         return False
 
-    task = hierarchy[task_id]
     timestamp = _get_timestamp()
 
     # Update status
@@ -597,16 +622,19 @@ def find_unjournaled_tasks(spec_data: Dict[str, Any]) -> List[Dict[str, str]]:
         if node.get("status") == "completed":
             metadata = node.get("metadata", {})
             if metadata.get("needs_journaling", False):
-                unjournaled.append({
-                    "task_id": node_id,
-                    "title": node.get("title", ""),
-                    "completed_at": metadata.get("completed_at", ""),
-                })
+                unjournaled.append(
+                    {
+                        "task_id": node_id,
+                        "title": node.get("title", ""),
+                        "completed_at": metadata.get("completed_at", ""),
+                    }
+                )
 
     return unjournaled
 
 
 # Utility functions
+
 
 def save_journal(
     spec_data: Dict[str, Any],
@@ -643,6 +671,7 @@ def save_journal(
 
 
 # Helper functions
+
 
 def _get_timestamp() -> str:
     """Get current timestamp in ISO 8601 format."""

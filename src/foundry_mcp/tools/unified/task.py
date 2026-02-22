@@ -11,28 +11,48 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from foundry_mcp.config import ServerConfig
-from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
+from foundry_mcp.config.server import ServerConfig
+from foundry_mcp.tools.unified.common import (
+    build_request_id,  # noqa: F401
+    dispatch_with_standard_errors,
+)
 from foundry_mcp.tools.unified.task_handlers import (  # noqa: F401
     _TASK_ROUTER,
     register_unified_task_tool,
 )
 from foundry_mcp.tools.unified.task_handlers._helpers import (  # noqa: F401
+    _attach_deprecation_metadata,
+    _attach_session_step_loop_metadata,
+    _emit_legacy_action_warning,
+    _normalize_task_action_shape,
+)
+from foundry_mcp.tools.unified.task_handlers._helpers import (
     _metric as _metric,
 )
-from foundry_mcp.tools.unified.common import build_request_id  # noqa: F401
 
 
 def _request_id() -> str:
     return build_request_id("task")
 
 
-def _dispatch_task_action(
-    *, action: str, payload: Dict[str, Any], config: ServerConfig
-) -> dict:
-    return dispatch_with_standard_errors(
-        _TASK_ROUTER, "task", action, config=config, **payload
+def _dispatch_task_action(*, action: str, payload: Dict[str, Any], config: ServerConfig) -> dict:
+    request_id = payload.get("request_id")
+    if not isinstance(request_id, str):
+        request_id = build_request_id("task")
+    normalized_action, normalized_payload, deprecation, error = _normalize_task_action_shape(
+        action=action,
+        payload=payload,
+        request_id=request_id,
     )
+    if error is not None:
+        return error
+
+    _emit_legacy_action_warning(normalized_action, deprecation)
+    response = dispatch_with_standard_errors(
+        _TASK_ROUTER, "task", normalized_action, config=config, **normalized_payload
+    )
+    response = _attach_deprecation_metadata(response, deprecation)
+    return _attach_session_step_loop_metadata(normalized_action, response)
 
 
 __all__ = [

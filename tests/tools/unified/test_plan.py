@@ -4,7 +4,7 @@ Tests that _dispatch_plan_action catches exceptions and returns error responses
 instead of crashing the MCP server.
 """
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 class TestPlanDispatchExceptionHandling:
@@ -15,14 +15,17 @@ class TestPlanDispatchExceptionHandling:
         from foundry_mcp.tools.unified.plan import _dispatch_plan_action
 
         with patch(
-            "foundry_mcp.tools.unified.plan._PLAN_ROUTER"
-        ) as mock_router:
-            mock_router.dispatch.side_effect = RuntimeError("Plan execution failed")
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            with patch("foundry_mcp.tools.unified.plan._PLAN_ROUTER") as mock_router:
+                mock_router.allowed_actions.return_value = ["create"]
+                mock_router.dispatch.side_effect = RuntimeError("Plan execution failed")
 
-            result = _dispatch_plan_action(
-                action="create",
-                payload={"name": "test-plan"},
-            )
+                result = _dispatch_plan_action(
+                    action="create",
+                    payload={"name": "test-plan"},
+                )
 
         # Should return error response, not raise exception
         assert result["success"] is False
@@ -36,14 +39,17 @@ class TestPlanDispatchExceptionHandling:
         from foundry_mcp.tools.unified.plan import _dispatch_plan_action
 
         with patch(
-            "foundry_mcp.tools.unified.plan._PLAN_ROUTER"
-        ) as mock_router:
-            mock_router.dispatch.side_effect = RuntimeError()
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            with patch("foundry_mcp.tools.unified.plan._PLAN_ROUTER") as mock_router:
+                mock_router.allowed_actions.return_value = ["create"]
+                mock_router.dispatch.side_effect = RuntimeError()
 
-            result = _dispatch_plan_action(
-                action="create",
-                payload={"name": "test-plan"},
-            )
+                result = _dispatch_plan_action(
+                    action="create",
+                    payload={"name": "test-plan"},
+                )
 
         # Should use class name when message is empty
         assert result["success"] is False
@@ -57,13 +63,59 @@ class TestPlanDispatchExceptionHandling:
 
         with caplog.at_level(logging.ERROR):
             with patch(
-                "foundry_mcp.tools.unified.plan._PLAN_ROUTER"
-            ) as mock_router:
-                mock_router.dispatch.side_effect = ValueError("test error")
+                "foundry_mcp.tools.unified.common.get_server_role",
+                return_value="maintainer",
+            ):
+                with patch("foundry_mcp.tools.unified.plan._PLAN_ROUTER") as mock_router:
+                    mock_router.allowed_actions.return_value = ["create"]
+                    mock_router.dispatch.side_effect = ValueError("test error")
+
+                    _dispatch_plan_action(
+                        action="create",
+                        payload={"name": "test-plan"},
+                    )
+
+        assert "test error" in caplog.text
+
+    def test_dispatch_forwards_config_to_router(self):
+        """_dispatch_plan_action should pass config through dispatch kwargs."""
+        from foundry_mcp.tools.unified.plan import _dispatch_plan_action
+
+        config = MagicMock()
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            with patch("foundry_mcp.tools.unified.plan._PLAN_ROUTER") as mock_router:
+                mock_router.allowed_actions.return_value = ["create"]
+                mock_router.dispatch.return_value = {"success": True}
 
                 _dispatch_plan_action(
                     action="create",
                     payload={"name": "test-plan"},
+                    config=config,
                 )
 
-        assert "test error" in caplog.text
+        mock_router.dispatch.assert_called_once_with(
+            action="create",
+            config=config,
+            name="test-plan",
+        )
+
+    def test_dispatch_with_config_still_enforces_authorization(self):
+        """Observer role should be denied even when config is provided."""
+        from foundry_mcp.tools.unified.plan import _dispatch_plan_action
+
+        config = MagicMock()
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="observer",
+        ):
+            result = _dispatch_plan_action(
+                action="create",
+                payload={"name": "test-plan"},
+                config=config,
+            )
+
+        assert result["success"] is False
+        assert result["data"]["error_code"] == "AUTHORIZATION"

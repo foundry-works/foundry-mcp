@@ -1,6 +1,6 @@
-"""Modification commands for SDD CLI.
+"""Modification commands for Foundry CLI.
 
-Provides commands for modifying SDD specifications including:
+Provides commands for modifying Foundry specifications including:
 - Applying bulk modifications from JSON files
 - Adding/removing tasks
 - Managing assumptions and revisions
@@ -18,17 +18,17 @@ from foundry_mcp.cli.output import emit_error, emit_success
 from foundry_mcp.cli.registry import get_context
 from foundry_mcp.cli.resilience import (
     MEDIUM_TIMEOUT,
-    with_sync_timeout,
     handle_keyboard_interrupt,
+    with_sync_timeout,
 )
 from foundry_mcp.core.modifications import apply_modifications, load_modifications_file
-from foundry_mcp.core.task import add_task, remove_task
 from foundry_mcp.core.spec import (
     add_assumption,
     add_phase,
     add_revision,
     update_frontmatter,
 )
+from foundry_mcp.core.task import add_task, remove_task
 
 logger = get_cli_logger()
 
@@ -84,8 +84,8 @@ def modify_apply_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -219,8 +219,8 @@ def modify_phase_add_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -274,7 +274,7 @@ def modify_phase_add_cmd(
         {
             "spec_id": spec_id,
             "dry_run": False,
-            **result,
+            **(result or {}),
             "telemetry": {"duration_ms": round(duration_ms, 2)},
         }
     )
@@ -353,8 +353,8 @@ def modify_task_add_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -415,7 +415,7 @@ def modify_task_add_cmd(
             "title": title,
             "type": task_type,
             "dry_run": False,
-            **result,
+            **(result or {}),
             "telemetry": {"duration_ms": round(duration_ms, 2)},
         }
     )
@@ -459,8 +459,8 @@ def modify_task_remove_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -511,7 +511,7 @@ def modify_task_remove_cmd(
             "task_id": task_id,
             "cascade": cascade,
             "dry_run": False,
-            **result,
+            **(result or {}),
             "telemetry": {"duration_ms": round(duration_ms, 2)},
         }
     )
@@ -564,8 +564,8 @@ def modify_assumption_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -616,7 +616,7 @@ def modify_assumption_cmd(
             "text": text,
             "type": assumption_type or "constraint",
             "dry_run": False,
-            **result,
+            **(result or {}),
             "telemetry": {"duration_ms": round(duration_ms, 2)},
         }
     )
@@ -668,8 +668,8 @@ def modify_revision_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -720,7 +720,7 @@ def modify_revision_cmd(
             "version": version,
             "changes": changes,
             "dry_run": False,
-            **result,
+            **(result or {}),
             "telemetry": {"duration_ms": round(duration_ms, 2)},
         }
     )
@@ -767,8 +767,8 @@ def modify_frontmatter_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -818,7 +818,7 @@ def modify_frontmatter_cmd(
             "key": key,
             "value": value,
             "dry_run": False,
-            **result,
+            **(result or {}),
             "telemetry": {"duration_ms": round(duration_ms, 2)},
         }
     )

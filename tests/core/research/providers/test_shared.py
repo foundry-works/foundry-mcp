@@ -5,7 +5,7 @@ Each acceptance criterion from the spec is explicitly verified.
 """
 
 import os
-from datetime import datetime, timezone
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -24,7 +24,6 @@ from foundry_mcp.core.research.providers.shared import (
     redact_secrets,
     resolve_provider_settings,
 )
-
 
 # ===========================================================================
 # Redaction helpers
@@ -436,7 +435,6 @@ class TestCreateResilienceExecutor:
     async def test_successful_execution(self):
         from foundry_mcp.core.research.providers.resilience import (
             ProviderResilienceConfig,
-            get_resilience_manager,
             reset_resilience_manager_for_testing,
         )
 
@@ -707,9 +705,7 @@ class TestRedactionIntegration:
 
     def test_extract_error_message_redacts(self):
         response = MagicMock(spec=httpx.Response)
-        response.json.return_value = {
-            "error": "Auth failed for token=sk-secret-key-that-is-very-long"
-        }
+        response.json.return_value = {"error": "Auth failed for token=sk-secret-key-that-is-very-long"}
         result = extract_error_message(response)
         assert "sk-secret-key-that-is-very-long" not in result
 

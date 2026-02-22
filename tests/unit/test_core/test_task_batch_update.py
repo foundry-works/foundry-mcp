@@ -1,25 +1,11 @@
 """Tests for batch_update_tasks function."""
 
 import json
-import tempfile
-from pathlib import Path
 
 import pytest
 
-from foundry_mcp.core.task import batch_update_tasks
 from foundry_mcp.core.spec import load_spec
-
-
-@pytest.fixture
-def temp_specs_dir():
-    """Create a temporary specs directory structure."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        specs_dir = (Path(tmpdir) / "specs").resolve()
-        (specs_dir / "pending").mkdir(parents=True)
-        (specs_dir / "active").mkdir(parents=True)
-        (specs_dir / "completed").mkdir(parents=True)
-        (specs_dir / "archived").mkdir(parents=True)
-        yield specs_dir
+from foundry_mcp.core.task import batch_update_tasks
 
 
 @pytest.fixture

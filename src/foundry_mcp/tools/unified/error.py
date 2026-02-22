@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from mcp.server.fastmcp import FastMCP
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.pagination import (
     CursorError,
@@ -17,17 +17,19 @@ from foundry_mcp.core.pagination import (
     normalize_page_size,
     paginated_response,
 )
-from foundry_mcp.core.responses import (
-    ErrorCode,
-    ErrorType,
+from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
+from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
 )
-from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
 
 logger = logging.getLogger(__name__)
 
@@ -88,10 +90,7 @@ def _missing_parameter_response(param: str, action: str) -> dict:
 def _resolve_error_store(
     config: ServerConfig,
 ) -> Tuple[Any | None, Optional[dict]]:
-    if (
-        not getattr(config, "error_collection", None)
-        or not config.error_collection.enabled
-    ):
+    if not getattr(config, "error_collection", None) or not config.error_collection.enabled:
         return None, _error_collection_disabled_response()
 
     try:
@@ -405,12 +404,8 @@ _ERROR_ROUTER = ActionRouter(
 )
 
 
-def _dispatch_error_action(
-    *, action: str, payload: Dict[str, Any], config: ServerConfig
-) -> dict:
-    return dispatch_with_standard_errors(
-        _ERROR_ROUTER, "error", action, config=config, **payload
-    )
+def _dispatch_error_action(*, action: str, payload: Dict[str, Any], config: ServerConfig) -> dict:
+    return dispatch_with_standard_errors(_ERROR_ROUTER, "error", action, config=config, **payload)
 
 
 def register_unified_error_tool(mcp: FastMCP, config: ServerConfig) -> None:

@@ -10,17 +10,17 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Optional
 
-from foundry_mcp.config import ResearchConfig
-from foundry_mcp.core.llm_config import ProviderSpec
+from foundry_mcp.config.research import ResearchConfig
+from foundry_mcp.core.llm_config.provider_spec import ProviderSpec
 from foundry_mcp.core.providers import ProviderHooks, ProviderRequest, ProviderStatus
 from foundry_mcp.core.providers.registry import available_providers, resolve_provider
 from foundry_mcp.core.research.memory import ResearchMemory
-from foundry_mcp.core.research.models import (
+from foundry_mcp.core.research.models.consensus import (
     ConsensusConfig,
     ConsensusState,
-    ConsensusStrategy,
     ModelResponse,
 )
+from foundry_mcp.core.research.models.enums import ConsensusStrategy
 from foundry_mcp.core.research.workflows.base import ResearchWorkflowBase, WorkflowResult
 
 logger = logging.getLogger(__name__)
@@ -107,7 +107,9 @@ class ConsensusWorkflow(ResearchWorkflowBase):
                 )
 
             # Use full spec strings for tracking, but we'll parse again when resolving
-            valid_providers = [spec.raw or f"{spec.provider}:{spec.model}" if spec.model else spec.provider for spec in valid_specs]
+            valid_providers = [
+                spec.raw or f"{spec.provider}:{spec.model}" if spec.model else spec.provider for spec in valid_specs
+            ]
 
             # Create consensus config and state
             consensus_config = ConsensusConfig(
@@ -151,10 +153,7 @@ class ConsensusWorkflow(ResearchWorkflowBase):
             # Check if we have enough responses
             successful = state.successful_responses()
             if len(successful) < min_responses:
-                failed_info = [
-                    f"{r.provider_id}: {r.error_message}"
-                    for r in state.failed_responses()
-                ]
+                failed_info = [f"{r.provider_id}: {r.error_message}" for r in state.failed_responses()]
                 return WorkflowResult(
                     success=False,
                     content="",
@@ -529,10 +528,7 @@ class ConsensusWorkflow(ResearchWorkflowBase):
             WorkflowResult with synthesized content
         """
         # Build synthesis prompt
-        response_text = "\n\n---\n\n".join(
-            f"Response from {r.provider_id}:\n{r.content}"
-            for r in responses
-        )
+        response_text = "\n\n---\n\n".join(f"Response from {r.provider_id}:\n{r.content}" for r in responses)
 
         synthesis_prompt = f"""You are synthesizing multiple AI responses to the same question.
 

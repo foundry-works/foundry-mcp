@@ -37,12 +37,8 @@ DEFAULT_QUEUE_LIMIT = 100
 DEFAULT_SHUTDOWN_TIMEOUT = 30.0
 
 
-class ExecutorExhaustedError(Exception):
-    """Raised when both dedicated and fallback executors are unavailable."""
-
-    def __init__(self, message: str = "Executor pool exhausted"):
-        super().__init__(message)
-        self.message = message
+# Error class (canonical definition in foundry_mcp.core.errors.execution)
+from foundry_mcp.core.errors.execution import ExecutorExhaustedError  # noqa: E402
 
 
 class ProviderExecutor:
@@ -176,8 +172,7 @@ class ProviderExecutor:
             self._fallback_executor = None
 
         logger.info(
-            "Provider executor shutdown complete: "
-            "fallback_count=%d",
+            "Provider executor shutdown complete: fallback_count=%d",
             self._fallback_count,
         )
 
@@ -277,17 +272,14 @@ class ProviderExecutor:
     ) -> T:
         """Run in fallback executor when primary is exhausted."""
         if self._fallback_executor is None:
-            raise ExecutorExhaustedError(
-                "Primary executor queue full and no fallback available"
-            )
+            raise ExecutorExhaustedError("Primary executor queue full and no fallback available")
 
         with self._lock:
             self._fallback_count += 1
             get_metrics().counter("provider_executor_fallback_total")
 
         logger.warning(
-            "Primary executor queue full, using fallback: "
-            "queued=%d, limit=%d",
+            "Primary executor queue full, using fallback: queued=%d, limit=%d",
             self._queued_tasks,
             self._queue_limit,
         )
@@ -358,10 +350,7 @@ def configure_executor(
     global _provider_executor
     with _executor_lock:
         if _provider_executor is not None and _provider_executor.is_started:
-            logger.warning(
-                "Reconfiguring already-started executor - "
-                "new settings will apply after restart"
-            )
+            logger.warning("Reconfiguring already-started executor - new settings will apply after restart")
         _provider_executor = ProviderExecutor(
             pool_size=pool_size,
             queue_limit=queue_limit,

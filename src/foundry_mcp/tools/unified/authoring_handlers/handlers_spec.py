@@ -4,29 +4,29 @@ from __future__ import annotations
 
 import time
 from dataclasses import asdict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.observability import audit_log
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.builders import (
+    error_response,
+    success_response,
+)
+from foundry_mcp.core.responses.sanitization import sanitize_error_message
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
-    error_response,
-    sanitize_error_message,
-    success_response,
 )
 from foundry_mcp.core.spec import (
     CATEGORIES,
     TEMPLATES,
-    PHASE_TEMPLATES,
     create_spec,
     find_replace_in_spec,
     generate_spec_data,
     rollback_spec,
     update_frontmatter,
 )
-from foundry_mcp.core.validation import validate_spec
-
+from foundry_mcp.core.validation.rules import validate_spec
 from foundry_mcp.tools.unified.authoring_handlers._helpers import (
     _metric_name,
     _metrics,
@@ -35,96 +35,91 @@ from foundry_mcp.tools.unified.authoring_handlers._helpers import (
     _validation_error,
     logger,
 )
+from foundry_mcp.tools.unified.param_schema import Bool, Str, validate_payload
 
 # Valid scopes for find-replace
 _FIND_REPLACE_SCOPES = {"all", "titles", "descriptions"}
+
+_SPEC_UPDATE_FRONTMATTER_SCHEMA = {
+    "spec_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED),
+    "key": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED),
+    # value validated imperatively — any type, just required
+    "dry_run": Bool(default=False, error_code=ErrorCode.INVALID_FORMAT),
+    "path": Str(error_code=ErrorCode.INVALID_FORMAT),
+}
+
+_SPEC_FIND_REPLACE_SCHEMA = {
+    "spec_id": Str(
+        required=True, error_code=ErrorCode.MISSING_REQUIRED, remediation="Pass the spec identifier to authoring"
+    ),
+    "find": Str(
+        required=True, error_code=ErrorCode.MISSING_REQUIRED, remediation="Specify the text or regex pattern to find"
+    ),
+    # replace validated imperatively — needs MISSING_REQUIRED vs INVALID_FORMAT
+    "scope": Str(
+        choices=frozenset(_FIND_REPLACE_SCOPES),
+        error_code=ErrorCode.INVALID_FORMAT,
+        remediation=f"Use one of: {sorted(_FIND_REPLACE_SCOPES)}",
+    ),
+    "use_regex": Bool(default=False, error_code=ErrorCode.INVALID_FORMAT),
+    "case_sensitive": Bool(default=True, error_code=ErrorCode.INVALID_FORMAT),
+    "dry_run": Bool(default=False, error_code=ErrorCode.INVALID_FORMAT),
+    "path": Str(error_code=ErrorCode.INVALID_FORMAT),
+}
+
+_SPEC_ROLLBACK_SCHEMA = {
+    "spec_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED),
+    "version": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED),
+    "dry_run": Bool(default=False),
+    "path": Str(),
+}
+
+_SPEC_CREATE_SCHEMA = {
+    "name": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED),
+    "template": Str(
+        choices=frozenset(TEMPLATES),
+        remediation="Use template='empty' and add phases via phase-add-bulk",
+    ),
+    "category": Str(choices=frozenset(CATEGORIES), remediation=f"Use one of: {', '.join(CATEGORIES)}"),
+    "mission": Str(),
+    "plan_path": Str(
+        required=True, error_code=ErrorCode.MISSING_REQUIRED, remediation="Provide the path to the markdown plan file"
+    ),
+    "plan_review_path": Str(
+        required=True,
+        error_code=ErrorCode.MISSING_REQUIRED,
+        remediation="Provide the path to the synthesized plan review file",
+    ),
+    "dry_run": Bool(default=False),
+    "path": Str(),
+}
 
 
 def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "spec-create"
 
-    name = payload.get("name")
-    if not isinstance(name, str) or not name.strip():
-        return _validation_error(
-            field="name",
-            action=action,
-            message="Provide a non-empty specification name",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
+    # Apply defaults for template and category before validation
+    payload["template"] = payload.get("template") or "empty"
+    payload["category"] = payload.get("category") or "implementation"
 
-    template = payload.get("template") or "empty"
-    if not isinstance(template, str):
-        return _validation_error(
-            field="template",
-            action=action,
-            message="template must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-    template = template.strip() or "empty"
-    if template not in TEMPLATES:
-        return _validation_error(
-            field="template",
-            action=action,
-            message=f"Only 'empty' template is supported. Use phase templates to add structure.",
-            request_id=request_id,
-            remediation="Use template='empty' and add phases via phase-add-bulk or phase-template apply",
-        )
+    err = validate_payload(payload, _SPEC_CREATE_SCHEMA, tool_name="authoring", action=action, request_id=request_id)
+    if err:
+        return err
 
-    category = payload.get("category") or "implementation"
-    if not isinstance(category, str):
-        return _validation_error(
-            field="category",
-            action=action,
-            message="category must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-    category = category.strip() or "implementation"
-    if category not in CATEGORIES:
-        return _validation_error(
-            field="category",
-            action=action,
-            message=f"Category must be one of: {', '.join(CATEGORIES)}",
-            request_id=request_id,
-            remediation=f"Use one of: {', '.join(CATEGORIES)}",
-        )
-
+    name = payload["name"]
+    template = payload["template"]
+    category = payload["category"]
     mission = payload.get("mission")
-    if mission is not None and not isinstance(mission, str):
-        return _validation_error(
-            field="mission",
-            action=action,
-            message="mission must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
-    dry_run = payload.get("dry_run", False)
-    if dry_run is not None and not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="dry_run must be a boolean",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
+    plan_path = payload["plan_path"]
+    plan_review_path = payload["plan_review_path"]
+    dry_run = payload["dry_run"]
     path = payload.get("path")
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            field="path",
-            action=action,
-            message="path must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
 
     specs_dir, specs_err = _resolve_specs_dir(config, path)
     if specs_err:
         return specs_err
+    assert specs_dir is not None
 
     if dry_run:
         # Generate spec data for preflight validation
@@ -133,6 +128,8 @@ def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
             template=template,
             category=category,
             mission=mission,
+            plan_path=plan_path,
+            plan_review_path=plan_review_path,
         )
         if gen_error:
             return _validation_error(
@@ -143,6 +140,7 @@ def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
                 code=ErrorCode.VALIDATION_ERROR,
             )
 
+        assert spec_data is not None
         # Run full validation on generated spec
         validation_result = validate_spec(spec_data)
         diagnostics = [
@@ -190,6 +188,8 @@ def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
         template=template,
         category=category,
         mission=mission,
+        plan_path=plan_path,
+        plan_review_path=plan_review_path,
         specs_dir=specs_dir,
     )
     elapsed_ms = (time.perf_counter() - start_time) * 1000
@@ -291,22 +291,17 @@ def _handle_spec_template(*, config: ServerConfig, **payload: Any) -> dict:
         data["templates"] = [
             {
                 "name": "empty",
-                "description": "Blank spec with no phases - use phase templates to add structure",
+                "description": "Blank spec with no phases - use phase-add-bulk to add structure",
             },
         ]
-        data["phase_templates"] = [
-            {"name": t, "description": f"Add {t} phase structure"}
-            for t in PHASE_TEMPLATES
-        ]
         data["total_count"] = 1
-        data["message"] = "Use 'empty' template, then add phases via phase-add-bulk or phase-template apply"
+        data["message"] = "Use 'empty' template, then add phases via phase-add-bulk"
     elif template_action == "show":
         data["template_name"] = template_name
         data["content"] = {
             "name": template_name,
             "description": "Blank spec with no phases",
-            "usage": "Use authoring(action='spec-create', name='your-spec') to create, then add phases",
-            "phase_templates": list(PHASE_TEMPLATES),
+            "usage": "Use authoring(action='spec-create', name='your-spec') to create, then add phases via phase-add-bulk",
         }
     else:
         data["template_name"] = template_name
@@ -316,8 +311,7 @@ def _handle_spec_template(*, config: ServerConfig, **payload: Any) -> dict:
         }
         data["instructions"] = (
             "1. Create spec: authoring(action='spec-create', name='your-spec-name')\n"
-            "2. Add phases: authoring(action='phase-template', template_action='apply', "
-            "template_name='planning', spec_id='...')"
+            "2. Add phases: authoring(action='phase-add-bulk', spec_id='...', title='Phase 1', tasks=[...])"
         )
 
     return asdict(success_response(data=data, request_id=request_id))
@@ -327,26 +321,18 @@ def _handle_spec_update_frontmatter(*, config: ServerConfig, **payload: Any) -> 
     request_id = _request_id()
     action = "spec-update-frontmatter"
 
-    spec_id = payload.get("spec_id")
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
+    err = validate_payload(
+        payload, _SPEC_UPDATE_FRONTMATTER_SCHEMA, tool_name="authoring", action=action, request_id=request_id
+    )
+    if err:
+        return err
 
-    key = payload.get("key")
-    if not isinstance(key, str) or not key.strip():
-        return _validation_error(
-            field="key",
-            action=action,
-            message="Provide a non-empty metadata key",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
+    spec_id = payload["spec_id"]
+    key = payload["key"]
+    dry_run = payload["dry_run"]
+    path = payload.get("path")
 
+    # value is required but can be any type — keep imperative
     value = payload.get("value")
     if value is None:
         return _validation_error(
@@ -355,26 +341,6 @@ def _handle_spec_update_frontmatter(*, config: ServerConfig, **payload: Any) -> 
             message="Provide a value",
             request_id=request_id,
             code=ErrorCode.MISSING_REQUIRED,
-        )
-
-    dry_run = payload.get("dry_run", False)
-    if dry_run is not None and not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="dry_run must be a boolean",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
-    path = payload.get("path")
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            field="path",
-            action=action,
-            message="path must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
         )
 
     specs_dir, specs_err = _resolve_specs_dir(config, path)
@@ -461,32 +427,24 @@ def _handle_spec_find_replace(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "spec-find-replace"
 
-    # Required: spec_id
-    spec_id = payload.get("spec_id")
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec_id parameter",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-            remediation="Pass the spec identifier to authoring",
-        )
-    spec_id = spec_id.strip()
+    # Pre-apply scope default before schema validation
+    payload["scope"] = payload.get("scope") or "all"
 
-    # Required: find
-    find = payload.get("find")
-    if not isinstance(find, str) or not find:
-        return _validation_error(
-            field="find",
-            action=action,
-            message="Provide a non-empty find pattern",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-            remediation="Specify the text or regex pattern to find",
-        )
+    err = validate_payload(
+        payload, _SPEC_FIND_REPLACE_SCHEMA, tool_name="authoring", action=action, request_id=request_id
+    )
+    if err:
+        return err
 
-    # Required: replace (can be empty string to delete matches)
+    spec_id = payload["spec_id"]
+    find = payload["find"]
+    scope = payload["scope"]
+    use_regex = payload["use_regex"]
+    case_sensitive = payload["case_sensitive"]
+    dry_run = payload["dry_run"]
+    path = payload.get("path")
+
+    # replace needs MISSING_REQUIRED vs INVALID_FORMAT — keep imperative
     replace = payload.get("replace")
     if replace is None:
         return _validation_error(
@@ -505,65 +463,6 @@ def _handle_spec_find_replace(*, config: ServerConfig, **payload: Any) -> dict:
             request_id=request_id,
             code=ErrorCode.INVALID_FORMAT,
             remediation="Provide a string value for replace parameter",
-        )
-
-    # Optional: scope (default: "all")
-    scope = payload.get("scope", "all")
-    if not isinstance(scope, str) or scope not in _FIND_REPLACE_SCOPES:
-        return _validation_error(
-            field="scope",
-            action=action,
-            message=f"scope must be one of: {sorted(_FIND_REPLACE_SCOPES)}",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-            remediation=f"Use one of: {sorted(_FIND_REPLACE_SCOPES)}",
-        )
-
-    # Optional: use_regex (default: False)
-    use_regex = payload.get("use_regex", False)
-    if not isinstance(use_regex, bool):
-        return _validation_error(
-            field="use_regex",
-            action=action,
-            message="use_regex must be a boolean",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-            remediation="Set use_regex to true or false",
-        )
-
-    # Optional: case_sensitive (default: True)
-    case_sensitive = payload.get("case_sensitive", True)
-    if not isinstance(case_sensitive, bool):
-        return _validation_error(
-            field="case_sensitive",
-            action=action,
-            message="case_sensitive must be a boolean",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-            remediation="Set case_sensitive to true or false",
-        )
-
-    # Optional: dry_run (default: False)
-    dry_run = payload.get("dry_run", False)
-    if not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="dry_run must be a boolean",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-            remediation="Set dry_run to true or false",
-        )
-
-    # Optional: path (workspace)
-    path = payload.get("path")
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            field="path",
-            action=action,
-            message="Workspace path must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
         )
 
     specs_dir, specs_err = _resolve_specs_dir(config, path)
@@ -661,45 +560,14 @@ def _handle_spec_rollback(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "spec-rollback"
 
-    spec_id = payload.get("spec_id")
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec_id parameter",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    spec_id = spec_id.strip()
+    err = validate_payload(payload, _SPEC_ROLLBACK_SCHEMA, tool_name="authoring", action=action, request_id=request_id)
+    if err:
+        return err
 
-    timestamp = payload.get("version")  # Use 'version' parameter for timestamp
-    if not isinstance(timestamp, str) or not timestamp.strip():
-        return _validation_error(
-            field="version",
-            action=action,
-            message="Provide the backup timestamp to restore (use spec history to list)",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    timestamp = timestamp.strip()
-
-    dry_run = payload.get("dry_run", False)
-    if not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="Expected a boolean value",
-            request_id=request_id,
-        )
-
+    spec_id = payload["spec_id"]
+    timestamp = payload["version"]
+    dry_run = payload["dry_run"]
     path = payload.get("path")
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            field="path",
-            action=action,
-            message="Workspace path must be a string",
-            request_id=request_id,
-        )
 
     specs_dir, specs_err = _resolve_specs_dir(config, path)
     if specs_err:

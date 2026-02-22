@@ -14,12 +14,14 @@ import logging
 from dataclasses import asdict
 from typing import Any, Dict, Optional
 
-from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.responses import (
-    ErrorCode,
-    ErrorType,
+from foundry_mcp.config.server import ServerConfig
+from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
+)
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
 )
 
 logger = logging.getLogger(__name__)
@@ -87,7 +89,7 @@ def build_server_context_response(
 
     if include_capabilities:
         try:
-            from foundry_mcp.core.discovery import get_capabilities
+            from foundry_mcp.core.discovery.capabilities import get_capabilities
 
             payload["capabilities"] = get_capabilities()
         except Exception as exc:

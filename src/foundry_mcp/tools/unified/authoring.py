@@ -11,8 +11,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from foundry_mcp.config import ServerConfig
-from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
+from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.tools.unified.authoring_handlers import (  # noqa: F401
     _AUTHORING_ROUTER,
     register_unified_authoring_tool,
@@ -20,19 +19,18 @@ from foundry_mcp.tools.unified.authoring_handlers import (  # noqa: F401
 from foundry_mcp.tools.unified.authoring_handlers._helpers import (  # noqa: F401
     _metric_name as _metric_name,
 )
-from foundry_mcp.tools.unified.common import build_request_id  # noqa: F401
+from foundry_mcp.tools.unified.common import (
+    build_request_id,  # noqa: F401
+    dispatch_with_standard_errors,
+)
 
 
 def _request_id() -> str:
     return build_request_id("authoring")
 
 
-def _dispatch_authoring_action(
-    *, action: str, payload: Dict[str, Any], config: ServerConfig
-) -> dict:
-    return dispatch_with_standard_errors(
-        _AUTHORING_ROUTER, "authoring", action, config=config, **payload
-    )
+def _dispatch_authoring_action(*, action: str, payload: Dict[str, Any], config: ServerConfig) -> dict:
+    return dispatch_with_standard_errors(_AUTHORING_ROUTER, "authoring", action, config=config, **payload)
 
 
 __all__ = [

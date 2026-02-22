@@ -1,22 +1,10 @@
 """Tests for check_spec_completeness and detect_duplicate_tasks functions."""
 
 import json
-import tempfile
-from pathlib import Path
 
 import pytest
 
 from foundry_mcp.core.spec import check_spec_completeness, detect_duplicate_tasks
-
-
-@pytest.fixture
-def temp_specs_dir():
-    """Create a temporary specs directory structure."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        specs_dir = (Path(tmpdir) / "specs").resolve()
-        for folder in ["pending", "active", "completed", "archived"]:
-            (specs_dir / folder).mkdir(parents=True)
-        yield specs_dir
 
 
 @pytest.fixture
@@ -190,9 +178,7 @@ class TestCheckSpecCompleteness:
         spec_file = temp_specs_dir / "active" / "complete-spec-001.json"
         spec_file.write_text(json.dumps(complete_spec))
 
-        result, error = check_spec_completeness(
-            "complete-spec-001", specs_dir=temp_specs_dir
-        )
+        result, error = check_spec_completeness("complete-spec-001", specs_dir=temp_specs_dir)
 
         assert error is None
         assert result["completeness_score"] == 100
@@ -203,9 +189,7 @@ class TestCheckSpecCompleteness:
         spec_file = temp_specs_dir / "active" / "incomplete-spec-001.json"
         spec_file.write_text(json.dumps(incomplete_spec))
 
-        result, error = check_spec_completeness(
-            "incomplete-spec-001", specs_dir=temp_specs_dir
-        )
+        result, error = check_spec_completeness("incomplete-spec-001", specs_dir=temp_specs_dir)
 
         assert error is None
         assert result["completeness_score"] < 100
@@ -217,16 +201,13 @@ class TestCheckSpecCompleteness:
         assert "titles" in categories  # Empty phase title
         assert "descriptions" in categories  # Missing description
         assert "file_paths" in categories  # Missing file_path for impl task
-        assert "estimates" in categories  # Missing estimated_hours
 
     def test_category_scores(self, temp_specs_dir, incomplete_spec):
         """Category scores should reflect completion."""
         spec_file = temp_specs_dir / "active" / "incomplete-spec-001.json"
         spec_file.write_text(json.dumps(incomplete_spec))
 
-        result, error = check_spec_completeness(
-            "incomplete-spec-001", specs_dir=temp_specs_dir
-        )
+        result, error = check_spec_completeness("incomplete-spec-001", specs_dir=temp_specs_dir)
 
         assert error is None
         categories = result["categories"]
@@ -241,9 +222,7 @@ class TestCheckSpecCompleteness:
 
     def test_spec_not_found(self, temp_specs_dir):
         """Should return error for non-existent spec."""
-        result, error = check_spec_completeness(
-            "nonexistent-spec", specs_dir=temp_specs_dir
-        )
+        result, error = check_spec_completeness("nonexistent-spec", specs_dir=temp_specs_dir)
 
         assert result is None
         assert "not found" in error.lower()
@@ -281,9 +260,7 @@ class TestDetectDuplicateTasks:
 
         # task-1-1 and task-1-2 should be similar
         node_pairs = [(d["node_a"], d["node_b"]) for d in result["duplicates"]]
-        found_auth_pair = any(
-            ("task-1-1" in pair and "task-1-2" in pair) for pair in node_pairs
-        )
+        found_auth_pair = any(("task-1-1" in pair and "task-1-2" in pair) for pair in node_pairs)
         assert found_auth_pair
 
     def test_threshold_filtering(self, temp_specs_dir, duplicate_spec):
@@ -382,9 +359,7 @@ class TestDetectDuplicateTasks:
 
     def test_spec_not_found(self, temp_specs_dir):
         """Should return error for non-existent spec."""
-        result, error = detect_duplicate_tasks(
-            "nonexistent-spec", specs_dir=temp_specs_dir
-        )
+        result, error = detect_duplicate_tasks("nonexistent-spec", specs_dir=temp_specs_dir)
 
         assert result is None
         assert "not found" in error.lower()
@@ -408,9 +383,7 @@ class TestDetectDuplicateTasks:
         spec_file = temp_specs_dir / "active" / "duplicate-spec-001.json"
         spec_file.write_text(json.dumps(duplicate_spec))
 
-        result, error = detect_duplicate_tasks(
-            "duplicate-spec-001", specs_dir=temp_specs_dir
-        )
+        result, error = detect_duplicate_tasks("duplicate-spec-001", specs_dir=temp_specs_dir)
 
         assert error is None
         assert "spec_id" in result

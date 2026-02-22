@@ -12,12 +12,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from foundry_mcp.core.research.models import (
-    ConversationThread,
-    ThreadStatus,
-)
+from foundry_mcp.core.research.models.enums import ThreadStatus
 from foundry_mcp.core.research.workflows.base import WorkflowResult
-
 
 # =============================================================================
 # Test Fixtures
@@ -45,22 +41,28 @@ class MockWorkflowResult:
 @pytest.fixture
 def mock_config(tmp_path: Path):
     """Mock server config for testing."""
-    with patch("foundry_mcp.tools.unified.research._get_config") as mock_get_config:
-        mock_cfg = MagicMock()
-        mock_cfg.research.enabled = True
-        mock_cfg.get_research_dir.return_value = tmp_path
-        mock_cfg.research.ttl_hours = 24
-        mock_get_config.return_value = mock_cfg
-        yield mock_cfg
+    import foundry_mcp.tools.unified.research_handlers._helpers as _helpers
+
+    mock_cfg = MagicMock()
+    mock_cfg.research.enabled = True
+    mock_cfg.get_research_dir.return_value = tmp_path
+    mock_cfg.research.ttl_hours = 24
+    old_config = _helpers._config
+    _helpers._config = mock_cfg
+    yield mock_cfg
+    _helpers._config = old_config
 
 
 @pytest.fixture
 def mock_memory():
     """Mock research memory instance."""
-    with patch("foundry_mcp.tools.unified.research._get_memory") as mock_get_memory:
-        memory = MagicMock()
-        mock_get_memory.return_value = memory
-        yield memory
+    import foundry_mcp.tools.unified.research_handlers._helpers as _helpers
+
+    memory = MagicMock()
+    old_memory = _helpers._memory
+    _helpers._memory = memory
+    yield memory
+    _helpers._memory = old_memory
 
 
 # =============================================================================
@@ -71,13 +73,19 @@ def mock_memory():
 class TestResearchDispatch:
     """Tests for action dispatch logic."""
 
+    @pytest.fixture(autouse=True)
+    def _maintainer_role(self):
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            yield
+
     def test_dispatch_to_chat(self, mock_config, mock_memory):
         """Should dispatch 'chat' action and call chat workflow."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=True,
@@ -96,9 +104,7 @@ class TestResearchDispatch:
         """Should dispatch 'consensus' action and call consensus workflow."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        with patch(
-            "foundry_mcp.tools.unified.research.ConsensusWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.ConsensusWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=True,
@@ -121,9 +127,7 @@ class TestResearchDispatch:
         """Should dispatch 'thinkdeep' action and call thinkdeep workflow."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        with patch(
-            "foundry_mcp.tools.unified.research.ThinkDeepWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.ThinkDeepWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=True,
@@ -148,9 +152,7 @@ class TestResearchDispatch:
         """Should dispatch 'ideate' action and call ideate workflow."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        with patch(
-            "foundry_mcp.tools.unified.research.IdeateWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.IdeateWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=True,
@@ -180,6 +182,7 @@ class TestResearchDispatch:
         assert "data" in result
         assert result["data"]["error_code"] == "VALIDATION_ERROR"
 
+
 # =============================================================================
 # Chat Handler Tests
 # =============================================================================
@@ -202,9 +205,7 @@ class TestChatHandler:
         """Should return success response from chat workflow."""
         from foundry_mcp.tools.unified.research import _handle_chat
 
-        with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=True,
@@ -228,9 +229,7 @@ class TestChatHandler:
         """Should return error response on chat workflow failure."""
         from foundry_mcp.tools.unified.research import _handle_chat
 
-        with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=False,
@@ -253,9 +252,7 @@ class TestChatHandler:
 class TestConsensusHandler:
     """Tests for consensus action handler."""
 
-    def test_consensus_requires_prompt(
-        self, mock_config, mock_memory
-    ):
+    def test_consensus_requires_prompt(self, mock_config, mock_memory):
         """Should return validation error when prompt is missing."""
         from foundry_mcp.tools.unified.research import _handle_consensus
 
@@ -264,9 +261,7 @@ class TestConsensusHandler:
         assert result["success"] is False
         assert "prompt" in result["error"].lower()
 
-    def test_consensus_invalid_strategy(
-        self, mock_config, mock_memory
-    ):
+    def test_consensus_invalid_strategy(self, mock_config, mock_memory):
         """Should return validation error for invalid strategy."""
         from foundry_mcp.tools.unified.research import _handle_consensus
 
@@ -280,9 +275,7 @@ class TestConsensusHandler:
         """Should return success response from consensus workflow."""
         from foundry_mcp.tools.unified.research import _handle_consensus
 
-        with patch(
-            "foundry_mcp.tools.unified.research.ConsensusWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.ConsensusWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=True,
@@ -312,9 +305,7 @@ class TestConsensusHandler:
 class TestThinkDeepHandler:
     """Tests for thinkdeep action handler."""
 
-    def test_thinkdeep_requires_topic_or_id(
-        self, mock_config, mock_memory
-    ):
+    def test_thinkdeep_requires_topic_or_id(self, mock_config, mock_memory):
         """Should return validation error when neither topic nor ID provided."""
         from foundry_mcp.tools.unified.research import _handle_thinkdeep
 
@@ -327,9 +318,7 @@ class TestThinkDeepHandler:
         """Should start new investigation with topic."""
         from foundry_mcp.tools.unified.research import _handle_thinkdeep
 
-        with patch(
-            "foundry_mcp.tools.unified.research.ThinkDeepWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.ThinkDeepWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=True,
@@ -351,15 +340,11 @@ class TestThinkDeepHandler:
             assert result["data"]["investigation_id"] == "inv-123"
             assert result["data"]["converged"] is False
 
-    def test_thinkdeep_with_investigation_id(
-        self, mock_config, mock_memory
-    ):
+    def test_thinkdeep_with_investigation_id(self, mock_config, mock_memory):
         """Should continue existing investigation with ID."""
         from foundry_mcp.tools.unified.research import _handle_thinkdeep
 
-        with patch(
-            "foundry_mcp.tools.unified.research.ThinkDeepWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.ThinkDeepWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=True,
@@ -390,9 +375,7 @@ class TestThinkDeepHandler:
 class TestIdeateHandler:
     """Tests for ideate action handler."""
 
-    def test_ideate_requires_topic_or_id(
-        self, mock_config, mock_memory
-    ):
+    def test_ideate_requires_topic_or_id(self, mock_config, mock_memory):
         """Should return validation error when neither topic nor ID provided."""
         from foundry_mcp.tools.unified.research import _handle_ideate
 
@@ -405,9 +388,7 @@ class TestIdeateHandler:
         """Should start new ideation with topic."""
         from foundry_mcp.tools.unified.research import _handle_ideate
 
-        with patch(
-            "foundry_mcp.tools.unified.research.IdeateWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.IdeateWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=True,
@@ -437,15 +418,11 @@ class TestIdeateHandler:
 class TestThreadListHandler:
     """Tests for thread-list action handler."""
 
-    def test_thread_list_returns_threads(
-        self, mock_config, mock_memory
-    ):
+    def test_thread_list_returns_threads(self, mock_config, mock_memory):
         """Should return list of threads."""
         from foundry_mcp.tools.unified.research import _handle_thread_list
 
-        with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_threads.ChatWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.list_threads.return_value = [
                 {"id": "thread-1", "title": "Thread 1", "status": "active"},
@@ -459,15 +436,11 @@ class TestThreadListHandler:
             assert result["data"]["count"] == 2
             assert len(result["data"]["threads"]) == 2
 
-    def test_thread_list_with_status_filter(
-        self, mock_config, mock_memory
-    ):
+    def test_thread_list_with_status_filter(self, mock_config, mock_memory):
         """Should filter threads by status."""
         from foundry_mcp.tools.unified.research import _handle_thread_list
 
-        with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_threads.ChatWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.list_threads.return_value = [
                 {"id": "thread-1", "title": "Thread 1", "status": "active"},
@@ -481,9 +454,7 @@ class TestThreadListHandler:
             call_kwargs = mock_workflow.list_threads.call_args.kwargs
             assert call_kwargs["status"] == ThreadStatus.ACTIVE
 
-    def test_thread_list_invalid_status(
-        self, mock_config, mock_memory
-    ):
+    def test_thread_list_invalid_status(self, mock_config, mock_memory):
         """Should return validation error for invalid status."""
         from foundry_mcp.tools.unified.research import _handle_thread_list
 
@@ -509,9 +480,7 @@ class TestThreadGetHandler:
         """Should return thread details when found."""
         from foundry_mcp.tools.unified.research import _handle_thread_get
 
-        with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_threads.ChatWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.get_thread.return_value = {
                 "id": "thread-123",
@@ -529,9 +498,7 @@ class TestThreadGetHandler:
         """Should return not found error when thread doesn't exist."""
         from foundry_mcp.tools.unified.research import _handle_thread_get
 
-        with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_threads.ChatWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.get_thread.return_value = None
             MockWorkflow.return_value = mock_workflow
@@ -545,9 +512,7 @@ class TestThreadGetHandler:
 class TestThreadDeleteHandler:
     """Tests for thread-delete action handler."""
 
-    def test_thread_delete_requires_id(
-        self, mock_config, mock_memory
-    ):
+    def test_thread_delete_requires_id(self, mock_config, mock_memory):
         """Should return validation error when thread_id is missing."""
         from foundry_mcp.tools.unified.research import _handle_thread_delete
 
@@ -560,9 +525,7 @@ class TestThreadDeleteHandler:
         """Should return success when thread deleted."""
         from foundry_mcp.tools.unified.research import _handle_thread_delete
 
-        with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_threads.ChatWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.delete_thread.return_value = True
             MockWorkflow.return_value = mock_workflow
@@ -577,9 +540,7 @@ class TestThreadDeleteHandler:
         """Should return not found error when thread doesn't exist."""
         from foundry_mcp.tools.unified.research import _handle_thread_delete
 
-        with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_threads.ChatWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.delete_thread.return_value = False
             MockWorkflow.return_value = mock_workflow
@@ -598,9 +559,7 @@ class TestThreadDeleteHandler:
 class TestResponseEnvelope:
     """Tests for response envelope structure (meta.version=response-v2)."""
 
-    def test_success_response_has_version(
-        self, mock_config, mock_memory
-    ):
+    def test_success_response_has_version(self, mock_config, mock_memory):
         """Success responses should have meta.version=response-v2."""
         from foundry_mcp.tools.unified.research import _handle_thread_list
 
@@ -610,9 +569,7 @@ class TestResponseEnvelope:
         assert "meta" in result
         assert result["meta"]["version"] == "response-v2"
 
-    def test_error_response_has_version(
-        self, mock_config, mock_memory
-    ):
+    def test_error_response_has_version(self, mock_config, mock_memory):
         """Error responses should have meta.version=response-v2."""
         from foundry_mcp.tools.unified.research import _handle_chat
 
@@ -622,9 +579,7 @@ class TestResponseEnvelope:
         assert "meta" in result
         assert result["meta"]["version"] == "response-v2"
 
-    def test_error_response_has_error_code(
-        self, mock_config, mock_memory
-    ):
+    def test_error_response_has_error_code(self, mock_config, mock_memory):
         """Error responses should include error_code in data."""
         from foundry_mcp.tools.unified.research import _handle_chat
 
@@ -633,11 +588,9 @@ class TestResponseEnvelope:
         assert result["success"] is False
         assert "data" in result
         assert "error_code" in result["data"]
-        assert result["data"]["error_code"] == "VALIDATION_ERROR"
+        assert result["data"]["error_code"] == "MISSING_REQUIRED"
 
-    def test_error_response_has_error_type(
-        self, mock_config, mock_memory
-    ):
+    def test_error_response_has_error_type(self, mock_config, mock_memory):
         """Error responses should include error_type in data."""
         from foundry_mcp.tools.unified.research import _handle_chat
 
@@ -648,9 +601,7 @@ class TestResponseEnvelope:
         assert "error_type" in result["data"]
         assert result["data"]["error_type"] == "validation"
 
-    def test_error_response_has_remediation(
-        self, mock_config, mock_memory
-    ):
+    def test_error_response_has_remediation(self, mock_config, mock_memory):
         """Error responses should include remediation guidance."""
         from foundry_mcp.tools.unified.research import _handle_chat
 
@@ -669,37 +620,18 @@ class TestResponseEnvelope:
 class TestFeatureFlag:
     """Tests for feature flag handling."""
 
-    def test_feature_flag_error_response_format(
-        self, mock_config, mock_memory
-    ):
-        """Feature flag error response should follow response-v2 format."""
-        from dataclasses import asdict
+    @pytest.fixture(autouse=True)
+    def _maintainer_role(self):
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            yield
 
-        from foundry_mcp.core.responses import ErrorCode, ErrorType, error_response
-
-        # The research tool returns this error when feature flag is disabled
-        response = error_response(
-            "Research tools are not enabled",
-            error_code=ErrorCode.FEATURE_DISABLED,
-            error_type=ErrorType.UNAVAILABLE,
-            remediation="Enable 'research_tools' feature flag in configuration",
-        )
-        result = asdict(response)
-
-        assert result["success"] is False
-        assert "not enabled" in result["error"]
-        assert result["data"]["error_code"] == "FEATURE_DISABLED"
-        assert result["data"]["error_type"] == "unavailable"
-        assert result["meta"]["version"] == "response-v2"
-
-    def test_dispatch_without_feature_flag_check(
-        self, mock_config, mock_memory
-    ):
-        """Dispatch should work when called directly (feature flag in wrapper)."""
+    def test_dispatch_research_action_directly(self, mock_config, mock_memory):
+        """Dispatch should work when called directly."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        # _dispatch_research_action doesn't check feature flag
-        # The feature flag is checked in the registered tool function wrapper
         result = _dispatch_research_action(action="thread-list")
 
         assert result["success"] is True
@@ -713,15 +645,19 @@ class TestFeatureFlag:
 class TestErrorConditions:
     """Tests for error handling."""
 
-    def test_workflow_exception_handled(
-        self, mock_config, mock_memory
-    ):
+    @pytest.fixture(autouse=True)
+    def _maintainer_role(self):
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            yield
+
+    def test_workflow_exception_handled(self, mock_config, mock_memory):
         """Should handle exceptions from workflow gracefully."""
         from foundry_mcp.tools.unified.research import _handle_chat
 
-        with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=False,
@@ -758,13 +694,9 @@ class TestErrorConditions:
         """Exceptions during dispatch should return error response, not crash MCP server."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow") as MockWorkflow:
             # Simulate an exception (e.g., provider API failure)
-            MockWorkflow.return_value.execute.side_effect = RuntimeError(
-                "API insufficient credits"
-            )
+            MockWorkflow.return_value.execute.side_effect = RuntimeError("API insufficient credits")
 
             result = _dispatch_research_action("chat", prompt="Hello")
 
@@ -778,16 +710,13 @@ class TestErrorConditions:
 
     def test_dispatch_exception_logs_error(self, mock_config, mock_memory, caplog):
         """Exceptions during dispatch should be logged."""
-        from foundry_mcp.tools.unified.research import _dispatch_research_action
         import logging
 
+        from foundry_mcp.tools.unified.research import _dispatch_research_action
+
         with caplog.at_level(logging.ERROR):
-            with patch(
-                "foundry_mcp.tools.unified.research.ChatWorkflow"
-            ) as MockWorkflow:
-                MockWorkflow.return_value.execute.side_effect = ValueError(
-                    "test error"
-                )
+            with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow") as MockWorkflow:
+                MockWorkflow.return_value.execute.side_effect = ValueError("test error")
 
                 _dispatch_research_action("chat", prompt="Hello")
 
@@ -870,12 +799,8 @@ class TestActionRouter:
         router = ActionRouter(
             tool_name="test",
             actions=[
-                ActionDefinition(
-                    name="action1", handler=lambda: {}, summary="First action"
-                ),
-                ActionDefinition(
-                    name="action2", handler=lambda: {}, summary="Second action"
-                ),
+                ActionDefinition(name="action1", handler=lambda: {}, summary="First action"),
+                ActionDefinition(name="action2", handler=lambda: {}, summary="Second action"),
             ],
         )
 
@@ -900,7 +825,7 @@ class TestDeepResearchTimeoutConfig:
         mock_config.research.deep_research_timeout = 300.0
 
         with patch(
-            "foundry_mcp.tools.unified.research.DeepResearchWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_deep_research.DeepResearchWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
@@ -933,7 +858,7 @@ class TestDeepResearchTimeoutConfig:
         mock_config.research.deep_research_timeout = 300.0
 
         with patch(
-            "foundry_mcp.tools.unified.research.DeepResearchWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_deep_research.DeepResearchWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
@@ -958,9 +883,10 @@ class TestDeepResearchTimeoutConfig:
 
     def test_hardcoded_fallback_when_config_missing(self, mock_memory):
         """Hardcoded fallback (600s) used when config field missing."""
+        import foundry_mcp.tools.unified.research_handlers._helpers as _helpers
         from foundry_mcp.tools.unified.research import _handle_deep_research
 
-        with patch("foundry_mcp.tools.unified.research._get_config") as mock_get_config:
+        with patch.object(_helpers, "_get_config") as mock_get_config:
             mock_cfg = MagicMock()
             mock_cfg.research.enabled = True
             # Simulate missing deep_research_timeout by having it return default
@@ -968,7 +894,7 @@ class TestDeepResearchTimeoutConfig:
             mock_get_config.return_value = mock_cfg
 
             with patch(
-                "foundry_mcp.tools.unified.research.DeepResearchWorkflow"
+                "foundry_mcp.tools.unified.research_handlers.handlers_deep_research.DeepResearchWorkflow"
             ) as MockWorkflow:
                 mock_workflow = MagicMock()
                 mock_workflow.execute.return_value = WorkflowResult(

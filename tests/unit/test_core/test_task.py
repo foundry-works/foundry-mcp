@@ -1,44 +1,26 @@
 """Tests for core task operations."""
 
 import json
-import tempfile
-from pathlib import Path
 
 import pytest
 
+from foundry_mcp.core.spec import load_spec
 from foundry_mcp.core.task import (
-    is_unblocked,
-    is_in_current_phase,
-    get_next_task,
+    add_task,
     check_dependencies,
-    get_previous_sibling,
+    get_next_task,
     get_parent_context,
     get_phase_context,
+    get_previous_sibling,
     get_task_journal_summary,
-    prepare_task,
-    add_task,
-    update_task_metadata,
-    move_task,
+    is_in_current_phase,
+    is_unblocked,
     manage_task_dependency,
+    move_task,
+    prepare_task,
+    update_task_metadata,
     update_task_requirements,
 )
-from foundry_mcp.core.spec import load_spec
-
-
-@pytest.fixture
-def temp_specs_dir():
-    """Create a temporary specs directory structure."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # Resolve to handle macOS /var -> /private/var symlink
-        specs_dir = (Path(tmpdir) / "specs").resolve()
-
-        # Create status directories
-        (specs_dir / "pending").mkdir(parents=True)
-        (specs_dir / "active").mkdir(parents=True)
-        (specs_dir / "completed").mkdir(parents=True)
-        (specs_dir / "archived").mkdir(parents=True)
-
-        yield specs_dir
 
 
 @pytest.fixture
@@ -394,12 +376,7 @@ class TestAddTask:
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
 
-        result, error = add_task(
-            "test-spec-001",
-            parent_id="phase-1",
-            title="New Task",
-            specs_dir=temp_specs_dir
-        )
+        result, error = add_task("test-spec-001", parent_id="phase-1", title="New Task", specs_dir=temp_specs_dir)
 
         assert error is None
         assert result is not None
@@ -422,11 +399,7 @@ class TestAddTask:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = add_task(
-            "test-spec-001",
-            parent_id="task-1-1",
-            title="Subtask",
-            task_type="subtask",
-            specs_dir=temp_specs_dir
+            "test-spec-001", parent_id="task-1-1", title="Subtask", task_type="subtask", specs_dir=temp_specs_dir
         )
 
         assert error is None
@@ -443,11 +416,7 @@ class TestAddTask:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = add_task(
-            "test-spec-001",
-            parent_id="phase-1",
-            title="Run Tests",
-            task_type="verify",
-            specs_dir=temp_specs_dir
+            "test-spec-001", parent_id="phase-1", title="Run Tests", task_type="verify", specs_dir=temp_specs_dir
         )
 
         assert error is None
@@ -464,7 +433,7 @@ class TestAddTask:
             parent_id="phase-1",
             title="Documented Task",
             description="This is the task description",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -478,11 +447,7 @@ class TestAddTask:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = add_task(
-            "test-spec-001",
-            parent_id="phase-1",
-            title="Estimated Task",
-            estimated_hours=4.5,
-            specs_dir=temp_specs_dir
+            "test-spec-001", parent_id="phase-1", title="Estimated Task", estimated_hours=4.5, specs_dir=temp_specs_dir
         )
 
         assert error is None
@@ -496,11 +461,7 @@ class TestAddTask:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = add_task(
-            "test-spec-001",
-            parent_id="phase-1",
-            title="Inserted Task",
-            position=0,
-            specs_dir=temp_specs_dir
+            "test-spec-001", parent_id="phase-1", title="Inserted Task", position=0, specs_dir=temp_specs_dir
         )
 
         assert error is None
@@ -518,12 +479,7 @@ class TestAddTask:
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
 
-        result, error = add_task(
-            "test-spec-001",
-            parent_id="phase-1",
-            title="New Task",
-            specs_dir=temp_specs_dir
-        )
+        result, error = add_task("test-spec-001", parent_id="phase-1", title="New Task", specs_dir=temp_specs_dir)
 
         assert error is None
         spec_data = load_spec("test-spec-001", temp_specs_dir)
@@ -532,12 +488,7 @@ class TestAddTask:
 
     def test_add_task_spec_not_found(self, temp_specs_dir):
         """Should return error for nonexistent spec."""
-        result, error = add_task(
-            "nonexistent-spec",
-            parent_id="phase-1",
-            title="Test",
-            specs_dir=temp_specs_dir
-        )
+        result, error = add_task("nonexistent-spec", parent_id="phase-1", title="Test", specs_dir=temp_specs_dir)
 
         assert result is None
         assert "not found" in error
@@ -548,10 +499,7 @@ class TestAddTask:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = add_task(
-            "test-spec-001",
-            parent_id="nonexistent-parent",
-            title="Test",
-            specs_dir=temp_specs_dir
+            "test-spec-001", parent_id="nonexistent-parent", title="Test", specs_dir=temp_specs_dir
         )
 
         assert result is None
@@ -566,7 +514,7 @@ class TestAddTask:
             "test-spec-001",
             parent_id="spec-root",  # Root is not a valid parent
             title="Test",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert result is None
@@ -577,12 +525,7 @@ class TestAddTask:
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
 
-        result, error = add_task(
-            "test-spec-001",
-            parent_id="phase-1",
-            title="",
-            specs_dir=temp_specs_dir
-        )
+        result, error = add_task("test-spec-001", parent_id="phase-1", title="", specs_dir=temp_specs_dir)
 
         assert result is None
         assert "Title is required" in error
@@ -593,11 +536,7 @@ class TestAddTask:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = add_task(
-            "test-spec-001",
-            parent_id="phase-1",
-            title="Test",
-            task_type="invalid",
-            specs_dir=temp_specs_dir
+            "test-spec-001", parent_id="phase-1", title="Test", task_type="invalid", specs_dir=temp_specs_dir
         )
 
         assert result is None
@@ -626,7 +565,7 @@ class TestAddTask:
             parent_id="phase-1",
             title="Task with file",
             file_path="src/components/widget.py",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -648,7 +587,7 @@ class TestAddTask:
             parent_id="phase-1",
             title="Task with padded path",
             file_path="  src/padded.py  ",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -664,10 +603,7 @@ class TestUpdateTaskMetadata:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = update_task_metadata(
-            "test-spec-001",
-            "task-1-2",
-            file_path="src/new_module.py",
-            specs_dir=temp_specs_dir
+            "test-spec-001", "task-1-2", file_path="src/new_module.py", specs_dir=temp_specs_dir
         )
 
         assert error is None
@@ -684,12 +620,7 @@ class TestUpdateTaskMetadata:
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
 
-        result, error = update_task_metadata(
-            "test-spec-001",
-            "task-1-2",
-            file_path="",
-            specs_dir=temp_specs_dir
-        )
+        result, error = update_task_metadata("test-spec-001", "task-1-2", file_path="", specs_dir=temp_specs_dir)
 
         assert error is None
         assert "file_path" in result["fields_updated"]
@@ -705,10 +636,7 @@ class TestUpdateTaskMetadata:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = update_task_metadata(
-            "test-spec-001",
-            "task-1-2",
-            file_path="  src/trimmed.py  ",
-            specs_dir=temp_specs_dir
+            "test-spec-001", "task-1-2", file_path="  src/trimmed.py  ", specs_dir=temp_specs_dir
         )
 
         assert error is None
@@ -722,10 +650,7 @@ class TestUpdateTaskMetadata:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = update_task_metadata(
-            "test-spec-001",
-            "task-1-2",
-            description="New detailed description",
-            specs_dir=temp_specs_dir
+            "test-spec-001", "task-1-2", description="New detailed description", specs_dir=temp_specs_dir
         )
 
         assert error is None
@@ -742,10 +667,7 @@ class TestUpdateTaskMetadata:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = update_task_metadata(
-            "test-spec-001",
-            "task-1-2",
-            title="Updated Title",
-            specs_dir=temp_specs_dir
+            "test-spec-001", "task-1-2", title="Updated Title", specs_dir=temp_specs_dir
         )
 
         assert error is None
@@ -762,12 +684,7 @@ class TestUpdateTaskMetadata:
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
 
-        result, error = update_task_metadata(
-            "test-spec-001",
-            "task-1-2",
-            title="",
-            specs_dir=temp_specs_dir
-        )
+        result, error = update_task_metadata("test-spec-001", "task-1-2", title="", specs_dir=temp_specs_dir)
 
         assert result is None
         assert error is not None
@@ -778,12 +695,7 @@ class TestUpdateTaskMetadata:
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
 
-        result, error = update_task_metadata(
-            "test-spec-001",
-            "task-1-2",
-            title="   ",
-            specs_dir=temp_specs_dir
-        )
+        result, error = update_task_metadata("test-spec-001", "task-1-2", title="   ", specs_dir=temp_specs_dir)
 
         assert result is None
         assert error is not None
@@ -800,7 +712,7 @@ class TestUpdateTaskMetadata:
             title="New Title",
             file_path="src/new.py",
             description="New description",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -814,11 +726,7 @@ class TestUpdateTaskMetadata:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = update_task_metadata(
-            "test-spec-001",
-            "task-1-2",
-            title="Would Be New",
-            dry_run=True,
-            specs_dir=temp_specs_dir
+            "test-spec-001", "task-1-2", title="Would Be New", dry_run=True, specs_dir=temp_specs_dir
         )
 
         assert error is None
@@ -836,10 +744,7 @@ class TestUpdateTaskMetadata:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = update_task_metadata(
-            "test-spec-001",
-            "nonexistent-task",
-            title="New Title",
-            specs_dir=temp_specs_dir
+            "test-spec-001", "nonexistent-task", title="New Title", specs_dir=temp_specs_dir
         )
 
         assert result is None
@@ -851,11 +756,7 @@ class TestUpdateTaskMetadata:
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
 
-        result, error = update_task_metadata(
-            "test-spec-001",
-            "task-1-2",
-            specs_dir=temp_specs_dir
-        )
+        result, error = update_task_metadata("test-spec-001", "task-1-2", specs_dir=temp_specs_dir)
 
         assert result is None
         assert error is not None
@@ -871,12 +772,7 @@ class TestMoveTask:
         spec_file.write_text(json.dumps(sample_spec))
 
         # Move task-1-2 to position 1 (first)
-        result, error, warnings = move_task(
-            "test-spec-001",
-            "task-1-2",
-            position=1,
-            specs_dir=temp_specs_dir
-        )
+        result, error, warnings = move_task("test-spec-001", "task-1-2", position=1, specs_dir=temp_specs_dir)
 
         assert error is None
         assert result["is_reparenting"] is False
@@ -894,12 +790,7 @@ class TestMoveTask:
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
 
-        result, error, warnings = move_task(
-            "test-spec-001",
-            "task-1-2",
-            new_parent="phase-2",
-            specs_dir=temp_specs_dir
-        )
+        result, error, warnings = move_task("test-spec-001", "task-1-2", new_parent="phase-2", specs_dir=temp_specs_dir)
 
         assert error is None
         assert result["is_reparenting"] is True
@@ -932,10 +823,7 @@ class TestMoveTask:
 
         # Try to move task-1-1 under its own child
         result, error, warnings = move_task(
-            "test-spec-001",
-            "task-1-1",
-            new_parent="task-1-1-1",
-            specs_dir=temp_specs_dir
+            "test-spec-001", "task-1-1", new_parent="task-1-1-1", specs_dir=temp_specs_dir
         )
 
         assert result is None
@@ -948,11 +836,7 @@ class TestMoveTask:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error, warnings = move_task(
-            "test-spec-001",
-            "task-1-2",
-            new_parent="phase-2",
-            dry_run=True,
-            specs_dir=temp_specs_dir
+            "test-spec-001", "task-1-2", new_parent="phase-2", dry_run=True, specs_dir=temp_specs_dir
         )
 
         assert error is None
@@ -970,10 +854,7 @@ class TestMoveTask:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error, warnings = move_task(
-            "test-spec-001",
-            "nonexistent-task",
-            new_parent="phase-2",
-            specs_dir=temp_specs_dir
+            "test-spec-001", "nonexistent-task", new_parent="phase-2", specs_dir=temp_specs_dir
         )
 
         assert result is None
@@ -989,7 +870,7 @@ class TestMoveTask:
             "test-spec-001",
             "task-1-2",
             position=100,  # Way too high
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert result is None
@@ -1006,7 +887,7 @@ class TestMoveTask:
             "test-spec-001",
             "task-1-1",  # This task is completed
             new_parent="phase-2",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -1039,7 +920,7 @@ class TestManageTaskDependency:
             target_task_id="task-1-2",
             dependency_type="blocks",
             action="add",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -1073,7 +954,7 @@ class TestManageTaskDependency:
             target_task_id="task-1-1",
             dependency_type="blocked_by",
             action="add",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -1103,7 +984,7 @@ class TestManageTaskDependency:
             target_task_id="task-1-1",
             dependency_type="depends",
             action="add",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -1139,7 +1020,7 @@ class TestManageTaskDependency:
             target_task_id="task-1-2",
             dependency_type="blocks",
             action="remove",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -1168,7 +1049,7 @@ class TestManageTaskDependency:
             target_task_id="task-1-2",
             dependency_type="blocks",
             action="remove",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert result is None
@@ -1192,7 +1073,7 @@ class TestManageTaskDependency:
             target_task_id="task-1-2",
             dependency_type="blocks",
             action="add",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert result is None
@@ -1210,7 +1091,7 @@ class TestManageTaskDependency:
             target_task_id="task-1-1",
             dependency_type="blocks",
             action="add",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert result is None
@@ -1240,7 +1121,7 @@ class TestManageTaskDependency:
             target_task_id="task-1-1",
             dependency_type="blocks",
             action="add",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert result is None
@@ -1275,7 +1156,7 @@ class TestManageTaskDependency:
             target_task_id="task-1-1",
             dependency_type="blocks",
             action="add",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert result is None
@@ -1293,7 +1174,7 @@ class TestManageTaskDependency:
             target_task_id="task-1-1",
             dependency_type="blocks",
             action="add",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert result is None
@@ -1311,7 +1192,7 @@ class TestManageTaskDependency:
             target_task_id="nonexistent-task",
             dependency_type="blocks",
             action="add",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert result is None
@@ -1326,7 +1207,7 @@ class TestManageTaskDependency:
             target_task_id="task-1-2",
             dependency_type="blocks",
             action="add",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert result is None
@@ -1344,7 +1225,7 @@ class TestManageTaskDependency:
             target_task_id="task-1-2",
             dependency_type="invalid",
             action="add",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert result is None
@@ -1362,7 +1243,7 @@ class TestManageTaskDependency:
             target_task_id="task-1-2",
             dependency_type="blocks",
             action="invalid",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert result is None
@@ -1381,7 +1262,7 @@ class TestManageTaskDependency:
             dependency_type="blocks",
             action="add",
             dry_run=True,
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -1419,7 +1300,7 @@ class TestManageTaskDependency:
             dependency_type="blocks",
             action="remove",
             dry_run=True,
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -1443,7 +1324,7 @@ class TestManageTaskDependency:
             target_task_id="phase-2",
             dependency_type="blocks",
             action="add",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -1468,7 +1349,7 @@ class TestManageTaskDependency:
             target_task_id="task-1-2",
             dependency_type="blocks",
             action="add",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -1494,9 +1375,12 @@ class TestUpdateTaskRequirements:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = update_task_requirements(
-            "test-spec-001", "task-1-2", action="add",
-            requirement_type="acceptance", text="User can submit form",
-            specs_dir=temp_specs_dir
+            "test-spec-001",
+            "task-1-2",
+            action="add",
+            requirement_type="acceptance",
+            text="User can submit form",
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -1510,12 +1394,20 @@ class TestUpdateTaskRequirements:
         spec_file.write_text(json.dumps(sample_spec))
 
         r1, _ = update_task_requirements(
-            "test-spec-001", "task-1-2", action="add",
-            requirement_type="technical", text="Use async", specs_dir=temp_specs_dir
+            "test-spec-001",
+            "task-1-2",
+            action="add",
+            requirement_type="technical",
+            text="Use async",
+            specs_dir=temp_specs_dir,
         )
         r2, _ = update_task_requirements(
-            "test-spec-001", "task-1-2", action="add",
-            requirement_type="constraint", text="<200ms", specs_dir=temp_specs_dir
+            "test-spec-001",
+            "task-1-2",
+            action="add",
+            requirement_type="constraint",
+            text="<200ms",
+            specs_dir=temp_specs_dir,
         )
 
         assert r1["requirement"]["type"] == "technical"
@@ -1531,8 +1423,7 @@ class TestUpdateTaskRequirements:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = update_task_requirements(
-            "test-spec-001", "task-1-2", action="remove",
-            requirement_id="req-1", specs_dir=temp_specs_dir
+            "test-spec-001", "task-1-2", action="remove", requirement_id="req-1", specs_dir=temp_specs_dir
         )
 
         assert error is None
@@ -1545,8 +1436,7 @@ class TestUpdateTaskRequirements:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = update_task_requirements(
-            "test-spec-001", "task-1-2", action="remove",
-            requirement_id="req-999", specs_dir=temp_specs_dir
+            "test-spec-001", "task-1-2", action="remove", requirement_id="req-999", specs_dir=temp_specs_dir
         )
 
         assert result is None
@@ -1570,8 +1460,7 @@ class TestUpdateTaskRequirements:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = update_task_requirements(
-            "test-spec-001", "task-1-2", action="add",
-            requirement_type="invalid", text="Test", specs_dir=temp_specs_dir
+            "test-spec-001", "task-1-2", action="add", requirement_type="invalid", text="Test", specs_dir=temp_specs_dir
         )
 
         assert result is None
@@ -1583,8 +1472,7 @@ class TestUpdateTaskRequirements:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = update_task_requirements(
-            "test-spec-001", "task-1-2", action="add",
-            requirement_type="acceptance", text="", specs_dir=temp_specs_dir
+            "test-spec-001", "task-1-2", action="add", requirement_type="acceptance", text="", specs_dir=temp_specs_dir
         )
 
         assert result is None
@@ -1596,9 +1484,13 @@ class TestUpdateTaskRequirements:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = update_task_requirements(
-            "test-spec-001", "task-1-2", action="add",
-            requirement_type="acceptance", text="Test",
-            dry_run=True, specs_dir=temp_specs_dir
+            "test-spec-001",
+            "task-1-2",
+            action="add",
+            requirement_type="acceptance",
+            text="Test",
+            dry_run=True,
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None

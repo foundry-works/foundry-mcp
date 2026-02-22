@@ -1,4 +1,4 @@
-"""Spec management commands for SDD CLI.
+"""Spec management commands for Foundry CLI.
 
 Provides commands for creating, listing, and managing specifications.
 """
@@ -16,18 +16,19 @@ from foundry_mcp.cli.output import emit_error, emit_success
 from foundry_mcp.cli.registry import get_context
 from foundry_mcp.cli.resilience import (
     FAST_TIMEOUT,
-    handle_keyboard_interrupt,
     MEDIUM_TIMEOUT,
+    handle_keyboard_interrupt,
     with_sync_timeout,
 )
 from foundry_mcp.core.journal import list_blocked_tasks
 from foundry_mcp.core.progress import list_phases as core_list_phases
-from foundry_mcp.core.spec import list_specs as core_list_specs, load_spec
+from foundry_mcp.core.spec import list_specs as core_list_specs
+from foundry_mcp.core.spec import load_spec
 
 logger = get_cli_logger()
 
 # Valid templates and categories
-# Note: Only 'empty' template is supported. Use phase templates to add structure.
+# Note: Only 'empty' template is supported. Use phase-add-bulk to add structure.
 TEMPLATES = ("empty",)
 CATEGORIES = ("investigation", "implementation", "refactoring", "decision", "research")
 
@@ -52,7 +53,7 @@ def generate_spec_id(name: str) -> str:
 def get_template_structure(template: str, category: str) -> Dict[str, Any]:
     """Get the hierarchical structure for a spec template.
 
-    Only 'empty' template is supported. Use phase templates to add structure.
+    Only 'empty' template is supported. Use phase-add-bulk to add structure.
 
     Args:
         template: Template type (only 'empty' is valid).
@@ -66,8 +67,7 @@ def get_template_structure(template: str, category: str) -> Dict[str, Any]:
     """
     if template != "empty":
         raise ValueError(
-            f"Invalid template '{template}'. Only 'empty' template is supported. "
-            f"Use phase templates to add structure."
+            f"Invalid template '{template}'. Only 'empty' template is supported. Use phase-add-bulk to add structure."
         )
 
     return {
@@ -102,15 +102,12 @@ def specs() -> None:
 TEMPLATE_INFO = {
     "empty": {
         "name": "empty",
-        "description": "Blank spec with no phases - use phase templates to add structure",
+        "description": "Blank spec with no phases - use phase-add-bulk to add structure",
         "phases": 0,
         "tasks": 0,
-        "use_cases": ["All specs - add phases via phase-add-bulk or phase-template apply"],
+        "use_cases": ["All specs - add phases via phase-add-bulk"],
     },
 }
-
-# Phase templates available for adding structure
-PHASE_TEMPLATES = ("planning", "implementation", "testing", "security", "documentation")
 
 
 @specs.command("template")
@@ -153,7 +150,7 @@ def template(
                 "Template name required for 'show' action",
                 code="MISSING_REQUIRED",
                 error_type="validation",
-                remediation="Provide a template name: sdd specs template show <template_name>",
+                remediation="Provide a template name: foundry specs template show <template_name>",
                 details={"required": "template_name"},
             )
 
@@ -245,9 +242,7 @@ def analyze(ctx: click.Context, directory: Optional[str] = None) -> None:
 
         # Check for documentation
         docs_dir = specs_dir / ".human-readable"
-        analysis["documentation_available"] = docs_dir.is_dir() and any(
-            docs_dir.glob("*.md")
-        )
+        analysis["documentation_available"] = docs_dir.is_dir() and any(docs_dir.glob("*.md"))
 
         # Check for codebase docs
         codebase_json = target_dir / "docs" / "codebase.json"
@@ -258,9 +253,7 @@ def analyze(ctx: click.Context, directory: Optional[str] = None) -> None:
             "has_active_specs": folder_counts.get("active", 0) > 0,
             "has_pending_specs": folder_counts.get("pending", 0) > 0,
             "completion_rate": (
-                round(folder_counts.get("completed", 0) / total_specs * 100, 1)
-                if total_specs > 0
-                else 0
+                round(folder_counts.get("completed", 0) / total_specs * 100, 1) if total_specs > 0 else 0
             ),
         }
     else:
@@ -279,7 +272,7 @@ def analyze(ctx: click.Context, directory: Optional[str] = None) -> None:
     "--template",
     type=click.Choice(TEMPLATES),
     default="empty",
-    help="Spec template (only 'empty' supported - use phase templates to add structure).",
+    help="Spec template (only 'empty' supported - use phase-add-bulk to add structure).",
 )
 @click.option(
     "--category",
@@ -316,8 +309,8 @@ def create(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
 
     # Ensure pending directory exists
@@ -381,9 +374,7 @@ def create(
 
     # Count tasks
     task_count = sum(
-        1
-        for node in hierarchy.values()
-        if isinstance(node, dict) and node.get("type") in ("task", "subtask", "verify")
+        1 for node in hierarchy.values() if isinstance(node, dict) and node.get("type") in ("task", "subtask", "verify")
     )
 
     emit_success(
@@ -394,13 +385,7 @@ def create(
             "category": category,
             "name": name,
             "structure": {
-                "phases": len(
-                    [
-                        n
-                        for n in hierarchy.values()
-                        if isinstance(n, dict) and n.get("type") == "phase"
-                    ]
-                ),
+                "phases": len([n for n in hierarchy.values() if isinstance(n, dict) and n.get("type") == "phase"]),
                 "tasks": task_count,
             },
         }
@@ -413,9 +398,9 @@ def create(
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Schema export timed out")
 def schema_cmd(ctx: click.Context) -> None:
-    """Export the SDD spec JSON schema.
+    """Export the Foundry spec JSON schema.
 
-    Returns the complete JSON schema for SDD specification files,
+    Returns the complete JSON schema for Foundry specification files,
     useful for validation, IDE integration, and agent understanding.
     """
     from foundry_mcp.schemas import get_spec_schema
@@ -458,9 +443,9 @@ def find_specs_cmd(ctx: click.Context, status: str) -> None:
     Lists specs sorted by status (active first) and completion percentage.
 
     Examples:
-        sdd specs find
-        sdd specs find --status active
-        sdd specs find
+        foundry specs find
+        foundry specs find --status active
+        foundry specs find
     """
     cli_ctx = get_context(ctx)
     specs_dir = cli_ctx.specs_dir
@@ -470,8 +455,8 @@ def find_specs_cmd(ctx: click.Context, status: str) -> None:
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -500,8 +485,8 @@ def list_phases_cmd(ctx: click.Context, spec_id: str) -> None:
     SPEC_ID is the specification identifier.
 
     Examples:
-        sdd specs list-phases my-spec
-        sdd list-phases my-spec
+        foundry specs list-phases my-spec
+        foundry list-phases my-spec
     """
     cli_ctx = get_context(ctx)
     specs_dir = cli_ctx.specs_dir
@@ -511,8 +496,8 @@ def list_phases_cmd(ctx: click.Context, spec_id: str) -> None:
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -523,7 +508,7 @@ def list_phases_cmd(ctx: click.Context, spec_id: str) -> None:
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs find",
+            remediation="Verify the spec ID exists using: foundry specs find",
             details={"spec_id": spec_id, "specs_dir": str(specs_dir)},
         )
         return
@@ -562,10 +547,10 @@ def query_tasks_cmd(
     SPEC_ID is the specification identifier.
 
     Examples:
-        sdd specs query-tasks my-spec
-        sdd specs query-tasks my-spec --status pending
-        sdd specs query-tasks my-spec --parent phase-2
-        sdd query-tasks my-spec --status in_progress
+        foundry specs query-tasks my-spec
+        foundry specs query-tasks my-spec --status pending
+        foundry specs query-tasks my-spec --parent phase-2
+        foundry query-tasks my-spec --status in_progress
     """
     cli_ctx = get_context(ctx)
     specs_dir = cli_ctx.specs_dir
@@ -575,8 +560,8 @@ def query_tasks_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -587,7 +572,7 @@ def query_tasks_cmd(
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs find",
+            remediation="Verify the spec ID exists using: foundry specs find",
             details={"spec_id": spec_id, "specs_dir": str(specs_dir)},
         )
         return
@@ -647,8 +632,8 @@ def list_blockers_cmd(ctx: click.Context, spec_id: str) -> None:
     Returns tasks with status='blocked' and their blocker information.
 
     Examples:
-        sdd specs list-blockers my-spec
-        sdd list-blockers my-spec
+        foundry specs list-blockers my-spec
+        foundry list-blockers my-spec
     """
     cli_ctx = get_context(ctx)
     specs_dir = cli_ctx.specs_dir
@@ -658,8 +643,8 @@ def list_blockers_cmd(ctx: click.Context, spec_id: str) -> None:
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -670,7 +655,7 @@ def list_blockers_cmd(ctx: click.Context, spec_id: str) -> None:
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs find",
+            remediation="Verify the spec ID exists using: foundry specs find",
             details={"spec_id": spec_id, "specs_dir": str(specs_dir)},
         )
         return

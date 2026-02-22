@@ -3,9 +3,7 @@
 import os
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 
 
 class TestDisabledToolsConfig:
@@ -24,25 +22,19 @@ class TestDisabledToolsConfig:
 
     def test_env_var_multiple_tools(self):
         """FOUNDRY_MCP_DISABLED_TOOLS with multiple tools."""
-        with patch.dict(
-            os.environ, {"FOUNDRY_MCP_DISABLED_TOOLS": "error,health"}
-        ):
+        with patch.dict(os.environ, {"FOUNDRY_MCP_DISABLED_TOOLS": "error,health"}):
             config = ServerConfig.from_env()
             assert set(config.disabled_tools) == {"error", "health"}
 
     def test_env_var_whitespace_handling(self):
         """Whitespace in FOUNDRY_MCP_DISABLED_TOOLS is trimmed."""
-        with patch.dict(
-            os.environ, {"FOUNDRY_MCP_DISABLED_TOOLS": " error , health "}
-        ):
+        with patch.dict(os.environ, {"FOUNDRY_MCP_DISABLED_TOOLS": " error , health "}):
             config = ServerConfig.from_env()
             assert set(config.disabled_tools) == {"error", "health"}
 
     def test_env_var_empty_entries_filtered(self):
         """Empty entries from trailing commas are filtered."""
-        with patch.dict(
-            os.environ, {"FOUNDRY_MCP_DISABLED_TOOLS": "health,,error,"}
-        ):
+        with patch.dict(os.environ, {"FOUNDRY_MCP_DISABLED_TOOLS": "health,,error,"}):
             config = ServerConfig.from_env()
             assert set(config.disabled_tools) == {"health", "error"}
 

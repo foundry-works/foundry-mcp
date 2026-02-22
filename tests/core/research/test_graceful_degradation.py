@@ -15,7 +15,6 @@ from foundry_mcp.core.research.context_budget import (
     HEADLINE_MIN_FIDELITY,
     MIN_ITEMS_PER_PHASE,
     TOP_PRIORITY_ITEMS,
-    AllocatedItem,
     ChunkFailure,
     ChunkResult,
     ContentItem,
@@ -25,7 +24,6 @@ from foundry_mcp.core.research.context_budget import (
     DegradationStep,
     ProtectedContentOverflowError,
 )
-
 
 # =============================================================================
 # Test: Degradation Fallback Chain
@@ -190,10 +188,7 @@ class TestPriorityGuardrails:
     def test_top_priority_items_never_dropped(self, pipeline):
         """Test that top-5 priority items are never dropped."""
         # Create 7 items - priorities 1-7
-        items = [
-            ContentItem(id=f"item-{i}", content="A" * 400, priority=i)
-            for i in range(1, 8)
-        ]
+        items = [ContentItem(id=f"item-{i}", content="A" * 400, priority=i) for i in range(1, 8)]
 
         # Very tight budget - not enough for all items
         result = pipeline.degrade(items, budget=100)
@@ -666,10 +661,7 @@ class TestMinItemsGuardrail:
 
     def test_token_budget_floored_warning(self, pipeline):
         """Test TOKEN_BUDGET_FLOORED warning when min items guardrail active."""
-        items = [
-            ContentItem(id=f"item-{i}", content="A" * 400, priority=i)
-            for i in range(1, 4)
-        ]
+        items = [ContentItem(id=f"item-{i}", content="A" * 400, priority=i) for i in range(1, 4)]
 
         result = pipeline.degrade(items, budget=50)
 

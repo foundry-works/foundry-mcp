@@ -9,11 +9,10 @@ Tests:
 """
 
 import json
-import pytest
-from foundry_mcp.server import create_server
-from foundry_mcp.config import ServerConfig
-from tests.conftest import extract_response_dict
+from unittest.mock import patch
 
+import pytest
+from tests.conftest import extract_response_dict
 
 # =============================================================================
 # Test Fixtures
@@ -126,21 +125,14 @@ def test_specs_dir(tmp_path):
     return specs_dir
 
 
-@pytest.fixture
-def test_config(test_specs_dir):
-    """Create a test server configuration."""
-    return ServerConfig(
-        server_name="foundry-mcp-authoring-test",
-        server_version="0.1.0",
-        specs_dir=test_specs_dir,
-        log_level="WARNING",
-    )
-
-
-@pytest.fixture
-def mcp_server(test_config):
-    """Create a test MCP server instance."""
-    return create_server(test_config)
+@pytest.fixture(autouse=True)
+def maintainer_role():
+    """Run integration authoring tool assertions with maintainer access."""
+    with patch(
+        "foundry_mcp.tools.unified.common.get_server_role",
+        return_value="maintainer",
+    ):
+        yield
 
 
 def _call_tool(tools, tool_name: str, **kwargs):
@@ -276,9 +268,7 @@ class TestResponseEnvelopeCompliance:
         assert isinstance(response["success"], bool), "success must be boolean"
         assert isinstance(response["data"], dict), "data must be dict"
         assert isinstance(response["meta"], dict), "meta must be dict"
-        assert response["meta"].get("version") == "response-v2", (
-            "meta.version must be 'response-v2'"
-        )
+        assert response["meta"].get("version") == "response-v2", "meta.version must be 'response-v2'"
 
         if response["success"]:
             assert response["error"] is None, "error must be null on success"
@@ -302,9 +292,11 @@ class TestResponseEnvelopeCompliance:
         """Test validation errors return proper envelope with error details."""
         tools = mcp_server._tool_manager._tools
         # Missing required parameter
-        result = _call_tool(
-            tools, "task-add", spec_id="", parent="phase-1", title="Test"
-        )
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            result = _call_tool(tools, "task-add", spec_id="", parent="phase-1", title="Test")
         self._validate_response_envelope(result)
         assert result["success"] is False
         assert "spec_id" in result["error"].lower()
@@ -317,13 +309,17 @@ class TestResponseEnvelopeCompliance:
         tools = mcp_server._tool_manager._tools
 
         # Missing version
-        result = _call_tool(
-            tools,
-            "revision-add",
-            spec_id="authoring-test-spec-001",
-            version="",
-            changes="Test changes",
-        )
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            result = _call_tool(
+                tools,
+                "revision-add",
+                spec_id="authoring-test-spec-001",
+                version="",
+                changes="Test changes",
+            )
 
         assert result["success"] is False
         assert "version" in result["error"].lower()
@@ -416,7 +412,7 @@ class TestSpecCreation:
         )
 
         assert result["success"] is False
-        assert "VALIDATION_ERROR" in str(result["data"].get("error_code", ""))
+        assert "INVALID_FORMAT" in str(result["data"].get("error_code", ""))
 
     def test_spec_create_validates_category(self, mcp_server):
         """Test spec-create validates category parameter."""
@@ -446,9 +442,9 @@ class TestSpecCreation:
         )
         # May fail due to CLI not being available, but should not fail validation
         if result["success"] is False:
-            assert "VALIDATION_ERROR" not in str(
-                result["data"].get("error_code", "")
-            ), "Template 'empty' should be valid"
+            assert "VALIDATION_ERROR" not in str(result["data"].get("error_code", "")), (
+                "Template 'empty' should be valid"
+            )
 
     def test_spec_create_rejects_deprecated_templates(self, mcp_server):
         """Test spec-create rejects deprecated templates."""
@@ -484,9 +480,7 @@ class TestSpecCreation:
             )
             # May fail due to CLI not being available, but should not fail validation
             if result["success"] is False:
-                assert category.lower() not in result["error"].lower(), (
-                    f"Category '{category}' should be valid"
-                )
+                assert category.lower() not in result["error"].lower(), f"Category '{category}' should be valid"
 
 
 # =============================================================================
@@ -575,9 +569,7 @@ class TestTaskOperations:
             )
             # May fail due to CLI, but should not fail type validation
             if result["success"] is False:
-                assert task_type.lower() not in result["error"].lower(), (
-                    f"Task type '{task_type}' should be valid"
-                )
+                assert task_type.lower() not in result["error"].lower(), f"Task type '{task_type}' should be valid"
 
     def test_task_remove_validates_spec_id(self, mcp_server):
         """Test task-remove validates spec_id."""
@@ -658,20 +650,6 @@ class TestPhaseOperations:
 
         assert result["success"] is False
         assert "title" in result["error"].lower()
-
-    def test_phase_add_validates_hours(self, mcp_server):
-        tools = mcp_server._tool_manager._tools
-
-        result = _call_tool(
-            tools,
-            "phase-add",
-            spec_id="test-spec",
-            title="Phase",
-            estimated_hours=-2,
-        )
-
-        assert result["success"] is False
-        assert "estimated_hours" in result["error"].lower()
 
     def test_phase_add_dry_run_option(self, mcp_server):
         tools = mcp_server._tool_manager._tools
@@ -769,9 +747,7 @@ class TestAuthoringWorkflows:
         tools = mcp_server._tool_manager._tools
 
         # Step 1: List existing assumptions
-        list_result = _call_tool(
-            tools, "assumption-list", spec_id="authoring-test-spec-001"
-        )
+        list_result = _call_tool(tools, "assumption-list", spec_id="authoring-test-spec-001")
 
         # Step 2: Add a new assumption
         add_result = _call_tool(
@@ -819,7 +795,7 @@ class TestAuthoringWorkflows:
             template="not_a_real_template",
         )
         assert invalid_result["success"] is False
-        assert invalid_result["data"].get("error_code") == "VALIDATION_ERROR"
+        assert invalid_result["data"].get("error_code") == "INVALID_FORMAT"
 
         # Step 2: Try valid parameters (may fail due to CLI, but should pass validation)
         valid_result = _call_tool(
@@ -871,9 +847,7 @@ class TestErrorHandling:
         )
 
         # If it failed with timeout, check remediation
-        if result["success"] is False and "TIMEOUT" in str(
-            result["data"].get("error_code", "")
-        ):
+        if result["success"] is False and "TIMEOUT" in str(result["data"].get("error_code", "")):
             assert "remediation" in result["data"]
 
     def test_not_found_errors_include_remediation(self, mcp_server):
@@ -890,8 +864,5 @@ class TestErrorHandling:
 
         if result["success"] is False:
             # Should include remediation for not found errors
-            if (
-                "NOT_FOUND" in str(result["data"].get("error_code", ""))
-                or "not found" in result["error"].lower()
-            ):
+            if "NOT_FOUND" in str(result["data"].get("error_code", "")) or "not found" in result["error"].lower():
                 assert "remediation" in result["data"]

@@ -255,7 +255,7 @@ class CursorAgentProvider(ProviderContext):
         config_path = cursor_dir / "cli-config.json"
 
         # Create unique backup path for thread-safety
-        backup_suffix = f".sdd-backup.{os.getpid()}.{int(time.time())}"
+        backup_suffix = f".foundry-backup.{os.getpid()}.{int(time.time())}"
         backup_path = Path(str(config_path) + backup_suffix)
 
         # Backup original config if it exists
@@ -314,9 +314,7 @@ class CursorAgentProvider(ProviderContext):
             ):
                 shutil.move(self._config_backup_path, config_path)
             elif (
-                hasattr(self, "_original_config_existed")
-                and not self._original_config_existed
-                and config_path.exists()
+                hasattr(self, "_original_config_existed") and not self._original_config_existed and config_path.exists()
             ):
                 # No original config existed - remove our temporary one
                 config_path.unlink()

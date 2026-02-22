@@ -30,16 +30,15 @@ Example usage:
         return asdict(success_response(data={"result": result}))
 """
 
+import asyncio
+import random
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from functools import wraps
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar
-import asyncio
-import random
-import time
-
 
 # ---------------------------------------------------------------------------
 # Timeout Budget Constants
@@ -70,28 +69,10 @@ T = TypeVar("T")
 
 
 # ---------------------------------------------------------------------------
-# Timeout Error
+# Timeout Error (canonical definition in foundry_mcp.core.errors.resilience)
 # ---------------------------------------------------------------------------
 
-
-class TimeoutException(Exception):
-    """Operation timed out.
-
-    Attributes:
-        timeout_seconds: The timeout duration that was exceeded.
-        operation: Name of the operation that timed out.
-    """
-
-    def __init__(
-        self,
-        message: str,
-        timeout_seconds: Optional[float] = None,
-        operation: Optional[str] = None,
-    ):
-        super().__init__(message)
-        self.timeout_seconds = timeout_seconds
-        self.operation = operation
-
+from foundry_mcp.core.errors.resilience import TimeoutException  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Timeout Decorator
@@ -128,18 +109,18 @@ def with_timeout(
         async def wrapper(*args: Any, **kwargs: Any) -> T:
             try:
                 return await asyncio.wait_for(
-                    func(*args, **kwargs),
+                    func(*args, **kwargs),  # type: ignore[arg-type]
                     timeout=seconds,
                 )
-            except asyncio.TimeoutError:
+            except asyncio.TimeoutError as e:
                 msg = error_message or f"{func.__name__} timed out after {seconds}s"
                 raise TimeoutException(
                     msg,
                     timeout_seconds=seconds,
                     operation=func.__name__,
-                )
+                ) from e
 
-        return wrapper
+        return wrapper  # type: ignore[return-value]
 
     return decorator
 
@@ -267,26 +248,7 @@ class CircuitState(Enum):
     HALF_OPEN = "half_open"
 
 
-class CircuitBreakerError(Exception):
-    """Circuit breaker is open and rejecting requests.
-
-    Attributes:
-        breaker_name: Name of the circuit breaker.
-        state: Current state of the breaker.
-        retry_after: Seconds until recovery timeout.
-    """
-
-    def __init__(
-        self,
-        message: str,
-        breaker_name: Optional[str] = None,
-        state: Optional[CircuitState] = None,
-        retry_after: Optional[float] = None,
-    ):
-        super().__init__(message)
-        self.breaker_name = breaker_name
-        self.state = state
-        self.retry_after = retry_after
+from foundry_mcp.core.errors.resilience import CircuitBreakerError  # noqa: E402
 
 
 @dataclass
@@ -586,11 +548,13 @@ async def check_dependencies(
         Dict with overall status and per-dependency results.
 
     Example:
-        >>> results = await check_dependencies({
-        ...     "database": lambda: db.execute("SELECT 1"),
-        ...     "cache": lambda: cache.ping(),
-        ...     "api": lambda: http.get(health_url),
-        ... })
+        >>> results = await check_dependencies(
+        ...     {
+        ...         "database": lambda: db.execute("SELECT 1"),
+        ...         "cache": lambda: cache.ping(),
+        ...         "api": lambda: http.get(health_url),
+        ...     }
+        ... )
         >>> if results["status"] == "degraded":
         ...     logger.warning(f"Unhealthy: {results['unhealthy']}")
     """
@@ -598,10 +562,7 @@ async def check_dependencies(
 
     # Run all checks concurrently
     statuses = await asyncio.gather(
-        *[
-            health_check(name, check_func, timeout_per_check)
-            for name, check_func in checks.items()
-        ],
+        *[health_check(name, check_func, timeout_per_check) for name, check_func in checks.items()],
         return_exceptions=False,
     )
 

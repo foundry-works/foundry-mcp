@@ -9,7 +9,7 @@ from typing import Any, Dict, Mapping, Optional, Tuple, cast
 
 from mcp.server.fastmcp import FastMCP
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.journal import (
     add_journal_entry,
     find_unjournaled_tasks,
@@ -22,11 +22,13 @@ from foundry_mcp.core.pagination import (
     encode_cursor,
     normalize_page_size,
 )
-from foundry_mcp.core.responses import (
-    ErrorCode,
-    ErrorType,
+from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
+)
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
 )
 from foundry_mcp.core.spec import load_spec, save_spec
 from foundry_mcp.tools.unified.common import (
@@ -113,9 +115,7 @@ def _missing_field(field: str, action: str) -> dict:
     )
 
 
-def _load_spec_data(
-    *, spec_id: str, specs_dir: Path, action: str
-) -> Tuple[Optional[Dict[str, Any]], Optional[dict]]:
+def _load_spec_data(*, spec_id: str, specs_dir: Path, action: str) -> Tuple[Optional[Dict[str, Any]], Optional[dict]]:
     try:
         spec_data = load_spec(spec_id, specs_dir)
     except Exception as exc:  # pragma: no cover - defensive guard
@@ -143,9 +143,7 @@ def _load_spec_data(
     return cast(Dict[str, Any], spec_data), None
 
 
-def _persist_spec(
-    *, spec_id: str, spec_data: Dict[str, Any], specs_dir: Path
-) -> Optional[dict]:
+def _persist_spec(*, spec_id: str, spec_data: Dict[str, Any], specs_dir: Path) -> Optional[dict]:
     try:
         if not save_spec(spec_id, spec_data, specs_dir):
             return asdict(
@@ -187,17 +185,13 @@ def _validate_string(
         return None, _validation_error(field, action, "Expected a string value")
 
     if not allow_empty and not value.strip():
-        return None, _validation_error(
-            field, action, "Value must be a non-empty string"
-        )
+        return None, _validation_error(field, action, "Value must be a non-empty string")
 
     return value, None
 
 
 def _validate_entry_type(value: Any, *, action: str) -> Tuple[str, Optional[dict]]:
-    entry_type, error = _validate_string(
-        value, field="entry_type", action=action, required=False
-    )
+    entry_type, error = _validate_string(value, field="entry_type", action=action, required=False)
     if error:
         return "", error
 
@@ -260,27 +254,21 @@ def _validate_add_payload(
     payload: Mapping[str, Any],
 ) -> Tuple[Optional[JournalAddInput], Optional[dict]]:
     action = "add"
-    spec_id, error = _validate_string(
-        payload.get("spec_id"), field="spec_id", action=action, required=True
-    )
+    spec_id, error = _validate_string(payload.get("spec_id"), field="spec_id", action=action, required=True)
     if error:
         return None, error
     if spec_id is None:
         return None, _missing_field("spec_id", action)
     spec_id = cast(str, spec_id)
 
-    title, error = _validate_string(
-        payload.get("title"), field="title", action=action, required=True
-    )
+    title, error = _validate_string(payload.get("title"), field="title", action=action, required=True)
     if error:
         return None, error
     if title is None:
         return None, _missing_field("title", action)
     title = cast(str, title)
 
-    content, error = _validate_string(
-        payload.get("content"), field="content", action=action, required=True
-    )
+    content, error = _validate_string(payload.get("content"), field="content", action=action, required=True)
     if error:
         return None, error
     if content is None:
@@ -328,17 +316,13 @@ def _validate_list_payload(
     payload: Mapping[str, Any],
 ) -> Tuple[Optional[JournalListInput], Optional[dict]]:
     action = "list"
-    spec_id, error = _validate_string(
-        payload.get("spec_id"), field="spec_id", action=action, required=True
-    )
+    spec_id, error = _validate_string(payload.get("spec_id"), field="spec_id", action=action, required=True)
     if error:
         return None, error
     if spec_id is None:
         return None, _missing_field("spec_id", action)
 
-    task_id, error = _validate_string(
-        payload.get("task_id"), field="task_id", action=action, required=False
-    )
+    task_id, error = _validate_string(payload.get("task_id"), field="task_id", action=action, required=False)
     if error:
         return None, error
 
@@ -353,15 +337,11 @@ def _validate_list_payload(
     if error:
         return None, error
 
-    cursor, error = _validate_cursor(
-        payload.get("cursor"), field="cursor", action=action
-    )
+    cursor, error = _validate_cursor(payload.get("cursor"), field="cursor", action=action)
     if error:
         return None, error
 
-    workspace, error = _validate_string(
-        payload.get("workspace"), field="workspace", action=action, required=False
-    )
+    workspace, error = _validate_string(payload.get("workspace"), field="workspace", action=action, required=False)
     if error:
         return None, error
 
@@ -382,9 +362,7 @@ def _validate_list_unjournaled_payload(
     payload: Mapping[str, Any],
 ) -> Tuple[Optional[JournalListUnjournaledInput], Optional[dict]]:
     action = "list-unjournaled"
-    spec_id, error = _validate_string(
-        payload.get("spec_id"), field="spec_id", action=action, required=True
-    )
+    spec_id, error = _validate_string(payload.get("spec_id"), field="spec_id", action=action, required=True)
     if error:
         return None, error
     if spec_id is None:
@@ -395,15 +373,11 @@ def _validate_list_unjournaled_payload(
     if error:
         return None, error
 
-    cursor, error = _validate_cursor(
-        payload.get("cursor"), field="cursor", action=action
-    )
+    cursor, error = _validate_cursor(payload.get("cursor"), field="cursor", action=action)
     if error:
         return None, error
 
-    workspace, error = _validate_string(
-        payload.get("workspace"), field="workspace", action=action, required=False
-    )
+    workspace, error = _validate_string(payload.get("workspace"), field="workspace", action=action, required=False)
     if error:
         return None, error
 
@@ -444,9 +418,7 @@ def perform_journal_add(
         return error
     assert specs_dir is not None
 
-    spec_data, error = _load_spec_data(
-        spec_id=spec_id, specs_dir=specs_dir, action="add"
-    )
+    spec_data, error = _load_spec_data(spec_id=spec_id, specs_dir=specs_dir, action="add")
     if error:
         return error
     assert spec_data is not None
@@ -503,9 +475,7 @@ def perform_journal_list(
         return error
     assert specs_dir is not None
 
-    spec_data, error = _load_spec_data(
-        spec_id=spec_id, specs_dir=specs_dir, action="list"
-    )
+    spec_data, error = _load_spec_data(spec_id=spec_id, specs_dir=specs_dir, action="list")
     if error:
         return error
     assert spec_data is not None
@@ -560,15 +530,11 @@ def perform_journal_list(
 
     next_cursor = None
     if has_more and page_entries:
-        next_cursor = encode_cursor(
-            {"last_ts": getattr(page_entries[-1], "timestamp", None)}
-        )
+        next_cursor = encode_cursor({"last_ts": getattr(page_entries[-1], "timestamp", None)})
 
     warnings = None
     if has_more:
-        warnings = [
-            f"Results truncated after {page_size} entries. Use the returned cursor to continue."
-        ]
+        warnings = [f"Results truncated after {page_size} entries. Use the returned cursor to continue."]
 
     data = {
         "spec_id": spec_id,
@@ -604,9 +570,7 @@ def perform_journal_list_unjournaled(
         return error
     assert specs_dir is not None
 
-    spec_data, error = _load_spec_data(
-        spec_id=spec_id, specs_dir=specs_dir, action="list-unjournaled"
-    )
+    spec_data, error = _load_spec_data(spec_id=spec_id, specs_dir=specs_dir, action="list-unjournaled")
     if error:
         return error
     assert spec_data is not None
@@ -660,9 +624,7 @@ def perform_journal_list_unjournaled(
 
     warnings = None
     if has_more:
-        warnings = [
-            f"Results truncated after {page_size} tasks. Use the returned cursor to continue."
-        ]
+        warnings = [f"Results truncated after {page_size} tasks. Use the returned cursor to continue."]
 
     data = {
         "spec_id": spec_id,
@@ -756,12 +718,8 @@ _JOURNAL_ROUTER = ActionRouter(
 )
 
 
-def _dispatch_journal_action(
-    *, action: str, payload: Dict[str, Any], config: ServerConfig
-) -> dict:
-    return dispatch_with_standard_errors(
-        _JOURNAL_ROUTER, "journal", action, config=config, **payload
-    )
+def _dispatch_journal_action(*, action: str, payload: Dict[str, Any], config: ServerConfig) -> dict:
+    return dispatch_with_standard_errors(_JOURNAL_ROUTER, "journal", action, config=config, **payload)
 
 
 def register_unified_journal_tool(mcp: FastMCP, config: ServerConfig) -> None:

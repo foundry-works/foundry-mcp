@@ -1,4 +1,4 @@
-"""Journal management commands for SDD CLI.
+"""Journal management commands for Foundry CLI.
 
 Provides commands for managing journal entries in specifications.
 """
@@ -16,13 +16,13 @@ from foundry_mcp.cli.resilience import (
     handle_keyboard_interrupt,
     with_sync_timeout,
 )
-from foundry_mcp.core.spec import load_spec, find_spec_file
 from foundry_mcp.core.journal import (
     add_journal_entry,
     find_unjournaled_tasks,
     get_journal_entries,
     save_journal,
 )
+from foundry_mcp.core.spec import find_spec_file, load_spec
 
 logger = get_cli_logger()
 
@@ -63,9 +63,9 @@ def journal_add_cmd(
     SPEC_ID is the specification identifier.
 
     Examples:
-        sdd journal add my-spec --title "Progress update" --content "Completed phase 1"
-        sdd journal add my-spec -t "Decision" -c "Using Redis for cache" --type decision
-        sdd journal add my-spec -t "Task note" -c "Found edge case" --task-id task-2-1
+        foundry journal add my-spec --title "Progress update" --content "Completed phase 1"
+        foundry journal add my-spec -t "Decision" -c "Using Redis for cache" --type decision
+        foundry journal add my-spec -t "Task note" -c "Found edge case" --task-id task-2-1
     """
     cli_ctx = get_context(ctx)
     specs_dir = cli_ctx.specs_dir
@@ -75,8 +75,8 @@ def journal_add_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -87,7 +87,7 @@ def journal_add_cmd(
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs list",
+            remediation="Verify the spec ID exists using: foundry specs list",
             details={"spec_id": spec_id, "specs_dir": str(specs_dir)},
         )
         return
@@ -111,7 +111,7 @@ def journal_add_cmd(
                 f"Task not found: {task_id}",
                 code="TASK_NOT_FOUND",
                 error_type="not_found",
-                remediation="Verify the task ID exists using: sdd task-info <spec_id> <task_id>",
+                remediation="Verify the task ID exists using: foundry task-info <spec_id> <task_id>",
                 details={"spec_id": spec_id, "task_id": task_id},
             )
             return
@@ -179,9 +179,9 @@ def journal_list_cmd(
     Returns entries sorted by timestamp (most recent first).
 
     Examples:
-        sdd journal list my-spec
-        sdd journal list my-spec --task-id task-2-1
-        sdd journal list my-spec --type decision --limit 5
+        foundry journal list my-spec
+        foundry journal list my-spec --task-id task-2-1
+        foundry journal list my-spec --type decision --limit 5
     """
     cli_ctx = get_context(ctx)
     specs_dir = cli_ctx.specs_dir
@@ -191,8 +191,8 @@ def journal_list_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -203,7 +203,7 @@ def journal_list_cmd(
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs list",
+            remediation="Verify the spec ID exists using: foundry specs list",
             details={"spec_id": spec_id, "specs_dir": str(specs_dir)},
         )
         return
@@ -258,7 +258,7 @@ def journal_unjournaled_cmd(
     needs_journaling flag set to true.
 
     Examples:
-        sdd journal unjournaled my-spec
+        foundry journal unjournaled my-spec
     """
     cli_ctx = get_context(ctx)
     specs_dir = cli_ctx.specs_dir
@@ -268,8 +268,8 @@ def journal_unjournaled_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -280,7 +280,7 @@ def journal_unjournaled_cmd(
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs list",
+            remediation="Verify the spec ID exists using: foundry specs list",
             details={"spec_id": spec_id, "specs_dir": str(specs_dir)},
         )
         return
@@ -300,9 +300,7 @@ def journal_unjournaled_cmd(
 @journal.command("get")
 @click.argument("spec_id")
 @click.option("--task-id", help="Filter by task ID.")
-@click.option(
-    "--last", "-n", "last_n", type=int, help="Get last N entries (most recent)."
-)
+@click.option("--last", "-n", "last_n", type=int, help="Get last N entries (most recent).")
 @click.pass_context
 @cli_command("get")
 @handle_keyboard_interrupt()
@@ -321,9 +319,9 @@ def journal_get_cmd(
     Use --last to limit to the N most recent entries.
 
     Examples:
-        sdd get-journal my-spec
-        sdd get-journal my-spec --task-id task-2-1
-        sdd get-journal my-spec --last 5
+        foundry get-journal my-spec
+        foundry get-journal my-spec --task-id task-2-1
+        foundry get-journal my-spec --last 5
     """
     cli_ctx = get_context(ctx)
     specs_dir = cli_ctx.specs_dir
@@ -333,8 +331,8 @@ def journal_get_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -345,7 +343,7 @@ def journal_get_cmd(
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs list",
+            remediation="Verify the spec ID exists using: foundry specs list",
             details={"spec_id": spec_id, "specs_dir": str(specs_dir)},
         )
         return

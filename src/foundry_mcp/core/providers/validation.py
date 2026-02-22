@@ -48,12 +48,7 @@ MAX_METADATA_SIZE = 64 * 1024  # 64KB
 # ---------------------------------------------------------------------------
 
 
-class ValidationError(ProviderExecutionError):
-    """Raised when input validation fails."""
-
-    def __init__(self, message: str, field: Optional[str] = None, **kwargs: object) -> None:
-        self.field = field
-        super().__init__(message, **kwargs)
+from foundry_mcp.core.errors.provider import ValidationError  # noqa: E402, F811
 
 
 def strip_ansi(text: str) -> str:
@@ -811,10 +806,12 @@ def create_context_window_guidance(
     elif max_tokens:
         parts.append(f"Maximum context window is {max_tokens:,} tokens.")
 
-    parts.append("To resolve: (1) Reduce input size by excluding large content, "
-                 "(2) Summarize or truncate long sections, "
-                 "(3) Use a model with larger context window, "
-                 "(4) Process content in smaller batches.")
+    parts.append(
+        "To resolve: (1) Reduce input size by excluding large content, "
+        "(2) Summarize or truncate long sections, "
+        "(3) Use a model with larger context window, "
+        "(4) Process content in smaller batches."
+    )
 
     return " ".join(parts)
 

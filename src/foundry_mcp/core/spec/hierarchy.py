@@ -1,17 +1,21 @@
 """
-Hierarchy operations for SDD spec nodes.
+Hierarchy operations for Foundry spec nodes.
 
 Functions for traversing and mutating the spec hierarchy: get/update nodes,
-add/remove/move phases, recalculate hours, and update phase metadata.
+add/remove/move phases, recalculate actual hours, and update phase metadata.
 
 Imports ``io`` (for find/load/save) and ``_constants`` only.
 """
 
+import logging
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
+logger = logging.getLogger(__name__)
+
 from foundry_mcp.core.spec._constants import (
     CATEGORIES,
+    COMPLEXITY_LEVELS,
     VERIFICATION_TYPES,
 )
 from foundry_mcp.core.spec.io import (
@@ -20,24 +24,6 @@ from foundry_mcp.core.spec.io import (
     load_spec,
     save_spec,
 )
-
-
-def _requires_rich_task_fields(spec_data: Dict[str, Any]) -> bool:
-    """Check if spec requires rich task fields based on explicit complexity metadata."""
-    metadata = spec_data.get("metadata", {})
-    if not isinstance(metadata, dict):
-        return False
-
-    # Only check explicit complexity metadata (template no longer indicates complexity)
-    complexity = metadata.get("complexity")
-    if isinstance(complexity, str) and complexity.strip().lower() in {
-        "medium",
-        "complex",
-        "high",
-    }:
-        return True
-
-    return False
 
 
 def _normalize_acceptance_criteria(value: Any) -> Optional[List[str]]:
@@ -72,9 +58,7 @@ def get_node(spec_data: Dict[str, Any], node_id: str) -> Optional[Dict[str, Any]
     return hierarchy.get(node_id)
 
 
-def update_node(
-    spec_data: Dict[str, Any], node_id: str, updates: Dict[str, Any]
-) -> bool:
+def update_node(spec_data: Dict[str, Any], node_id: str, updates: Dict[str, Any]) -> bool:
     """
     Update a node in the hierarchy.
 
@@ -111,9 +95,7 @@ def update_node(
 # =============================================================================
 
 
-def _add_phase_verification(
-    hierarchy: Dict[str, Any], phase_num: int, phase_id: str
-) -> None:
+def _add_phase_verification(hierarchy: Dict[str, Any], phase_num: int, phase_id: str) -> None:
     """
     Add verify nodes (auto + fidelity) to a phase.
 
@@ -191,7 +173,6 @@ def add_phase(
     title: str,
     description: Optional[str] = None,
     purpose: Optional[str] = None,
-    estimated_hours: Optional[float] = None,
     position: Optional[int] = None,
     link_previous: bool = True,
     specs_dir=None,
@@ -204,7 +185,6 @@ def add_phase(
         title: Phase title.
         description: Optional phase description.
         purpose: Optional purpose/goal metadata string.
-        estimated_hours: Optional estimated hours for the phase.
         position: Optional zero-based insertion index in spec-root children.
         link_previous: Whether to automatically block on the previous phase when appending.
         specs_dir: Specs directory override.
@@ -218,9 +198,6 @@ def add_phase(
     if not title or not title.strip():
         return None, "Phase title is required"
 
-    if estimated_hours is not None and estimated_hours < 0:
-        return None, "estimated_hours must be non-negative"
-
     title = title.strip()
 
     if specs_dir is None:
@@ -229,7 +206,7 @@ def add_phase(
     if specs_dir is None:
         return (
             None,
-            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+            "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR.",
         )
 
     spec_path = find_spec_file(spec_id, specs_dir)
@@ -264,8 +241,6 @@ def add_phase(
     }
     if description:
         metadata["description"] = description.strip()
-    if estimated_hours is not None:
-        metadata["estimated_hours"] = estimated_hours
 
     phase_node = {
         "type": "phase",
@@ -316,15 +291,6 @@ def add_phase(
     total_tasks = spec_root.get("total_tasks", 0)
     spec_root["total_tasks"] = total_tasks + phase_task_total
 
-    # Update spec-level estimated hours if provided
-    if estimated_hours is not None:
-        spec_metadata = spec_data.setdefault("metadata", {})
-        current_hours = spec_metadata.get("estimated_hours")
-        if isinstance(current_hours, (int, float)):
-            spec_metadata["estimated_hours"] = current_hours + estimated_hours
-        else:
-            spec_metadata["estimated_hours"] = estimated_hours
-
     saved = save_spec(spec_id, spec_data, specs_dir)
     if not saved:
         return None, "Failed to save specification"
@@ -347,18 +313,18 @@ def add_phase_bulk(
     tasks: List[Dict[str, Any]],
     phase_description: Optional[str] = None,
     phase_purpose: Optional[str] = None,
-    phase_estimated_hours: Optional[float] = None,
     metadata_defaults: Optional[Dict[str, Any]] = None,
     position: Optional[int] = None,
     link_previous: bool = True,
     specs_dir=None,
+    **extra_kwargs: Any,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
     Add a new phase with pre-defined tasks in a single atomic operation.
 
-    Creates a phase and all specified tasks/verify nodes without auto-generating
-    verification scaffolding. This enables creating complete phase structures
-    in one operation.
+    Creates a phase and all specified tasks in a single atomic operation.
+    Automatically appends verification scaffolding (run-tests + fidelity review)
+    unless the caller already includes verify-type nodes in the task list.
 
     Args:
         spec_id: Specification ID to mutate.
@@ -370,13 +336,11 @@ def add_phase_bulk(
             - acceptance_criteria: Optional list of acceptance criteria
             - task_category: Optional task category
             - file_path: Optional associated file path
-            - estimated_hours: Optional time estimate
             - verification_type: Optional verification type for verify tasks
         phase_description: Optional phase description.
         phase_purpose: Optional purpose/goal metadata string.
-        phase_estimated_hours: Optional estimated hours for the phase.
         metadata_defaults: Optional defaults applied to tasks missing explicit values.
-            Supported keys: task_category, category, acceptance_criteria, estimated_hours
+            Supported keys: task_category, category, acceptance_criteria
         position: Optional zero-based insertion index in spec-root children.
         link_previous: Whether to automatically block on the previous phase.
         specs_dir: Specs directory override.
@@ -386,6 +350,11 @@ def add_phase_bulk(
         On success: ({"phase_id": ..., "tasks_created": [...], ...}, None)
         On failure: (None, "error message")
     """
+    if extra_kwargs:
+        logger.warning(
+            "add_phase_bulk received unexpected keyword arguments (ignored): %s",
+            ", ".join(sorted(extra_kwargs)),
+        )
     # Validate required parameters
     if not spec_id or not spec_id.strip():
         return None, "Specification ID is required"
@@ -396,31 +365,20 @@ def add_phase_bulk(
     if not tasks or not isinstance(tasks, list) or len(tasks) == 0:
         return None, "At least one task definition is required"
 
-    if phase_estimated_hours is not None and phase_estimated_hours < 0:
-        return None, "phase_estimated_hours must be non-negative"
-
     phase_title = phase_title.strip()
     defaults = metadata_defaults or {}
 
     # Validate metadata_defaults values
     if defaults:
-        default_est_hours = defaults.get("estimated_hours")
-        if default_est_hours is not None:
-            if not isinstance(default_est_hours, (int, float)) or default_est_hours < 0:
-                return None, "metadata_defaults.estimated_hours must be a non-negative number"
         default_category = defaults.get("task_category")
         if default_category is None:
             default_category = defaults.get("category")
         if default_category is not None and not isinstance(default_category, str):
             return None, "metadata_defaults.task_category must be a string"
         default_acceptance = defaults.get("acceptance_criteria")
-        if default_acceptance is not None and not isinstance(
-            default_acceptance, (list, str)
-        ):
+        if default_acceptance is not None and not isinstance(default_acceptance, (list, str)):
             return None, "metadata_defaults.acceptance_criteria must be a list of strings"
-        if isinstance(default_acceptance, list) and any(
-            not isinstance(item, str) for item in default_acceptance
-        ):
+        if isinstance(default_acceptance, list) and any(not isinstance(item, str) for item in default_acceptance):
             return None, "metadata_defaults.acceptance_criteria must be a list of strings"
 
     # Validate each task definition
@@ -438,23 +396,14 @@ def add_phase_bulk(
         if not task_title or not isinstance(task_title, str) or not task_title.strip():
             return None, f"Task at index {idx} must have a non-empty title"
 
-        est_hours = task_def.get("estimated_hours")
-        if est_hours is not None:
-            if not isinstance(est_hours, (int, float)) or est_hours < 0:
-                return None, f"Task at index {idx} has invalid estimated_hours"
-
         task_category = task_def.get("task_category")
         if task_category is not None and not isinstance(task_category, str):
             return None, f"Task at index {idx} has invalid task_category"
 
         acceptance_criteria = task_def.get("acceptance_criteria")
-        if acceptance_criteria is not None and not isinstance(
-            acceptance_criteria, (list, str)
-        ):
+        if acceptance_criteria is not None and not isinstance(acceptance_criteria, (list, str)):
             return None, f"Task at index {idx} has invalid acceptance_criteria"
-        if isinstance(acceptance_criteria, list) and any(
-            not isinstance(item, str) for item in acceptance_criteria
-        ):
+        if isinstance(acceptance_criteria, list) and any(not isinstance(item, str) for item in acceptance_criteria):
             return None, f"Task at index {idx} acceptance_criteria must be a list of strings"
 
     # Find specs directory
@@ -464,7 +413,7 @@ def add_phase_bulk(
     if specs_dir is None:
         return (
             None,
-            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+            "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR.",
         )
 
     spec_path = find_spec_file(spec_id, specs_dir)
@@ -474,8 +423,6 @@ def add_phase_bulk(
     spec_data = load_spec(spec_id, specs_dir)
     if spec_data is None:
         return None, f"Failed to load specification '{spec_id}'"
-
-    requires_rich_tasks = _requires_rich_task_fields(spec_data)
 
     hierarchy = spec_data.get("hierarchy", {})
     spec_root = hierarchy.get("spec-root")
@@ -503,8 +450,6 @@ def add_phase_bulk(
     }
     if phase_description:
         phase_metadata["description"] = phase_description.strip()
-    if phase_estimated_hours is not None:
-        phase_metadata["estimated_hours"] = phase_estimated_hours
 
     # Create phase node (without children initially)
     phase_node = {
@@ -559,11 +504,7 @@ def add_phase_bulk(
         if _nonempty_string(details) and isinstance(details, str):
             return "details", details.strip()
         if isinstance(details, list):
-            cleaned = [
-                item.strip()
-                for item in details
-                if isinstance(item, str) and item.strip()
-            ]
+            cleaned = [item.strip() for item in details if isinstance(item, str) and item.strip()]
             if cleaned:
                 return "details", cleaned
         return None, None
@@ -592,20 +533,13 @@ def add_phase_bulk(
         desc_field, desc_value = _extract_description(task_def)
         if desc_field and desc_value is not None:
             task_metadata[desc_field] = desc_value
-        elif requires_rich_tasks and task_type == "task":
+        elif task_type == "task":
             return None, f"Task '{task_title}' missing description"
 
         # Apply file_path
         file_path = task_def.get("file_path")
         if file_path and isinstance(file_path, str):
             task_metadata["file_path"] = file_path.strip()
-
-        # Apply estimated_hours (task-level overrides defaults)
-        est_hours = task_def.get("estimated_hours")
-        if est_hours is not None:
-            task_metadata["estimated_hours"] = float(est_hours)
-        elif defaults.get("estimated_hours") is not None:
-            task_metadata["estimated_hours"] = float(defaults["estimated_hours"])
 
         normalized_category = None
         if task_type == "task":
@@ -616,14 +550,13 @@ def add_phase_bulk(
             acceptance_criteria = _normalize_acceptance_criteria(raw_acceptance)
             if acceptance_criteria is not None:
                 task_metadata["acceptance_criteria"] = acceptance_criteria
-            if requires_rich_tasks:
-                if raw_acceptance is None:
-                    return None, f"Task '{task_title}' missing acceptance_criteria"
-                if not acceptance_criteria:
-                    return (
-                        None,
-                        f"Task '{task_title}' acceptance_criteria must include at least one entry",
-                    )
+            if raw_acceptance is None:
+                return None, f"Task '{task_title}' missing acceptance_criteria"
+            if not acceptance_criteria:
+                return (
+                    None,
+                    f"Task '{task_title}' acceptance_criteria must include at least one entry",
+                )
 
             # Apply task_category from defaults if not specified
             category = task_def.get("task_category") or task_def.get("category")
@@ -637,7 +570,7 @@ def add_phase_bulk(
                         f"Task '{task_title}' has invalid task_category '{category}'",
                     )
                 task_metadata["task_category"] = normalized_category
-            if requires_rich_tasks and normalized_category is None:
+            if normalized_category is None:
                 return None, f"Task '{task_title}' missing task_category"
 
             if normalized_category in {"implementation", "refactoring"}:
@@ -645,6 +578,17 @@ def add_phase_bulk(
                     return (
                         None,
                         f"Task '{task_title}' missing file_path for category '{normalized_category}'",
+                    )
+
+            # Apply complexity if provided
+            complexity = task_def.get("complexity")
+            if complexity is not None:
+                if isinstance(complexity, str) and complexity.strip().lower() in COMPLEXITY_LEVELS:
+                    task_metadata["complexity"] = complexity.strip().lower()
+                else:
+                    return (
+                        None,
+                        f"Task '{task_title}' has invalid complexity '{complexity}'. Must be one of: {', '.join(COMPLEXITY_LEVELS)}",
                     )
 
         # Apply verification_type for verify tasks
@@ -674,24 +618,36 @@ def add_phase_bulk(
         phase_node["children"].append(task_id)
         phase_node["total_tasks"] += 1
 
-        tasks_created.append({
-            "task_id": task_id,
-            "title": task_title,
-            "type": task_type,
-        })
+        tasks_created.append(
+            {
+                "task_id": task_id,
+                "title": task_title,
+                "type": task_type,
+            }
+        )
+
+    # Auto-append verification scaffolding unless caller already included verify nodes
+    has_verify_nodes = any(t.get("type") == "verify" for t in tasks)
+    if not has_verify_nodes:
+        try:
+            _add_phase_verification(hierarchy, phase_num, phase_id)
+        except Exception as exc:
+            return None, f"Failed to add verification scaffolding: {exc}"
+        # Track the auto-appended verify nodes in the result
+        for child_id in hierarchy[phase_id]["children"]:
+            if child_id.startswith("verify-") and child_id not in [t["task_id"] for t in tasks_created]:
+                node = hierarchy[child_id]
+                tasks_created.append(
+                    {
+                        "task_id": child_id,
+                        "title": node["title"],
+                        "type": "verify",
+                    }
+                )
 
     # Update spec-root total_tasks
     total_tasks = spec_root.get("total_tasks", 0)
     spec_root["total_tasks"] = total_tasks + phase_node["total_tasks"]
-
-    # Update spec-level estimated hours if provided
-    if phase_estimated_hours is not None:
-        spec_metadata = spec_data.setdefault("metadata", {})
-        current_hours = spec_metadata.get("estimated_hours")
-        if isinstance(current_hours, (int, float)):
-            spec_metadata["estimated_hours"] = current_hours + phase_estimated_hours
-        else:
-            spec_metadata["estimated_hours"] = phase_estimated_hours
 
     # Save spec atomically
     saved = save_spec(spec_id, spec_data, specs_dir)
@@ -714,7 +670,11 @@ def add_phase_bulk(
 # with callers that import from this module.
 from foundry_mcp.core.hierarchy_helpers import (  # noqa: F401
     collect_descendants as _collect_descendants,
+)
+from foundry_mcp.core.hierarchy_helpers import (
     count_tasks_in_subtree as _count_tasks_in_subtree,
+)
+from foundry_mcp.core.hierarchy_helpers import (
     remove_dependency_references as _remove_dependency_references,
 )
 
@@ -757,7 +717,7 @@ def remove_phase(
     if specs_dir is None:
         return (
             None,
-            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+            "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR.",
         )
 
     # Find and load the spec
@@ -972,7 +932,7 @@ def move_phase(
     if specs_dir is None:
         return (
             None,
-            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+            "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR.",
         )
 
     # Find and load the spec
@@ -1074,9 +1034,7 @@ def move_phase(
 
     if link_previous:
         # Remove old dependency links
-        phase_deps = phase.setdefault(
-            "dependencies", {"blocks": [], "blocked_by": [], "depends": []}
-        )
+        phase_deps = phase.setdefault("dependencies", {"blocks": [], "blocked_by": [], "depends": []})
 
         # 1. Remove this phase from old_prev's blocks list
         if old_prev_id:
@@ -1086,23 +1044,27 @@ def move_phase(
                 old_prev_blocks = old_prev_deps.get("blocks", [])
                 if phase_id in old_prev_blocks:
                     old_prev_blocks.remove(phase_id)
-                    dependencies_updated.append({
-                        "action": "removed",
-                        "from": old_prev_id,
-                        "relationship": "blocks",
-                        "target": phase_id,
-                    })
+                    dependencies_updated.append(
+                        {
+                            "action": "removed",
+                            "from": old_prev_id,
+                            "relationship": "blocks",
+                            "target": phase_id,
+                        }
+                    )
 
         # 2. Remove old_prev from this phase's blocked_by
         phase_blocked_by = phase_deps.setdefault("blocked_by", [])
         if old_prev_id and old_prev_id in phase_blocked_by:
             phase_blocked_by.remove(old_prev_id)
-            dependencies_updated.append({
-                "action": "removed",
-                "from": phase_id,
-                "relationship": "blocked_by",
-                "target": old_prev_id,
-            })
+            dependencies_updated.append(
+                {
+                    "action": "removed",
+                    "from": phase_id,
+                    "relationship": "blocked_by",
+                    "target": old_prev_id,
+                }
+            )
 
         # 3. Remove this phase from old_next's blocked_by
         if old_next_id:
@@ -1112,82 +1074,88 @@ def move_phase(
                 old_next_blocked_by = old_next_deps.get("blocked_by", [])
                 if phase_id in old_next_blocked_by:
                     old_next_blocked_by.remove(phase_id)
-                    dependencies_updated.append({
-                        "action": "removed",
-                        "from": old_next_id,
-                        "relationship": "blocked_by",
-                        "target": phase_id,
-                    })
+                    dependencies_updated.append(
+                        {
+                            "action": "removed",
+                            "from": old_next_id,
+                            "relationship": "blocked_by",
+                            "target": phase_id,
+                        }
+                    )
 
         # 4. Remove old_next from this phase's blocks
         phase_blocks = phase_deps.setdefault("blocks", [])
         if old_next_id and old_next_id in phase_blocks:
             phase_blocks.remove(old_next_id)
-            dependencies_updated.append({
-                "action": "removed",
-                "from": phase_id,
-                "relationship": "blocks",
-                "target": old_next_id,
-            })
+            dependencies_updated.append(
+                {
+                    "action": "removed",
+                    "from": phase_id,
+                    "relationship": "blocks",
+                    "target": old_next_id,
+                }
+            )
 
         # 5. Link old neighbors to each other (if they were adjacent via this phase)
         if old_prev_id and old_next_id:
             old_prev = hierarchy.get(old_prev_id)
             old_next = hierarchy.get(old_next_id)
             if old_prev and old_next:
-                old_prev_deps = old_prev.setdefault(
-                    "dependencies", {"blocks": [], "blocked_by": [], "depends": []}
-                )
+                old_prev_deps = old_prev.setdefault("dependencies", {"blocks": [], "blocked_by": [], "depends": []})
                 old_prev_blocks = old_prev_deps.setdefault("blocks", [])
                 if old_next_id not in old_prev_blocks:
                     old_prev_blocks.append(old_next_id)
-                    dependencies_updated.append({
-                        "action": "added",
-                        "from": old_prev_id,
-                        "relationship": "blocks",
-                        "target": old_next_id,
-                    })
+                    dependencies_updated.append(
+                        {
+                            "action": "added",
+                            "from": old_prev_id,
+                            "relationship": "blocks",
+                            "target": old_next_id,
+                        }
+                    )
 
-                old_next_deps = old_next.setdefault(
-                    "dependencies", {"blocks": [], "blocked_by": [], "depends": []}
-                )
+                old_next_deps = old_next.setdefault("dependencies", {"blocks": [], "blocked_by": [], "depends": []})
                 old_next_blocked_by = old_next_deps.setdefault("blocked_by", [])
                 if old_prev_id not in old_next_blocked_by:
                     old_next_blocked_by.append(old_prev_id)
-                    dependencies_updated.append({
-                        "action": "added",
-                        "from": old_next_id,
-                        "relationship": "blocked_by",
-                        "target": old_prev_id,
-                    })
+                    dependencies_updated.append(
+                        {
+                            "action": "added",
+                            "from": old_next_id,
+                            "relationship": "blocked_by",
+                            "target": old_prev_id,
+                        }
+                    )
 
         # Add new dependency links
         # 6. New prev blocks this phase
         if new_prev_id:
             new_prev = hierarchy.get(new_prev_id)
             if new_prev:
-                new_prev_deps = new_prev.setdefault(
-                    "dependencies", {"blocks": [], "blocked_by": [], "depends": []}
-                )
+                new_prev_deps = new_prev.setdefault("dependencies", {"blocks": [], "blocked_by": [], "depends": []})
                 new_prev_blocks = new_prev_deps.setdefault("blocks", [])
                 if phase_id not in new_prev_blocks:
                     new_prev_blocks.append(phase_id)
-                    dependencies_updated.append({
-                        "action": "added",
-                        "from": new_prev_id,
-                        "relationship": "blocks",
-                        "target": phase_id,
-                    })
+                    dependencies_updated.append(
+                        {
+                            "action": "added",
+                            "from": new_prev_id,
+                            "relationship": "blocks",
+                            "target": phase_id,
+                        }
+                    )
 
                 # This phase is blocked by new prev
                 if new_prev_id not in phase_blocked_by:
                     phase_blocked_by.append(new_prev_id)
-                    dependencies_updated.append({
-                        "action": "added",
-                        "from": phase_id,
-                        "relationship": "blocked_by",
-                        "target": new_prev_id,
-                    })
+                    dependencies_updated.append(
+                        {
+                            "action": "added",
+                            "from": phase_id,
+                            "relationship": "blocked_by",
+                            "target": new_prev_id,
+                        }
+                    )
 
         # 7. This phase blocks new next
         if new_next_id:
@@ -1195,25 +1163,27 @@ def move_phase(
             if new_next:
                 if new_next_id not in phase_blocks:
                     phase_blocks.append(new_next_id)
-                    dependencies_updated.append({
-                        "action": "added",
-                        "from": phase_id,
-                        "relationship": "blocks",
-                        "target": new_next_id,
-                    })
+                    dependencies_updated.append(
+                        {
+                            "action": "added",
+                            "from": phase_id,
+                            "relationship": "blocks",
+                            "target": new_next_id,
+                        }
+                    )
 
-                new_next_deps = new_next.setdefault(
-                    "dependencies", {"blocks": [], "blocked_by": [], "depends": []}
-                )
+                new_next_deps = new_next.setdefault("dependencies", {"blocks": [], "blocked_by": [], "depends": []})
                 new_next_blocked_by = new_next_deps.setdefault("blocked_by", [])
                 if phase_id not in new_next_blocked_by:
                     new_next_blocked_by.append(phase_id)
-                    dependencies_updated.append({
-                        "action": "added",
-                        "from": new_next_id,
-                        "relationship": "blocked_by",
-                        "target": phase_id,
-                    })
+                    dependencies_updated.append(
+                        {
+                            "action": "added",
+                            "from": new_next_id,
+                            "relationship": "blocked_by",
+                            "target": phase_id,
+                        }
+                    )
 
                 # Remove old link from new prev to new next (now goes through this phase)
                 if new_prev_id:
@@ -1223,21 +1193,25 @@ def move_phase(
                         new_prev_blocks = new_prev_deps.get("blocks", [])
                         if new_next_id in new_prev_blocks:
                             new_prev_blocks.remove(new_next_id)
-                            dependencies_updated.append({
-                                "action": "removed",
-                                "from": new_prev_id,
-                                "relationship": "blocks",
-                                "target": new_next_id,
-                            })
+                            dependencies_updated.append(
+                                {
+                                    "action": "removed",
+                                    "from": new_prev_id,
+                                    "relationship": "blocks",
+                                    "target": new_next_id,
+                                }
+                            )
 
                     if new_prev_id in new_next_blocked_by:
                         new_next_blocked_by.remove(new_prev_id)
-                        dependencies_updated.append({
-                            "action": "removed",
-                            "from": new_next_id,
-                            "relationship": "blocked_by",
-                            "target": new_prev_id,
-                        })
+                        dependencies_updated.append(
+                            {
+                                "action": "removed",
+                                "from": new_next_id,
+                                "relationship": "blocked_by",
+                                "target": new_prev_id,
+                            }
+                        )
 
     # Update spec-root children
     spec_root["children"] = children
@@ -1273,22 +1247,21 @@ def update_phase_metadata(
     spec_id: str,
     phase_id: str,
     *,
-    estimated_hours: Optional[float] = None,
     description: Optional[str] = None,
     purpose: Optional[str] = None,
     dry_run: bool = False,
     specs_dir=None,
+    **extra_kwargs: Any,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
     Update metadata fields of a phase in a specification.
 
-    Allows updating phase-level metadata such as estimated_hours, description,
-    and purpose. Tracks previous values for audit purposes.
+    Allows updating phase-level metadata such as description and purpose.
+    Tracks previous values for audit purposes.
 
     Args:
         spec_id: Specification ID containing the phase.
         phase_id: Phase ID to update (e.g., "phase-1").
-        estimated_hours: New estimated hours value (must be >= 0 if provided).
         description: New description text for the phase.
         purpose: New purpose text for the phase.
         dry_run: If True, validate and return preview without saving changes.
@@ -1299,6 +1272,11 @@ def update_phase_metadata(
         On success: ({"spec_id": ..., "phase_id": ..., "updates": [...], ...}, None)
         On failure: (None, "error message")
     """
+    if extra_kwargs:
+        logger.warning(
+            "update_phase_metadata received unexpected keyword arguments (ignored): %s",
+            ", ".join(sorted(extra_kwargs)),
+        )
     # Validate spec_id
     if not spec_id or not spec_id.strip():
         return None, "Specification ID is required"
@@ -1307,19 +1285,10 @@ def update_phase_metadata(
     if not phase_id or not phase_id.strip():
         return None, "Phase ID is required"
 
-    # Validate estimated_hours if provided
-    if estimated_hours is not None:
-        if not isinstance(estimated_hours, (int, float)):
-            return None, "estimated_hours must be a number"
-        if estimated_hours < 0:
-            return None, "estimated_hours must be >= 0"
-
     # Check that at least one field is being updated
-    has_update = any(
-        v is not None for v in [estimated_hours, description, purpose]
-    )
+    has_update = any(v is not None for v in [description, purpose])
     if not has_update:
-        return None, "At least one field (estimated_hours, description, purpose) must be provided"
+        return None, "At least one field (description, purpose) must be provided"
 
     # Find specs directory
     if specs_dir is None:
@@ -1328,7 +1297,7 @@ def update_phase_metadata(
     if specs_dir is None:
         return (
             None,
-            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+            "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR.",
         )
 
     # Find and load the spec
@@ -1361,34 +1330,29 @@ def update_phase_metadata(
     # Track updates with previous values
     updates: List[Dict[str, Any]] = []
 
-    if estimated_hours is not None:
-        previous = phase_metadata.get("estimated_hours")
-        phase_metadata["estimated_hours"] = estimated_hours
-        updates.append({
-            "field": "estimated_hours",
-            "previous_value": previous,
-            "new_value": estimated_hours,
-        })
-
     if description is not None:
         description = description.strip() if description else description
         previous = phase_metadata.get("description")
         phase_metadata["description"] = description
-        updates.append({
-            "field": "description",
-            "previous_value": previous,
-            "new_value": description,
-        })
+        updates.append(
+            {
+                "field": "description",
+                "previous_value": previous,
+                "new_value": description,
+            }
+        )
 
     if purpose is not None:
         purpose = purpose.strip() if purpose else purpose
         previous = phase_metadata.get("purpose")
         phase_metadata["purpose"] = purpose
-        updates.append({
-            "field": "purpose",
-            "previous_value": previous,
-            "new_value": purpose,
-        })
+        updates.append(
+            {
+                "field": "purpose",
+                "previous_value": previous,
+                "new_value": purpose,
+            }
+        )
 
     # Build result
     result: Dict[str, Any] = {
@@ -1404,147 +1368,6 @@ def update_phase_metadata(
         return result, None
 
     # Save the spec
-    saved = save_spec(spec_id, spec_data, specs_dir)
-    if not saved:
-        return None, "Failed to save specification"
-
-    return result, None
-
-
-def recalculate_estimated_hours(
-    spec_id: str,
-    dry_run: bool = False,
-    specs_dir=None,
-) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-    """
-    Recalculate estimated_hours by aggregating from tasks up through the hierarchy.
-
-    Performs full hierarchy rollup:
-    1. For each phase: sums estimated_hours from all task/subtask/verify descendants
-    2. Updates each phase's metadata.estimated_hours with the calculated sum
-    3. Sums all phase estimates to get the spec total
-    4. Updates spec metadata.estimated_hours with the calculated sum
-
-    Args:
-        spec_id: Specification ID to recalculate.
-        dry_run: If True, return report without saving changes.
-        specs_dir: Path to specs directory (auto-detected if not provided).
-
-    Returns:
-        Tuple of (result_dict, error_message).
-        On success: ({"spec_id": ..., "phases": [...], "spec_level": {...}, ...}, None)
-        On failure: (None, "error message")
-    """
-    # Validate spec_id
-    if not spec_id or not spec_id.strip():
-        return None, "Specification ID is required"
-
-    # Find specs directory
-    if specs_dir is None:
-        specs_dir = find_specs_directory()
-
-    if specs_dir is None:
-        return None, "Could not find specs directory"
-
-    # Load spec
-    spec_data = load_spec(spec_id, specs_dir)
-    if spec_data is None:
-        return None, f"Specification '{spec_id}' not found"
-
-    hierarchy = spec_data.get("hierarchy", {})
-    spec_root = hierarchy.get("spec-root")
-    if not spec_root:
-        return None, "Invalid spec: missing spec-root"
-
-    # Get phase children from spec-root
-    phase_ids = spec_root.get("children", [])
-
-    # Track results for each phase
-    phase_results: List[Dict[str, Any]] = []
-    spec_total_calculated = 0.0
-
-    for phase_id in phase_ids:
-        phase = hierarchy.get(phase_id)
-        if not phase or phase.get("type") != "phase":
-            continue
-
-        phase_metadata = phase.get("metadata", {})
-        previous_hours = phase_metadata.get("estimated_hours")
-
-        # Collect all descendants of this phase
-        descendants = _collect_descendants(hierarchy, phase_id)
-
-        # Sum estimated_hours from task/subtask/verify nodes
-        task_count = 0
-        calculated_hours = 0.0
-
-        for desc_id in descendants:
-            desc_node = hierarchy.get(desc_id)
-            if not desc_node:
-                continue
-
-            desc_type = desc_node.get("type")
-            if desc_type in ("task", "subtask", "verify"):
-                task_count += 1
-                desc_metadata = desc_node.get("metadata", {})
-                est = desc_metadata.get("estimated_hours")
-                if isinstance(est, (int, float)) and est >= 0:
-                    calculated_hours += float(est)
-
-        # Calculate delta
-        prev_value = float(previous_hours) if isinstance(previous_hours, (int, float)) else 0.0
-        delta = calculated_hours - prev_value
-
-        phase_results.append({
-            "phase_id": phase_id,
-            "title": phase.get("title", ""),
-            "previous": previous_hours,
-            "calculated": calculated_hours,
-            "delta": delta,
-            "task_count": task_count,
-        })
-
-        # Update phase metadata (will be saved if not dry_run)
-        if "metadata" not in phase:
-            phase["metadata"] = {}
-        phase["metadata"]["estimated_hours"] = calculated_hours
-
-        # Add to spec total
-        spec_total_calculated += calculated_hours
-
-    # Get spec-level previous value
-    spec_metadata = spec_data.get("metadata", {})
-    spec_previous = spec_metadata.get("estimated_hours")
-    spec_prev_value = float(spec_previous) if isinstance(spec_previous, (int, float)) else 0.0
-    spec_delta = spec_total_calculated - spec_prev_value
-
-    # Update spec metadata
-    if "metadata" not in spec_data:
-        spec_data["metadata"] = {}
-    spec_data["metadata"]["estimated_hours"] = spec_total_calculated
-
-    # Build result
-    result: Dict[str, Any] = {
-        "spec_id": spec_id,
-        "dry_run": dry_run,
-        "spec_level": {
-            "previous": spec_previous,
-            "calculated": spec_total_calculated,
-            "delta": spec_delta,
-        },
-        "phases": phase_results,
-        "summary": {
-            "total_phases": len(phase_results),
-            "phases_changed": sum(1 for p in phase_results if p["delta"] != 0),
-            "spec_changed": spec_delta != 0,
-        },
-    }
-
-    if dry_run:
-        result["message"] = "Dry run - changes not saved"
-        return result, None
-
-    # Save spec
     saved = save_spec(spec_id, spec_data, specs_dir)
     if not saved:
         return None, "Failed to save specification"
@@ -1636,14 +1459,16 @@ def recalculate_actual_hours(
         prev_value = float(previous_hours) if isinstance(previous_hours, (int, float)) else 0.0
         delta = calculated_hours - prev_value
 
-        phase_results.append({
-            "phase_id": phase_id,
-            "title": phase.get("title", ""),
-            "previous": previous_hours,
-            "calculated": calculated_hours,
-            "delta": delta,
-            "task_count": task_count,
-        })
+        phase_results.append(
+            {
+                "phase_id": phase_id,
+                "title": phase.get("title", ""),
+                "previous": previous_hours,
+                "calculated": calculated_hours,
+                "delta": delta,
+                "task_count": task_count,
+            }
+        )
 
         # Update phase metadata (will be saved if not dry_run)
         if "metadata" not in phase:

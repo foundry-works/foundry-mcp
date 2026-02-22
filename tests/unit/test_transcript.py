@@ -4,7 +4,6 @@ import json
 import tempfile
 from pathlib import Path
 
-
 from foundry_mcp.cli.transcript import (
     TokenMetrics,
     find_transcript_by_marker,
@@ -47,9 +46,7 @@ class TestIsClearCommand:
         """Test detecting /clear in string content."""
         entry = {
             "type": "user",
-            "message": {
-                "content": "<command-name>/clear</command-name>\n<command-message>clear</command-message>"
-            },
+            "message": {"content": "<command-name>/clear</command-name>\n<command-message>clear</command-message>"},
         }
         assert is_clear_command(entry) is True
 
@@ -57,11 +54,7 @@ class TestIsClearCommand:
         """Test detecting /clear in list content."""
         entry = {
             "type": "user",
-            "message": {
-                "content": [
-                    {"type": "text", "text": "<command-name>/clear</command-name>"}
-                ]
-            },
+            "message": {"content": [{"type": "text", "text": "<command-name>/clear</command-name>"}]},
         }
         assert is_clear_command(entry) is True
 
@@ -282,10 +275,7 @@ class TestFindTranscriptByMarker:
         transcripts_dir = tmp_path / "transcripts"
         transcripts_dir.mkdir()
         transcript = transcripts_dir / "session.jsonl"
-        transcript.write_text(
-            json.dumps({"type": "user", "message": {"content": "SESSION_MARKER_Z"}})
-            + "\n"
-        )
+        transcript.write_text(json.dumps({"type": "user", "message": {"content": "SESSION_MARKER_Z"}}) + "\n")
 
         result = find_transcript_by_marker(
             Path("/anywhere"),

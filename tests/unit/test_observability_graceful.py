@@ -14,14 +14,14 @@ class TestNoOpStubs:
 
     def test_noop_tracer_can_be_imported(self):
         """NoOp tracer should always be importable."""
-        from foundry_mcp.core.otel_stubs import get_noop_tracer
+        from foundry_mcp.core.observability.stubs import get_noop_tracer
 
         tracer = get_noop_tracer("test")
         assert tracer is not None
 
     def test_noop_tracer_context_manager(self):
         """NoOp tracer spans should work as context managers."""
-        from foundry_mcp.core.otel_stubs import get_noop_tracer
+        from foundry_mcp.core.observability.stubs import get_noop_tracer
 
         tracer = get_noop_tracer("test")
         with tracer.start_as_current_span("test-span") as span:
@@ -30,14 +30,14 @@ class TestNoOpStubs:
 
     def test_noop_meter_can_be_imported(self):
         """NoOp meter should always be importable."""
-        from foundry_mcp.core.otel_stubs import get_noop_meter
+        from foundry_mcp.core.observability.stubs import get_noop_meter
 
         meter = get_noop_meter("test")
         assert meter is not None
 
     def test_noop_meter_instruments(self):
         """NoOp meter instruments should be callable."""
-        from foundry_mcp.core.otel_stubs import get_noop_meter
+        from foundry_mcp.core.observability.stubs import get_noop_meter
 
         meter = get_noop_meter("test")
         counter = meter.create_counter("test_counter")
@@ -154,6 +154,7 @@ class TestMcpToolDecoratorFastPath:
     def test_async_decorator_works_without_observability(self):
         """Async decorator should work correctly when observability is disabled."""
         import asyncio
+
         from foundry_mcp.core.observability import mcp_tool
 
         @mcp_tool(tool_name="test_async_tool")
@@ -180,7 +181,7 @@ class TestConfigLoading:
 
     def test_observability_config_defaults(self):
         """ObservabilityConfig should have sensible defaults."""
-        from foundry_mcp.config import ObservabilityConfig
+        from foundry_mcp.config.domains import ObservabilityConfig
 
         config = ObservabilityConfig()
         assert config.enabled is False
@@ -195,7 +196,7 @@ class TestConfigLoading:
 
     def test_observability_config_from_dict(self):
         """ObservabilityConfig should load from TOML dict."""
-        from foundry_mcp.config import ObservabilityConfig
+        from foundry_mcp.config.domains import ObservabilityConfig
 
         data = {
             "enabled": True,
@@ -214,7 +215,7 @@ class TestConfigLoading:
 
     def test_server_config_has_observability(self):
         """ServerConfig should include observability settings."""
-        from foundry_mcp.config import ServerConfig
+        from foundry_mcp.config.server import ServerConfig
 
         config = ServerConfig()
         assert hasattr(config, "observability")

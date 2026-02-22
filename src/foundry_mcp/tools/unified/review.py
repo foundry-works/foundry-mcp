@@ -9,54 +9,60 @@ from __future__ import annotations
 import json
 import logging
 import time
-from datetime import datetime
+from collections import Counter
 from dataclasses import asdict
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.ai_consultation import (
+    ConsensusResult,
     ConsultationOrchestrator,
     ConsultationRequest,
     ConsultationResult,
     ConsultationWorkflow,
-    ConsensusResult,
+    ProviderResponse,
 )
+from foundry_mcp.core.llm_config.consultation import load_consultation_config
+from foundry_mcp.core.naming import canonical_tool
+from foundry_mcp.core.observability import get_metrics, mcp_tool
 from foundry_mcp.core.prompts.fidelity_review import (
     FIDELITY_SYNTHESIZED_RESPONSE_SCHEMA,
 )
-from foundry_mcp.core.llm_config import get_consultation_config, load_consultation_config
-from foundry_mcp.core.naming import canonical_tool
-from foundry_mcp.core.observability import get_metrics, mcp_tool
 from foundry_mcp.core.providers import get_provider_statuses
-from foundry_mcp.core.responses import (
-    ErrorCode,
-    ErrorType,
+from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 from foundry_mcp.core.security import is_prompt_injection
 from foundry_mcp.core.spec import find_spec_file, find_specs_directory, load_spec
-from .documentation_helpers import (
-    _build_implementation_artifacts,
-    _build_journal_entries,
-    _build_spec_requirements,
-    _build_test_results,
-)
-from .review_helpers import (
-    DEFAULT_AI_TIMEOUT,
-    REVIEW_TYPES,
-    _get_llm_status,
-    _run_ai_review,
-    _run_quick_review,
-)
+from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
 )
-from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
+
+from .documentation_helpers import (
+    _build_implementation_artifacts,
+    _build_journal_entries,
+    _build_plan_context,
+    _build_spec_overview,
+    _build_spec_requirements,
+    _build_subsequent_phases,
+    _build_test_results,
+)
+from .review_helpers import (
+    DEFAULT_AI_TIMEOUT,
+    _get_llm_status,
+    _run_ai_review,
+)
 
 logger = logging.getLogger(__name__)
 _metrics = get_metrics()
@@ -88,11 +94,6 @@ def _parse_json_content(content: str) -> Optional[dict]:
 
 def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     spec_id = payload.get("spec_id")
-    # Get default review_type from consultation config (used when not provided or None)
-    consultation_config = get_consultation_config()
-    workflow_config = consultation_config.get_workflow_config("plan_review")
-    default_review_type = workflow_config.default_review_type
-    review_type = payload.get("review_type") or default_review_type
 
     if not isinstance(spec_id, str) or not spec_id.strip():
         return asdict(
@@ -101,16 +102,6 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
                 error_code=ErrorCode.MISSING_REQUIRED,
                 error_type=ErrorType.VALIDATION,
                 remediation="Provide a valid spec_id",
-            )
-        )
-
-    if review_type not in REVIEW_TYPES:
-        return asdict(
-            error_response(
-                f"Invalid review_type: {review_type}",
-                error_code=ErrorCode.VALIDATION_ERROR,
-                error_type=ErrorType.VALIDATION,
-                remediation=f"Use one of: {', '.join(REVIEW_TYPES)}",
             )
         )
 
@@ -127,11 +118,7 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
         ("ai_provider", ai_provider),
         ("model", model),
     ]:
-        if (
-            field_value
-            and isinstance(field_value, str)
-            and is_prompt_injection(field_value)
-        ):
+        if field_value and isinstance(field_value, str) and is_prompt_injection(field_value):
             return asdict(
                 error_response(
                     f"Input validation failed for {field_name}",
@@ -173,15 +160,6 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
         )
     dry_run = dry_run_value if isinstance(dry_run_value, bool) else False
 
-    if review_type == "quick":
-        return _run_quick_review(
-            spec_id=spec_id,
-            specs_dir=specs_dir,
-            dry_run=dry_run,
-            llm_status=llm_status,
-            start_time=start_time,
-        )
-
     try:
         ai_timeout = float(payload.get("ai_timeout", DEFAULT_AI_TIMEOUT))
     except (TypeError, ValueError):
@@ -205,9 +183,7 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
         )
 
     consultation_cache_value = payload.get("consultation_cache", True)
-    if consultation_cache_value is not None and not isinstance(
-        consultation_cache_value, bool
-    ):
+    if consultation_cache_value is not None and not isinstance(consultation_cache_value, bool):
         return asdict(
             error_response(
                 "consultation_cache must be a boolean",
@@ -217,14 +193,20 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
                 details={"field": "consultation_cache"},
             )
         )
-    consultation_cache = (
-        consultation_cache_value if isinstance(consultation_cache_value, bool) else True
-    )
+    consultation_cache = consultation_cache_value if isinstance(consultation_cache_value, bool) else True
 
-    return _run_ai_review(
+    # Load plan content for plan-enhanced review (auto-enhances when plan is available)
+    plan_content: Optional[str] = None
+    workspace_root: Optional[Path] = None
+    if specs_dir:
+        workspace_root = specs_dir.parent if specs_dir.name == "specs" else specs_dir
+        spec_data = load_spec(spec_id, specs_dir)
+        if spec_data:
+            plan_content = _build_plan_context(spec_data, workspace_root) or None
+
+    result = _run_ai_review(
         spec_id=spec_id,
         specs_dir=specs_dir,
-        review_type=review_type,
         ai_provider=ai_provider,
         model=model,
         ai_timeout=ai_timeout,
@@ -232,7 +214,54 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
         dry_run=dry_run,
         llm_status=llm_status,
         start_time=start_time,
+        plan_content=plan_content,
     )
+
+    # Persist plan-comparison review results to disk
+    if plan_content and result.get("success") and result.get("plan_enhanced") and not dry_run and specs_dir:
+        try:
+            spec_reviews_dir = Path(specs_dir) / ".spec-reviews"
+            spec_reviews_dir.mkdir(parents=True, exist_ok=True)
+            review_file = spec_reviews_dir / f"{spec_id}-spec-review.md"
+
+            response_content = result.get("response", "")
+            parsed_json = _parse_json_content(response_content) if response_content else None
+            verdict = parsed_json.get("verdict", "unknown") if parsed_json else "unknown"
+
+            review_md_lines = [
+                f"# Spec Review: {result.get('title', spec_id)}",
+                "",
+                f"**Spec ID:** {spec_id}",
+                "**Review Type:** spec-vs-plan (plan-enhanced full review)",
+                f"**Verdict:** {verdict}",
+                f"**Template:** {result.get('template_id', 'SPEC_REVIEW_VS_PLAN_V1')}",
+                f"**Date:** {datetime.now().isoformat()}",
+                f"**Provider:** {result.get('ai_provider', 'unknown')}",
+                "",
+                "## Review Output",
+                "",
+            ]
+
+            if parsed_json:
+                review_md_lines.append(f"```json\n{json.dumps(parsed_json, indent=2)}\n```")
+            else:
+                review_md_lines.append(response_content)
+
+            review_md_lines.extend(
+                [
+                    "",
+                    "---",
+                    "*Generated by Foundry MCP Spec-vs-Plan Review*",
+                ]
+            )
+
+            review_file.write_text("\n".join(review_md_lines), encoding="utf-8")
+            result["review_path"] = str(review_file)
+        except Exception as exc:
+            logger.warning("Failed to persist spec review: %s", exc)
+            result["review_path"] = None
+
+    return result
 
 
 def _handle_list_tools(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -260,7 +289,6 @@ def _handle_list_tools(*, config: ServerConfig, payload: Dict[str, Any]) -> dict
             success_response(
                 tools=tools_info,
                 llm_status=llm_status,
-                review_types=REVIEW_TYPES,
                 available_count=sum(1 for tool in tools_info if tool.get("available")),
                 total_count=len(tools_info),
                 telemetry={"duration_ms": round(duration_ms, 2)},
@@ -287,40 +315,17 @@ def _handle_list_plan_tools(*, config: ServerConfig, payload: Dict[str, Any]) ->
 
         plan_tools = [
             {
-                "name": "quick-review",
-                "description": "Fast structural review for basic validation",
-                "capabilities": ["structure", "syntax", "basic_quality"],
-                "llm_required": False,
-                "estimated_time": "< 10 seconds",
-            },
-            {
                 "name": "full-review",
-                "description": "Comprehensive review with LLM analysis",
-                "capabilities": ["structure", "quality", "feasibility", "suggestions"],
-                "llm_required": True,
-                "estimated_time": "30-60 seconds",
-            },
-            {
-                "name": "security-review",
-                "description": "Security-focused analysis of plan",
-                "capabilities": ["security", "trust_boundaries", "data_flow"],
-                "llm_required": True,
-                "estimated_time": "30-60 seconds",
-            },
-            {
-                "name": "feasibility-review",
-                "description": "Feasibility and complexity assessment",
-                "capabilities": ["complexity", "estimation", "risks"],
+                "description": "Comprehensive review with LLM analysis (auto-enhances to spec-vs-plan when plan is available)",
+                "capabilities": ["structure", "quality", "feasibility", "suggestions", "plan_comparison"],
                 "llm_required": True,
                 "estimated_time": "30-60 seconds",
             },
         ]
 
         recommendations = [
-            "Use 'quick-review' for a fast sanity check.",
             "Use 'full-review' before implementation for comprehensive feedback.",
-            "Use 'security-review' for specs touching auth/data boundaries.",
-            "Use 'feasibility-review' to validate scope/estimates.",
+            "Use 'spec validate' for structural validation.",
         ]
 
         duration_ms = (time.perf_counter() - start_time) * 1000
@@ -406,24 +411,28 @@ def _format_fidelity_markdown(
     # Requirement Alignment
     req_align = parsed.get("requirement_alignment", {})
     if req_align:
-        lines.extend([
-            "## Requirement Alignment",
-            f"**Status:** {req_align.get('answer', 'unknown')}",
-            "",
-            req_align.get("details", ""),
-            "",
-        ])
+        lines.extend(
+            [
+                "## Requirement Alignment",
+                f"**Status:** {req_align.get('answer', 'unknown')}",
+                "",
+                req_align.get("details", ""),
+                "",
+            ]
+        )
 
     # Success Criteria
     success = parsed.get("success_criteria", {})
     if success:
-        lines.extend([
-            "## Success Criteria",
-            f"**Status:** {success.get('met', 'unknown')}",
-            "",
-            success.get("details", ""),
-            "",
-        ])
+        lines.extend(
+            [
+                "## Success Criteria",
+                f"**Status:** {success.get('met', 'unknown')}",
+                "",
+                success.get("details", ""),
+                "",
+            ]
+        )
 
     # Deviations
     deviations = parsed.get("deviations", [])
@@ -441,13 +450,15 @@ def _format_fidelity_markdown(
     # Test Coverage
     test_cov = parsed.get("test_coverage", {})
     if test_cov:
-        lines.extend([
-            "## Test Coverage",
-            f"**Status:** {test_cov.get('status', 'unknown')}",
-            "",
-            test_cov.get("details", ""),
-            "",
-        ])
+        lines.extend(
+            [
+                "## Test Coverage",
+                f"**Status:** {test_cov.get('status', 'unknown')}",
+                "",
+                test_cov.get("details", ""),
+                "",
+            ]
+        )
 
     # Code Quality
     code_quality = parsed.get("code_quality", {})
@@ -463,13 +474,15 @@ def _format_fidelity_markdown(
     # Documentation
     doc = parsed.get("documentation", {})
     if doc:
-        lines.extend([
-            "## Documentation",
-            f"**Status:** {doc.get('status', 'unknown')}",
-            "",
-            doc.get("details", ""),
-            "",
-        ])
+        lines.extend(
+            [
+                "## Documentation",
+                f"**Status:** {doc.get('status', 'unknown')}",
+                "",
+                doc.get("details", ""),
+                "",
+            ]
+        )
 
     # Issues
     issues = parsed.get("issues", [])
@@ -515,12 +528,150 @@ def _format_fidelity_markdown(
             lines.append(f"- Synthesis provider: {synth_meta['synthesis_provider']}")
         lines.append("")
 
-    lines.extend([
-        "---",
-        "*Generated by Foundry MCP Fidelity Review*",
-    ])
+    lines.extend(
+        [
+            "---",
+            "*Generated by Foundry MCP Fidelity Review*",
+        ]
+    )
 
     return "\n".join(lines)
+
+
+def _try_tiebreaker_review(
+    *,
+    orchestrator: ConsultationOrchestrator,
+    successful_responses: List[ProviderResponse],
+    all_responses: List[ProviderResponse],
+    request: ConsultationRequest,
+    failed_providers: List[Dict[str, Any]],
+) -> tuple:
+    """Detect split verdicts and invoke an unused provider as tiebreaker.
+
+    When two reviewers disagree on the verdict, this attempts to bring in
+    a third reviewer to break the tie before synthesis.
+
+    Args:
+        orchestrator: The consultation orchestrator for provider calls.
+        successful_responses: Responses with success=True and non-empty content.
+        all_responses: All responses from the initial consensus round (including
+            failures). Used to determine which providers were already consulted,
+            so that failed providers are also excluded — if a provider failed the
+            initial round it is unlikely to succeed as a tiebreaker.
+        request: The original consultation request (context is reused).
+        failed_providers: Mutable list; tiebreaker failures are appended here.
+
+    Returns:
+        (successful_responses, successful_provider_ids) — the responses list may
+        have one additional entry if a tiebreaker succeeded.
+    """
+    if len(successful_responses) < 2:
+        return successful_responses, [r.provider_id for r in successful_responses]
+
+    individual_verdicts: List[tuple] = []
+    unparseable_providers: List[str] = []
+    for resp in successful_responses:
+        resp_parsed = _parse_json_content(resp.content)
+        if resp_parsed and "verdict" in resp_parsed:
+            individual_verdicts.append((resp.provider_id, resp_parsed["verdict"]))
+        else:
+            unparseable_providers.append(resp.provider_id)
+
+    if unparseable_providers:
+        logger.warning(
+            "Could not parse verdict from providers: %s — excluded from split detection",
+            unparseable_providers,
+        )
+
+    verdict_values = [v for _, v in individual_verdicts]
+    verdicts_split = len(individual_verdicts) >= 2 and len(set(verdict_values)) > 1
+
+    if not verdicts_split:
+        return successful_responses, [r.provider_id for r in successful_responses]
+
+    # If one verdict already holds a strict majority, synthesis can resolve via
+    # majority vote — no need to spend time and cost on an extra reviewer.
+    verdict_counts = Counter(verdict_values)
+    majority_threshold = len(individual_verdicts) / 2
+    has_majority = any(count > majority_threshold for count in verdict_counts.values())
+    if has_majority:
+        logger.info(
+            "Split verdict detected (%s) but majority exists — skipping tiebreaker, synthesis will use majority vote",
+            verdict_values,
+        )
+        return successful_responses, [r.provider_id for r in successful_responses]
+
+    # Exclude all providers from the initial round (both successful and failed)
+    # so we get a genuinely fresh perspective for the tiebreaker.
+    used_provider_ids = {r.provider_id for r in all_responses}
+    all_available = orchestrator.get_available_providers()
+    tiebreaker_candidates = [pid for pid in all_available if pid not in used_provider_ids]
+
+    if not tiebreaker_candidates:
+        logger.info(
+            "Split verdict detected (%s) but no unused providers available "
+            "for tiebreaker — falling back to severity-based synthesis resolution",
+            verdict_values,
+        )
+        return successful_responses, [r.provider_id for r in successful_responses]
+
+    logger.info(
+        "Split verdict detected (%s), trying tiebreaker from %d candidates",
+        verdict_values,
+        len(tiebreaker_candidates),
+    )
+
+    tiebreaker_response: Optional[ProviderResponse] = None
+    for tiebreaker_pid in tiebreaker_candidates:
+        logger.info("Attempting tiebreaker with provider: %s", tiebreaker_pid)
+
+        tiebreaker_request = ConsultationRequest(
+            workflow=ConsultationWorkflow.FIDELITY_REVIEW,
+            prompt_id="FIDELITY_REVIEW_V1",
+            context=request.context,
+            provider_id=tiebreaker_pid,
+        )
+
+        try:
+            # Bypass cache to ensure a fresh, independent evaluation
+            tiebreaker_outcome = orchestrator.consult(tiebreaker_request, use_cache=False)
+        except Exception as e:
+            logger.warning("Tiebreaker provider %s failed: %s", tiebreaker_pid, e)
+            failed_providers.append({"provider_id": tiebreaker_pid, "error": str(e)})
+            continue
+
+        if isinstance(tiebreaker_outcome, ConsultationResult):
+            if tiebreaker_outcome.success and tiebreaker_outcome.content.strip():
+                tiebreaker_response = ProviderResponse.from_result(tiebreaker_outcome)
+        elif isinstance(tiebreaker_outcome, ConsensusResult):
+            for cr in tiebreaker_outcome.responses:
+                if cr.success and cr.content.strip():
+                    tiebreaker_response = cr
+                    break
+
+        if tiebreaker_response is not None:
+            successful_responses.append(tiebreaker_response)
+            logger.info(
+                "Tiebreaker provider %s succeeded, synthesis will use %d reviews",
+                tiebreaker_response.provider_id,
+                len(successful_responses),
+            )
+            break
+
+        failed_providers.append({"provider_id": tiebreaker_pid, "error": "no usable content"})
+        logger.warning(
+            "Tiebreaker provider %s returned no usable content, trying next candidate",
+            tiebreaker_pid,
+        )
+
+    if tiebreaker_response is None:
+        logger.warning(
+            "All %d tiebreaker candidates exhausted, proceeding with %d-reviewer synthesis",
+            len(tiebreaker_candidates),
+            len(successful_responses),
+        )
+
+    return successful_responses, [r.provider_id for r in successful_responses]
 
 
 def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -563,9 +714,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
                 details={"field": "include_tests"},
             )
         )
-    include_tests = (
-        include_tests_value if isinstance(include_tests_value, bool) else True
-    )
+    include_tests = include_tests_value if isinstance(include_tests_value, bool) else True
     base_branch = payload.get("base_branch", "main")
     workspace = payload.get("workspace")
 
@@ -589,11 +738,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             )
         )
 
-    if (
-        not isinstance(consensus_threshold, int)
-        or consensus_threshold < 1
-        or consensus_threshold > 5
-    ):
+    if not isinstance(consensus_threshold, int) or consensus_threshold < 1 or consensus_threshold > 5:
         return asdict(
             error_response(
                 f"Invalid consensus_threshold: {consensus_threshold}. Must be between 1 and 5.",
@@ -611,11 +756,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         ("base_branch", base_branch),
         ("workspace", workspace),
     ]:
-        if (
-            field_value
-            and isinstance(field_value, str)
-            and is_prompt_injection(field_value)
-        ):
+        if field_value and isinstance(field_value, str) and is_prompt_injection(field_value):
             return asdict(
                 error_response(
                     f"Input validation failed for {field_name}",
@@ -637,9 +778,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
                     )
                 )
 
-    ws_path = (
-        Path(workspace) if isinstance(workspace, str) and workspace else Path.cwd()
-    )
+    ws_path = Path(workspace) if isinstance(workspace, str) and workspace else Path.cwd()
     specs_dir = find_specs_directory(str(ws_path))
     if not specs_dir:
         return asdict(
@@ -685,7 +824,9 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     provider_review_paths: List[Dict[str, Any]] = []
     review_path: Optional[str] = None
 
-    spec_requirements = _build_spec_requirements(spec_data, task_id, phase_id)
+    spec_requirements = _build_spec_requirements(spec_data, task_id, phase_id, exclude_fidelity_verify=True)
+    spec_overview = _build_spec_overview(spec_data)
+    plan_context = _build_plan_context(spec_data, ws_path)
     implementation_artifacts = _build_implementation_artifacts(
         spec_data,
         task_id,
@@ -694,11 +835,13 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         incremental,
         base_branch,
         workspace_root=ws_path,
+        exclude_fidelity_verify=True,
     )
     test_results = (
-        _build_test_results(spec_data, task_id, phase_id) if include_tests else ""
+        _build_test_results(spec_data, task_id, phase_id, exclude_fidelity_verify=True) if include_tests else ""
     )
-    journal_entries = _build_journal_entries(spec_data, task_id, phase_id)
+    journal_entries = _build_journal_entries(spec_data, task_id, phase_id, exclude_fidelity_verify=True)
+    subsequent_phases = _build_subsequent_phases(spec_data, phase_id)
 
     preferred_providers = ai_tools if isinstance(ai_tools, list) else []
     first_provider = preferred_providers[0] if preferred_providers else None
@@ -726,10 +869,13 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             "spec_title": spec_data.get("title", spec_id),
             "spec_description": spec_data.get("description", ""),
             "review_scope": scope,
+            "spec_overview": spec_overview,
+            "plan_context": plan_context,
             "spec_requirements": spec_requirements,
             "implementation_artifacts": implementation_artifacts,
             "test_results": test_results,
             "journal_entries": journal_entries,
+            "subsequent_phases": subsequent_phases,
         },
         provider_id=first_provider,
         model=model,
@@ -744,24 +890,26 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     if is_consensus:
         # Extract provider details for visibility
-        failed_providers = [
-            {"provider_id": r.provider_id, "error": r.error}
-            for r in result.responses
-            if not r.success
-        ]
+        failed_providers = [{"provider_id": r.provider_id, "error": r.error} for r in result.responses if not r.success]
         # Filter for truly successful responses (success=True AND non-empty content)
-        successful_responses = [
-            r for r in result.responses if r.success and r.content.strip()
-        ]
+        successful_responses = [r for r in result.responses if r.success and r.content.strip()]
         successful_providers = [r.provider_id for r in successful_responses]
+
+        # Try to resolve split verdicts with a tiebreaker reviewer
+        successful_responses, successful_providers = _try_tiebreaker_review(
+            orchestrator=orchestrator,
+            successful_responses=successful_responses,
+            all_responses=result.responses,
+            request=request,
+            failed_providers=failed_providers,
+        )
 
         if len(successful_responses) >= 2:
             # Multi-model mode: run synthesis to consolidate reviews
             model_reviews_json = ""
             for response in successful_responses:
                 model_reviews_json += (
-                    f"\n---\n## Review by {response.provider_id}\n\n"
-                    f"```json\n{response.content}\n```\n"
+                    f"\n---\n## Review by {response.provider_id}\n\n```json\n{response.content}\n```\n"
                 )
 
             # Write individual provider review files
@@ -781,10 +929,12 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
                             provider_id=response.provider_id,
                         )
                         provider_file.write_text(provider_md, encoding="utf-8")
-                        provider_review_paths.append({
-                            "provider_id": response.provider_id,
-                            "path": str(provider_file),
-                        })
+                        provider_review_paths.append(
+                            {
+                                "provider_id": response.provider_id,
+                                "path": str(provider_file),
+                            }
+                        )
                     else:
                         # JSON parsing failed - write raw content as fallback
                         logger.warning(
@@ -798,11 +948,13 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
                             f"## Raw Response\n\n```\n{response.content}\n```\n"
                         )
                         provider_file.write_text(raw_md, encoding="utf-8")
-                        provider_review_paths.append({
-                            "provider_id": response.provider_id,
-                            "path": str(provider_file),
-                            "parse_error": True,
-                        })
+                        provider_review_paths.append(
+                            {
+                                "provider_id": response.provider_id,
+                                "path": str(provider_file),
+                                "parse_error": True,
+                            }
+                        )
             except Exception as e:
                 logger.warning("Failed to write provider review files: %s", e)
 
@@ -932,7 +1084,227 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     return asdict(
         success_response(
-            **response_data,
+            data=response_data,
+            telemetry={"duration_ms": round(duration_ms, 2)},
+        )
+    )
+
+
+def _handle_fidelity_gate(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+    """Run a phase fidelity review for autonomous gate enforcement.
+
+    This action is designed for the autonomous execution system. It runs a
+    fidelity review for a phase and writes gate evidence to the session state.
+    The orchestrator (via session-step command="next") validates and applies
+    gate policy based on this evidence.
+
+    Request fields:
+    - spec_id (required): Spec ID
+    - session_id (required): Session ID
+    - phase_id (required): Phase ID to review
+    - step_id (required): Step ID from the run_fidelity_gate next_step
+    - Existing fidelity inputs (ai_tools, model, consensus_threshold, etc.)
+
+    Response data:
+    - spec_id, session_id, phase_id, step_id
+    - gate_attempt_id: Unique ID for this review attempt
+    - verdict: pass | fail | warn
+    - gate_policy: Echo of active session policy
+    - gate_passed_preview: bool preview (command="next" recomputes authoritatively)
+    - review_path: Path to review file (if written)
+    - findings: Summary of issues (if any)
+    """
+    from datetime import datetime, timezone
+
+    from ulid import ULID
+
+    from foundry_mcp.core.autonomy.memory import AutonomyStorage
+    from foundry_mcp.core.autonomy.models.enums import GatePolicy, GateVerdict
+    from foundry_mcp.core.autonomy.models.gates import PendingGateEvidence
+    from foundry_mcp.core.autonomy.server_secret import compute_integrity_checksum
+
+    start_time = time.perf_counter()
+
+    # Required parameters
+    spec_id = payload.get("spec_id")
+    session_id = payload.get("session_id")
+    phase_id = payload.get("phase_id")
+    step_id = payload.get("step_id")
+
+    # Validate required parameters
+    _fidelity_gate_field_hints = {
+        "spec_id": "Provide the spec_id from the session.",
+        "session_id": "Provide the session_id.",
+        "phase_id": "Use next_step.phase_id from the orchestrator step.",
+        "step_id": "Use next_step.step_id from the orchestrator step.",
+    }
+    for field_name, field_value in [
+        ("spec_id", spec_id),
+        ("session_id", session_id),
+        ("phase_id", phase_id),
+        ("step_id", step_id),
+    ]:
+        if not isinstance(field_value, str) or not field_value.strip():
+            return asdict(
+                error_response(
+                    f"{field_name} is required for fidelity-gate action",
+                    error_code=ErrorCode.MISSING_REQUIRED,
+                    error_type=ErrorType.VALIDATION,
+                    remediation=_fidelity_gate_field_hints[field_name],
+                )
+            )
+
+    # Security validation for string inputs
+    for field_name, field_value in [
+        ("spec_id", spec_id),
+        ("session_id", session_id),
+        ("phase_id", phase_id),
+        ("step_id", step_id),
+    ]:
+        if isinstance(field_value, str) and is_prompt_injection(field_value):
+            return asdict(
+                error_response(
+                    f"Input validation failed for {field_name}",
+                    error_code=ErrorCode.VALIDATION_ERROR,
+                    error_type=ErrorType.VALIDATION,
+                    remediation="Remove instruction-like patterns from input.",
+                )
+            )
+
+    workspace = payload.get("workspace")
+    ws_path = Path(workspace) if isinstance(workspace, str) and workspace else Path.cwd()
+
+    # Load session to get gate_policy
+    storage = AutonomyStorage(workspace_path=ws_path)
+    session = storage.load(str(session_id))
+
+    if session is None:
+        return asdict(
+            error_response(
+                f"Session not found: {session_id}",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Verify the session ID exists.",
+            )
+        )
+
+    if session.spec_id != spec_id:
+        return asdict(
+            error_response(
+                f"Session {session_id} is for spec {session.spec_id}, not {spec_id}",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
+                remediation="Ensure session_id matches the spec_id.",
+            )
+        )
+
+    # Build fidelity review payload (reuse existing handler)
+    fidelity_payload = {
+        "spec_id": spec_id,
+        "phase_id": phase_id,
+        "ai_tools": payload.get("ai_tools"),
+        "model": payload.get("model"),
+        "consensus_threshold": payload.get("consensus_threshold", 2),
+        "include_tests": payload.get("include_tests", True),
+        "workspace": workspace,
+        "files": payload.get("files"),
+        "incremental": payload.get("incremental", False),
+        "base_branch": payload.get("base_branch", "main"),
+    }
+
+    # Run the fidelity review
+    fidelity_result = _handle_fidelity(config=config, payload=fidelity_payload)
+
+    # Extract verdict from fidelity result
+    if fidelity_result.get("success"):
+        verdict_str = fidelity_result.get("data", {}).get("verdict", "unknown")
+        review_path = fidelity_result.get("data", {}).get("review_path")
+        deviations = fidelity_result.get("data", {}).get("deviations", [])
+    else:
+        # Fidelity review failed - treat as fail verdict
+        verdict_str = "fail"
+        review_path = None
+        deviations = [{"error": fidelity_result.get("error", "Unknown error")}]
+
+    # Normalize verdict to enum value
+    verdict_map = {
+        "pass": GateVerdict.PASS,
+        "warn": GateVerdict.WARN,
+        "fail": GateVerdict.FAIL,
+    }
+    verdict = verdict_map.get(verdict_str.lower(), GateVerdict.FAIL)
+
+    # Generate gate_attempt_id
+    gate_attempt_id = f"gate_{ULID()}"
+
+    # Compute gate_passed_preview based on policy and verdict
+    gate_policy = session.gate_policy
+    if gate_policy == GatePolicy.STRICT:
+        gate_passed_preview = verdict == GateVerdict.PASS
+    elif gate_policy == GatePolicy.LENIENT:
+        gate_passed_preview = verdict in (GateVerdict.PASS, GateVerdict.WARN)
+    else:  # MANUAL
+        gate_passed_preview = False  # Manual always requires human review
+
+    # Write pending gate evidence to session
+    now = datetime.now(timezone.utc)
+
+    # Compute integrity checksum for tamper detection (P1.3)
+    integrity_checksum = compute_integrity_checksum(
+        gate_attempt_id=gate_attempt_id,
+        step_id=str(step_id),
+        phase_id=str(phase_id),
+        verdict=verdict.value,
+    )
+
+    session.pending_gate_evidence = PendingGateEvidence(
+        gate_attempt_id=gate_attempt_id,
+        step_id=str(step_id),  # Validated non-None above
+        phase_id=str(phase_id),  # Validated non-None above
+        verdict=verdict,
+        issued_at=now,
+        integrity_checksum=integrity_checksum,
+    )
+    session.updated_at = now
+    session.state_version += 1
+
+    # Save session
+    storage.save(session)
+
+    duration_ms = (time.perf_counter() - start_time) * 1000
+
+    # Build findings from deviations
+    findings = []
+    if deviations:
+        for dev in deviations[:10]:  # Cap at 10 for response size
+            if isinstance(dev, dict):
+                findings.append(
+                    {
+                        "type": dev.get("type", "unknown"),
+                        "description": dev.get("description", str(dev)),
+                    }
+                )
+            else:
+                findings.append({"type": "issue", "description": str(dev)})
+
+    response_data = {
+        "spec_id": spec_id,
+        "session_id": session_id,
+        "phase_id": phase_id,
+        "step_id": step_id,
+        "gate_attempt_id": gate_attempt_id,
+        "verdict": verdict.value,
+        "gate_policy": gate_policy.value,
+        "gate_passed_preview": gate_passed_preview,
+        "findings": findings,
+    }
+
+    if review_path:
+        response_data["review_path"] = review_path
+
+    return asdict(
+        success_response(
+            data=response_data,
             telemetry={"duration_ms": round(duration_ms, 2)},
         )
     )
@@ -944,6 +1316,11 @@ _ACTIONS = [
         name="fidelity",
         handler=_handle_fidelity,
         summary="Run a fidelity review",
+    ),
+    ActionDefinition(
+        name="fidelity-gate",
+        handler=_handle_fidelity_gate,
+        summary="Run a fidelity gate review for autonomous execution",
     ),
     ActionDefinition(
         name="parse-feedback",
@@ -965,12 +1342,8 @@ _ACTIONS = [
 _REVIEW_ROUTER = ActionRouter(tool_name="review", actions=_ACTIONS)
 
 
-def _dispatch_review_action(
-    *, action: str, payload: Dict[str, Any], config: ServerConfig
-) -> dict:
-    return dispatch_with_standard_errors(
-        _REVIEW_ROUTER, "review", action, payload=payload, config=config
-    )
+def _dispatch_review_action(*, action: str, payload: Dict[str, Any], config: ServerConfig) -> dict:
+    return dispatch_with_standard_errors(_REVIEW_ROUTER, "review", action, payload=payload, config=config)
 
 
 def register_unified_review_tool(mcp: FastMCP, config: ServerConfig) -> None:
@@ -981,7 +1354,6 @@ def register_unified_review_tool(mcp: FastMCP, config: ServerConfig) -> None:
     def review(
         action: str,
         spec_id: Optional[str] = None,
-        review_type: Optional[str] = None,
         tools: Optional[str] = None,
         model: Optional[str] = None,
         ai_provider: Optional[str] = None,
@@ -1000,10 +1372,11 @@ def register_unified_review_tool(mcp: FastMCP, config: ServerConfig) -> None:
         workspace: Optional[str] = None,
         review_path: Optional[str] = None,
         output_path: Optional[str] = None,
+        session_id: Optional[str] = None,
+        step_id: Optional[str] = None,
     ) -> dict:
         payload = {
             "spec_id": spec_id,
-            "review_type": review_type,
             "tools": tools,
             "model": model,
             "ai_provider": ai_provider,
@@ -1022,6 +1395,8 @@ def register_unified_review_tool(mcp: FastMCP, config: ServerConfig) -> None:
             "workspace": workspace,
             "review_path": review_path,
             "output_path": output_path,
+            "session_id": session_id,
+            "step_id": step_id,
         }
         return _dispatch_review_action(action=action, payload=payload, config=config)
 

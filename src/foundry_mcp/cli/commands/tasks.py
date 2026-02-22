@@ -1,4 +1,4 @@
-"""Task management commands for SDD CLI.
+"""Task management commands for Foundry CLI.
 
 Provides commands for discovering, querying, and updating tasks in specifications.
 """
@@ -9,15 +9,14 @@ import click
 
 from foundry_mcp.cli.logging import cli_command, get_cli_logger
 from foundry_mcp.cli.output import emit_error, emit_success
+from foundry_mcp.cli.registry import get_context
 from foundry_mcp.cli.resilience import (
-    handle_keyboard_interrupt,
     MEDIUM_TIMEOUT,
+    handle_keyboard_interrupt,
     with_sync_timeout,
 )
-from foundry_mcp.cli.registry import get_context
 
 logger = get_cli_logger()
-from foundry_mcp.core.spec import load_spec, find_spec_file, get_node
 from foundry_mcp.core.journal import (
     add_journal_entry,
     mark_blocked,
@@ -25,6 +24,7 @@ from foundry_mcp.core.journal import (
     unblock,
     update_task_status,
 )
+from foundry_mcp.core.spec import find_spec_file, get_node, load_spec
 from foundry_mcp.core.task import (
     check_dependencies,
     get_next_task,
@@ -61,8 +61,8 @@ def next_task(ctx: click.Context, spec_id: str) -> None:
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
 
     # Load the spec
@@ -72,7 +72,7 @@ def next_task(ctx: click.Context, spec_id: str) -> None:
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs list",
+            remediation="Verify the spec ID exists using: foundry specs list",
             details={"spec_id": spec_id, "specs_dir": str(specs_dir)},
         )
 
@@ -98,8 +98,7 @@ def next_task(ctx: click.Context, spec_id: str) -> None:
         all_tasks = [
             node
             for node in hierarchy.values()
-            if isinstance(node, dict)
-            and node.get("type") in ("task", "subtask", "verify")
+            if isinstance(node, dict) and node.get("type") in ("task", "subtask", "verify")
         ]
         completed = sum(1 for t in all_tasks if t.get("status") == "completed")
         pending = sum(1 for t in all_tasks if t.get("status") == "pending")
@@ -131,9 +130,7 @@ def next_task(ctx: click.Context, spec_id: str) -> None:
 @cli_command("prepare")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Task preparation timed out")
-def prepare_task_cmd(
-    ctx: click.Context, spec_id: str, task_id: Optional[str] = None
-) -> None:
+def prepare_task_cmd(ctx: click.Context, spec_id: str, task_id: Optional[str] = None) -> None:
     """Prepare complete context for task implementation.
 
     SPEC_ID is the specification identifier.
@@ -147,8 +144,8 @@ def prepare_task_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
 
     # Use core prepare_task function
@@ -183,9 +180,7 @@ def prepare_task_cmd(
 @tasks.command("info")
 @click.argument("spec_id")
 @click.argument("task_id")
-@click.option(
-    "--include-context/--no-context", default=True, help="Include task context."
-)
+@click.option("--include-context/--no-context", default=True, help="Include task context.")
 @click.pass_context
 @cli_command("info")
 @handle_keyboard_interrupt()
@@ -209,8 +204,8 @@ def task_info_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
 
     # Load the spec
@@ -220,7 +215,7 @@ def task_info_cmd(
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs list",
+            remediation="Verify the spec ID exists using: foundry specs list",
             details={"spec_id": spec_id, "specs_dir": str(specs_dir)},
         )
 
@@ -231,7 +226,7 @@ def task_info_cmd(
             f"Task not found: {task_id}",
             code="TASK_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the task ID exists using: sdd tasks info <spec_id> --list",
+            remediation="Verify the task ID exists using: foundry tasks info <spec_id> --list",
             details={"spec_id": spec_id, "task_id": task_id},
         )
 
@@ -264,9 +259,7 @@ def task_info_cmd(
 @tasks.command("update-status")
 @click.argument("spec_id")
 @click.argument("task_id")
-@click.argument(
-    "status", type=click.Choice(["pending", "in_progress", "completed", "blocked"])
-)
+@click.argument("status", type=click.Choice(["pending", "in_progress", "completed", "blocked"]))
 @click.option("--note", "-n", help="Optional note about the status change.")
 @click.pass_context
 @cli_command("update-status")
@@ -293,8 +286,8 @@ def update_status_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
 
     # Find and load spec
@@ -304,7 +297,7 @@ def update_status_cmd(
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs list",
+            remediation="Verify the spec ID exists using: foundry specs list",
             details={"spec_id": spec_id, "specs_dir": str(specs_dir)},
         )
 
@@ -387,8 +380,8 @@ def block_task_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
 
     # Find and load spec
@@ -398,7 +391,7 @@ def block_task_cmd(
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs list",
+            remediation="Verify the spec ID exists using: foundry specs list",
             details={"spec_id": spec_id},
         )
 
@@ -480,8 +473,8 @@ def unblock_task_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
 
     # Find and load spec
@@ -491,7 +484,7 @@ def unblock_task_cmd(
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs list",
+            remediation="Verify the spec ID exists using: foundry specs list",
             details={"spec_id": spec_id},
         )
 
@@ -571,8 +564,8 @@ def complete_task_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
 
     # Find and load spec
@@ -582,7 +575,7 @@ def complete_task_cmd(
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs list",
+            remediation="Verify the spec ID exists using: foundry specs list",
             details={"spec_id": spec_id, "specs_dir": str(specs_dir)},
         )
 
@@ -603,7 +596,7 @@ def complete_task_cmd(
             f"Task not found: {task_id}",
             code="TASK_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the task ID exists using: sdd tasks info <spec_id> --list",
+            remediation="Verify the task ID exists using: foundry tasks info <spec_id> --list",
             details={"spec_id": spec_id, "task_id": task_id},
         )
 
@@ -692,8 +685,8 @@ def check_complete_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -704,7 +697,7 @@ def check_complete_cmd(
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs list",
+            remediation="Verify the spec ID exists using: foundry specs list",
             details={"spec_id": spec_id, "specs_dir": str(specs_dir)},
         )
         return
@@ -716,7 +709,7 @@ def check_complete_cmd(
             f"Task not found: {task_id}",
             code="TASK_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the task ID exists using: sdd tasks info <spec_id> --list",
+            remediation="Verify the task ID exists using: foundry tasks info <spec_id> --list",
             details={"spec_id": spec_id, "task_id": task_id},
         )
         return
@@ -800,8 +793,6 @@ def check_complete_cmd(
             "already_completed": False,
             "status": current_status,
             "blockers": blockers,
-            "message": "Ready to complete"
-            if can_complete
-            else f"{len(blockers)} blocker(s) found",
+            "message": "Ready to complete" if can_complete else f"{len(blockers)} blocker(s) found",
         }
     )

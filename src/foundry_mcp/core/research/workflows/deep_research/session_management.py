@@ -9,13 +9,8 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Optional
 
-from foundry_mcp.core.research.models import DeepResearchState
+from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.workflows.base import WorkflowResult
-
-if TYPE_CHECKING:
-    from foundry_mcp.core.research.workflows.deep_research.core import (
-        DeepResearchWorkflow,
-    )
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +23,14 @@ class SessionManagementMixin:
     - _execute_workflow_async() (orchestration loop on core)
     """
 
+    memory: Any
+
+    if TYPE_CHECKING:
+
+        async def _execute_workflow_async(self, *args: Any, **kwargs: Any) -> Any: ...
+
     def list_sessions(
-        self: DeepResearchWorkflow,
+        self,
         limit: int = 50,
         cursor: Optional[str] = None,
         completed_only: bool = False,
@@ -65,7 +66,7 @@ class SessionManagementMixin:
             for s in sessions
         ]
 
-    def delete_session(self: DeepResearchWorkflow, research_id: str) -> bool:
+    def delete_session(self, research_id: str) -> bool:
         """Delete a research session.
 
         Args:
@@ -77,7 +78,7 @@ class SessionManagementMixin:
         return self.memory.delete_deep_research(research_id)
 
     def resume_research(
-        self: DeepResearchWorkflow,
+        self,
         research_id: str,
         provider_id: Optional[str] = None,
         timeout_per_operation: float = 120.0,
@@ -171,6 +172,7 @@ class SessionManagementMixin:
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     future = executor.submit(
                         asyncio.run,
@@ -209,7 +211,7 @@ class SessionManagementMixin:
 
         return result
 
-    def _validate_state_for_resume(self: DeepResearchWorkflow, state: DeepResearchState) -> dict[str, Any]:
+    def _validate_state_for_resume(self, state: DeepResearchState) -> dict[str, Any]:
         """Validate a DeepResearchState for safe resumption.
 
         Checks for common corruption issues and missing required data.
@@ -259,7 +261,7 @@ class SessionManagementMixin:
 
         return {"valid": True}
 
-    def list_resumable_sessions(self: DeepResearchWorkflow) -> list[dict[str, Any]]:
+    def list_resumable_sessions(self) -> list[dict[str, Any]]:
         """List all in-progress research sessions that can be resumed.
 
         Scans persistence for sessions that are not completed and can be resumed.
@@ -276,21 +278,23 @@ class SessionManagementMixin:
 
             validation = self._validate_state_for_resume(state)
 
-            resumable.append({
-                "id": state.id,
-                "query": state.original_query[:100] + ("..." if len(state.original_query) > 100 else ""),
-                "phase": state.phase.value,
-                "iteration": state.iteration,
-                "max_iterations": state.max_iterations,
-                "sub_queries": len(state.sub_queries),
-                "completed_queries": len(state.completed_sub_queries()),
-                "sources": len(state.sources),
-                "findings": len(state.findings),
-                "gaps": len(state.unresolved_gaps()),
-                "can_resume": validation["valid"],
-                "issues": validation.get("issues", []),
-                "created_at": state.created_at.isoformat(),
-                "updated_at": state.updated_at.isoformat(),
-            })
+            resumable.append(
+                {
+                    "id": state.id,
+                    "query": state.original_query[:100] + ("..." if len(state.original_query) > 100 else ""),
+                    "phase": state.phase.value,
+                    "iteration": state.iteration,
+                    "max_iterations": state.max_iterations,
+                    "sub_queries": len(state.sub_queries),
+                    "completed_queries": len(state.completed_sub_queries()),
+                    "sources": len(state.sources),
+                    "findings": len(state.findings),
+                    "gaps": len(state.unresolved_gaps()),
+                    "can_resume": validation["valid"],
+                    "issues": validation.get("issues", []),
+                    "created_at": state.created_at.isoformat(),
+                    "updated_at": state.updated_at.isoformat(),
+                }
+            )
 
         return resumable

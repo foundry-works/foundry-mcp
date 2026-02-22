@@ -9,12 +9,11 @@ Verifies:
 
 from __future__ import annotations
 
-import asyncio
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock
 
 import pytest
 
-from foundry_mcp.core.research.models import (
+from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
     DeepResearchState,
 )
@@ -105,7 +104,6 @@ class TestPartialResultCancellationFlow:
     async def test_cancel_during_gathering_discards_partial(self):
         """Should discard partial results when cancelled during gathering phase."""
         from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
-        from foundry_mcp.core.research.workflows.base import WorkflowResult
 
         mock_config = MagicMock()
         mock_config.deep_research_audit_artifacts = False

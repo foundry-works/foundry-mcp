@@ -2,11 +2,8 @@
 
 import pytest
 
-from foundry_mcp.core.llm_config import (
-    ProviderSpec,
-    ConsultationConfig,
-)
-
+from foundry_mcp.core.llm_config.consultation import ConsultationConfig
+from foundry_mcp.core.llm_config.provider_spec import ProviderSpec
 
 # =============================================================================
 # ProviderSpec Parsing Tests
@@ -252,9 +249,7 @@ class TestConsultationConfigOverrides:
 
     def test_get_override_existing(self):
         """Test getting existing override."""
-        config = ConsultationConfig(
-            overrides={"[api]openai/gpt-4.1": {"timeout": 120}}
-        )
+        config = ConsultationConfig(overrides={"[api]openai/gpt-4.1": {"timeout": 120}})
         override = config.get_override("[api]openai/gpt-4.1")
         assert override == {"timeout": 120}
 
@@ -281,16 +276,12 @@ class TestConsultationConfigValidation:
 
     def test_validate_invalid_priority_spec(self):
         """Test validation fails for invalid spec in priority."""
-        config = ConsultationConfig(
-            priority=["invalid-spec"]
-        )
+        config = ConsultationConfig(priority=["invalid-spec"])
         with pytest.raises(ValueError, match="Invalid provider specs"):
             config.validate()
 
     def test_validate_unknown_provider_warning(self):
         """Test validation fails for unknown provider in priority."""
-        config = ConsultationConfig(
-            priority=["[cli]unknown-provider:model"]
-        )
+        config = ConsultationConfig(priority=["[cli]unknown-provider:model"])
         with pytest.raises(ValueError, match="Unknown CLI provider"):
             config.validate()

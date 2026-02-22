@@ -1,4 +1,4 @@
-"""JSON output helpers for SDD CLI.
+"""JSON output helpers for Foundry CLI.
 
 This module provides the sole output mechanism for the CLI.
 The CLI is JSON-first and currently emits JSON envelopes only.
@@ -16,10 +16,13 @@ to ensure CLI output matches the response-v2 schema used by MCP tools.
 import json
 import sys
 from dataclasses import asdict
-from typing import Any, Mapping, Sequence, NoReturn
+from typing import Any, Mapping, NoReturn, Sequence
 
 from foundry_mcp.cli.logging import generate_request_id, get_request_id, set_request_id
-from foundry_mcp.core.responses import error_response, success_response
+from foundry_mcp.core.responses.builders import (
+    error_response,
+    success_response,
+)
 
 
 def _ensure_request_id() -> str:

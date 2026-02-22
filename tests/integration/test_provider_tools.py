@@ -4,38 +4,12 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-import pytest
-
-from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.responses import error_response, success_response
-from foundry_mcp.server import create_server
 from tests.conftest import extract_response_dict
 
-
-@pytest.fixture
-def test_specs_dir(tmp_path):
-    specs_dir = tmp_path / "specs"
-    specs_dir.mkdir()
-    (specs_dir / "active").mkdir()
-    (specs_dir / "pending").mkdir()
-    (specs_dir / "completed").mkdir()
-    (specs_dir / "archived").mkdir()
-    return specs_dir
-
-
-@pytest.fixture
-def test_config(test_specs_dir):
-    return ServerConfig(
-        server_name="foundry-mcp-test",
-        server_version="0.1.0",
-        specs_dir=test_specs_dir,
-        log_level="WARNING",
-    )
-
-
-@pytest.fixture
-def mcp_server(test_config):
-    return create_server(test_config)
+from foundry_mcp.core.responses.builders import (
+    error_response,
+    success_response,
+)
 
 
 class TestProviderToolResponseEnvelopes:

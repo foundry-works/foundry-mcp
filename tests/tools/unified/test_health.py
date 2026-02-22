@@ -4,7 +4,7 @@ Tests that _dispatch_health_action catches exceptions and returns error response
 instead of crashing the MCP server.
 """
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 class TestHealthDispatchExceptionHandling:
@@ -15,11 +15,14 @@ class TestHealthDispatchExceptionHandling:
         from foundry_mcp.tools.unified.health import _dispatch_health_action
 
         with patch(
-            "foundry_mcp.tools.unified.health._HEALTH_ROUTER"
-        ) as mock_router:
-            mock_router.dispatch.side_effect = RuntimeError("Health check failed")
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            with patch("foundry_mcp.tools.unified.health._HEALTH_ROUTER") as mock_router:
+                mock_router.allowed_actions.return_value = ["check"]
+                mock_router.dispatch.side_effect = RuntimeError("Health check failed")
 
-            result = _dispatch_health_action(action="check", include_details=True)
+                result = _dispatch_health_action(action="check", include_details=True)
 
         # Should return error response, not raise exception
         assert result["success"] is False
@@ -33,11 +36,14 @@ class TestHealthDispatchExceptionHandling:
         from foundry_mcp.tools.unified.health import _dispatch_health_action
 
         with patch(
-            "foundry_mcp.tools.unified.health._HEALTH_ROUTER"
-        ) as mock_router:
-            mock_router.dispatch.side_effect = RuntimeError()
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            with patch("foundry_mcp.tools.unified.health._HEALTH_ROUTER") as mock_router:
+                mock_router.allowed_actions.return_value = ["check"]
+                mock_router.dispatch.side_effect = RuntimeError()
 
-            result = _dispatch_health_action(action="check")
+                result = _dispatch_health_action(action="check")
 
         # Should use class name when message is empty
         assert result["success"] is False
@@ -51,10 +57,56 @@ class TestHealthDispatchExceptionHandling:
 
         with caplog.at_level(logging.ERROR):
             with patch(
-                "foundry_mcp.tools.unified.health._HEALTH_ROUTER"
-            ) as mock_router:
-                mock_router.dispatch.side_effect = ValueError("test error")
+                "foundry_mcp.tools.unified.common.get_server_role",
+                return_value="maintainer",
+            ):
+                with patch("foundry_mcp.tools.unified.health._HEALTH_ROUTER") as mock_router:
+                    mock_router.allowed_actions.return_value = ["check"]
+                    mock_router.dispatch.side_effect = ValueError("test error")
 
-                _dispatch_health_action(action="check")
+                    _dispatch_health_action(action="check")
 
         assert "test error" in caplog.text
+
+    def test_dispatch_forwards_config_to_router(self):
+        """_dispatch_health_action should pass config through dispatch kwargs."""
+        from foundry_mcp.tools.unified.health import _dispatch_health_action
+
+        config = MagicMock()
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            with patch("foundry_mcp.tools.unified.health._HEALTH_ROUTER") as mock_router:
+                mock_router.allowed_actions.return_value = ["check"]
+                mock_router.dispatch.return_value = {"success": True}
+
+                _dispatch_health_action(
+                    action="check",
+                    include_details=False,
+                    config=config,
+                )
+
+        mock_router.dispatch.assert_called_once_with(
+            action="check",
+            include_details=False,
+            config=config,
+        )
+
+    def test_dispatch_with_config_still_enforces_authorization(self):
+        """Observer role should be denied even when config is provided."""
+        from foundry_mcp.tools.unified.health import _dispatch_health_action
+
+        config = MagicMock()
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="observer",
+        ):
+            result = _dispatch_health_action(
+                action="check",
+                include_details=True,
+                config=config,
+            )
+
+        assert result["success"] is False
+        assert result["data"]["error_code"] == "AUTHORIZATION"

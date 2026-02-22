@@ -9,11 +9,13 @@ Tests:
 """
 
 import tempfile
-from pathlib import Path
 from dataclasses import asdict
+from pathlib import Path
 
-
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses.builders import (
+    error_response,
+    success_response,
+)
 
 
 class TestEnvironmentToolResponseEnvelopes:
@@ -77,7 +79,7 @@ class TestFeatureFlagIntegration:
 
     def test_environment_tools_flag_in_discovery(self):
         """Test environment_tools flag is available in discovery."""
-        from foundry_mcp.core.discovery import get_environment_capabilities
+        from foundry_mcp.core.discovery.metadata import get_environment_capabilities
 
         capabilities = get_environment_capabilities()
         flags = capabilities["feature_flags"]
@@ -88,7 +90,7 @@ class TestFeatureFlagIntegration:
 
     def test_env_auto_fix_depends_on_environment_tools(self):
         """Test env_auto_fix flag has correct dependency."""
-        from foundry_mcp.core.discovery import ENVIRONMENT_FEATURE_FLAGS
+        from foundry_mcp.core.discovery.metadata import ENVIRONMENT_FEATURE_FLAGS
 
         auto_fix = ENVIRONMENT_FEATURE_FLAGS["env_auto_fix"]
         assert "environment_tools" in auto_fix.dependencies
@@ -97,7 +99,7 @@ class TestFeatureFlagIntegration:
 
     def test_feature_flag_descriptor_to_dict(self):
         """Test FeatureFlagDescriptor serialization."""
-        from foundry_mcp.core.discovery import FeatureFlagDescriptor
+        from foundry_mcp.core.discovery.flags import FeatureFlagDescriptor
 
         flag = FeatureFlagDescriptor(
             name="test_flag",
@@ -123,13 +125,13 @@ class TestToolDiscoveryMetadata:
 
     def test_environment_tools_registered_in_metadata(self):
         """Test all environment tools have discovery metadata."""
-        from foundry_mcp.core.discovery import ENVIRONMENT_TOOL_METADATA
+        from foundry_mcp.core.discovery.metadata import ENVIRONMENT_TOOL_METADATA
 
         expected_tools = [
-            "sdd-verify-toolchain",
-            "sdd-init-workspace",
-            "sdd-detect-topology",
-            "sdd-verify-environment",
+            "foundry-verify-toolchain",
+            "foundry-init-workspace",
+            "foundry-detect-topology",
+            "foundry-verify-environment",
         ]
 
         for tool in expected_tools:
@@ -140,7 +142,7 @@ class TestToolDiscoveryMetadata:
 
     def test_tool_metadata_json_schema_generation(self):
         """Test that tool metadata can generate valid JSON schemas."""
-        from foundry_mcp.core.discovery import ENVIRONMENT_TOOL_METADATA
+        from foundry_mcp.core.discovery.metadata import ENVIRONMENT_TOOL_METADATA
 
         for name, metadata in ENVIRONMENT_TOOL_METADATA.items():
             schema = metadata.to_json_schema()
@@ -152,7 +154,7 @@ class TestToolDiscoveryMetadata:
 
     def test_tool_metadata_summary_generation(self):
         """Test that tool metadata generates proper summaries."""
-        from foundry_mcp.core.discovery import ENVIRONMENT_TOOL_METADATA
+        from foundry_mcp.core.discovery.metadata import ENVIRONMENT_TOOL_METADATA
 
         for name, metadata in ENVIRONMENT_TOOL_METADATA.items():
             summary = metadata.to_summary()
@@ -164,7 +166,7 @@ class TestToolDiscoveryMetadata:
 
     def test_tool_metadata_detailed_generation(self):
         """Test that tool metadata generates detailed info."""
-        from foundry_mcp.core.discovery import ENVIRONMENT_TOOL_METADATA
+        from foundry_mcp.core.discovery.metadata import ENVIRONMENT_TOOL_METADATA
 
         for name, metadata in ENVIRONMENT_TOOL_METADATA.items():
             detailed = metadata.to_detailed()
@@ -181,10 +183,8 @@ class TestToolRegistration:
 
     def test_register_environment_tools(self):
         """Test environment tools can be registered in a registry."""
-        from foundry_mcp.core.discovery import (
-            ToolRegistry,
-            register_environment_tools,
-        )
+        from foundry_mcp.core.discovery.metadata import register_environment_tools
+        from foundry_mcp.core.discovery.registry import ToolRegistry
 
         registry = ToolRegistry()
         register_environment_tools(registry)
@@ -194,16 +194,14 @@ class TestToolRegistration:
         assert len(tools) == 4
 
         # Verify can retrieve by name
-        toolchain = registry.get("sdd-verify-toolchain")
+        toolchain = registry.get("foundry-verify-toolchain")
         assert toolchain is not None
-        assert toolchain.name == "sdd-verify-toolchain"
+        assert toolchain.name == "foundry-verify-toolchain"
 
     def test_registry_category_filtering(self):
         """Test registry filters tools by category correctly."""
-        from foundry_mcp.core.discovery import (
-            ToolRegistry,
-            register_environment_tools,
-        )
+        from foundry_mcp.core.discovery.metadata import register_environment_tools
+        from foundry_mcp.core.discovery.registry import ToolRegistry
 
         registry = ToolRegistry()
         register_environment_tools(registry)
@@ -218,10 +216,8 @@ class TestToolRegistration:
 
     def test_registry_list_categories(self):
         """Test registry lists categories correctly."""
-        from foundry_mcp.core.discovery import (
-            ToolRegistry,
-            register_environment_tools,
-        )
+        from foundry_mcp.core.discovery.metadata import register_environment_tools
+        from foundry_mcp.core.discovery.registry import ToolRegistry
 
         registry = ToolRegistry()
         register_environment_tools(registry)
@@ -233,10 +229,8 @@ class TestToolRegistration:
 
     def test_registry_stats(self):
         """Test registry provides accurate statistics."""
-        from foundry_mcp.core.discovery import (
-            ToolRegistry,
-            register_environment_tools,
-        )
+        from foundry_mcp.core.discovery.metadata import register_environment_tools
+        from foundry_mcp.core.discovery.registry import ToolRegistry
 
         registry = ToolRegistry()
         register_environment_tools(registry)
@@ -254,7 +248,7 @@ class TestEnvironmentCapabilities:
 
     def test_get_environment_capabilities_structure(self):
         """Test environment capabilities have correct structure."""
-        from foundry_mcp.core.discovery import get_environment_capabilities
+        from foundry_mcp.core.discovery.metadata import get_environment_capabilities
 
         caps = get_environment_capabilities()
 
@@ -265,7 +259,7 @@ class TestEnvironmentCapabilities:
 
     def test_capabilities_include_feature_flags(self):
         """Test capabilities include all environment feature flags."""
-        from foundry_mcp.core.discovery import get_environment_capabilities
+        from foundry_mcp.core.discovery.metadata import get_environment_capabilities
 
         caps = get_environment_capabilities()
 
@@ -275,13 +269,13 @@ class TestEnvironmentCapabilities:
 
     def test_is_environment_tool_helper(self):
         """Test is_environment_tool helper function works correctly."""
-        from foundry_mcp.core.discovery import is_environment_tool
+        from foundry_mcp.core.discovery.metadata import is_environment_tool
 
         # Valid environment tools
-        assert is_environment_tool("sdd-verify-toolchain") is True
-        assert is_environment_tool("sdd-init-workspace") is True
-        assert is_environment_tool("sdd-detect-topology") is True
-        assert is_environment_tool("sdd-verify-environment") is True
+        assert is_environment_tool("foundry-verify-toolchain") is True
+        assert is_environment_tool("foundry-init-workspace") is True
+        assert is_environment_tool("foundry-detect-topology") is True
+        assert is_environment_tool("foundry-verify-environment") is True
 
         # Non-environment tools
         assert is_environment_tool("list_specs") is False
@@ -290,12 +284,12 @@ class TestEnvironmentCapabilities:
 
     def test_get_environment_tool_metadata_helper(self):
         """Test get_environment_tool_metadata helper function works correctly."""
-        from foundry_mcp.core.discovery import get_environment_tool_metadata
+        from foundry_mcp.core.discovery.metadata import get_environment_tool_metadata
 
         # Valid tools return metadata
-        metadata = get_environment_tool_metadata("sdd-verify-toolchain")
+        metadata = get_environment_tool_metadata("foundry-verify-toolchain")
         assert metadata is not None
-        assert metadata.name == "sdd-verify-toolchain"
+        assert metadata.name == "foundry-verify-toolchain"
         assert metadata.category == "environment"
 
         # Invalid tools return None
@@ -356,8 +350,8 @@ class TestEndToEndWorkflow:
 
     def test_environment_verification_workflow(self):
         """Test environment verification correctly reports runtime info."""
-        import sys
         import shutil
+        import sys
 
         # Get actual runtime info
         python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"

@@ -4,16 +4,7 @@ Tests that _dispatch_environment_action catches exceptions and returns error res
 instead of crashing the MCP server.
 """
 
-from unittest.mock import MagicMock, patch
-
-import pytest
-
-
-@pytest.fixture
-def mock_config():
-    """Create a mock ServerConfig."""
-    config = MagicMock()
-    return config
+from unittest.mock import patch
 
 
 class TestEnvironmentDispatchExceptionHandling:
@@ -23,9 +14,8 @@ class TestEnvironmentDispatchExceptionHandling:
         """_dispatch_environment_action should catch exceptions and return error response."""
         from foundry_mcp.tools.unified.environment import _dispatch_environment_action
 
-        with patch(
-            "foundry_mcp.tools.unified.environment._ENVIRONMENT_ROUTER"
-        ) as mock_router:
+        with patch("foundry_mcp.tools.unified.environment._ENVIRONMENT_ROUTER") as mock_router:
+            mock_router.allowed_actions.return_value = ["info"]
             mock_router.dispatch.side_effect = RuntimeError("File system error")
 
             result = _dispatch_environment_action(
@@ -45,9 +35,8 @@ class TestEnvironmentDispatchExceptionHandling:
         """_dispatch_environment_action should handle exceptions with empty messages."""
         from foundry_mcp.tools.unified.environment import _dispatch_environment_action
 
-        with patch(
-            "foundry_mcp.tools.unified.environment._ENVIRONMENT_ROUTER"
-        ) as mock_router:
+        with patch("foundry_mcp.tools.unified.environment._ENVIRONMENT_ROUTER") as mock_router:
+            mock_router.allowed_actions.return_value = ["info"]
             mock_router.dispatch.side_effect = RuntimeError()
 
             result = _dispatch_environment_action(
@@ -67,9 +56,8 @@ class TestEnvironmentDispatchExceptionHandling:
         from foundry_mcp.tools.unified.environment import _dispatch_environment_action
 
         with caplog.at_level(logging.ERROR):
-            with patch(
-                "foundry_mcp.tools.unified.environment._ENVIRONMENT_ROUTER"
-            ) as mock_router:
+            with patch("foundry_mcp.tools.unified.environment._ENVIRONMENT_ROUTER") as mock_router:
+                mock_router.allowed_actions.return_value = ["info"]
                 mock_router.dispatch.side_effect = ValueError("test error")
 
                 _dispatch_environment_action(

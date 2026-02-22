@@ -128,7 +128,7 @@ class SpecsDirectoryChecker:
         try:
             # Try to get specs_dir from config if not provided
             if self.specs_dir is None:
-                from foundry_mcp.config import get_config
+                from foundry_mcp.config.server import get_config
 
                 config = get_config()
                 self.specs_dir = config.specs_dir if config else None
@@ -653,9 +653,7 @@ class HealthManager:
                 details={
                     "unhealthy_count": len(unhealthy),
                     "degraded_count": len(degraded),
-                    "healthy_count": len(dependencies)
-                    - len(unhealthy)
-                    - len(degraded),
+                    "healthy_count": len(dependencies) - len(unhealthy) - len(degraded),
                 },
             )
 

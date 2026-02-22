@@ -9,7 +9,6 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Provider factories — create each provider with a test API key
 # ---------------------------------------------------------------------------

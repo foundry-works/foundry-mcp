@@ -23,7 +23,6 @@ import pytest
 
 from foundry_mcp.core.providers import detect_provider_availability
 
-
 # =============================================================================
 # Skip conditions
 # =============================================================================
@@ -59,7 +58,7 @@ class TestConsultationOrchestratorSmoke:
             ConsultationResult,
             ConsultationWorkflow,
         )
-        from foundry_mcp.core.llm_config import ConsultationConfig
+        from foundry_mcp.core.llm_config.consultation import ConsultationConfig
 
         config = ConsultationConfig(
             priority=["[cli]gemini:gemini-2.5-flash"],
@@ -100,7 +99,7 @@ class TestConsultationOrchestratorSmoke:
             ConsultationResult,
             ConsultationWorkflow,
         )
-        from foundry_mcp.core.llm_config import ConsultationConfig
+        from foundry_mcp.core.llm_config.consultation import ConsultationConfig
 
         config = ConsultationConfig(
             priority=["[cli]gemini:gemini-2.5-flash"],
@@ -148,7 +147,7 @@ class TestConsultationOrchestratorMultiModelSmoke:
             ConsultationRequest,
             ConsultationWorkflow,
         )
-        from foundry_mcp.core.llm_config import (
+        from foundry_mcp.core.llm_config.consultation import (
             ConsultationConfig,
             WorkflowConsultationConfig,
         )
@@ -208,7 +207,7 @@ class TestResearchRouterSmoke:
         """Configure research with gemini provider."""
         from unittest.mock import patch
 
-        from foundry_mcp.config import ResearchConfig
+        from foundry_mcp.config.research import ResearchConfig
 
         research_cfg = ResearchConfig(
             enabled=True,
@@ -220,6 +219,7 @@ class TestResearchRouterSmoke:
         )
 
         from unittest.mock import MagicMock
+
         mock_server_cfg = MagicMock()
         mock_server_cfg.research = research_cfg
         mock_server_cfg.get_research_dir.return_value = tmp_path
@@ -285,7 +285,7 @@ class TestResearchRouterConsensusSmoke:
         """Configure research with multiple providers."""
         from unittest.mock import patch
 
-        from foundry_mcp.config import ResearchConfig
+        from foundry_mcp.config.research import ResearchConfig
 
         research_cfg = ResearchConfig(
             enabled=True,
@@ -297,6 +297,7 @@ class TestResearchRouterConsensusSmoke:
         )
 
         from unittest.mock import MagicMock
+
         mock_server_cfg = MagicMock()
         mock_server_cfg.research = research_cfg
         mock_server_cfg.get_research_dir.return_value = tmp_path

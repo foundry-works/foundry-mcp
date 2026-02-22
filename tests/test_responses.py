@@ -4,20 +4,24 @@ Tests for response helper functions and standard format validation.
 Verifies that the response contract is properly implemented across all tools.
 """
 
-from foundry_mcp.core.responses import (
-    ErrorCode,
-    ErrorType,
-    ToolResponse,
-    success_response,
+from foundry_mcp.core.responses.builders import (
     error_response,
-    validation_error,
+    success_response,
+)
+from foundry_mcp.core.responses.errors_generic import (
+    conflict_error,
+    forbidden_error,
+    internal_error,
     not_found_error,
     rate_limit_error,
     unauthorized_error,
-    forbidden_error,
-    conflict_error,
-    internal_error,
     unavailable_error,
+    validation_error,
+)
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+    ToolResponse,
 )
 
 
@@ -26,9 +30,7 @@ class TestToolResponse:
 
     def test_success_response_structure(self):
         """Test that success responses have correct structure."""
-        response = ToolResponse(
-            success=True, data={"spec_id": "test-spec", "count": 5}, error=None
-        )
+        response = ToolResponse(success=True, data={"spec_id": "test-spec", "count": 5}, error=None)
         assert response.success is True
         assert response.data == {"spec_id": "test-spec", "count": 5}
         assert response.error is None
@@ -67,9 +69,7 @@ class TestSuccessResponse:
 
     def test_passes_kwargs_to_data(self):
         """Test that kwargs are included in data."""
-        response = success_response(
-            spec_id="my-spec", count=10, tasks=["task-1", "task-2"]
-        )
+        response = success_response(spec_id="my-spec", count=10, tasks=["task-1", "task-2"])
         assert response.data == {
             "spec_id": "my-spec",
             "count": 10,
@@ -78,9 +78,7 @@ class TestSuccessResponse:
 
     def test_data_argument_merges_with_kwargs(self):
         """Test that explicit data dict merges with additional kwargs."""
-        response = success_response(
-            data={"spec_id": "my-spec", "count": 5}, tasks=["task-1"], status="active"
-        )
+        response = success_response(data={"spec_id": "my-spec", "count": 5}, tasks=["task-1"], status="active")
         assert response.data == {
             "spec_id": "my-spec",
             "count": 5,
@@ -258,9 +256,7 @@ class TestMetaVersionCompliance:
 
     def test_meta_preserved_when_data_set(self):
         """Test that meta.version is preserved when data is provided."""
-        response = success_response(
-            spec_id="my-spec", count=10, tasks=["task-1", "task-2"]
-        )
+        response = success_response(spec_id="my-spec", count=10, tasks=["task-1", "task-2"])
         assert response.meta["version"] == "response-v2"
         assert response.data["spec_id"] == "my-spec"
 
@@ -331,7 +327,6 @@ class TestErrorCodeEnum:
         assert ErrorCode.UNAUTHORIZED.value == "UNAUTHORIZED"
         assert ErrorCode.FORBIDDEN.value == "FORBIDDEN"
         assert ErrorCode.RATE_LIMIT_EXCEEDED.value == "RATE_LIMIT_EXCEEDED"
-        assert ErrorCode.FEATURE_DISABLED.value == "FEATURE_DISABLED"
 
     def test_system_error_codes(self):
         """Test system error codes are defined."""
@@ -370,7 +365,6 @@ class TestErrorTypeEnum:
         assert ErrorType.NOT_FOUND.value == "not_found"
         assert ErrorType.CONFLICT.value == "conflict"
         assert ErrorType.RATE_LIMIT.value == "rate_limit"
-        assert ErrorType.FEATURE_FLAG.value == "feature_flag"
         assert ErrorType.INTERNAL.value == "internal"
         assert ErrorType.UNAVAILABLE.value == "unavailable"
 
@@ -419,9 +413,7 @@ class TestValidationError:
 
     def test_passes_remediation(self):
         """Test that remediation is passed through."""
-        response = validation_error(
-            "Invalid email", remediation="Use format: user@domain.com"
-        )
+        response = validation_error("Invalid email", remediation="Use format: user@domain.com")
         assert response.data["remediation"] == "Use format: user@domain.com"
 
     def test_includes_custom_details(self):
@@ -459,12 +451,8 @@ class TestNotFoundError:
 
     def test_custom_remediation(self):
         """Test that custom remediation overrides default."""
-        response = not_found_error(
-            "Spec", "x", remediation='Use spec(action="list") to find valid IDs.'
-        )
-        assert (
-            response.data["remediation"] == 'Use spec(action="list") to find valid IDs.'
-        )
+        response = not_found_error("Spec", "x", remediation='Use spec(action="list") to find valid IDs.')
+        assert response.data["remediation"] == 'Use spec(action="list") to find valid IDs.'
 
 
 class TestRateLimitError:
@@ -515,9 +503,7 @@ class TestUnauthorizedError:
     def test_default_remediation(self):
         """Test default remediation."""
         response = unauthorized_error()
-        assert (
-            response.data["remediation"] == "Provide valid authentication credentials."
-        )
+        assert response.data["remediation"] == "Provide valid authentication credentials."
 
 
 class TestForbiddenError:
@@ -533,18 +519,13 @@ class TestForbiddenError:
 
     def test_includes_required_permission(self):
         """Test that required_permission is in data."""
-        response = forbidden_error(
-            "Cannot delete project", required_permission="project:delete"
-        )
+        response = forbidden_error("Cannot delete project", required_permission="project:delete")
         assert response.data["required_permission"] == "project:delete"
 
     def test_default_remediation(self):
         """Test default remediation."""
         response = forbidden_error("Access denied")
-        assert (
-            response.data["remediation"]
-            == "Request appropriate permissions from the resource owner."
-        )
+        assert response.data["remediation"] == "Request appropriate permissions from the resource owner."
 
 
 class TestConflictError:
@@ -560,18 +541,13 @@ class TestConflictError:
 
     def test_includes_details(self):
         """Test that details are included."""
-        response = conflict_error(
-            "Duplicate entry", details={"existing_id": "spec-001"}
-        )
+        response = conflict_error("Duplicate entry", details={"existing_id": "spec-001"})
         assert response.data["details"]["existing_id"] == "spec-001"
 
     def test_default_remediation(self):
         """Test default remediation."""
         response = conflict_error("State conflict")
-        assert (
-            response.data["remediation"]
-            == "Check current state and retry if appropriate."
-        )
+        assert response.data["remediation"] == "Check current state and retry if appropriate."
 
 
 class TestInternalError:

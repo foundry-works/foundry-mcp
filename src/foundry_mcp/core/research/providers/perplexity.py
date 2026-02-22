@@ -22,18 +22,20 @@ Example usage:
 
 import logging
 import os
-from datetime import datetime
 from dataclasses import replace
+from datetime import datetime
 from typing import Any, Optional
 
 import httpx
 
-from foundry_mcp.core.research.models import ResearchSource, SourceType
-from foundry_mcp.core.research.providers.base import (
+from foundry_mcp.core.errors.search import (
     AuthenticationError,
     RateLimitError,
-    SearchProvider,
     SearchProviderError,
+)
+from foundry_mcp.core.research.models.sources import ResearchSource, SourceType
+from foundry_mcp.core.research.providers.base import (
+    SearchProvider,
     SearchResult,
 )
 from foundry_mcp.core.research.providers.resilience import (
@@ -98,16 +100,11 @@ def _validate_search_params(
 
     if max_tokens is not None:
         if not isinstance(max_tokens, int) or max_tokens < 1:
-            raise ValueError(
-                f"Invalid max_tokens: {max_tokens!r}. Must be a positive integer."
-            )
+            raise ValueError(f"Invalid max_tokens: {max_tokens!r}. Must be a positive integer.")
 
     if max_tokens_per_page is not None:
         if not isinstance(max_tokens_per_page, int) or max_tokens_per_page < 1:
-            raise ValueError(
-                f"Invalid max_tokens_per_page: {max_tokens_per_page!r}. "
-                "Must be a positive integer."
-            )
+            raise ValueError(f"Invalid max_tokens_per_page: {max_tokens_per_page!r}. Must be a positive integer.")
 
     # Parse and validate dates
     parsed_after = None
@@ -116,27 +113,22 @@ def _validate_search_params(
     if search_after_date is not None:
         try:
             parsed_after = datetime.strptime(search_after_date, "%m/%d/%Y")
-        except ValueError:
-            raise ValueError(
-                f"Invalid search_after_date: {search_after_date!r}. "
-                "Must be in MM/DD/YYYY format."
-            )
+        except ValueError as e:
+            raise ValueError(f"Invalid search_after_date: {search_after_date!r}. Must be in MM/DD/YYYY format.") from e
 
     if search_before_date is not None:
         try:
             parsed_before = datetime.strptime(search_before_date, "%m/%d/%Y")
-        except ValueError:
+        except ValueError as e:
             raise ValueError(
-                f"Invalid search_before_date: {search_before_date!r}. "
-                "Must be in MM/DD/YYYY format."
-            )
+                f"Invalid search_before_date: {search_before_date!r}. Must be in MM/DD/YYYY format."
+            ) from e
 
     # Validate date range logic
     if parsed_after is not None and parsed_before is not None:
         if parsed_after >= parsed_before:
             raise ValueError(
-                f"search_after_date ({search_after_date}) must be before "
-                f"search_before_date ({search_before_date})."
+                f"search_after_date ({search_after_date}) must be before search_before_date ({search_before_date})."
             )
 
     # Validate last_updated date filters
@@ -146,20 +138,18 @@ def _validate_search_params(
     if last_updated_after_filter is not None:
         try:
             parsed_last_updated_after = datetime.strptime(last_updated_after_filter, "%m/%d/%Y")
-        except ValueError:
+        except ValueError as e:
             raise ValueError(
-                f"Invalid last_updated_after_filter: {last_updated_after_filter!r}. "
-                "Must be in MM/DD/YYYY format."
-            )
+                f"Invalid last_updated_after_filter: {last_updated_after_filter!r}. Must be in MM/DD/YYYY format."
+            ) from e
 
     if last_updated_before_filter is not None:
         try:
             parsed_last_updated_before = datetime.strptime(last_updated_before_filter, "%m/%d/%Y")
-        except ValueError:
+        except ValueError as e:
             raise ValueError(
-                f"Invalid last_updated_before_filter: {last_updated_before_filter!r}. "
-                "Must be in MM/DD/YYYY format."
-            )
+                f"Invalid last_updated_before_filter: {last_updated_before_filter!r}. Must be in MM/DD/YYYY format."
+            ) from e
 
     # Validate last_updated date range logic
     if parsed_last_updated_after is not None and parsed_last_updated_before is not None:
@@ -174,8 +164,7 @@ def _validate_search_params(
         valid_recency_filters = {"day", "week", "month", "year"}
         if recency_filter not in valid_recency_filters:
             raise ValueError(
-                f"Invalid recency_filter: {recency_filter!r}. "
-                f"Must be one of: {sorted(valid_recency_filters)}."
+                f"Invalid recency_filter: {recency_filter!r}. Must be one of: {sorted(valid_recency_filters)}."
             )
         if search_after_date is not None or search_before_date is not None:
             raise ValueError(
@@ -231,8 +220,7 @@ class PerplexitySearchProvider(SearchProvider):
         self._api_key = api_key or os.environ.get("PERPLEXITY_API_KEY")
         if not self._api_key:
             raise ValueError(
-                "Perplexity API key required. Provide via api_key parameter "
-                "or PERPLEXITY_API_KEY environment variable."
+                "Perplexity API key required. Provide via api_key parameter or PERPLEXITY_API_KEY environment variable."
             )
 
         self._base_url = base_url.rstrip("/")
@@ -438,7 +426,9 @@ class PerplexitySearchProvider(SearchProvider):
                 return response.json()
 
         executor = create_resilience_executor(
-            "perplexity", self.resilience_config, self.classify_error,
+            "perplexity",
+            self.resilience_config,
+            self.classify_error,
         )
         return await executor(make_request, timeout=self._timeout)
 
@@ -488,9 +478,7 @@ class PerplexitySearchProvider(SearchProvider):
 
         for result in results:
             # Parse date - try both 'date' and 'last_updated' fields
-            published_date = parse_iso_date(
-                result.get("date") or result.get("last_updated")
-            )
+            published_date = parse_iso_date(result.get("date") or result.get("last_updated"))
 
             # Create SearchResult from Perplexity response
             # Map snippet to content when include_raw_content is requested

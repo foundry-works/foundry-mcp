@@ -5,7 +5,287 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.12.0b29] - 2026-02-22
+
+### Removed
+
+- **Sub-phases, phase dependencies, and bulk phase operations**: Removed deprecated complexity from the spec system — sub-phase nesting, inter-phase dependency tracking, and bulk phase management actions.
+- **Phase templates**: Removed `phase-template` action and all supporting code (`PHASE_TEMPLATES`, `get_phase_template_structure`, `apply_phase_template`). Verification scaffolding migrated into `add_phase_bulk()`.
+- **Plan review type variants**: Removed quick/security/feasibility review types — consolidated to a single full review.
+- **Spec/phase-level `estimated_hours`**: Removed from spec-level and phase-level metadata and template defaults. Task-level `estimated_hours` retained.
+
+### Added
+
+- **Spec metadata fields**: Added `success_criteria`, `constraints`, `risks`, and `open_questions` to spec metadata with full CRUD functions, authoring handlers, validation rules, and fidelity context enrichment.
+- **Task complexity support**: Added `complexity` field (low/medium/high) to tasks with validation and hierarchy support.
+- **Plan linkage**: Required `plan_path` and `plan_review_path` metadata fields on `spec-create` with file-existence validation at creation time.
+- **Spec-vs-plan review**: New `SPEC_REVIEW_VS_PLAN_V1` prompt that auto-activates when a spec has a linked `plan_path`, comparing JSON spec against its source markdown plan for translation fidelity.
+- **Verification scaffolding in `add_phase_bulk()`**: Auto-appends run-tests and fidelity-verify nodes with deduplication, replacing the removed phase templates.
+- **Plan context in fidelity reviews**: New `_build_plan_context()` helper enriches fidelity review context with linked plan file content.
+
+### Changed
+
+- **Plan templates consolidated**: Merged simple/detailed plan templates into a single spec-aligned template.
+
+### Fixed
+
+- **Silent kwarg swallowing**: `add_phase_bulk()` and `update_phase_metadata()` now log unexpected kwargs instead of silently ignoring them.
+- **Verification error propagation**: `_add_phase_verification()` wrapped in try/except for clean error messages.
+- **Duplicate risk detection**: `add_risk()` now detects duplicates by description, consistent with `add_constraint`/`add_question`/`add_success_criterion`.
+- **Deterministic review path**: `review_path` set to `None` on persistence failure so callers get a predictable key.
+
+## [0.12.0b28] - 2026-02-21
+
+### Fixed
+
+- **Fidelity gate false positives from future-phase requirements**: Added spec overview and subsequent phases context to fidelity reviews so reviewers no longer penalize implementations for features planned in later phases.
+- **Fidelity review context truncation**: Removed arbitrary caps on assumptions (was 5), file paths (was 5), test results (was 3), and journal entries (was 5) — reviewers now see full context.
+- **Implementation artifacts bloating review context**: Replaced inline file content rendering with compact file-path listing (`[+]`/`[-]` existence markers), dramatically reducing token usage.
+- **Test/journal scoping in fidelity reviews**: Test results and journal entries are now properly scoped to the task or phase under review instead of returning unscoped entries.
+
+### Changed
+
+- **Spec metadata simplified**: Removed `complexity`, `estimated_hours`, `owner`, and `category` from spec-level frontmatter and template defaults. `recalculate_estimated_hours` now reports spec totals without storing them in spec metadata.
+
+## [0.12.0b27] - 2026-02-20
+
+### Fixed
+
+- **Fidelity gate false positives from missing task descriptions**: `_build_spec_requirements()` now includes `metadata.description` in task-scoped reviews and renders child `description`, `details`, and `file_path` in phase-scoped reviews, giving AI reviewers full context to evaluate implementation fidelity.
+- **Fidelity gate missing task category and phase context**: Task-scoped and phase-scoped reviews now include `task_category` (e.g. implementation, research, investigation). Phase-scoped reviews now include the phase `description` and `purpose`.
+
+## [0.12.0b24] - 2026-02-19
+
+### Fixed
+
+- **Fidelity review self-referential context**: Fidelity reviews no longer include fidelity-verify nodes in the review context (spec requirements, implementation artifacts, test results, journal entries), preventing the reviewer from evaluating its own gate task.
+
+### Added
+
+- **Pre-commit config**: Added `.pre-commit-config.yaml` with ruff format and lint hooks.
+- **Makefile**: Added `make lint`, `make fmt`, `make test`, and `make ci` shortcuts.
+- **Documentation helpers tests**: Added unit tests for `exclude_fidelity_verify` filtering in `documentation_helpers.py`.
+
+## [0.12.0b23] - 2026-02-19
+
+### Fixed
+
+- **Fidelity cycle counter**: Moved increment from `_record_step_outcome` to `_handle_gate_evidence` so both orchestrator-issued and agent-initiated gates count toward the per-phase limit.
+- **Fidelity review false-partial verdicts**: Added explicit verdict criteria to the review prompt — medium/low-severity style suggestions no longer trigger "partial" verdicts.
+- **Split-verdict synthesis**: Tied verdicts now resolve via deviation severities instead of defaulting to "partial".
+
+### Added
+
+- **Tiebreaker reviewer**: When two fidelity reviewers disagree and no majority exists, an unused provider is consulted as a tiebreaker before synthesis.
+
+## [0.12.0b22] - 2026-02-19
+
+### Fixed
+
+- **Phase completion false BLOCKED pause**: When all tasks in the active phase are complete but subsequent phase tasks are dependency-blocked, the orchestrator now defers to phase transition logic (fidelity gate / phase_complete) instead of incorrectly pausing with `BLOCKED`.
+- **Token estimation tests**: Tests no longer assume specific token counts, making them pass regardless of whether tiktoken is installed.
+- **`foundry run` tests**: Rewritten to match the simplified `os.execvpe`-based launcher (tmux tests removed).
+
+## [0.12.0b21] - 2026-02-19
+
+### Changed
+
+- **Autonomous exit payload format**: Exit packet from `foundry-implement-auto` skill now emits machine-parseable JSON instead of an ASCII table. Supervisors can reliably parse the structured output for automated handoff decisions.
+
+## [0.12.0b20] - 2026-02-19
+
+### Changed
+
+- **`foundry run` simplified**: Removed tmux/watcher complexity. Now launches claude in interactive mode with the foundry-implement-auto skill via `os.execvpe`, giving full visibility into agent activity. Removed `--detach` and `--layout` options.
+
+## [0.12.0b14] - 2026-02-19
+
+### Changed
+
+- **Rebrand SDD to Foundry**: Renamed all SDD references to Foundry across the codebase, including CLI commands (`foundry run`, `foundry stop`, `foundry watch`), skill prefixes, environment variables (`SDD_` to `FOUNDRY_`), and documentation.
+- **Type safety overhaul**: Added ruff and pyright tooling; fixed all 573 type errors to zero across the codebase.
+
+### Fixed
+
+- **Agent-facing validation UX**: Aggregate validation errors into a single response instead of failing on the first error. Protect step proofs from being consumed on validation failure. Verification command fallback when no command is configured.
+
+### Added
+
+- **Specs directory**: Added spec definitions, autonomy session records, and plan review artifacts.
+
+## [0.12.0b13] - 2026-02-18
+
+### Fixed
+
+- **Verification gate ignoring pending gate evidence**: `_should_run_fidelity_gate()` could re-emit a fidelity gate step while `pending_gate_evidence` was still waiting for Step 13 (`_handle_gate_evidence`) to process it. Now defers when evidence is pending, allowing auto-retry routing to `address_fidelity_feedback` to proceed correctly.
+- **Spec-status fallback polluting session verification evidence**: `_find_next_verification()` and `_should_run_fidelity_gate()` fell back to `task.get("status") == "completed"` from the spec when a verification wasn't in `session.completed_task_ids`. This let stale completions from prior sessions count as evidence for the current session's fidelity gate. Now only `session.completed_task_ids` is authoritative.
+
+### Added
+
+- **`session-step-heartbeat` in autonomy runner allowlist**: Enables autonomous agents to send heartbeats during long operations (e.g., fidelity gate reviews ~90s each), preventing `heartbeat_stale` pauses.
+
+### Changed
+
+- **Step handler docs**: Unified all step types to always use the extended `last_step_result` envelope (removed simple `command="report"` transport). Added concrete JSON examples with required fields for every step type. Documented heartbeat protocol.
+
+## [0.12.0b12] - 2026-02-18
+
+### Fixed
+
+- **Proof deadlock on gate invariant errors**: When the orchestrator consumed a step proof (Step 3) but a later pipeline stage (e.g. `REQUIRED_GATE_UNSATISFIED` at Step 17) returned an error with `should_persist=True`, the session was saved with `last_step_issued` still pointing to the consumed proof. The next call required a proof that no longer existed — unrecoverable deadlock. Now clears `last_step_issued` and advances `state_version` after step consumption (Step 6b), before the next-step computation pipeline.
+- **Fidelity gate skipped for spec-completed verifications**: `_should_run_fidelity_gate()` only checked `session.completed_task_ids` for verification status, but when a prior session already completed verifications in the spec, the new session's `completed_task_ids` didn't include them. The gate checker said "verifications pending" while the verification finder said "nothing to issue" — deadlock between Steps 12 and 16. Now also checks `task.get("status") == "completed"` from the spec.
+- **`update_task_status()` blind to phases-format specs**: Only checked `hierarchy` dict. Now falls back to `phases` array for specs using the denormalized format.
+- **`_persist_task_completion_to_spec()` silently failed on phases-format specs**: `save_spec()` with default `validate=True` rejected specs without a `hierarchy` key. Now passes `validate=False` since this is a targeted status update.
+- **Session reuse ignores fidelity cycle limit**: `foundry-implement-auto` would reuse a session paused at `fidelity_cycle_limit` (gate retries exhausted), then immediately hit the same wall. The skill now detects this pause reason and raises `SESSION_REUSE_PAUSED_GATE_LIMIT` with clear remediation guidance instead of entering a futile retry loop.
+
+## [0.12.0b10] - 2026-02-18
+
+### Fixed
+
+- **Fidelity gate blind to verification evidence**: The fidelity gate reviewer received no meaningful verification evidence, causing gates to fail in a retry loop. Four bugs fixed:
+  - `_build_journal_entries()` only rendered entry titles (not content) — the reviewer saw one-liners like "Step execute_verification: success" with zero detail
+  - `_build_journal_entries()` ignored `phase_id` parameter — when the gate passed `phase_id` without `task_id`, no filtering occurred; now filters to entries from the phase's child tasks
+  - `_build_test_results()` checked for `"verify"` substring but journal titles contain `"verification"` (not a match) — added `"verification"` to the keyword filter
+  - `_write_step_journal()` wrote terse content for verification steps without receipt evidence — now includes exit_code, command_hash, and output_digest when a verification receipt is present
+
+## [0.12.0b9] - 2026-02-18
+
+### Fixed
+
+- **Write-lock task completion deadlock**: When `write_lock_enforced=true`, the autonomous runner cannot call `task(action="complete")` (blocked by write lock), but the orchestrator also never persisted completions to the spec file. The phantom reconciler (Step 4b) would then see the spec task as still "pending", revoke the session-level completion, and re-issue the same task indefinitely. The orchestrator now calls `_persist_task_completion_to_spec()` server-side during Step 3 when write lock is enforced.
+- **Phantom reconciler blind to hierarchy format**: `_get_spec_task_status()` only checked the `phases` array, but production specs use the `hierarchy` dict (no `phases` key). This caused every completion to be treated as phantom and revoked. Now checks `hierarchy` first, falling back to `phases` for test fixtures.
+
+## [0.12.0b8] - 2026-02-18
+
+### Fixed
+
+- **Phantom task completions**: Added Step 4b reconciliation (`_reconcile_completed_tasks`) that cross-checks `session.completed_task_ids` against actual spec task status after spec data is loaded. When the runner self-reports success but the spec task remains pending (e.g., `task(action="complete")` was never called), the phantom completion is revoked and the task is re-issued on the next step cycle. Self-healing — no manual intervention required.
+- **Proof deadlock on crash recovery**: Enhanced `session-step-replay` to detect consumed proof tokens and reissue fresh ones. Previously, if a crash occurred between proof consumption and session state update, recovery agents received a dead proof from replay and were permanently stuck (`STEP_PROOF_CONFLICT`). Now replay checks `get_proof_record()`, generates a replacement proof, and persists the updated session state.
+
+## [0.12.0b7] - 2026-02-18
+
+### Fixed
+
+- **Commandless verify node deadlock**: Verify nodes without a command in metadata no longer cause unrecoverable deadlock. The orchestrator now distinguishes "no receipt was ever pending" from "receipt missing", skipping receipt validation when inapplicable while preserving the hard boundary for verify nodes that do have commands.
+- **Payload key collision in session-step-report**: Consumed fields (`step_id`, `step_type`, `outcome`, etc.) are now stripped from `**payload` before delegation to `session-step-next`, preventing `TypeError: got multiple values for argument` when callers pass redundant keys.
+
+### Added
+
+- **`prepare` in autonomy runner allowlist**: Added read-only `prepare` action to `AUTONOMY_RUNNER_ALLOWLIST`, enabling autonomous agents to fetch task context via server-mediated authorization instead of soft prompt-based file reading.
+
+### Changed
+
+- **Step-handlers reference**: Added explicit outcome enum callout (`success | failure | skipped`) and clarified that `next_step.instruction` is the primary context source for `implement_task`, with `task(action="prepare")` as optional.
+
+## [0.12.0b6] - 2026-02-18
+
+### Fixed
+
+- **Stale session recovery authorization**: Added `session-step-replay` to `AUTONOMY_RUNNER_ALLOWLIST`, enabling autonomous agents to probe for unreported pending steps during stale session recovery. Previously, replay was documented in the skill but blocked at the server with `AUTHORIZATION` error.
+
+## [0.12.0b5] - 2026-02-18
+
+### Added
+
+- **Stale session recovery**: Replay-based recovery for autonomous sessions where a prior agent died mid-step. New agents probe for unreported pending steps via `session-step replay`, recovering the step proof without counter resets, session cycling, or gate bypass. Covers all `loop_signal` states with deterministic escalation or continuation.
+- **Skill documentation**: Updated `foundry-implement-auto` flow diagram, session management reference, and step loop docs to document the full stale session recovery sequence, safety guarantees, state-specific behavior, and edge cases.
+
+## [0.12.0b4] - 2026-02-18
+
+### Added
+
+- **Verification-execute authorization**: Added `verification-execute` to `AUTONOMY_RUNNER_ALLOWLIST`, enabling autonomous sessions to execute verification commands for proof-carrying receipts.
+- **Hierarchy spec integration tests**: Comprehensive test suite (`TestHierarchySpecIntegration`) verifying the full orchestrator pipeline works with hierarchy-format specs (the production format), covering task discovery, phase advancement, fidelity gates, hash equivalence, subtask expansion, and multi-step progression.
+- **Hierarchy spec test factory**: New `make_hierarchy_spec_data()` factory and `hierarchy_spec_factory` fixture in autonomy test conftest for building realistic production-format spec data.
+
+## [0.12.0b3] - 2026-02-18
+
+### Added
+
+- **Spec adapter** (`core/autonomy/spec_adapter.py`): New module that bridges hierarchy-based spec data to the phases-array view expected by the orchestrator. Provides `load_spec_file()` as the single entry point for loading spec files in the autonomy layer, and `ensure_phases_view()` for converting hierarchy format to phases format non-destructively. Handles nested subtasks, group nodes, and is idempotent.
+
+### Changed
+
+- **Spec loading centralized**: All spec file loading in the autonomy layer (`orchestrator.py`, `handlers_session_lifecycle.py`, `handlers_session_rebase.py`) now uses `load_spec_file()` from the spec adapter instead of inline `json.loads()` calls. This ensures hierarchy-format specs are automatically converted to the phases view.
+
+## [0.12.0b2] - 2026-02-18
+
+### Removed
+
+- **Feature flag system**: Removed the entire feature flag infrastructure (parsing, env vars, config loading, validation, dependency resolution). Autonomy features (`autonomy_sessions`, `autonomy_fidelity_gates`) are now always enabled — no opt-in required.
+- **`FEATURE_DISABLED` error code**: Removed `ErrorCode.FEATURE_DISABLED` and `ErrorType.FEATURE_FLAG` from the response schema and autonomy signal handling.
+- **Feature flag discovery metadata**: Removed `AUTONOMY_FEATURE_FLAGS` registry, `get_autonomy_capabilities()`, `is_autonomy_feature_flag()`, and `get_autonomy_feature_flag()` from discovery module.
+- **Stale files**: Removed `REFACTOR-RESEARCH.md` and `skills/foundry-implement-v2/SKILL.md`.
+
+### Changed
+
+- **Default role**: Changed default server role from `observer` (fail-closed read-only) to `maintainer` (full interactive access). Autonomous sessions continue to use posture-driven role overrides.
+- **Capabilities endpoint**: `get_capabilities()` no longer accepts `feature_flags` parameter; always reports autonomy as enabled.
+- **Config loader**: Removed `[feature_flags]` TOML section parsing, `FOUNDRY_MCP_FEATURE_FLAGS` env var, and per-flag `FOUNDRY_MCP_FEATURE_FLAG_<NAME>` overrides.
+- **Startup validation**: Removed feature flag dependency checks and autonomy-only security toggle warnings.
+
+## [0.12.0b1] - 2026-02-18
+
+### Added
+
+- **Autonomous Spec Execution (ADR-002)**: Durable session management for autonomous spec-driven task execution with replay-safe semantics
+  - Session lifecycle: `session-start`, `session-pause`, `session-resume`, `session-end`, `session-reset`, `session-rebase`, `session-heartbeat`, `session-status`, `session-list`
+  - Step orchestration: 18-step priority sequence (`session-step-next`, `session-step-report`, `session-step-replay`) driving task progression with exactly-once semantics
+  - Fidelity gates: per-phase quality gates with strict/lenient/manual policies, auto-retry with cycle caps, and human acknowledgment flow
+  - Write-lock enforcement: prevents concurrent mutations to specs under active autonomous sessions, with bypass mechanism for emergency overrides
+  - File-backed persistence (`AutonomyStorage`): atomic writes, per-spec pointer files, cursor-based pagination, TTL-based garbage collection
+  - Spec integrity validation: structure hashing with mtime fast-path optimization, rebase recovery for mid-session spec edits
+  - Resume context: provides completed/pending task summaries, journal hints, and phase progress on session resume
+  - State migrations infrastructure for schema versioning
+- **Capabilities manifest**: `autonomy_sessions` and `autonomy_fidelity_gates` registered as experimental feature flags
+- **Discovery module**: Autonomy capabilities exposed for tool discovery
+
+### Fixed
+
+- **Terminal states check**: Removed `FAILED` from terminal states in orchestrator — only `COMPLETED` and `ENDED` are truly terminal per ADR state transition table; `FAILED` can transition to `running` via resume or rebase
+- **Auto-retry cycle cap**: Added cycle cap check before scheduling `address_fidelity_feedback` to prevent exceeding `max_fidelity_review_cycles_per_phase`
+- **State version increments**: Added missing `state_version` increments in rebase handler (both no-change and success paths), heartbeat handler, and force-end on start
+- **Reset handler safety**: Reset now requires explicit `session_id` parameter — no active-session lookup allowed, per ADR safety constraint
+- **Session override contract enforcement**: `session-end` and `session-reset` now require `reason_code` (`OverrideReasonCode`) from callers/tests; validation errors are returned when missing or invalid
+- **GC spec-lock cleanup**: `cleanup_expired()` now removes orphaned spec-lock files in addition to session locks and pointer files
+- **`AutonomyStorage` export**: Added `AutonomyStorage` to `core/autonomy/__init__.py` public API exports
+- **`LastStepResult` validation**: Added cross-field model validator ensuring required fields per step type (`task_id` for implement/verify, `phase_id`+`gate_attempt_id` for gate steps)
+
+### Changed
+
+- **Autonomy posture profiles**: Added fixed posture profiles (`unattended`, `supervised`, `debug`) with runtime defaults for role, escape-hatch policy, and session-start defaults.
+- **Capability response enhancements**: `server(action="capabilities")` now includes runtime posture/security/session-default details and a role-preflight convention contract for consumers.
+- **Session-start default expansion**: `task(action="session", command="start")` now uses config-driven session defaults (`gate_policy`, stop/retry behavior, bounded limits) when request fields are omitted.
+- **Declarative parameter validation framework** (`tools/unified/param_schema.py`): Migrated 69 handlers across 5 waves from imperative `_validation_error()` calls to declarative schemas. ~370 validation calls reduced to 4 (irreducibly runtime-dependent). ~15-20% handler file size reduction.
+- **Unified error hierarchy** (`core/errors/`): Consolidated all 37 error classes from 17 source files into a structured package (9 domain modules). Added `ERROR_MAPPINGS` registry with 24 error-to-code mappings and `error_to_response()` helper.
+- **God object decomposition**: Split 3 core monoliths into sub-module packages:
+  - `core/validation/` (2,342 lines → 10 sub-modules)
+  - `core/ai_consultation/` (1,774 lines → 4 sub-modules)
+  - `core/observability/` (1,218 lines → 6 sub-modules)
+- **Research tool decomposition**: Extracted 17 handlers from monolithic `research.py` into `research_handlers/` package with 5 domain-focused modules.
+- **Tool registration signature cleanup**: Replaced manual payload dict construction (~470 lines) with `locals()` filter pattern in task, authoring, and research tool registrations.
+- **Observability/metrics consolidation** (`core/metrics/`, `core/observability/`): Merged 6 standalone files into 2 bounded packages with deprecation shims.
+- **Deep research phase execution framework** (`phases/_lifecycle.py`, `_run_phase()`): Extracted shared LLM call lifecycle and orchestrator dispatch boilerplate from 4 phase mixins. ~350 lines of phase boilerplate and ~250 lines of dispatch boilerplate eliminated.
+- **Config module decomposition** (`config/`): Split `config.py` (2,771 lines, 24 dataclasses) into 7 focused sub-modules (server, loader, research, autonomy, domains, parsing, decorators).
+- **Research models decomposition** (`core/research/models/`): Split 2,176-line models file (33 classes) into 8 sub-modules (enums, digest, conversations, thinkdeep, ideation, consensus, fidelity, sources, deep_research).
+- **Autonomy models decomposition** (`core/autonomy/models/`): Split 1,154-line models file (36 classes) into 8 sub-modules (enums, verification, gates, steps, session_config, responses, state, signals).
+- **LLM config decomposition** (`core/llm_config/`): Split 1,419-line module into 5 sub-modules (paths, provider_spec, llm, workflow, consultation).
+- **Discovery module decomposition** (`core/discovery/`): Split 1,811-line module (55% metadata dicts) into 10 sub-modules with metadata separated from infrastructure.
+- **Research infrastructure decomposition**: Split 7 monolithic modules (~9,936 lines total) into focused sub-packages: `document_digest/`, `context_budget/`, `summarization/`, `token_management/`, `providers/resilience/`, plus deep research core/analysis mixin extraction.
+- **Response module decomposition** (`core/responses/`): Split 1,697-line module (62 import sites) into 7 sub-modules (types, builders, errors_generic, errors_spec, errors_ai, sanitization, batch_schemas).
+- **Tool router handler decomposition**: Split 3 remaining large routers (spec 1,180 lines, environment 1,373 lines, review 1,268 lines) into handler packages with 29 handlers across 11 files.
+- **Test fixture consolidation**: Created 5 `conftest.py` files centralizing duplicate fixtures across the test suite. ~820 lines deduplicated.
+- **Validation fix dispatch dict**: Replaced 12 sequential `if code ==` branches with two dispatch dicts in `core/validation/fixes.py`.
+- All refactoring completed with zero test regressions (5,208 tests passing). Backward-compatible `__init__.py` re-exports preserved for all decomposed packages.
+
+### Migration
+
+- **Legacy session action names remain supported** but are now on an explicit removal window: **3 months or 2 minor releases (whichever is later)**.
+- Legacy action responses include machine-readable deprecation metadata:
+  - `meta.deprecated.action`
+  - `meta.deprecated.replacement`
+  - `meta.deprecated.removal_target`
+- Server logs now emit `WARN` entries for legacy action invocations to support migration tracking.
 
 ## [0.11.1] - 2026-02-15
 

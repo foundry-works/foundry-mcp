@@ -27,6 +27,7 @@ class RateLimitConfig:
     """
     Configuration for a rate limit.
     """
+
     requests_per_minute: int = 60
     burst_limit: int = 10
     enabled: bool = True
@@ -38,6 +39,7 @@ class RateLimitState:
     """
     Current state of a rate limiter.
     """
+
     tokens: float = 0.0
     last_update: float = 0.0
     request_count: int = 0
@@ -49,6 +51,7 @@ class RateLimitResult:
     """
     Result of a rate limit check.
     """
+
     allowed: bool
     remaining: int = 0
     reset_in: float = 0.0
@@ -71,10 +74,7 @@ class TokenBucketLimiter:
             config: Rate limit configuration
         """
         self.config = config
-        self.state = RateLimitState(
-            tokens=float(config.burst_limit),
-            last_update=time.time()
-        )
+        self.state = RateLimitState(tokens=float(config.burst_limit), last_update=time.time())
 
     def check(self) -> RateLimitResult:
         """
@@ -135,10 +135,7 @@ class TokenBucketLimiter:
         tokens_per_second = self.config.requests_per_minute / 60.0
         new_tokens = elapsed * tokens_per_second
 
-        self.state.tokens = min(
-            float(self.config.burst_limit),
-            self.state.tokens + new_tokens
-        )
+        self.state.tokens = min(float(self.config.burst_limit), self.state.tokens + new_tokens)
 
     def _time_to_next_token(self) -> float:
         """Calculate time until next token is available."""
@@ -201,7 +198,7 @@ class RateLimitManager:
                 manifest = json.load(f)
 
             # Load tool-specific rate limits
-            for category, tools in manifest.get("tools", {}).items():
+            for _category, tools in manifest.get("tools", {}).items():
                 if isinstance(tools, list):
                     for tool in tools:
                         name = tool.get("name")
@@ -245,7 +242,10 @@ class RateLimitManager:
 
         # Per-tool overrides
         for key, value in os.environ.items():
-            if key.startswith("FOUNDRY_RATE_LIMIT_") and key not in ("FOUNDRY_RATE_LIMIT_DEFAULT", "FOUNDRY_RATE_LIMIT_BURST"):
+            if key.startswith("FOUNDRY_RATE_LIMIT_") and key not in (
+                "FOUNDRY_RATE_LIMIT_DEFAULT",
+                "FOUNDRY_RATE_LIMIT_BURST",
+            ):
                 tool_name = key[19:].lower().replace("_", "_")  # Keep underscores
                 try:
                     rpm = int(value)
@@ -278,10 +278,7 @@ class RateLimitManager:
         return self._limiters[tool_name]
 
     def check_limit(
-        self,
-        tool_name: str,
-        tenant_id: Optional[str] = None,
-        log_on_throttle: bool = True
+        self, tool_name: str, tenant_id: Optional[str] = None, log_on_throttle: bool = True
     ) -> RateLimitResult:
         """
         Check and enforce rate limit for a tool invocation.
@@ -302,12 +299,7 @@ class RateLimitManager:
 
         return result
 
-    def _log_throttle(
-        self,
-        tool_name: str,
-        tenant_id: Optional[str],
-        result: RateLimitResult
-    ) -> None:
+    def _log_throttle(self, tool_name: str, tenant_id: Optional[str], result: RateLimitResult) -> None:
         """Log a throttle event."""
         audit_log(
             "rate_limit_exceeded",
@@ -325,10 +317,7 @@ class RateLimitManager:
         )
 
     def log_auth_failure(
-        self,
-        tool_name: str,
-        tenant_id: Optional[str] = None,
-        reason: str = "Authentication failed"
+        self, tool_name: str, tenant_id: Optional[str] = None, reason: str = "Authentication failed"
     ) -> None:
         """
         Log an authentication failure.
@@ -346,9 +335,7 @@ class RateLimitManager:
             success=False,
         )
         logger.warning(
-            f"Auth failure for {tool_name}"
-            + (f" (tenant: {tenant_id})" if tenant_id else "")
-            + f": {reason}"
+            f"Auth failure for {tool_name}" + (f" (tenant: {tenant_id})" if tenant_id else "") + f": {reason}"
         )
 
     def get_all_stats(self) -> Dict[str, Any]:
@@ -367,10 +354,7 @@ class RateLimitManager:
             stats["tools"][tool_name] = limiter.get_stats()
 
         for tenant_id, limiters in self._tenant_limiters.items():
-            stats["tenants"][tenant_id] = {
-                name: limiter.get_stats()
-                for name, limiter in limiters.items()
-            }
+            stats["tenants"][tenant_id] = {name: limiter.get_stats() for name, limiter in limiters.items()}
 
         return stats
 
@@ -410,10 +394,7 @@ def get_rate_limit_manager() -> RateLimitManager:
     return _manager
 
 
-def check_rate_limit(
-    tool_name: str,
-    tenant_id: Optional[str] = None
-) -> RateLimitResult:
+def check_rate_limit(tool_name: str, tenant_id: Optional[str] = None) -> RateLimitResult:
     """
     Check rate limit for a tool invocation.
 

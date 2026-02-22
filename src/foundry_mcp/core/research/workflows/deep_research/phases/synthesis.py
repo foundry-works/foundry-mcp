@@ -8,16 +8,10 @@ from __future__ import annotations
 import logging
 import re
 import time
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-from foundry_mcp.core.observability import get_metrics
-from foundry_mcp.core.providers import ContextWindowError
 from foundry_mcp.core.research.context_budget import AllocationResult
-from foundry_mcp.core.research.models import (
-    DeepResearchState,
-    PhaseMetrics,
-)
+from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research._budgeting import (
     allocate_synthesis_budget,
@@ -29,11 +23,10 @@ from foundry_mcp.core.research.workflows.deep_research._constants import (
 from foundry_mcp.core.research.workflows.deep_research._helpers import (
     fidelity_level_from_score,
 )
-
-if TYPE_CHECKING:
-    from foundry_mcp.core.research.workflows.deep_research.core import (
-        DeepResearchWorkflow,
-    )
+from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+    execute_llm_call,
+    finalize_phase,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +40,16 @@ class SynthesisPhaseMixin:
     - _execute_provider_async() (inherited from ResearchWorkflowBase)
     """
 
+    config: Any
+    memory: Any
+
+    if TYPE_CHECKING:
+
+        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
+        def _check_cancellation(self, *args: Any, **kwargs: Any) -> None: ...
+
     async def _execute_synthesis_async(
-        self: DeepResearchWorkflow,
+        self,
         state: DeepResearchState,
         provider_id: Optional[str],
         timeout: float,
@@ -132,9 +133,7 @@ class SynthesisPhaseMixin:
         # Store overall fidelity in metadata (content_fidelity is now per-item dict)
         state.dropped_content_ids = allocation_result.dropped_ids
         allocation_dict = allocation_result.to_dict()
-        allocation_dict["overall_fidelity_level"] = fidelity_level_from_score(
-            allocation_result.fidelity
-        )
+        allocation_dict["overall_fidelity_level"] = fidelity_level_from_score(allocation_result.fidelity)
         state.content_allocation_metadata = allocation_dict
 
         logger.info(
@@ -159,131 +158,30 @@ class SynthesisPhaseMixin:
         )
 
         if not valid:
-            logger.warning(
-                "Synthesis phase final-fit validation failed, proceeding with truncated prompts"
-            )
+            logger.warning("Synthesis phase final-fit validation failed, proceeding with truncated prompts")
 
         # Check for cancellation before making provider call
         self._check_cancellation(state)
 
-        # Execute LLM call with context window error handling and timeout protection
-        effective_provider = provider_id or state.synthesis_provider
-        llm_call_start_time = time.perf_counter()
-        # Update heartbeat and persist interim state for progress visibility
-        state.last_heartbeat_at = datetime.now(timezone.utc)
-        self.memory.save_deep_research(state)
-        self._write_audit_event(
-            state,
-            "llm.call.started",
-            data={
-                "provider": effective_provider,
-                "task_id": state.id,
-                "phase": "synthesis",
+        # Execute LLM call with lifecycle instrumentation
+        call_result = await execute_llm_call(
+            workflow=self,
+            state=state,
+            phase_name="synthesis",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            provider_id=provider_id or state.synthesis_provider,
+            model=state.synthesis_model,
+            temperature=0.5,  # Balanced for coherent but varied writing
+            timeout=timeout,
+            error_metadata={
+                "finding_count": len(state.findings),
+                "guidance": "Try reducing the number of findings or source content included",
             },
         )
-        try:
-            result = await self._execute_provider_async(
-                prompt=user_prompt,
-                provider_id=effective_provider,
-                model=state.synthesis_model,
-                system_prompt=system_prompt,
-                timeout=timeout,
-                temperature=0.5,  # Balanced for coherent but varied writing
-                phase="synthesis",
-                fallback_providers=self.config.get_phase_fallback_providers("synthesis"),
-                max_retries=self.config.deep_research_max_retries,
-                retry_delay=self.config.deep_research_retry_delay,
-            )
-        except ContextWindowError as e:
-            llm_call_duration_ms = (time.perf_counter() - llm_call_start_time) * 1000
-            self._write_audit_event(
-                state,
-                "llm.call.completed",
-                data={
-                    "provider": effective_provider,
-                    "task_id": state.id,
-                    "duration_ms": llm_call_duration_ms,
-                    "status": "error",
-                    "error_type": "context_window_exceeded",
-                },
-            )
-            get_metrics().histogram(
-                "foundry_mcp_research_llm_call_duration_seconds",
-                llm_call_duration_ms / 1000.0,
-                labels={"provider": effective_provider or "unknown", "status": "error"},
-            )
-            logger.error(
-                "Synthesis phase context window exceeded: prompt_tokens=%s, "
-                "max_tokens=%s, truncation_needed=%s, provider=%s, finding_count=%d",
-                e.prompt_tokens,
-                e.max_tokens,
-                e.truncation_needed,
-                e.provider,
-                len(state.findings),
-            )
-            return WorkflowResult(
-                success=False,
-                content="",
-                error=str(e),
-                metadata={
-                    "research_id": state.id,
-                    "phase": "synthesis",
-                    "error_type": "context_window_exceeded",
-                    "prompt_tokens": e.prompt_tokens,
-                    "max_tokens": e.max_tokens,
-                    "truncation_needed": e.truncation_needed,
-                    "finding_count": len(state.findings),
-                    "guidance": "Try reducing the number of findings or source content included",
-                },
-            )
-
-        # Emit llm.call.completed audit event
-        llm_call_duration_ms = (time.perf_counter() - llm_call_start_time) * 1000
-        llm_call_status = "success" if result.success else "error"
-        llm_call_provider: str = result.provider_id or effective_provider or "unknown"
-        self._write_audit_event(
-            state,
-            "llm.call.completed",
-            data={
-                "provider": llm_call_provider,
-                "task_id": state.id,
-                "duration_ms": llm_call_duration_ms,
-                "status": llm_call_status,
-            },
-        )
-        get_metrics().histogram(
-            "foundry_mcp_research_llm_call_duration_seconds",
-            llm_call_duration_ms / 1000.0,
-            labels={"provider": llm_call_provider, "status": llm_call_status},
-        )
-
-        if not result.success:
-            # Check if this was a timeout
-            if result.metadata and result.metadata.get("timeout"):
-                logger.error(
-                    "Synthesis phase timed out after exhausting all providers: %s",
-                    result.metadata.get("providers_tried", []),
-                )
-            else:
-                logger.error("Synthesis phase LLM call failed: %s", result.error)
-            return result
-
-        # Track token usage
-        if result.tokens_used:
-            state.total_tokens_used += result.tokens_used
-
-        # Track phase metrics for audit
-        state.phase_metrics.append(
-            PhaseMetrics(
-                phase="synthesis",
-                duration_ms=result.duration_ms or 0.0,
-                input_tokens=result.input_tokens or 0,
-                output_tokens=result.output_tokens or 0,
-                cached_tokens=result.cached_tokens or 0,
-                provider_id=result.provider_id,
-                model_used=result.model_used,
-            )
-        )
+        if isinstance(call_result, WorkflowResult):
+            return call_result  # Error path
+        result = call_result.result
 
         # Extract the markdown report from the response
         report = self._extract_markdown_report(result.content)
@@ -319,25 +217,7 @@ class SynthesisPhaseMixin:
             len(state.report),
         )
 
-        # Emit phase.completed audit event
-        phase_duration_ms = (time.perf_counter() - phase_start_time) * 1000
-        self._write_audit_event(
-            state,
-            "phase.completed",
-            data={
-                "phase_name": "synthesis",
-                "iteration": state.iteration,
-                "task_id": state.id,
-                "duration_ms": phase_duration_ms,
-            },
-        )
-
-        # Emit phase duration metric
-        get_metrics().histogram(
-            "foundry_mcp_research_phase_duration_seconds",
-            phase_duration_ms / 1000.0,
-            labels={"phase_name": "synthesis", "status": "success"},
-        )
+        finalize_phase(self, state, "synthesis", phase_start_time)
 
         return WorkflowResult(
             success=True,
@@ -355,7 +235,7 @@ class SynthesisPhaseMixin:
             },
         )
 
-    def _build_synthesis_system_prompt(self: DeepResearchWorkflow, state: DeepResearchState) -> str:
+    def _build_synthesis_system_prompt(self, state: DeepResearchState) -> str:
         """Build system prompt for report synthesis.
 
         Args:
@@ -415,7 +295,7 @@ Guidelines:
 IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
 
     def _build_synthesis_user_prompt(
-        self: DeepResearchWorkflow,
+        self,
         state: DeepResearchState,
         allocation_result: Optional[AllocationResult] = None,
     ) -> str:
@@ -450,7 +330,7 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         for category, findings in categorized.items():
             prompt_parts.append(f"### {category}")
             for f in findings:
-                confidence_label = f.confidence.value if hasattr(f.confidence, 'value') else str(f.confidence)
+                confidence_label = f.confidence.value if hasattr(f.confidence, "value") else str(f.confidence)
                 source_refs = ", ".join(f.source_ids) if f.source_ids else "no sources"
                 prompt_parts.append(f"- [{confidence_label.upper()}] {f.content}")
                 prompt_parts.append(f"  Sources: {source_refs}")
@@ -478,7 +358,7 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                 if not source:
                     continue
 
-                quality = source.quality.value if hasattr(source.quality, 'value') else str(source.quality)
+                quality = source.quality.value if hasattr(source.quality, "value") else str(source.quality)
                 prompt_parts.append(f"- **{source.id}**: {source.title} [{quality}]")
                 if source.url:
                     prompt_parts.append(f"  URL: {source.url}")
@@ -504,11 +384,13 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
             if allocation_result.dropped_ids:
                 dropped_sources = [sid for sid in allocation_result.dropped_ids if sid.startswith("src-")]
                 if dropped_sources:
-                    prompt_parts.append(f"\n*Note: {len(dropped_sources)} additional source(s) omitted for context limits*")
+                    prompt_parts.append(
+                        f"\n*Note: {len(dropped_sources)} additional source(s) omitted for context limits*"
+                    )
         else:
             # Fallback: use first 30 sources (legacy behavior)
             for source in state.sources[:30]:
-                quality = source.quality.value if hasattr(source.quality, 'value') else str(source.quality)
+                quality = source.quality.value if hasattr(source.quality, "value") else str(source.quality)
                 prompt_parts.append(f"- {source.id}: {source.title} [{quality}]")
                 if source.url:
                     prompt_parts.append(f"  URL: {source.url}")
@@ -516,21 +398,23 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         prompt_parts.append("")
 
         # Add synthesis instructions
-        prompt_parts.extend([
-            "## Instructions",
-            f"Generate a comprehensive research report addressing the query: '{state.original_query}'",
-            "",
-            f"This is iteration {state.iteration} of {state.max_iterations}.",
-            f"Total findings: {len(state.findings)}",
-            f"Total sources: {len(state.sources)}",
-            f"Unresolved gaps: {len(state.unresolved_gaps())}",
-            "",
-            "Create a well-structured markdown report following the format specified.",
-        ])
+        prompt_parts.extend(
+            [
+                "## Instructions",
+                f"Generate a comprehensive research report addressing the query: '{state.original_query}'",
+                "",
+                f"This is iteration {state.iteration} of {state.max_iterations}.",
+                f"Total findings: {len(state.findings)}",
+                f"Total sources: {len(state.sources)}",
+                f"Unresolved gaps: {len(state.unresolved_gaps())}",
+                "",
+                "Create a well-structured markdown report following the format specified.",
+            ]
+        )
 
         return "\n".join(prompt_parts)
 
-    def _extract_markdown_report(self: DeepResearchWorkflow, content: str) -> Optional[str]:
+    def _extract_markdown_report(self, content: str) -> Optional[str]:
         """Extract markdown report from LLM response.
 
         The response should be pure markdown, but this handles cases where
@@ -552,14 +436,14 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         # Check for markdown code block wrapper
         if "```markdown" in content or "```md" in content:
             # Extract content between code blocks
-            pattern = r'```(?:markdown|md)?\s*([\s\S]*?)```'
+            pattern = r"```(?:markdown|md)?\s*([\s\S]*?)```"
             matches = re.findall(pattern, content)
             if matches:
                 return matches[0].strip()
 
         # Check for generic code block
         if "```" in content:
-            pattern = r'```\s*([\s\S]*?)```'
+            pattern = r"```\s*([\s\S]*?)```"
             matches = re.findall(pattern, content)
             for match in matches:
                 # Check if it looks like markdown (has headings)
@@ -567,7 +451,7 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                     return match.strip()
 
         # Look for first heading and take everything from there
-        heading_match = re.search(r'^(#[^\n]+)', content, re.MULTILINE)
+        heading_match = re.search(r"^(#[^\n]+)", content, re.MULTILINE)
         if heading_match:
             start_pos = heading_match.start()
             return content[start_pos:].strip()
@@ -575,7 +459,7 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         # If nothing else works, return the trimmed content
         return content.strip() if len(content.strip()) > 50 else None
 
-    def _generate_empty_report(self: DeepResearchWorkflow, state: DeepResearchState) -> str:
+    def _generate_empty_report(self, state: DeepResearchState) -> str:
         """Generate a minimal report when no findings are available.
 
         Args:

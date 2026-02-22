@@ -22,7 +22,7 @@ import re
 import threading
 import time
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -66,6 +66,7 @@ class IntakeItem:
         requester: Person/entity who requested (max 100 chars)
         idempotency_key: Optional client key for deduplication (max 64 chars)
     """
+
     schema_version: str = "intake-v1"
     id: str = ""
     title: str = ""
@@ -123,6 +124,7 @@ class IntakeItem:
 @dataclass
 class PaginationCursor:
     """Cursor for pagination through intake items."""
+
     last_id: str
     line_hint: int
     version: int = 1
@@ -153,9 +155,8 @@ class PaginationCursor:
             return None
 
 
-class LockAcquisitionError(Exception):
-    """Raised when file lock cannot be acquired within timeout."""
-    pass
+# Error class (canonical definition in foundry_mcp.core.errors.storage)
+from foundry_mcp.core.errors.storage import LockAcquisitionError  # noqa: E402
 
 
 class IntakeStore:
@@ -201,18 +202,14 @@ class IntakeStore:
 
         # Validate specs_dir is within workspace (prevent path traversal)
         if not self._validate_path_in_workspace(self.specs_dir):
-            raise ValueError(
-                f"specs_dir '{specs_dir}' is outside workspace root '{self.workspace_root}'"
-            )
+            raise ValueError(f"specs_dir '{specs_dir}' is outside workspace root '{self.workspace_root}'")
 
         # Use custom notes_dir if provided, otherwise default to specs/.notes
         if notes_dir is not None:
             self.notes_dir = Path(notes_dir).resolve()
             # Validate notes_dir is within workspace
             if not self._validate_path_in_workspace(self.notes_dir):
-                raise ValueError(
-                    f"notes_dir '{notes_dir}' is outside workspace root '{self.workspace_root}'"
-                )
+                raise ValueError(f"notes_dir '{notes_dir}' is outside workspace root '{self.workspace_root}'")
         else:
             self.notes_dir = self.specs_dir / ".notes"
 
@@ -244,9 +241,7 @@ class IntakeStore:
             resolved.relative_to(self.workspace_root)
             return True
         except ValueError:
-            logger.warning(
-                f"Path traversal attempt blocked: '{path}' is outside workspace"
-            )
+            logger.warning(f"Path traversal attempt blocked: '{path}' is outside workspace")
             return False
 
     def _acquire_lock(self, exclusive: bool = True, timeout: float = LOCK_TIMEOUT_SECONDS) -> int:
@@ -276,14 +271,13 @@ class IntakeStore:
             try:
                 fcntl.flock(fd, lock_type | fcntl.LOCK_NB)
                 return fd
-            except (IOError, OSError):
+            except (IOError, OSError) as e:
                 elapsed = time.monotonic() - start_time
                 if elapsed >= timeout:
                     os.close(fd)
                     raise LockAcquisitionError(
-                        f"Failed to acquire {'exclusive' if exclusive else 'shared'} lock "
-                        f"within {timeout} seconds"
-                    )
+                        f"Failed to acquire {'exclusive' if exclusive else 'shared'} lock within {timeout} seconds"
+                    ) from e
                 time.sleep(0.01)  # 10ms between retries
 
     def _release_lock(self, fd: int) -> None:
@@ -306,10 +300,7 @@ class IntakeStore:
         if not text:
             return text
         # Remove ASCII control characters (0x00-0x1F) except common whitespace
-        return "".join(
-            char for char in text
-            if ord(char) >= 32 or char in "\n\r\t"
-        )
+        return "".join(char for char in text if ord(char) >= 32 or char in "\n\r\t")
 
     def _truncate_for_log(self, text: str, max_length: int = LOG_DESCRIPTION_MAX_LENGTH) -> str:
         """
@@ -573,10 +564,7 @@ class IntakeStore:
                     f.write(json.dumps(item.to_dict()) + "\n")
                     f.flush()
 
-                logger.info(
-                    f"Added intake item: {item.id} "
-                    f"(title: {self._truncate_for_log(item.title)})"
-                )
+                logger.info(f"Added intake item: {item.id} (title: {self._truncate_for_log(item.title)})")
                 return item, False, lock_wait_ms
 
             finally:
@@ -664,7 +652,7 @@ class IntakeStore:
                     # Try to seek to line hint if cursor provided
                     if parsed_cursor and parsed_cursor.line_hint > 0:
                         # Read up to line_hint to find position
-                        for i in range(parsed_cursor.line_hint):
+                        for _i in range(parsed_cursor.line_hint):
                             line = f.readline()
                             if not line:
                                 break
@@ -687,9 +675,7 @@ class IntakeStore:
                                 if data.get("id") != parsed_cursor.last_id:
                                     # Line hint didn't match, need full scan
                                     cursor_fallback = True
-                                    logger.warning(
-                                        f"Cursor line hint mismatch, falling back to full scan"
-                                    )
+                                    logger.warning("Cursor line hint mismatch, falling back to full scan")
                                     f.seek(0)
                                     line_num = 0
                                     total_count = 0
@@ -707,7 +693,7 @@ class IntakeStore:
 
                     # Read remaining lines
                     for line in f:
-                        current_line = line_num
+                        _current_line = line_num
                         line_num += 1
                         line = line.strip()
                         if not line:
@@ -726,6 +712,7 @@ class IntakeStore:
 
                         # Handle cursor position finding
                         if not found_cursor_position:
+                            assert parsed_cursor is not None
                             if data.get("id") == parsed_cursor.last_id:
                                 found_cursor_position = True
                             continue

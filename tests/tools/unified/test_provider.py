@@ -4,16 +4,7 @@ Tests that _dispatch_provider_action catches exceptions and returns error respon
 instead of crashing the MCP server.
 """
 
-from unittest.mock import MagicMock, patch
-
-import pytest
-
-
-@pytest.fixture
-def mock_config():
-    """Create a mock ServerConfig."""
-    config = MagicMock()
-    return config
+from unittest.mock import patch
 
 
 class TestProviderDispatchExceptionHandling:
@@ -23,9 +14,8 @@ class TestProviderDispatchExceptionHandling:
         """_dispatch_provider_action should catch exceptions and return error response."""
         from foundry_mcp.tools.unified.provider import _dispatch_provider_action
 
-        with patch(
-            "foundry_mcp.tools.unified.provider._PROVIDER_ROUTER"
-        ) as mock_router:
+        with patch("foundry_mcp.tools.unified.provider._PROVIDER_ROUTER") as mock_router:
+            mock_router.allowed_actions.return_value = ["list"]
             mock_router.dispatch.side_effect = RuntimeError("Provider registry failed")
 
             result = _dispatch_provider_action(
@@ -45,9 +35,8 @@ class TestProviderDispatchExceptionHandling:
         """_dispatch_provider_action should handle exceptions with empty messages."""
         from foundry_mcp.tools.unified.provider import _dispatch_provider_action
 
-        with patch(
-            "foundry_mcp.tools.unified.provider._PROVIDER_ROUTER"
-        ) as mock_router:
+        with patch("foundry_mcp.tools.unified.provider._PROVIDER_ROUTER") as mock_router:
+            mock_router.allowed_actions.return_value = ["list"]
             mock_router.dispatch.side_effect = RuntimeError()
 
             result = _dispatch_provider_action(
@@ -67,9 +56,8 @@ class TestProviderDispatchExceptionHandling:
         from foundry_mcp.tools.unified.provider import _dispatch_provider_action
 
         with caplog.at_level(logging.ERROR):
-            with patch(
-                "foundry_mcp.tools.unified.provider._PROVIDER_ROUTER"
-            ) as mock_router:
+            with patch("foundry_mcp.tools.unified.provider._PROVIDER_ROUTER") as mock_router:
+                mock_router.allowed_actions.return_value = ["list"]
                 mock_router.dispatch.side_effect = ValueError("test error")
 
                 _dispatch_provider_action(

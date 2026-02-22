@@ -25,7 +25,6 @@ from typing import Any, Dict, List
 
 from foundry_mcp.core.prompts import PromptBuilder, PromptTemplate
 
-
 # =============================================================================
 # Response Schema
 # =============================================================================
@@ -229,6 +228,10 @@ CRITICAL CONSTRAINTS:
 - Do NOT focus on ownership, responsibility, or team assignment concerns
 - Avoid feedback like "who owns", "who verifies", "who is responsible for"
 - Focus on technical requirements and verification steps themselves, not who performs them
+- Implementation File Paths lists the files relevant to this review (not their contents).
+  Use file paths to understand project structure and scope.
+- Subsequent Phases (if present) describe work planned for later phases.
+  Do NOT penalize the implementation for features listed in subsequent phases.
 
 Focus on:
 1. Requirement alignment - Does implementation match spec?
@@ -245,19 +248,25 @@ Focus on:
 {spec_description}
 **Review Scope:** {review_scope}
 
-## 2. Specification Requirements
+## 2. Spec Overview
+{spec_overview}
+
+## 3. Specification Requirements
 {spec_requirements}
 
-## 3. Implementation Artifacts
+## 4. Implementation File Paths
 {implementation_artifacts}
 
-## 4. Test Results
+## 5. Test Results
 {test_results}
 
-## 5. Journal Entries
+## 6. Journal Entries
 {journal_entries}
 
-## 6. Review Questions
+## 7. Subsequent Phases
+{subsequent_phases}
+
+## 8. Review Questions
 
 Please evaluate the implementation against the specification:
 
@@ -281,7 +290,17 @@ Rules:
 - Keep arrays as arrays (use `[]` when a section has nothing to report)
 - Populate `issues` and `recommendations` with key takeaways
 - Feel free to include additional keys if needed, but never omit the ones above
-- Severity levels for deviations: critical, high, medium, low""",
+- Severity levels for deviations: critical, high, medium, low
+
+Verdict criteria (use these strictly):
+- "pass": All spec requirements are implemented correctly. Medium/low-severity
+  suggestions (documentation, style, minor quality concerns) do NOT warrant
+  "partial" or "fail".
+- "partial": Implementation has one or more HIGH-severity deviations from the spec.
+- "fail": Implementation has CRITICAL-severity deviations or fundamentally misses
+  spec requirements.
+- "unknown": Insufficient information to evaluate (e.g., no code artifacts
+  provided, or spec requirements too ambiguous to map to implementation).""",
     required_context=[
         "spec_id",
         "spec_title",
@@ -291,8 +310,10 @@ Rules:
     ],
     optional_context=[
         "spec_description",
+        "spec_overview",
         "test_results",
         "journal_entries",
+        "subsequent_phases",
         "response_schema",
     ],
     metadata={
@@ -301,10 +322,12 @@ Rules:
         "category": "implementation",
         "sections": [
             "Context",
+            "Spec Overview",
             "Specification Requirements",
-            "Implementation Artifacts",
+            "Implementation File Paths",
             "Test Results",
             "Journal Entries",
+            "Subsequent Phases",
             "Review Questions",
         ],
         "output_format": "json",
@@ -503,7 +526,7 @@ Your task is to consolidate diverse perspectives into actionable consensus while
 Guidelines:
 - Attribute findings to specific models using the identified_by field
 - Merge similar deviations, noting which models identified each
-- Resolve verdict disagreements using majority vote or escalate to "partial" on conflict
+- Resolve verdict disagreements using majority vote; if tied, derive verdict from deviation severities
 - Preserve unique insights from each model
 - Output valid JSON matching the required schema exactly
 - Do NOT focus on ownership, responsibility, or team assignment concerns
@@ -524,8 +547,12 @@ Guidelines:
 1. **Verdict Consensus:**
    - Count votes for each verdict (pass/fail/partial/unknown)
    - Use majority vote for final verdict
-   - If tied or conflicted, use "partial" and note disagreement
-   - Record agreement_level: "strong" (all agree), "moderate" (majority agrees), "weak" (slight majority), "conflicted" (tied/split)
+   - If tied: derive verdict from deviation severities across ALL reviews:
+     * No critical or high-severity deviations in any review -> "pass"
+     * Any high-severity deviations -> "partial"
+     * Any critical-severity deviations -> "fail"
+   - Record agreement_level: "strong" (all agree), "moderate" (majority agrees),
+     "weak" (slight majority), "conflicted" (tied/split)
 
 2. **Deviation Merging:**
    - Group similar deviations across models by description
@@ -641,10 +668,14 @@ class FidelityReviewPromptBuilder(PromptBuilder):
             # Add empty defaults for optional fields
             if "spec_description" not in render_context:
                 render_context["spec_description"] = ""
+            if "spec_overview" not in render_context:
+                render_context["spec_overview"] = ""
             if "test_results" not in render_context:
                 render_context["test_results"] = "*No test results available*"
             if "journal_entries" not in render_context:
                 render_context["journal_entries"] = "*No journal entries found*"
+            if "subsequent_phases" not in render_context:
+                render_context["subsequent_phases"] = ""
 
             return template.render(render_context)
 

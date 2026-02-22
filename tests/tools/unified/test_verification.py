@@ -4,16 +4,7 @@ Tests that _dispatch_verification_action catches exceptions and returns error re
 instead of crashing the MCP server.
 """
 
-from unittest.mock import MagicMock, patch
-
-import pytest
-
-
-@pytest.fixture
-def mock_config():
-    """Create a mock ServerConfig."""
-    config = MagicMock()
-    return config
+from unittest.mock import patch
 
 
 class TestVerificationDispatchExceptionHandling:
@@ -24,15 +15,18 @@ class TestVerificationDispatchExceptionHandling:
         from foundry_mcp.tools.unified.verification import _dispatch_verification_action
 
         with patch(
-            "foundry_mcp.tools.unified.verification._VERIFICATION_ROUTER"
-        ) as mock_router:
-            mock_router.dispatch.side_effect = RuntimeError("Verification failed")
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            with patch("foundry_mcp.tools.unified.verification._VERIFICATION_ROUTER") as mock_router:
+                mock_router.allowed_actions.return_value = ["run"]
+                mock_router.dispatch.side_effect = RuntimeError("Verification failed")
 
-            result = _dispatch_verification_action(
-                action="run",
-                payload={"spec_id": "test-spec"},
-                config=mock_config,
-            )
+                result = _dispatch_verification_action(
+                    action="run",
+                    payload={"spec_id": "test-spec"},
+                    config=mock_config,
+                )
 
         # Should return error response, not raise exception
         assert result["success"] is False
@@ -46,15 +40,18 @@ class TestVerificationDispatchExceptionHandling:
         from foundry_mcp.tools.unified.verification import _dispatch_verification_action
 
         with patch(
-            "foundry_mcp.tools.unified.verification._VERIFICATION_ROUTER"
-        ) as mock_router:
-            mock_router.dispatch.side_effect = RuntimeError()
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            with patch("foundry_mcp.tools.unified.verification._VERIFICATION_ROUTER") as mock_router:
+                mock_router.allowed_actions.return_value = ["run"]
+                mock_router.dispatch.side_effect = RuntimeError()
 
-            result = _dispatch_verification_action(
-                action="run",
-                payload={"spec_id": "test-spec"},
-                config=mock_config,
-            )
+                result = _dispatch_verification_action(
+                    action="run",
+                    payload={"spec_id": "test-spec"},
+                    config=mock_config,
+                )
 
         # Should use class name when message is empty
         assert result["success"] is False
@@ -68,14 +65,17 @@ class TestVerificationDispatchExceptionHandling:
 
         with caplog.at_level(logging.ERROR):
             with patch(
-                "foundry_mcp.tools.unified.verification._VERIFICATION_ROUTER"
-            ) as mock_router:
-                mock_router.dispatch.side_effect = ValueError("test error")
+                "foundry_mcp.tools.unified.common.get_server_role",
+                return_value="maintainer",
+            ):
+                with patch("foundry_mcp.tools.unified.verification._VERIFICATION_ROUTER") as mock_router:
+                    mock_router.allowed_actions.return_value = ["run"]
+                    mock_router.dispatch.side_effect = ValueError("test error")
 
-                _dispatch_verification_action(
-                    action="run",
-                    payload={"spec_id": "test-spec"},
-                    config=mock_config,
-                )
+                    _dispatch_verification_action(
+                        action="run",
+                        payload={"spec_id": "test-spec"},
+                        config=mock_config,
+                    )
 
         assert "test error" in caplog.text

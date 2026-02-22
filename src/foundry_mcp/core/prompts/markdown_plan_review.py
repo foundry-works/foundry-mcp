@@ -1,15 +1,12 @@
 """
 Markdown plan review prompts for AI consultation workflows.
 
-This module provides prompt templates for reviewing markdown plans
+This module provides the prompt template for reviewing markdown plans
 before converting them to formal JSON specifications. Supports iterative
 review cycles to refine plans with AI feedback.
 
 Templates:
     - MARKDOWN_PLAN_REVIEW_FULL_V1: Comprehensive 6-dimension review
-    - MARKDOWN_PLAN_REVIEW_QUICK_V1: Critical blockers only
-    - MARKDOWN_PLAN_REVIEW_SECURITY_V1: Security-focused review
-    - MARKDOWN_PLAN_REVIEW_FEASIBILITY_V1: Complexity and risk assessment
 
 Each template expects plan_content, plan_name, and optionally plan_path context.
 """
@@ -19,7 +16,6 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from foundry_mcp.core.prompts import PromptBuilder, PromptRegistry, PromptTemplate
-
 
 # =============================================================================
 # Response Schema for MARKDOWN_PLAN_REVIEW Templates
@@ -67,7 +63,7 @@ What the plan does well.
 ---
 
 **Important**:
-- Use category tags: [Completeness], [Architecture], [Sequencing], [Feasibility], [Risk], [Clarity]
+- Use category tags: [Completeness], [Architecture], [Sequencing], [Over-engineering], [Risk], [Clarity]
 - Include all sections even if empty (write "None identified" for empty sections)
 - Be specific and actionable in all feedback
 - For clarity issues, use Questions section rather than creating a separate category
@@ -131,10 +127,18 @@ Effective reviews combine critical analysis with actionable guidance.
 
 **Evaluate across 6 dimensions:**
 
-1. **Completeness** - Are all phases/deliverables identified? Missing sections?
-2. **Architecture** - Sound approach? Coupling concerns? Missing abstractions?
+1. **Completeness** - Are all required sections present?
+   - Mission statement (single sentence)?
+   - Objectives listed as discrete items?
+   - Success criteria with measurable checkboxes?
+   - Assumptions listed?
+   - Constraints listed?
+   - Risks with likelihood/impact/mitigation columns?
+   - Open questions (if any unresolved items exist)?
+   - Per-task: category tag, complexity tag, file path (or "N/A"), acceptance criteria, dependencies?
+2. **Architecture** - Sound approach? Coupling concerns? Missing abstractions? Is the design testable?
 3. **Sequencing** - Phases ordered correctly? Dependencies identified?
-4. **Feasibility** - Realistic estimates? Hidden complexity?
+4. **Over-engineering** - Unnecessary abstractions? Premature generalization? Features beyond what was asked?
 5. **Risk** - What could go wrong? Mitigation strategies?
 6. **Clarity** - Unambiguous? Would another developer understand?
 
@@ -159,224 +163,11 @@ Effective reviews combine critical analysis with actionable guidance.
             "Completeness",
             "Architecture",
             "Sequencing",
-            "Feasibility",
+            "Over-engineering",
             "Risk",
             "Clarity",
         ],
         "description": "Comprehensive 6-dimension markdown plan review",
-    },
-)
-
-
-# =============================================================================
-# MARKDOWN_PLAN_REVIEW_QUICK_V1
-# =============================================================================
-
-MARKDOWN_PLAN_REVIEW_QUICK_V1 = PromptTemplate(
-    id="MARKDOWN_PLAN_REVIEW_QUICK_V1",
-    version="1.0",
-    system_prompt=_MARKDOWN_PLAN_REVIEW_SYSTEM_PROMPT,
-    user_template="""You are conducting a quick review of a markdown implementation plan.
-
-**Plan Name**: {plan_name}
-**Review Type**: Quick (focus on blockers and questions)
-
-**Your role**: Identify critical blockers and key questions that need resolution before this becomes a spec.
-
-**Focus on finding:**
-
-1. **Critical Blockers**: What would prevent this plan from becoming a valid spec?
-   - Missing phases or deliverables
-   - Undefined dependencies
-   - Unresolved technical decisions
-   - Incomplete objectives
-
-2. **Key Questions**: What needs clarification?
-   - Ambiguous requirements
-   - Unclear technical approaches
-   - Missing context or rationale
-   - Edge cases not addressed
-
-**Evaluation areas**:
-- **Completeness**: Are all necessary sections present?
-- **Questions**: What clarifications are needed?
-
-**MARKDOWN PLAN TO REVIEW:**
-
-{plan_content}
-
----
-
-**Required Output Format** (Markdown):
-{response_schema}
-
-**Note**: Focus primarily on Critical Blockers and Questions sections. Brief notes for other sections are sufficient.""",
-    required_context=["plan_content", "plan_name"],
-    optional_context=["response_schema", "plan_path"],
-    metadata={
-        "author": "foundry-mcp",
-        "category": "markdown_plan_review",
-        "workflow": "MARKDOWN_PLAN_REVIEW",
-        "review_type": "quick",
-        "focus": ["Critical Blockers", "Questions"],
-        "description": "Quick review focusing on blockers and clarifications",
-    },
-)
-
-
-# =============================================================================
-# MARKDOWN_PLAN_REVIEW_SECURITY_V1
-# =============================================================================
-
-MARKDOWN_PLAN_REVIEW_SECURITY_V1 = PromptTemplate(
-    id="MARKDOWN_PLAN_REVIEW_SECURITY_V1",
-    version="1.0",
-    system_prompt="""You are a security specialist reviewing implementation plans.
-Your task is to identify security vulnerabilities, risks, and recommend mitigations
-in the proposed implementation approach.
-
-Guidelines:
-- Focus on authentication, authorization, and data protection
-- Identify injection risks and common vulnerabilities
-- Consider OWASP Top 10 and industry security standards
-- Provide specific, actionable remediation recommendations
-- Prioritize findings by risk severity""",
-    user_template="""You are conducting a security review of a markdown implementation plan.
-
-**Plan Name**: {plan_name}
-**Review Type**: Security (focus on vulnerabilities and risks)
-
-**Your role**: Security specialist helping identify and mitigate potential vulnerabilities in the proposed approach.
-
-**Focus on security considerations:**
-
-1. **Authentication & Authorization**:
-   - Are authentication mechanisms properly planned?
-   - Is authorization enforced at appropriate boundaries?
-   - Does the plan follow principle of least privilege?
-
-2. **Data Protection**:
-   - Is input validation planned?
-   - Are secrets managed securely?
-   - Is encryption considered for data at rest and in transit?
-   - Do error handling plans avoid leaking sensitive information?
-
-3. **Common Vulnerabilities**:
-   - Are injection attacks (SQL, command, XSS, CSRF) considered?
-   - Are security headers and protections planned?
-   - Is rate limiting and DoS protection addressed?
-   - Are insecure defaults avoided?
-
-4. **Audit & Compliance**:
-   - Is audit logging planned for security events?
-   - Are privacy concerns addressed?
-   - Are relevant compliance requirements considered?
-
-**Evaluation areas**:
-- **Security**: Authentication, authorization, data protection, vulnerability prevention
-- **Architecture**: Security-relevant design decisions
-- **Risk**: Security risks and mitigations
-
-**MARKDOWN PLAN TO REVIEW:**
-
-{plan_content}
-
----
-
-**Required Output Format** (Markdown):
-{response_schema}
-
-**Note**: Focus primarily on Security category feedback. Include Critical Blockers for any security issues that must be addressed before this becomes a spec.""",
-    required_context=["plan_content", "plan_name"],
-    optional_context=["response_schema", "plan_path"],
-    metadata={
-        "author": "foundry-mcp",
-        "category": "markdown_plan_review",
-        "workflow": "MARKDOWN_PLAN_REVIEW",
-        "review_type": "security",
-        "focus": [
-            "Authentication",
-            "Authorization",
-            "Data Protection",
-            "Vulnerabilities",
-        ],
-        "description": "Security-focused review for vulnerabilities and risks",
-    },
-)
-
-
-# =============================================================================
-# MARKDOWN_PLAN_REVIEW_FEASIBILITY_V1
-# =============================================================================
-
-MARKDOWN_PLAN_REVIEW_FEASIBILITY_V1 = PromptTemplate(
-    id="MARKDOWN_PLAN_REVIEW_FEASIBILITY_V1",
-    version="1.0",
-    system_prompt="""You are a pragmatic senior engineer assessing technical feasibility.
-Your task is to identify implementation challenges, risks, and hidden complexity
-in the proposed approach.
-
-Guidelines:
-- Identify non-obvious technical challenges
-- Evaluate dependency availability and stability
-- Assess resource and timeline realism
-- Highlight areas of concentrated complexity
-- Suggest risk mitigations and alternatives""",
-    user_template="""You are conducting a technical feasibility review of a markdown implementation plan.
-
-**Plan Name**: {plan_name}
-**Review Type**: Feasibility (focus on implementation challenges)
-
-**Your role**: Pragmatic engineer helping identify technical challenges and implementation risks.
-
-**Focus on technical considerations:**
-
-1. **Hidden Complexity**:
-   - What technical challenges might not be obvious?
-   - Where does complexity concentrate?
-   - What edge cases increase difficulty?
-
-2. **Dependencies & Integration**:
-   - Are all required dependencies identified?
-   - Are external services/APIs available and documented?
-   - Are integration points well-defined?
-   - What dependency risks exist?
-
-3. **Technical Constraints**:
-   - What technical limitations could impact the approach?
-   - Are performance requirements achievable?
-   - Are there scalability considerations?
-   - What infrastructure requirements exist?
-
-4. **Implementation Risks**:
-   - What could go wrong during implementation?
-   - Where are the highest-risk technical areas?
-   - What mitigation strategies are needed?
-
-**Evaluation areas**:
-- **Completeness**: Are technical requirements fully specified?
-- **Feasibility**: Is the technical approach sound?
-- **Risk**: What are the technical risks?
-
-**MARKDOWN PLAN TO REVIEW:**
-
-{plan_content}
-
----
-
-**Required Output Format** (Markdown):
-{response_schema}
-
-**Note**: Focus on technical challenges and risks. Identify Major Suggestions for areas of hidden complexity and Critical Blockers for missing technical requirements.""",
-    required_context=["plan_content", "plan_name"],
-    optional_context=["response_schema", "plan_path"],
-    metadata={
-        "author": "foundry-mcp",
-        "category": "markdown_plan_review",
-        "workflow": "MARKDOWN_PLAN_REVIEW",
-        "review_type": "feasibility",
-        "focus": ["Complexity", "Dependencies", "Risks"],
-        "description": "Technical feasibility and risk assessment",
     },
 )
 
@@ -388,9 +179,6 @@ Guidelines:
 
 MARKDOWN_PLAN_REVIEW_TEMPLATES: Dict[str, PromptTemplate] = {
     "MARKDOWN_PLAN_REVIEW_FULL_V1": MARKDOWN_PLAN_REVIEW_FULL_V1,
-    "MARKDOWN_PLAN_REVIEW_QUICK_V1": MARKDOWN_PLAN_REVIEW_QUICK_V1,
-    "MARKDOWN_PLAN_REVIEW_SECURITY_V1": MARKDOWN_PLAN_REVIEW_SECURITY_V1,
-    "MARKDOWN_PLAN_REVIEW_FEASIBILITY_V1": MARKDOWN_PLAN_REVIEW_FEASIBILITY_V1,
 }
 
 
@@ -408,9 +196,6 @@ class MarkdownPlanReviewPromptBuilder(PromptBuilder):
 
     Templates:
         - MARKDOWN_PLAN_REVIEW_FULL_V1: Comprehensive 6-dimension review
-        - MARKDOWN_PLAN_REVIEW_QUICK_V1: Critical blockers and questions focus
-        - MARKDOWN_PLAN_REVIEW_SECURITY_V1: Security-focused review
-        - MARKDOWN_PLAN_REVIEW_FEASIBILITY_V1: Technical complexity assessment
 
     Example:
         builder = MarkdownPlanReviewPromptBuilder()
@@ -476,9 +261,7 @@ class MarkdownPlanReviewPromptBuilder(PromptBuilder):
         """
         if prompt_id not in MARKDOWN_PLAN_REVIEW_TEMPLATES:
             available = sorted(MARKDOWN_PLAN_REVIEW_TEMPLATES.keys())
-            raise KeyError(
-                f"Template '{prompt_id}' not found. Available: {available}"
-            )
+            raise KeyError(f"Template '{prompt_id}' not found. Available: {available}")
         return self._registry.get_required(prompt_id)
 
 
@@ -504,9 +287,6 @@ def get_response_schema() -> str:
 __all__ = [
     # Templates
     "MARKDOWN_PLAN_REVIEW_FULL_V1",
-    "MARKDOWN_PLAN_REVIEW_QUICK_V1",
-    "MARKDOWN_PLAN_REVIEW_SECURITY_V1",
-    "MARKDOWN_PLAN_REVIEW_FEASIBILITY_V1",
     "MARKDOWN_PLAN_REVIEW_TEMPLATES",
     # Builder
     "MarkdownPlanReviewPromptBuilder",

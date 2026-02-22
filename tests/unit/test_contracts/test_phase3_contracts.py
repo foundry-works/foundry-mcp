@@ -8,20 +8,20 @@ Validates response-v2 envelope compliance per 10-testing-fixtures.md:
 """
 
 import json
-import tempfile
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict
 
 import pytest
 
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.builders import (
+    error_response,
+    success_response,
+)
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
-    success_response,
-    error_response,
 )
-
 
 # ---------------------------------------------------------------------------
 # Response-v2 Schema Validation Helpers
@@ -55,9 +55,7 @@ def validate_response_v2_envelope(response: Dict[str, Any]) -> list[str]:
         if "version" not in response["meta"]:
             errors.append("Missing required field: meta.version")
         elif response["meta"]["version"] != "response-v2":
-            errors.append(
-                f"meta.version must be 'response-v2', got '{response['meta']['version']}'"
-            )
+            errors.append(f"meta.version must be 'response-v2', got '{response['meta']['version']}'")
 
     # error field rules
     if response.get("success") is True:
@@ -93,25 +91,19 @@ def validate_error_response_fields(response: Dict[str, Any]) -> list[str]:
     if "error_code" not in data:
         errors.append("Error response missing recommended field: data.error_code")
     elif not isinstance(data["error_code"], str):
-        errors.append(
-            f"data.error_code must be string, got {type(data['error_code']).__name__}"
-        )
+        errors.append(f"data.error_code must be string, got {type(data['error_code']).__name__}")
 
     # error_type SHOULD be present
     if "error_type" not in data:
         errors.append("Error response missing recommended field: data.error_type")
     elif not isinstance(data["error_type"], str):
-        errors.append(
-            f"data.error_type must be string, got {type(data['error_type']).__name__}"
-        )
+        errors.append(f"data.error_type must be string, got {type(data['error_type']).__name__}")
 
     # remediation SHOULD be present
     if "remediation" not in data:
         errors.append("Error response missing recommended field: data.remediation")
     elif not isinstance(data["remediation"], str):
-        errors.append(
-            f"data.remediation must be string, got {type(data['remediation']).__name__}"
-        )
+        errors.append(f"data.remediation must be string, got {type(data['remediation']).__name__}")
 
     return errors
 
@@ -120,7 +112,7 @@ def assert_valid_response_v2(response: Dict[str, Any], context: str = ""):
     """Assert response is valid response-v2 format."""
     errors = validate_response_v2_envelope(response)
     if errors:
-        error_msg = f"Response-v2 validation errors"
+        error_msg = "Response-v2 validation errors"
         if context:
             error_msg += f" ({context})"
         error_msg += ":\n  - " + "\n  - ".join(errors)
@@ -133,7 +125,7 @@ def assert_valid_error_response(response: Dict[str, Any], context: str = ""):
 
     errors = validate_error_response_fields(response)
     if errors:
-        error_msg = f"Error response field validation errors"
+        error_msg = "Error response field validation errors"
         if context:
             error_msg += f" ({context})"
         error_msg += ":\n  - " + "\n  - ".join(errors)
@@ -143,18 +135,6 @@ def assert_valid_error_response(response: Dict[str, Any], context: str = ""):
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def temp_specs_dir():
-    """Create a temporary specs directory structure."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        specs_dir = (Path(tmpdir) / "specs").resolve()
-
-        for status in ("pending", "active", "completed", "archived"):
-            (specs_dir / status).mkdir(parents=True)
-
-        yield specs_dir
 
 
 @pytest.fixture
@@ -250,7 +230,7 @@ def spec_with_nested_tasks(sample_spec):
 @pytest.fixture
 def mock_server_config():
     """Mock ServerConfig for handler testing."""
-    from foundry_mcp.config import ServerConfig
+    from foundry_mcp.config.server import ServerConfig
 
     return ServerConfig(workspace=".")
 
@@ -270,8 +250,8 @@ def call_task_handler(
 
     This simulates how the MCP tool would invoke the handlers.
     """
+    from foundry_mcp.config.server import ServerConfig
     from foundry_mcp.tools.unified.task_handlers import _TASK_ROUTER
-    from foundry_mcp.config import ServerConfig
 
     if config is None:
         config = ServerConfig(specs_dir=specs_dir)

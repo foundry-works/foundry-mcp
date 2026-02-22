@@ -6,9 +6,6 @@ HTTP-backed research providers. These snapshots ensure behavioral parity after
 the shared-utility extraction in Phase 5.
 """
 
-import os
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import httpx
 import pytest
 
@@ -18,7 +15,6 @@ from foundry_mcp.core.research.providers.base import (
     SearchProviderError,
 )
 from foundry_mcp.core.research.providers.resilience import (
-    ErrorClassification,
     ErrorType,
 )
 
@@ -26,14 +22,23 @@ from foundry_mcp.core.research.providers.resilience import (
 from tests.core.research.providers.conftest import (
     FACTORY_MAP,
     PROVIDERS,
-    make_google as _make_google,
-    make_perplexity as _make_perplexity,
-    make_semantic_scholar as _make_semantic_scholar,
-    make_tavily as _make_tavily,
-    make_tavily_extract as _make_tavily_extract,
     make_mock_response,
 )
-
+from tests.core.research.providers.conftest import (
+    make_google as _make_google,
+)
+from tests.core.research.providers.conftest import (
+    make_perplexity as _make_perplexity,
+)
+from tests.core.research.providers.conftest import (
+    make_semantic_scholar as _make_semantic_scholar,
+)
+from tests.core.research.providers.conftest import (
+    make_tavily as _make_tavily,
+)
+from tests.core.research.providers.conftest import (
+    make_tavily_extract as _make_tavily_extract,
+)
 
 # ===================================================================
 # 1. Error Classification Snapshots
@@ -58,9 +63,7 @@ class TestErrorClassificationSnapshots:
 
     def test_rate_limit_error_retryable_no_breaker(self, provider):
         """RateLimitError → retryable, no breaker trip."""
-        error = RateLimitError(
-            provider=provider.get_provider_name(), retry_after=5.0
-        )
+        error = RateLimitError(provider=provider.get_provider_name(), retry_after=5.0)
         classification = provider.classify_error(error)
 
         assert classification.retryable is True
@@ -70,9 +73,7 @@ class TestErrorClassificationSnapshots:
 
     def test_rate_limit_preserves_retry_after(self, provider):
         """RateLimitError backoff_seconds reflects retry_after value."""
-        error = RateLimitError(
-            provider=provider.get_provider_name(), retry_after=42.0
-        )
+        error = RateLimitError(provider=provider.get_provider_name(), retry_after=42.0)
         classification = provider.classify_error(error)
 
         assert classification.backoff_seconds == 42.0
@@ -182,8 +183,10 @@ class TestRetryAfterParsing:
         """Numeric Retry-After header is parsed as float seconds."""
         provider = FACTORY_MAP[provider_name]()
         response = make_mock_response(
-            status_code=429, headers={"Retry-After": "30"},
-            text="Rate limited", json_data={"error": "rate limited"},
+            status_code=429,
+            headers={"Retry-After": "30"},
+            text="Rate limited",
+            json_data={"error": "rate limited"},
         )
         result = provider._parse_retry_after(response)
 
@@ -197,8 +200,10 @@ class TestRetryAfterParsing:
         """Float Retry-After header is parsed correctly."""
         provider = FACTORY_MAP[provider_name]()
         response = make_mock_response(
-            status_code=429, headers={"Retry-After": "1.5"},
-            text="Rate limited", json_data={"error": "rate limited"},
+            status_code=429,
+            headers={"Retry-After": "1.5"},
+            text="Rate limited",
+            json_data={"error": "rate limited"},
         )
         result = provider._parse_retry_after(response)
 
@@ -212,7 +217,8 @@ class TestRetryAfterParsing:
         """Missing Retry-After header returns None."""
         provider = FACTORY_MAP[provider_name]()
         response = make_mock_response(
-            status_code=429, text="Rate limited",
+            status_code=429,
+            text="Rate limited",
             json_data={"error": "rate limited"},
         )
         result = provider._parse_retry_after(response)
@@ -227,8 +233,10 @@ class TestRetryAfterParsing:
         """Non-numeric Retry-After header returns None (silent failure)."""
         provider = FACTORY_MAP[provider_name]()
         response = make_mock_response(
-            status_code=429, headers={"Retry-After": "not-a-number"},
-            text="Rate limited", json_data={"error": "rate limited"},
+            status_code=429,
+            headers={"Retry-After": "not-a-number"},
+            text="Rate limited",
+            json_data={"error": "rate limited"},
         )
         result = provider._parse_retry_after(response)
 
@@ -422,9 +430,7 @@ class TestClientLifecycleInvariants:
         }
         for name, factory in FACTORY_MAP.items():
             provider = factory()
-            assert provider.get_provider_name() == expected[name], (
-                f"{name} provider name mismatch"
-            )
+            assert provider.get_provider_name() == expected[name], f"{name} provider name mismatch"
 
     def test_default_max_retries(self, provider):
         """All providers default to 3 max retries."""
@@ -437,9 +443,7 @@ class TestClientLifecycleInvariants:
 
     def test_resilience_config_present(self, provider):
         """All providers have a resilience config."""
-        assert hasattr(provider, "_resilience_config") or hasattr(
-            provider, "resilience_config"
-        )
+        assert hasattr(provider, "_resilience_config") or hasattr(provider, "resilience_config")
 
     def test_rate_limit_property(self, provider):
         """All providers expose a rate_limit property."""
@@ -485,9 +489,7 @@ class TestCrossProviderConsistency:
                 ErrorType.SERVER_ERROR,
             ),
             (
-                lambda name: SearchProviderError(
-                    provider=name, message="HTTP 400 Bad Request", retryable=False
-                ),
+                lambda name: SearchProviderError(provider=name, message="HTTP 400 Bad Request", retryable=False),
                 ErrorType.INVALID_REQUEST,
             ),
             (
@@ -523,8 +525,7 @@ class TestCrossProviderConsistency:
             error = error_factory(name)
             classification = provider.classify_error(error)
             assert classification.error_type in acceptable, (
-                f"{name} classified as {classification.error_type}, "
-                f"expected one of {acceptable}"
+                f"{name} classified as {classification.error_type}, expected one of {acceptable}"
             )
 
     @pytest.mark.parametrize(
@@ -533,15 +534,11 @@ class TestCrossProviderConsistency:
             (lambda name: AuthenticationError(provider=name), False),
             (lambda name: RateLimitError(provider=name), True),
             (
-                lambda name: SearchProviderError(
-                    provider=name, message="HTTP 503", retryable=True
-                ),
+                lambda name: SearchProviderError(provider=name, message="HTTP 503", retryable=True),
                 True,
             ),
             (
-                lambda name: SearchProviderError(
-                    provider=name, message="HTTP 400", retryable=False
-                ),
+                lambda name: SearchProviderError(provider=name, message="HTTP 400", retryable=False),
                 False,
             ),
             (lambda _: httpx.ReadTimeout("timeout"), True),
@@ -565,6 +562,5 @@ class TestCrossProviderConsistency:
             error = error_factory(name)
             classification = provider.classify_error(error)
             assert classification.retryable is expected_retryable, (
-                f"{name}: retryable={classification.retryable}, "
-                f"expected {expected_retryable}"
+                f"{name}: retryable={classification.retryable}, expected {expected_retryable}"
             )

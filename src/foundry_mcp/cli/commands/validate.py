@@ -1,4 +1,4 @@
-"""Validation commands for SDD CLI.
+"""Validation commands for Foundry CLI.
 
 Provides commands for spec validation, auto-fix, statistics, and reporting.
 """
@@ -13,18 +13,16 @@ from foundry_mcp.cli.output import emit_error, emit_success
 from foundry_mcp.cli.registry import get_context
 from foundry_mcp.cli.resilience import (
     MEDIUM_TIMEOUT,
-    with_sync_timeout,
     handle_keyboard_interrupt,
+    with_sync_timeout,
 )
 
 logger = get_cli_logger()
-from foundry_mcp.core.spec import load_spec, find_spec_file
-from foundry_mcp.core.validation import (
-    apply_fixes,
-    calculate_stats,
-    get_fix_actions,
-    validate_spec,
-)
+from foundry_mcp.core.spec import find_spec_file, load_spec
+from foundry_mcp.core.validation.application import apply_fixes
+from foundry_mcp.core.validation.fixes import get_fix_actions
+from foundry_mcp.core.validation.rules import validate_spec
+from foundry_mcp.core.validation.stats import calculate_stats
 
 
 @click.group("validate")
@@ -52,8 +50,8 @@ def validate_check_cmd(ctx: click.Context, spec_id: str) -> None:
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -64,7 +62,7 @@ def validate_check_cmd(ctx: click.Context, spec_id: str) -> None:
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs list",
+            remediation="Verify the spec ID exists using: foundry specs list",
             details={"spec_id": spec_id},
         )
         return
@@ -125,8 +123,8 @@ def validate_fix_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -137,7 +135,7 @@ def validate_fix_cmd(
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs list",
+            remediation="Verify the spec ID exists using: foundry specs list",
             details={"spec_id": spec_id},
         )
         return
@@ -180,14 +178,8 @@ def validate_fix_cmd(
     )
 
     # Format applied/skipped actions
-    applied = [
-        {"id": a.id, "description": a.description, "category": a.category}
-        for a in report.applied_actions
-    ]
-    skipped = [
-        {"id": a.id, "description": a.description, "category": a.category}
-        for a in report.skipped_actions
-    ]
+    applied = [{"id": a.id, "description": a.description, "category": a.category} for a in report.applied_actions]
+    skipped = [{"id": a.id, "description": a.description, "category": a.category} for a in report.skipped_actions]
 
     emit_success(
         {
@@ -221,8 +213,8 @@ def validate_stats_cmd(ctx: click.Context, spec_id: str) -> None:
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -233,7 +225,7 @@ def validate_stats_cmd(ctx: click.Context, spec_id: str) -> None:
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs list",
+            remediation="Verify the spec ID exists using: foundry specs list",
             details={"spec_id": spec_id},
         )
         return
@@ -303,8 +295,8 @@ def validate_report_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -315,7 +307,7 @@ def validate_report_cmd(
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs list",
+            remediation="Verify the spec ID exists using: foundry specs list",
             details={"spec_id": spec_id},
         )
         return
@@ -404,18 +396,14 @@ def validate_report_cmd(
                 health_issues.append(f"Validation errors: {error_count}")
                 health_score -= min(30, error_count * 10)
             if validation["warning_count"] > 5:
-                health_issues.append(
-                    f"High warning count: {validation['warning_count']}"
-                )
+                health_issues.append(f"High warning count: {validation['warning_count']}")
                 health_score -= min(20, validation["warning_count"] * 2)
 
         # Stats impact
         if "stats" in output:
             statistics = output["statistics"]
             if statistics["verification_coverage"] < 50:
-                health_issues.append(
-                    f"Low verification coverage: {statistics['verification_coverage']}%"
-                )
+                health_issues.append(f"Low verification coverage: {statistics['verification_coverage']}%")
                 health_score -= 10
 
         health_score = max(0, health_score)
@@ -489,8 +477,8 @@ def validate_analyze_deps_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -501,7 +489,7 @@ def validate_analyze_deps_cmd(
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs list",
+            remediation="Verify the spec ID exists using: foundry specs list",
             details={"spec_id": spec_id},
         )
         return
@@ -533,7 +521,7 @@ def validate_analyze_deps_cmd(
             )
 
         # Count how many tasks each node blocks
-        for blocked_id in blocks:
+        for _blocked_id in blocks:
             blocks_count[node_id] = blocks_count.get(node_id, 0) + 1
 
         # Also count from blocked_by relationships
@@ -648,24 +636,16 @@ def validate_analyze_deps_cmd(
 # Top-level validate command (alias for check)
 @click.command("validate")
 @click.argument("spec_id")
-@click.option(
-    "--fix", "auto_fix", is_flag=True, help="Auto-fix issues after validation."
-)
-@click.option(
-    "--dry-run", is_flag=True, help="Preview fixes without applying (requires --fix)."
-)
-@click.option(
-    "--preview", is_flag=True, help="Show summary only (counts and issue codes)."
-)
+@click.option("--fix", "auto_fix", is_flag=True, help="Auto-fix issues after validation.")
+@click.option("--dry-run", is_flag=True, help="Preview fixes without applying (requires --fix).")
+@click.option("--preview", is_flag=True, help="Show summary only (counts and issue codes).")
 @click.option(
     "--diff",
     "show_diff",
     is_flag=True,
     help="Show unified diff of changes (requires --fix).",
 )
-@click.option(
-    "--select", "select_codes", help="Only fix selected issue codes (comma-separated)."
-)
+@click.option("--select", "select_codes", help="Only fix selected issue codes (comma-separated).")
 @click.pass_context
 @cli_command("validate")
 @handle_keyboard_interrupt()
@@ -691,8 +671,8 @@ def validate_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -703,7 +683,7 @@ def validate_cmd(
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs list",
+            remediation="Verify the spec ID exists using: foundry specs list",
             details={"spec_id": spec_id},
         )
         return
@@ -786,12 +766,7 @@ def validate_cmd(
 
         # Filter actions by selected codes
         if selected_codes:
-            actions = [
-                a
-                for a in actions
-                if a.id in selected_codes
-                or any(code in a.id for code in selected_codes)
-            ]
+            actions = [a for a in actions if a.id in selected_codes or any(code in a.id for code in selected_codes)]
 
         if actions:
             # Read original content for diff
@@ -809,10 +784,7 @@ def validate_cmd(
             output["fix_applied"] = not dry_run
             output["fix_dry_run"] = dry_run
             output["fixes_count"] = len(report.applied_actions)
-            output["fixes"] = [
-                {"id": a.id, "description": a.description}
-                for a in report.applied_actions
-            ]
+            output["fixes"] = [{"id": a.id, "description": a.description} for a in report.applied_actions]
             output["backup_path"] = report.backup_path
 
             # Generate diff if requested
@@ -844,9 +816,7 @@ def validate_cmd(
 @click.option("--dry-run", is_flag=True, help="Preview fixes without applying.")
 @click.option("--no-backup", is_flag=True, help="Skip creating backup file.")
 @click.option("--diff", "show_diff", is_flag=True, help="Show unified diff of changes.")
-@click.option(
-    "--select", "select_codes", help="Only fix selected issue codes (comma-separated)."
-)
+@click.option("--select", "select_codes", help="Only fix selected issue codes (comma-separated).")
 @click.pass_context
 @cli_command("fix")
 @handle_keyboard_interrupt()
@@ -863,7 +833,7 @@ def fix_cmd(
 
     SPEC_ID is the specification identifier.
 
-    This is a top-level alias for `sdd validate fix`.
+    This is a top-level alias for `foundry validate fix`.
     """
     cli_ctx = get_context(ctx)
     specs_dir = cli_ctx.specs_dir
@@ -873,8 +843,8 @@ def fix_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -885,7 +855,7 @@ def fix_cmd(
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs list",
+            remediation="Verify the spec ID exists using: foundry specs list",
             details={"spec_id": spec_id},
         )
         return
@@ -911,11 +881,7 @@ def fix_cmd(
     # Parse and filter by selected codes
     if select_codes:
         selected_codes = set(code.strip() for code in select_codes.split(","))
-        actions = [
-            a
-            for a in actions
-            if a.id in selected_codes or any(code in a.id for code in selected_codes)
-        ]
+        actions = [a for a in actions if a.id in selected_codes or any(code in a.id for code in selected_codes)]
 
     if not actions:
         emit_success(
@@ -923,8 +889,7 @@ def fix_cmd(
                 "spec_id": spec_id,
                 "applied_count": 0,
                 "skipped_count": 0,
-                "message": "No auto-fixable issues found"
-                + (" matching selection" if select_codes else ""),
+                "message": "No auto-fixable issues found" + (" matching selection" if select_codes else ""),
             }
         )
         return
@@ -944,14 +909,8 @@ def fix_cmd(
     )
 
     # Format applied/skipped actions
-    applied = [
-        {"id": a.id, "description": a.description, "category": a.category}
-        for a in report.applied_actions
-    ]
-    skipped = [
-        {"id": a.id, "description": a.description, "category": a.category}
-        for a in report.skipped_actions
-    ]
+    applied = [{"id": a.id, "description": a.description, "category": a.category} for a in report.applied_actions]
+    skipped = [{"id": a.id, "description": a.description, "category": a.category} for a in report.skipped_actions]
 
     output: dict = {
         "spec_id": spec_id,

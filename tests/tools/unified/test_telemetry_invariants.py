@@ -28,37 +28,32 @@ import pytest
 
 ROUTER_BASELINES = [
     # module_name        tool_name       metric_prefix          has_rid  details
-    ("authoring",        "authoring",    "authoring",           True,    False),
-    ("environment",      "environment",  "environment",         True,    False),
-    ("error",            "error",        None,                  False,   False),
-    ("health",           "health",       None,                  False,   True),
-    ("journal",          "journal",      None,                  False,   False),
-    ("lifecycle",        "lifecycle",    "lifecycle",            True,    False),
-    ("plan",             "plan",         None,                  False,   False),
-    ("provider",         "provider",     "provider",            True,    False),
-    ("research",         "research",     None,                  False,   True),
-    ("review",           "review",       None,                  False,   False),
-    ("server",           "server",       "unified_tools.server", True,   False),
-    ("spec",             "spec",         None,                  False,   False),
-    ("task",             "task",         "unified_tools.task",  True,    False),
-    ("verification",     "verification", "verification",        True,    False),
+    ("authoring", "authoring", "authoring", True, False),
+    ("environment", "environment", "environment", True, False),
+    ("error", "error", None, False, False),
+    ("health", "health", None, False, True),
+    ("journal", "journal", None, False, False),
+    ("lifecycle", "lifecycle", "lifecycle", True, False),
+    ("plan", "plan", None, False, False),
+    ("provider", "provider", "provider", True, False),
+    ("research", "research", None, False, True),
+    ("review", "review", None, False, False),
+    ("server", "server", "unified_tools.server", True, False),
+    ("spec", "spec", None, False, False),
+    ("task", "task", "unified_tools.task", True, False),
+    ("verification", "verification", "verification", True, False),
 ]
 
 # Convenience sets derived from the baseline table
-_ROUTERS_WITH_REQUEST_ID = {
-    m for m, _, _, has_rid, _ in ROUTER_BASELINES if has_rid
-}
-_ROUTERS_WITH_DETAILS = {
-    m for m, _, _, _, details in ROUTER_BASELINES if details
-}
-_ROUTERS_WITH_METRIC_PREFIX = {
-    m: prefix for m, _, prefix, _, _ in ROUTER_BASELINES if prefix is not None
-}
+_ROUTERS_WITH_REQUEST_ID = {m for m, _, _, has_rid, _ in ROUTER_BASELINES if has_rid}
+_ROUTERS_WITH_DETAILS = {m for m, _, _, _, details in ROUTER_BASELINES if details}
+_ROUTERS_WITH_METRIC_PREFIX = {m: prefix for m, _, prefix, _, _ in ROUTER_BASELINES if prefix is not None}
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _import_dispatch(module_name: str):
     """Import the _dispatch_*_action function from a router module."""
@@ -83,28 +78,37 @@ def _import_local_helper(module_name: str, helper_name: str):
 # minimal kwargs that satisfy each signature.
 _DISPATCH_SIGNATURES: dict[str, dict] = {
     # (action=..., payload=..., config=...)
-    "authoring":     {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
-    "environment":   {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
-    "error":         {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
-    "journal":       {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
-    "lifecycle":     {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
-    "provider":      {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
-    "review":        {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
-    "server":        {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
-    "spec":          {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
-    "task":          {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
-    "verification":  {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
+    "authoring": {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
+    "environment": {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
+    "error": {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
+    "journal": {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
+    "lifecycle": {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
+    "provider": {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
+    "review": {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
+    "server": {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
+    "spec": {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
+    "task": {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
+    "verification": {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
     # Positional-style: (action, payload)
-    "plan":          {"action": "nonexistent-action", "payload": {}},
+    "plan": {"action": "nonexistent-action", "payload": {}},
     # Unique signatures
-    "health":        {"action": "nonexistent-action"},
-    "research":      {"action": "nonexistent-action"},
+    "health": {"action": "nonexistent-action"},
+    "research": {"action": "nonexistent-action"},
 }
 
 # Dispatch functions that use **keyword-only** arguments
 _KEYWORD_ONLY_DISPATCH = {
-    "authoring", "environment", "error", "journal", "lifecycle",
-    "provider", "review", "server", "spec", "task", "verification",
+    "authoring",
+    "environment",
+    "error",
+    "journal",
+    "lifecycle",
+    "provider",
+    "review",
+    "server",
+    "spec",
+    "task",
+    "verification",
 }
 
 # Dispatch functions that use positional arguments
@@ -130,6 +134,7 @@ def _call_dispatch(module_name: str):
 # 1. Metric name invariants
 # ---------------------------------------------------------------------------
 
+
 class TestMetricNameInvariants:
     """Assert metric prefixes per router match the Phase 1 baseline."""
 
@@ -146,13 +151,10 @@ class TestMetricNameInvariants:
         if fn is None:
             fn = _import_local_helper(module_name, "_metric")
             helper_name = "_metric"
-        assert fn is not None, (
-            f"{module_name} should define _metric_name() or _metric()"
-        )
+        assert fn is not None, f"{module_name} should define _metric_name() or _metric()"
         result = fn("test-action")
         assert result == f"{expected_prefix}.test_action", (
-            f"{module_name}.{helper_name}('test-action') should produce "
-            f"'{expected_prefix}.test_action', got '{result}'"
+            f"{module_name}.{helper_name}('test-action') should produce '{expected_prefix}.test_action', got '{result}'"
         )
 
     @pytest.mark.parametrize(
@@ -164,14 +166,13 @@ class TestMetricNameInvariants:
         """Routers without local metric helpers should not define _metric_name or _metric."""
         fn_metric_name = _import_local_helper(module_name, "_metric_name")
         fn_metric = _import_local_helper(module_name, "_metric")
-        assert fn_metric_name is None and fn_metric is None, (
-            f"{module_name} should NOT define a local metric helper"
-        )
+        assert fn_metric_name is None and fn_metric is None, f"{module_name} should NOT define a local metric helper"
 
 
 # ---------------------------------------------------------------------------
 # 2. request_id invariants
 # ---------------------------------------------------------------------------
+
 
 class TestRequestIdInvariants:
     """Assert request_id inclusion per router matches the Phase 1 baseline."""
@@ -184,9 +185,7 @@ class TestRequestIdInvariants:
     def test_router_has_local_request_id(self, module_name):
         """Routers that had request_id in Phase 1 still define _request_id()."""
         fn = _import_local_helper(module_name, "_request_id")
-        assert fn is not None, (
-            f"{module_name} should define _request_id()"
-        )
+        assert fn is not None, f"{module_name} should define _request_id()"
 
     @pytest.mark.parametrize(
         "module_name",
@@ -196,10 +195,7 @@ class TestRequestIdInvariants:
     def test_request_id_delegates_to_build_request_id(self, module_name):
         """Each _request_id() delegates to build_request_id with correct tool name."""
         # Find the expected tool_name from baseline
-        tool_name = next(
-            tn for m, tn, _, has_rid, _ in ROUTER_BASELINES
-            if m == module_name and has_rid
-        )
+        tool_name = next(tn for m, tn, _, has_rid, _ in ROUTER_BASELINES if m == module_name and has_rid)
         with patch(
             f"foundry_mcp.tools.unified.{module_name}.build_request_id",
             return_value=f"{tool_name}_mock123",
@@ -211,19 +207,13 @@ class TestRequestIdInvariants:
 
     @pytest.mark.parametrize(
         "module_name",
-        sorted(
-            {m for m, _, _, _, _ in ROUTER_BASELINES} - _ROUTERS_WITH_REQUEST_ID
-        ),
-        ids=sorted(
-            {m for m, _, _, _, _ in ROUTER_BASELINES} - _ROUTERS_WITH_REQUEST_ID
-        ),
+        sorted({m for m, _, _, _, _ in ROUTER_BASELINES} - _ROUTERS_WITH_REQUEST_ID),
+        ids=sorted({m for m, _, _, _, _ in ROUTER_BASELINES} - _ROUTERS_WITH_REQUEST_ID),
     )
     def test_router_does_not_have_local_request_id(self, module_name):
         """Routers without request_id in Phase 1 should not define _request_id()."""
         fn = _import_local_helper(module_name, "_request_id")
-        assert fn is None, (
-            f"{module_name} should NOT define _request_id()"
-        )
+        assert fn is None, f"{module_name} should NOT define _request_id()"
 
     def test_request_id_router_count(self):
         """Exactly 7 routers define local _request_id helpers."""
@@ -236,6 +226,7 @@ class TestRequestIdInvariants:
 # ---------------------------------------------------------------------------
 # 3. details inclusion invariants
 # ---------------------------------------------------------------------------
+
 
 class TestDetailsInclusionInvariants:
     """Assert include_details_in_router_error per router matches baseline."""
@@ -250,21 +241,13 @@ class TestDetailsInclusionInvariants:
         result = _call_dispatch(module_name)
         assert result["success"] is False
         assert result["data"]["error_code"] == "VALIDATION_ERROR"
-        assert "details" in result["data"], (
-            f"{module_name} should include 'details' in ActionRouterError envelope"
-        )
-        assert "allowed_actions" in result["data"]["details"], (
-            f"{module_name} details should contain 'allowed_actions'"
-        )
+        assert "details" in result["data"], f"{module_name} should include 'details' in ActionRouterError envelope"
+        assert "allowed_actions" in result["data"]["details"], f"{module_name} details should contain 'allowed_actions'"
 
     @pytest.mark.parametrize(
         "module_name",
-        sorted(
-            {m for m, _, _, _, _ in ROUTER_BASELINES} - _ROUTERS_WITH_DETAILS
-        ),
-        ids=sorted(
-            {m for m, _, _, _, _ in ROUTER_BASELINES} - _ROUTERS_WITH_DETAILS
-        ),
+        sorted({m for m, _, _, _, _ in ROUTER_BASELINES} - _ROUTERS_WITH_DETAILS),
+        ids=sorted({m for m, _, _, _, _ in ROUTER_BASELINES} - _ROUTERS_WITH_DETAILS),
     )
     def test_router_excludes_details_in_router_error(self, module_name):
         """Routers not flagged for details should not include them in unsupported-action errors."""
@@ -274,8 +257,7 @@ class TestDetailsInclusionInvariants:
         # details should be None / absent for routers without the flag
         details = result["data"].get("details")
         assert details is None, (
-            f"{module_name} should NOT include 'details' in ActionRouterError envelope, "
-            f"got: {details}"
+            f"{module_name} should NOT include 'details' in ActionRouterError envelope, got: {details}"
         )
 
     def test_details_router_count(self):
@@ -294,6 +276,7 @@ class TestDetailsInclusionInvariants:
 # 4. Dispatch tool_name invariants
 # ---------------------------------------------------------------------------
 
+
 class TestDispatchToolNameInvariants:
     """Assert each router passes the correct tool_name to dispatch_with_standard_errors."""
 
@@ -302,19 +285,14 @@ class TestDispatchToolNameInvariants:
         [(m, tn) for m, tn, _, _, _ in ROUTER_BASELINES],
         ids=[m for m, _, _, _, _ in ROUTER_BASELINES],
     )
-    def test_dispatch_tool_name_in_error_message(
-        self, module_name, expected_tool_name
-    ):
+    def test_dispatch_tool_name_in_error_message(self, module_name, expected_tool_name):
         """Unsupported action error message should reference the correct tool_name."""
         result = _call_dispatch(module_name)
         assert result["success"] is False
         assert expected_tool_name in result["error"], (
-            f"{module_name} dispatch error should mention tool_name "
-            f"'{expected_tool_name}', got: {result['error']}"
+            f"{module_name} dispatch error should mention tool_name '{expected_tool_name}', got: {result['error']}"
         )
 
     def test_all_14_routers_covered(self):
         """Baseline table covers all 14 routers."""
-        assert len(ROUTER_BASELINES) == 14, (
-            f"Expected 14 router baselines, got {len(ROUTER_BASELINES)}"
-        )
+        assert len(ROUTER_BASELINES) == 14, f"Expected 14 router baselines, got {len(ROUTER_BASELINES)}"

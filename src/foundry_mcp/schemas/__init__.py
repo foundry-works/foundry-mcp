@@ -1,15 +1,15 @@
-"""Bundled JSON schemas for SDD specifications."""
+"""Bundled JSON schemas for Foundry specifications."""
 
 import json
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 
-def load_schema(name: str = "sdd-spec-schema.json") -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+def load_schema(name: str = "foundry-spec-schema.json") -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """Load a bundled JSON schema by name.
 
     Args:
-        name: Schema filename (default: sdd-spec-schema.json).
+        name: Schema filename (default: foundry-spec-schema.json).
 
     Returns:
         Tuple of (schema_dict, error_message). On success, error is None.
@@ -30,9 +30,9 @@ def load_schema(name: str = "sdd-spec-schema.json") -> Tuple[Optional[Dict[str, 
 
 
 def get_spec_schema() -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-    """Load the SDD spec JSON schema.
+    """Load the Foundry spec JSON schema.
 
     Returns:
         Tuple of (schema_dict, error_message).
     """
-    return load_schema("sdd-spec-schema.json")
+    return load_schema("foundry-spec-schema.json")

@@ -9,24 +9,26 @@ from typing import Any, Dict, Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import audit_log, get_metrics, mcp_tool
-from foundry_mcp.core.responses import (
-    ErrorCode,
-    ErrorType,
+from foundry_mcp.core.responses.builders import (
     error_response,
-    sanitize_error_message,
     success_response,
 )
+from foundry_mcp.core.responses.sanitization import sanitize_error_message
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 from foundry_mcp.core.spec import find_specs_directory, load_spec, save_spec
-from foundry_mcp.core.validation import add_verification, execute_verification
+from foundry_mcp.core.validation.verification import add_verification, execute_verification
 from foundry_mcp.tools.unified.common import (
     build_request_id,
     dispatch_with_standard_errors,
     make_metric_name,
-    make_validation_error_fn,
 )
+from foundry_mcp.tools.unified.param_schema import Bool, Str, validate_payload
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
@@ -49,80 +51,50 @@ def _request_id() -> str:
     return build_request_id("verification")
 
 
-_validation_error = make_validation_error_fn("verification")
+# ---------------------------------------------------------------------------
+# Declarative parameter schemas
+# ---------------------------------------------------------------------------
+
+_ADD_SCHEMA = {
+    "spec_id": Str(required=True, remediation='Use spec(action="list") to discover valid specification IDs'),
+    "verify_id": Str(required=True, remediation="Provide the verification node identifier (e.g., verify-1-1)"),
+    "result": Str(
+        required=True,
+        choices=frozenset({"PASSED", "FAILED", "PARTIAL"}),
+        remediation="Use one of: PASSED, FAILED, PARTIAL",
+    ),
+    "path": Str(),
+    "dry_run": Bool(default=False),
+}
+
+_EXECUTE_SCHEMA = {
+    "spec_id": Str(required=True, remediation='Use spec(action="list") to discover valid specification IDs'),
+    "verify_id": Str(required=True, remediation="Provide the verification identifier"),
+    "command": Str(
+        remediation="Provide a verification command to run (used as fallback if verify node has no embedded command)"
+    ),
+    "record": Bool(default=False),
+    "path": Str(),
+}
 
 
-def _handle_add(
-    *,
-    config: ServerConfig,  # noqa: ARG001 - reserved for future hooks
-    spec_id: Optional[str] = None,
-    verify_id: Optional[str] = None,
-    result: Optional[str] = None,
-    command: Optional[str] = None,
-    output: Optional[str] = None,
-    issues: Optional[str] = None,
-    notes: Optional[str] = None,
-    dry_run: bool = False,
-    path: Optional[str] = None,
-    **_: Any,
-) -> dict:
+def _handle_add(*, config: ServerConfig, **payload: Any) -> dict:  # noqa: ARG001
     request_id = _request_id()
     action = "add"
 
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            action=action,
-            field="spec_id",
-            message="Provide a non-empty spec_id",
-            request_id=request_id,
-            remediation='Use spec(action="list") to discover valid specification IDs',
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    spec_id = spec_id.strip()
+    err = validate_payload(payload, _ADD_SCHEMA, tool_name="verification", action=action, request_id=request_id)
+    if err:
+        return err
 
-    if not isinstance(verify_id, str) or not verify_id.strip():
-        return _validation_error(
-            action=action,
-            field="verify_id",
-            message="Provide the verification node identifier (e.g., verify-1-1)",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    verify_id = verify_id.strip()
-
-    if not isinstance(result, str) or not result.strip():
-        return _validation_error(
-            action=action,
-            field="result",
-            message="Provide the verification result (PASSED, FAILED, PARTIAL)",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    result_upper = result.strip().upper()
-    if result_upper not in {"PASSED", "FAILED", "PARTIAL"}:
-        return _validation_error(
-            action=action,
-            field="result",
-            message="Result must be one of PASSED, FAILED, or PARTIAL",
-            request_id=request_id,
-            remediation="Use one of: PASSED, FAILED, PARTIAL",
-        )
-
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            action=action,
-            field="path",
-            message="Workspace path must be a string",
-            request_id=request_id,
-        )
-    if not isinstance(dry_run, bool):
-        return _validation_error(
-            action=action,
-            field="dry_run",
-            message="Expected a boolean value",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
+    spec_id = payload["spec_id"]
+    verify_id = payload["verify_id"]
+    result_upper = payload["result"].upper()
+    command = payload.get("command")
+    output = payload.get("output")
+    issues = payload.get("issues")
+    notes = payload.get("notes")
+    dry_run = payload.get("dry_run", False)
+    path = payload.get("path")
 
     metric_key = _metric_name(action)
     audit_log(
@@ -266,54 +238,19 @@ def _handle_add(
     )
 
 
-def _handle_execute(
-    *,
-    config: ServerConfig,  # noqa: ARG001 - reserved for future hooks
-    spec_id: Optional[str] = None,
-    verify_id: Optional[str] = None,
-    record: bool = False,
-    path: Optional[str] = None,
-    **_: Any,
-) -> dict:
+def _handle_execute(*, config: ServerConfig, **payload: Any) -> dict:  # noqa: ARG001
     request_id = _request_id()
     action = "execute"
 
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            action=action,
-            field="spec_id",
-            message="Provide a non-empty spec_id",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    spec_id = spec_id.strip()
+    err = validate_payload(payload, _EXECUTE_SCHEMA, tool_name="verification", action=action, request_id=request_id)
+    if err:
+        return err
 
-    if not isinstance(verify_id, str) or not verify_id.strip():
-        return _validation_error(
-            action=action,
-            field="verify_id",
-            message="Provide the verification identifier",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    verify_id = verify_id.strip()
-
-    if not isinstance(record, bool):
-        return _validation_error(
-            action=action,
-            field="record",
-            message="Expected a boolean value",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            action=action,
-            field="path",
-            message="Workspace path must be a string",
-            request_id=request_id,
-        )
+    spec_id = payload["spec_id"]
+    verify_id = payload["verify_id"]
+    command_override = payload.get("command")
+    record = payload.get("record", False)
+    path = payload.get("path")
 
     metric_key = _metric_name(action)
     audit_log(
@@ -358,6 +295,7 @@ def _handle_execute(
             verify_id=verify_id,
             record=record,
             cwd=path,
+            command_override=command_override,
         )
     except Exception as exc:
         logger.exception("Unexpected error executing verification")
@@ -375,9 +313,7 @@ def _handle_execute(
     if record and result_data.get("recorded"):
         if not save_spec(spec_id, spec_data, specs_dir):
             result_data["recorded"] = False
-            result_data["error"] = (
-                result_data.get("error") or ""
-            ) + "; Failed to save spec"
+            result_data["error"] = (result_data.get("error") or "") + "; Failed to save spec"
 
     if result_data.get("error") and not result_data.get("success"):
         error_msg = result_data["error"]
@@ -445,12 +381,8 @@ _VERIFICATION_ROUTER = ActionRouter(
 )
 
 
-def _dispatch_verification_action(
-    *, action: str, payload: Dict[str, Any], config: ServerConfig
-) -> dict:
-    return dispatch_with_standard_errors(
-        _VERIFICATION_ROUTER, "verification", action, config=config, **payload
-    )
+def _dispatch_verification_action(*, action: str, payload: Dict[str, Any], config: ServerConfig) -> dict:
+    return dispatch_with_standard_errors(_VERIFICATION_ROUTER, "verification", action, config=config, **payload)
 
 
 def register_unified_verification_tool(mcp: FastMCP, config: ServerConfig) -> None:
@@ -483,9 +415,7 @@ def register_unified_verification_tool(mcp: FastMCP, config: ServerConfig) -> No
             "record": record,
             "path": path,
         }
-        return _dispatch_verification_action(
-            action=action, payload=payload, config=config
-        )
+        return _dispatch_verification_action(action=action, payload=payload, config=config)
 
     logger.debug("Registered unified verification tool")
 

@@ -33,7 +33,6 @@ from foundry_mcp.core.providers.base import (
 )
 from foundry_mcp.core.providers.registry import register_provider
 
-
 _PROVIDER_ID = "test-provider"
 _ENABLE_ENV = "FOUNDRY_TEST_PROVIDER_ENABLED"
 _FIXTURES_DIR_ENV = "FOUNDRY_TEST_PROVIDER_FIXTURES_DIR"

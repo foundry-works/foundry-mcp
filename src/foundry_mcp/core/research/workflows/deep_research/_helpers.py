@@ -23,28 +23,28 @@ def extract_json(content: str) -> Optional[str]:
         Extracted JSON string or None if not found
     """
     # First, try to find JSON in code blocks
-    code_block_pattern = r'```(?:json)?\s*([\s\S]*?)```'
+    code_block_pattern = r"```(?:json)?\s*([\s\S]*?)```"
     matches = re.findall(code_block_pattern, content)
     for match in matches:
         match = match.strip()
-        if match.startswith('{'):
+        if match.startswith("{"):
             return match
 
     # Try to find raw JSON object
     # Look for the outermost { ... } pair
-    brace_start = content.find('{')
+    brace_start = content.find("{")
     if brace_start == -1:
         return None
 
     # Find matching closing brace
     depth = 0
     for i, char in enumerate(content[brace_start:], brace_start):
-        if char == '{':
+        if char == "{":
             depth += 1
-        elif char == '}':
+        elif char == "}":
             depth -= 1
             if depth == 0:
-                return content[brace_start:i + 1]
+                return content[brace_start : i + 1]
 
     return None
 
@@ -92,6 +92,6 @@ def truncate_at_boundary(content: str, target_length: int) -> str:
         # Try sentence boundary
         sentence_break = truncated.rfind(". ", search_start)
         if sentence_break > search_start // 2:
-            truncated = truncated[:sentence_break + 1]
+            truncated = truncated[: sentence_break + 1]
 
     return truncated.strip() + "\n\n[... content truncated for context limits]"

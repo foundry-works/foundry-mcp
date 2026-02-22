@@ -7,13 +7,13 @@ shared constants in ``_helpers.py``.
 
 import re
 from pathlib import Path
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Any, Dict, List, Optional, Tuple
 
 from foundry_mcp.core.spec import (
-    load_spec,
-    save_spec,
     find_spec_file,
     find_specs_directory,
+    load_spec,
+    save_spec,
 )
 
 # Valid statuses for batch filtering
@@ -125,7 +125,9 @@ def batch_update_tasks(
     if category is not None:
         metadata_updates["category"] = category.strip() if category else None
     if labels is not None:
-        if not isinstance(labels, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in labels.items()):
+        if not isinstance(labels, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in labels.items()
+        ):
             return None, "labels must be a dict with string keys and values"
         metadata_updates["labels"] = labels
     if owners is not None:
@@ -160,7 +162,9 @@ def batch_update_tasks(
     if parent_filter and parent_filter not in hierarchy:
         return None, f"Parent '{parent_filter}' not found in specification"
 
-    matched_ids = _match_tasks_for_batch(hierarchy, status_filter=status_filter, parent_filter=parent_filter, pattern=pattern)
+    matched_ids = _match_tasks_for_batch(
+        hierarchy, status_filter=status_filter, parent_filter=parent_filter, pattern=pattern
+    )
     warnings: List[str] = []
     skipped_ids = []
     if len(matched_ids) > max_matches:
@@ -169,9 +173,17 @@ def batch_update_tasks(
         matched_ids = matched_ids[:max_matches]
 
     if not matched_ids:
-        return {"spec_id": spec_id, "matched_count": 0, "updated_count": 0, "skipped_count": len(skipped_ids),
-                "nodes": [], "filters": {"status_filter": status_filter, "parent_filter": parent_filter, "pattern": pattern},
-                "metadata_applied": metadata_updates, "dry_run": dry_run, "message": "No tasks matched"}, None
+        return {
+            "spec_id": spec_id,
+            "matched_count": 0,
+            "updated_count": 0,
+            "skipped_count": len(skipped_ids),
+            "nodes": [],
+            "filters": {"status_filter": status_filter, "parent_filter": parent_filter, "pattern": pattern},
+            "metadata_applied": metadata_updates,
+            "dry_run": dry_run,
+            "message": "No tasks matched",
+        }, None
 
     # Capture originals and build result
     original_metadata: Dict[str, Dict[str, Any]] = {}
@@ -180,11 +192,29 @@ def batch_update_tasks(
         node = hierarchy.get(node_id, {})
         existing_meta = node.get("metadata", {}) or {}
         original_metadata[node_id] = {k: existing_meta.get(k) for k in metadata_updates}
-        diff = {k: {"old": original_metadata[node_id].get(k), "new": v} for k, v in metadata_updates.items() if original_metadata[node_id].get(k) != v}
-        updated_nodes.append({"node_id": node_id, "title": node.get("title", ""), "type": node.get("type", ""),
-                              "status": node.get("status", ""), "fields_updated": list(metadata_updates.keys()), "diff": diff} if diff else
-                             {"node_id": node_id, "title": node.get("title", ""), "type": node.get("type", ""),
-                              "status": node.get("status", ""), "fields_updated": list(metadata_updates.keys())})
+        diff = {
+            k: {"old": original_metadata[node_id].get(k), "new": v}
+            for k, v in metadata_updates.items()
+            if original_metadata[node_id].get(k) != v
+        }
+        updated_nodes.append(
+            {
+                "node_id": node_id,
+                "title": node.get("title", ""),
+                "type": node.get("type", ""),
+                "status": node.get("status", ""),
+                "fields_updated": list(metadata_updates.keys()),
+                "diff": diff,
+            }
+            if diff
+            else {
+                "node_id": node_id,
+                "title": node.get("title", ""),
+                "type": node.get("type", ""),
+                "status": node.get("status", ""),
+                "fields_updated": list(metadata_updates.keys()),
+            }
+        )
         if not dry_run:
             if "metadata" not in node:
                 node["metadata"] = {}
@@ -205,9 +235,16 @@ def batch_update_tasks(
     if len(matched_ids) > 50:
         warnings.append(f"Updated {len(matched_ids)} tasks")
 
-    result = {"spec_id": spec_id, "matched_count": len(matched_ids), "updated_count": len(matched_ids) if not dry_run else 0,
-              "skipped_count": len(skipped_ids), "nodes": updated_nodes, "filters": {"status_filter": status_filter, "parent_filter": parent_filter, "pattern": pattern},
-              "metadata_applied": metadata_updates, "dry_run": dry_run}
+    result = {
+        "spec_id": spec_id,
+        "matched_count": len(matched_ids),
+        "updated_count": len(matched_ids) if not dry_run else 0,
+        "skipped_count": len(skipped_ids),
+        "nodes": updated_nodes,
+        "filters": {"status_filter": status_filter, "parent_filter": parent_filter, "pattern": pattern},
+        "metadata_applied": metadata_updates,
+        "dry_run": dry_run,
+    }
     if warnings:
         result["warnings"] = warnings
     if skipped_ids:

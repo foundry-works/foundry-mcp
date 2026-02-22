@@ -67,12 +67,8 @@ class DisclosureConfig:
     """
 
     summary_fields: List[str] = field(default_factory=lambda: ["id", "name", "status"])
-    standard_fields: List[str] = field(
-        default_factory=lambda: ["description", "created_at", "updated_at"]
-    )
-    full_fields: List[str] = field(
-        default_factory=lambda: ["metadata", "details", "history"]
-    )
+    standard_fields: List[str] = field(default_factory=lambda: ["description", "created_at", "updated_at"])
+    full_fields: List[str] = field(default_factory=lambda: ["metadata", "details", "history"])
     max_list_items: Dict[DetailLevel, int] = field(
         default_factory=lambda: {
             DetailLevel.SUMMARY: 5,
@@ -412,20 +408,24 @@ def batch_response(
     # Convert results to BatchItemResult
     for i, result in enumerate(results):
         item_id = result.get("id", i) if isinstance(result, dict) else i
-        batch.results.append(BatchItemResult(
-            item_id=item_id,
-            success=True,
-            result=result,
-        ))
+        batch.results.append(
+            BatchItemResult(
+                item_id=item_id,
+                success=True,
+                result=result,
+            )
+        )
 
     # Convert errors to BatchItemResult
     for err in error_list:
-        batch.errors.append(BatchItemResult(
-            item_id=err.get("item_id", "unknown"),
-            success=False,
-            error=err.get("error", "Unknown error"),
-            error_code=err.get("error_code"),
-        ))
+        batch.errors.append(
+            BatchItemResult(
+                item_id=err.get("item_id", "unknown"),
+                success=False,
+                error=err.get("error", "Unknown error"),
+                error_code=err.get("error_code"),
+            )
+        )
 
     return batch.to_response()
 
@@ -485,8 +485,7 @@ def paginated_batch_response(
         remaining = total - (offset + len(results))
         response["warnings"] = response.get("warnings", [])
         response["warnings"].append(
-            f"Showing {len(results)} of {total} items. "
-            f"{remaining} more available with offset={offset + len(results)}"
+            f"Showing {len(results)} of {total} items. {remaining} more available with offset={offset + len(results)}"
         )
 
     return response

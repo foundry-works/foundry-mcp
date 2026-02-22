@@ -25,7 +25,7 @@ the workflow is organized, and how to use the CLI and MCP tools.
 
 | Doc | Description |
 |-----|-------------|
-| [SDD Philosophy](concepts/sdd-philosophy.md) | Why spec-driven development matters |
+| [Foundry Philosophy](concepts/foundry-philosophy.md) | Why spec-driven development matters |
 | [Spec Schema](concepts/spec-schema.md) | JSON structure of specification files |
 | [Response Envelope](concepts/response-envelope.md) | Standard response format for all tools |
 | [Deep Research Workflow](concepts/deep_research_workflow.md) | Multi-phase research workflow |
@@ -36,6 +36,7 @@ the workflow is organized, and how to use the CLI and MCP tools.
 |-----|-------------|
 | [Intake Guide](guides/intake.md) | Fast-capture notes system |
 | [LLM Configuration](guides/llm-configuration.md) | Provider setup and troubleshooting |
+| [Autonomy Supervisor Runbook](guides/autonomy-supervisor-runbook.md) | Preflight, loop, and escalation operations for autonomous sessions |
 
 ## Examples
 
@@ -95,14 +96,15 @@ docs/
 ├── 07-troubleshooting.md       # Troubleshooting
 │
 ├── concepts/
-│   ├── sdd-philosophy.md       # SDD philosophy
+│   ├── foundry-philosophy.md   # Foundry philosophy
 │   ├── spec-schema.md          # Spec JSON structure
 │   ├── response-envelope.md    # Response format
 │   └── deep_research_workflow.md
 │
 ├── guides/
 │   ├── intake.md               # Intake/notes guide
-│   └── llm-configuration.md    # LLM setup
+│   ├── llm-configuration.md    # LLM setup
+│   └── autonomy-supervisor-runbook.md  # Autonomous loop operations
 │
 ├── examples/
 │   ├── first-run.md            # First run walkthrough

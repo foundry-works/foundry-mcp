@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from foundry_mcp.core.research.memory import ResearchMemory
-    from foundry_mcp.core.research.models import DeepResearchState
+    from foundry_mcp.core.research.models.deep_research import DeepResearchState
 
 # Track active research sessions for crash recovery
 # Protected by _active_sessions_lock to prevent race conditions during iteration
@@ -71,13 +71,13 @@ def _crash_handler(exc_type: type, exc_value: BaseException, exc_tb: Any) -> Non
 
     # Always write to stderr for visibility
     print(
-        f"\n{'='*60}\n"
+        f"\n{'=' * 60}\n"
         f"DEEP RESEARCH CRASH HANDLER\n"
-        f"{'='*60}\n"
+        f"{'=' * 60}\n"
         f"Exception: {exc_type.__name__}: {exc_value}\n"
         f"Active sessions: {session_keys}\n"
         f"Traceback:\n{tb_str}"
-        f"{'='*60}\n",
+        f"{'=' * 60}\n",
         file=sys.stderr,
         flush=True,
     )
@@ -88,13 +88,7 @@ def _crash_handler(exc_type: type, exc_value: BaseException, exc_tb: Any) -> Non
             state.metadata["crash"] = True
             state.metadata["crash_error"] = str(exc_value)
             # Write crash marker file
-            crash_path = (
-                Path.home()
-                / ".foundry-mcp"
-                / "research"
-                / "deep_research"
-                / f"{research_id}.crash"
-            )
+            crash_path = Path.home() / ".foundry-mcp" / "research" / "deep_research" / f"{research_id}.crash"
             crash_path.parent.mkdir(parents=True, exist_ok=True)
             crash_path.write_text(tb_str)
         except Exception:

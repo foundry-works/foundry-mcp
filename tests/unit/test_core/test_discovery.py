@@ -2,18 +2,23 @@
 
 import pytest
 
-from foundry_mcp.core.discovery import (
-    SCHEMA_VERSION,
-    ParameterType,
-    ParameterMetadata,
-    ToolMetadata,
-    ToolRegistry,
+from foundry_mcp.core.discovery.capabilities import (
     ServerCapabilities,
     get_capabilities,
     negotiate_capabilities,
+    set_capabilities,
+)
+from foundry_mcp.core.discovery.deprecation import (
     deprecated_tool,
-    is_deprecated,
     get_deprecation_info,
+    is_deprecated,
+)
+from foundry_mcp.core.discovery.registry import ToolRegistry
+from foundry_mcp.core.discovery.types import (
+    SCHEMA_VERSION,
+    ParameterMetadata,
+    ParameterType,
+    ToolMetadata,
 )
 
 
@@ -336,7 +341,9 @@ class TestServerCapabilities:
         assert caps.max_batch_size == 100
         assert caps.rate_limit_headers is True
         assert caps.supported_formats == ["json"]
-        assert caps.feature_flags_enabled is False
+        assert caps.autonomy_sessions is True
+        assert caps.autonomy_fidelity_gates is True
+        assert caps.autonomy_gate_invariants is True
 
     def test_to_dict(self):
         """Should convert to dict."""
@@ -350,7 +357,9 @@ class TestServerCapabilities:
         assert d["max_batch_size"] == 100
         assert d["rate_limit_headers"] is True
         assert d["formats"] == ["json"]
-        assert d["feature_flags"] is False
+        assert d["autonomy_sessions"] is True
+        assert d["autonomy_fidelity_gates"] is True
+        assert d["autonomy_gate_invariants"] is True
 
 
 class TestGetCapabilities:
@@ -365,6 +374,18 @@ class TestGetCapabilities:
         assert "capabilities" in caps
         assert "server_version" in caps
         assert "api_version" in caps
+
+    def test_autonomy_always_enabled(self):
+        """Autonomy capabilities should always be enabled."""
+        set_capabilities(ServerCapabilities())
+        caps = get_capabilities()
+
+        assert caps["capabilities"]["autonomy_sessions"] is True
+        assert caps["capabilities"]["autonomy_fidelity_gates"] is True
+        assert caps["capabilities"]["autonomy_gate_invariants"] is True
+        assert caps["runtime"]["autonomy"]["supported_by_binary"]["autonomy_sessions"] is True
+        assert caps["runtime"]["autonomy"]["enabled_now"]["autonomy_sessions"] is True
+        assert caps["runtime"]["autonomy"]["enabled_now"]["autonomy_fidelity_gates"] is True
 
 
 class TestNegotiateCapabilities:
@@ -406,6 +427,7 @@ class TestDeprecatedToolDecorator:
 
     def test_decorator_updates_docstring(self):
         """Should update function docstring."""
+
         @deprecated_tool(replacement="new_func", removal_version="2.0.0")
         def old_func():
             """Original docstring."""
@@ -417,6 +439,7 @@ class TestDeprecatedToolDecorator:
 
     def test_decorator_adds_warning_to_response(self):
         """Should add deprecation warning to response meta."""
+
         @deprecated_tool(replacement="new_func", removal_version="2.0.0")
         def old_func():
             return {"data": "test", "meta": {"version": "response-v2"}}
@@ -427,6 +450,7 @@ class TestDeprecatedToolDecorator:
 
     def test_decorator_creates_meta_if_missing(self):
         """Should create meta if not present."""
+
         @deprecated_tool(replacement="new_func", removal_version="2.0.0")
         def old_func():
             return {"data": "test"}
@@ -437,6 +461,7 @@ class TestDeprecatedToolDecorator:
 
     def test_is_deprecated_helper(self):
         """Should detect deprecated functions."""
+
         @deprecated_tool(replacement="new", removal_version="2.0.0")
         def deprecated_func():
             return {}
@@ -449,6 +474,7 @@ class TestDeprecatedToolDecorator:
 
     def test_get_deprecation_info(self):
         """Should return deprecation info."""
+
         @deprecated_tool(replacement="replacement_func", removal_version="3.0.0")
         def old_func():
             return {}
@@ -460,6 +486,7 @@ class TestDeprecatedToolDecorator:
 
     def test_get_deprecation_info_not_deprecated(self):
         """Should return None for non-deprecated functions."""
+
         def normal_func():
             return {}
 

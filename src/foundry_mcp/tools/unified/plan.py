@@ -11,44 +11,39 @@ from typing import Any, Dict, Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.ai_consultation import (
+    ConsensusResult,
     ConsultationOrchestrator,
     ConsultationRequest,
     ConsultationResult,
     ConsultationWorkflow,
-    ConsensusResult,
 )
-from foundry_mcp.core.llm_config import load_consultation_config
+from foundry_mcp.core.llm_config.consultation import load_consultation_config
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import get_metrics, mcp_tool
 from foundry_mcp.core.providers import available_providers
-from foundry_mcp.core.responses import (
-    ErrorCode,
-    ErrorType,
-    ai_no_provider_error,
+from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
-from foundry_mcp.core.llm_config import load_consultation_config
+from foundry_mcp.core.responses.errors_ai import ai_no_provider_error
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 from foundry_mcp.core.security import is_prompt_injection
 from foundry_mcp.core.spec import find_specs_directory
+from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
 )
-from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
 
 logger = logging.getLogger(__name__)
 _metrics = get_metrics()
 
-REVIEW_TYPES = ["quick", "full", "security", "feasibility"]
-REVIEW_TYPE_TO_TEMPLATE = {
-    "full": "MARKDOWN_PLAN_REVIEW_FULL_V1",
-    "quick": "MARKDOWN_PLAN_REVIEW_QUICK_V1",
-    "security": "MARKDOWN_PLAN_REVIEW_SECURITY_V1",
-    "feasibility": "MARKDOWN_PLAN_REVIEW_FEASIBILITY_V1",
-}
+_PLAN_REVIEW_TEMPLATE_ID = "MARKDOWN_PLAN_REVIEW_FULL_V1"
 
 
 def _extract_plan_name(plan_path: str) -> str:
@@ -132,78 +127,68 @@ def _get_llm_status() -> dict:
     return {"available": bool(providers), "providers": providers}
 
 
-PLAN_TEMPLATES = {
-    "simple": """# {name}
+PLAN_TEMPLATE = """# {name}
 
-## Objective
+## Mission
 
-[Describe the primary goal of this plan]
+[Single sentence describing the primary goal — becomes metadata.mission]
 
-## Scope
+## Objectives
 
-[What is included/excluded from this plan]
-
-## Tasks
-
-1. [Task 1]
-2. [Task 2]
-3. [Task 3]
+- [Objective 1 — each becomes an array item in metadata.objectives]
+- [Objective 2]
 
 ## Success Criteria
 
-- [ ] [Criterion 1]
-- [ ] [Criterion 2]
-""",
-    "detailed": """# {name}
+- [ ] [Measurable criterion 1 — becomes metadata.success_criteria]
+- [ ] [Measurable criterion 2]
 
-## Objective
+## Assumptions
 
-[Describe the primary goal of this plan]
+- [What we believe to be true — becomes metadata.assumptions]
 
-## Scope
+## Constraints
 
-### In Scope
-- [Item 1]
-- [Item 2]
+- [Hard limits we must work within — becomes metadata.constraints]
 
-### Out of Scope
-- [Item 1]
+## Risks
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|------------|--------|------------|
+| [Risk 1] | [low/medium/high] | [low/medium/high] | [Mitigation strategy] |
+
+## Open Questions
+
+- [Unresolved question — becomes metadata.open_questions]
+
+## Dependencies
+
+- [External/internal dependencies]
 
 ## Phases
 
 ### Phase 1: [Phase Name]
 
-**Purpose**: [Why this phase exists]
+**Goal:** [What this phase accomplishes — becomes phase purpose]
 
-**Tasks**:
-1. [Task 1]
-2. [Task 2]
+**Description:** [Detailed description — becomes phase description]
 
-**Verification**: [How to verify phase completion]
+#### Tasks
 
-### Phase 2: [Phase Name]
+- **[Task title]** `[task_category]` `[complexity]`
+  - Description: [What to do]
+  - File: [repo-relative path, or "N/A" for investigation/research/decision]
+  - Acceptance criteria:
+    - [How to verify this task is done]
+    - [Another criterion]
+  - Depends on: [other task titles, or "none"]
 
-**Purpose**: [Why this phase exists]
+#### Verification
 
-**Tasks**:
-1. [Task 1]
-2. [Task 2]
-
-**Verification**: [How to verify phase completion]
-
-## Risks and Mitigations
-
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| [Risk 1] | [High/Medium/Low] | [Mitigation strategy] |
-
-## Success Criteria
-
-- [ ] [Criterion 1]
-- [ ] [Criterion 2]
-- [ ] [Criterion 3]
-""",
-}
+- **Run tests:** [test command]
+- **Fidelity review:** Compare implementation to spec
+- **Manual checks:** [any manual steps, or "none"]
+"""
 
 
 def _slugify(name: str) -> str:
@@ -217,7 +202,6 @@ def _slugify(name: str) -> str:
 def perform_plan_review(
     *,
     plan_path: str,
-    review_type: str = "full",
     ai_provider: Optional[str] = None,
     ai_timeout: float = 360.0,
     consultation_cache: bool = True,
@@ -226,17 +210,6 @@ def perform_plan_review(
     """Execute the plan review workflow and return serialized response."""
 
     start_time = time.perf_counter()
-
-    if review_type not in REVIEW_TYPES:
-        return asdict(
-            error_response(
-                f"Invalid review_type: {review_type}. Must be one of: {', '.join(REVIEW_TYPES)}",
-                error_code=ErrorCode.VALIDATION_ERROR,
-                error_type=ErrorType.VALIDATION,
-                remediation=f"Use one of: {', '.join(REVIEW_TYPES)}",
-                details={"review_type": review_type, "allowed": REVIEW_TYPES},
-            )
-        )
 
     for field_name, field_value in (
         ("plan_path", plan_path),
@@ -317,14 +290,11 @@ def perform_plan_review(
                 data={
                     "plan_path": str(plan_file),
                     "plan_name": plan_name,
-                    "review_type": review_type,
                     "dry_run": True,
                     "llm_status": llm_status,
                     "message": "Dry run - review skipped",
                 },
-                telemetry={
-                    "duration_ms": round((time.perf_counter() - start_time) * 1000, 2)
-                },
+                telemetry={"duration_ms": round((time.perf_counter() - start_time) * 1000, 2)},
             )
         )
 
@@ -336,7 +306,7 @@ def perform_plan_review(
             )
         )
 
-    template_id = REVIEW_TYPE_TO_TEMPLATE[review_type]
+    template_id = _PLAN_REVIEW_TEMPLATE_ID
 
     try:
         # Load consultation config from workspace to get provider priority list
@@ -388,21 +358,15 @@ def perform_plan_review(
 
             # Extract failed provider details for visibility
             failed_providers = [
-                {"provider_id": r.provider_id, "error": r.error}
-                for r in result.responses
-                if not r.success
+                {"provider_id": r.provider_id, "error": r.error} for r in result.responses if not r.success
             ]
             # Filter for truly successful responses (success=True AND non-empty content)
-            successful_responses = [
-                r for r in result.responses if r.success and r.content.strip()
-            ]
+            successful_responses = [r for r in result.responses if r.success and r.content.strip()]
             successful_providers = [r.provider_id for r in successful_responses]
 
             consensus_info = {
                 "providers_consulted": providers_consulted,
-                "successful": result.agreement.successful_providers
-                if result.agreement
-                else 0,
+                "successful": result.agreement.successful_providers if result.agreement else 0,
                 "failed": result.agreement.failed_providers if result.agreement else 0,
                 "successful_providers": successful_providers,
                 "failed_providers": failed_providers,
@@ -428,18 +392,10 @@ def perform_plan_review(
                 # Save each provider's review to a separate file
                 model_reviews_text = ""
                 for response in successful_responses:
-                    provider_file = (
-                        plan_reviews_dir
-                        / f"{plan_name}-{review_type}-{response.provider_id}.md"
-                    )
+                    provider_file = plan_reviews_dir / f"{plan_name}-{response.provider_id}.md"
                     provider_file.write_text(response.content, encoding="utf-8")
-                    provider_reviews.append(
-                        {"provider_id": response.provider_id, "path": str(provider_file)}
-                    )
-                    model_reviews_text += (
-                        f"\n---\n## Review by {response.provider_id}\n\n"
-                        f"{response.content}\n"
-                    )
+                    provider_reviews.append({"provider_id": response.provider_id, "path": str(provider_file)})
+                    model_reviews_text += f"\n---\n## Review by {response.provider_id}\n\n{response.content}\n"
 
                 # Run synthesis call using first provider
                 logger.info(
@@ -460,9 +416,7 @@ def perform_plan_review(
                     timeout=ai_timeout,
                 )
                 try:
-                    synthesis_result = orchestrator.consult(
-                        synthesis_request, use_cache=consultation_cache
-                    )
+                    synthesis_result = orchestrator.consult(synthesis_request, use_cache=consultation_cache)
                 except Exception as e:
                     logger.error("Synthesis call crashed: %s", e, exc_info=True)
                     synthesis_result = None
@@ -477,7 +431,9 @@ def perform_plan_review(
                         synthesis_success = bool(synthesis_content and synthesis_content.strip())
                     elif isinstance(synthesis_result, ConsensusResult) and synthesis_result.success:
                         synthesis_content = synthesis_result.primary_content
-                        consensus_info["synthesis_provider"] = synthesis_result.responses[0].provider_id if synthesis_result.responses else "unknown"
+                        consensus_info["synthesis_provider"] = (
+                            synthesis_result.responses[0].provider_id if synthesis_result.responses else "unknown"
+                        )
                         synthesis_success = bool(synthesis_content and synthesis_content.strip())
 
                 if synthesis_success and synthesis_content:
@@ -541,7 +497,7 @@ def perform_plan_review(
     plan_reviews_dir = specs_dir / ".plan-reviews"
     try:
         plan_reviews_dir.mkdir(parents=True, exist_ok=True)
-        review_file = plan_reviews_dir / f"{plan_name}-{review_type}.md"
+        review_file = plan_reviews_dir / f"{plan_name}-review.md"
         review_file.write_text(review_content, encoding="utf-8")
     except Exception as exc:  # pragma: no cover - filesystem errors
         _metrics.counter(
@@ -560,13 +516,12 @@ def perform_plan_review(
     duration_ms = (time.perf_counter() - start_time) * 1000
     _metrics.counter(
         "plan_review.completed",
-        labels={"tool": "plan-review", "review_type": review_type},
+        labels={"tool": "plan-review"},
     )
 
     response_data = {
         "plan_path": str(plan_file),
         "plan_name": plan_name,
-        "review_type": review_type,
         "review_path": str(review_file),
         "summary": summary,
         "inline_summary": inline_summary,
@@ -586,24 +541,10 @@ def perform_plan_review(
     )
 
 
-def perform_plan_create(name: str, template: str = "detailed") -> dict:
-    """Create a markdown implementation plan using the requested template."""
+def perform_plan_create(name: str) -> dict:
+    """Create a markdown implementation plan."""
 
     start_time = time.perf_counter()
-
-    if template not in PLAN_TEMPLATES:
-        return asdict(
-            error_response(
-                f"Invalid template: {template}. Must be one of: simple, detailed",
-                error_code=ErrorCode.VALIDATION_ERROR,
-                error_type=ErrorType.VALIDATION,
-                remediation="Use 'simple' or 'detailed' template",
-                details={
-                    "template": template,
-                    "allowed": sorted(PLAN_TEMPLATES.keys()),
-                },
-            )
-        )
 
     if is_prompt_injection(name):
         _metrics.counter(
@@ -657,7 +598,7 @@ def perform_plan_create(name: str, template: str = "detailed") -> dict:
             )
         )
 
-    plan_content = PLAN_TEMPLATES[template].format(name=name)
+    plan_content = PLAN_TEMPLATE.format(name=name)
     try:
         plan_file.write_text(plan_content, encoding="utf-8")
     except Exception as exc:  # pragma: no cover - filesystem errors
@@ -673,7 +614,7 @@ def perform_plan_create(name: str, template: str = "detailed") -> dict:
     duration_ms = (time.perf_counter() - start_time) * 1000
     _metrics.counter(
         "plan_create.completed",
-        labels={"tool": "plan-create", "template": template},
+        labels={"tool": "plan-create"},
     )
 
     return asdict(
@@ -682,7 +623,6 @@ def perform_plan_create(name: str, template: str = "detailed") -> dict:
                 "plan_name": name,
                 "plan_slug": plan_slug,
                 "plan_path": str(plan_file),
-                "template": template,
             },
             telemetry={"duration_ms": round(duration_ms, 2)},
         )
@@ -710,9 +650,7 @@ def perform_plan_list() -> dict:
         return asdict(
             success_response(
                 data={"plans": [], "count": 0, "plans_dir": str(plans_dir)},
-                telemetry={
-                    "duration_ms": round((time.perf_counter() - start_time) * 1000, 2)
-                },
+                telemetry={"duration_ms": round((time.perf_counter() - start_time) * 1000, 2)},
             )
         )
 
@@ -750,7 +688,7 @@ def perform_plan_list() -> dict:
 
 
 _ACTION_SUMMARY = {
-    "create": "Create markdown plan templates in specs/.plans",
+    "create": "Create a markdown implementation plan in specs/.plans",
     "list": "Enumerate existing markdown plans and review coverage",
     "review": "Run AI-assisted review workflows for markdown plans",
 }
@@ -758,7 +696,6 @@ _ACTION_SUMMARY = {
 
 def _handle_plan_create(**payload: Any) -> dict:
     name = payload.get("name")
-    template = payload.get("template", "detailed")
     if not name:
         return asdict(
             error_response(
@@ -768,7 +705,7 @@ def _handle_plan_create(**payload: Any) -> dict:
                 remediation="Provide a plan name when action=create",
             )
         )
-    return perform_plan_create(name=name, template=template)
+    return perform_plan_create(name=name)
 
 
 def _handle_plan_list(**_: Any) -> dict:
@@ -788,7 +725,6 @@ def _handle_plan_review(**payload: Any) -> dict:
         )
     return perform_plan_review(
         plan_path=plan_path,
-        review_type=payload.get("review_type", "full"),
         ai_provider=payload.get("ai_provider"),
         ai_timeout=payload.get("ai_timeout", 120.0),
         consultation_cache=payload.get("consultation_cache", True),
@@ -804,9 +740,7 @@ _PLAN_ROUTER = ActionRouter(
             handler=_handle_plan_create,
             summary=_ACTION_SUMMARY["create"],
         ),
-        ActionDefinition(
-            name="list", handler=_handle_plan_list, summary=_ACTION_SUMMARY["list"]
-        ),
+        ActionDefinition(name="list", handler=_handle_plan_list, summary=_ACTION_SUMMARY["list"]),
         ActionDefinition(
             name="review",
             handler=_handle_plan_review,
@@ -817,10 +751,13 @@ _PLAN_ROUTER = ActionRouter(
 )
 
 
-def _dispatch_plan_action(action: str, payload: Dict[str, Any]) -> dict:
-    return dispatch_with_standard_errors(
-        _PLAN_ROUTER, "plan", action, **payload
-    )
+def _dispatch_plan_action(
+    action: str,
+    payload: Dict[str, Any],
+    *,
+    config: Optional[ServerConfig] = None,
+) -> dict:
+    return dispatch_with_standard_errors(_PLAN_ROUTER, "plan", action, config=config, **payload)
 
 
 def register_unified_plan_tool(mcp: FastMCP, config: ServerConfig) -> None:
@@ -834,9 +771,7 @@ def register_unified_plan_tool(mcp: FastMCP, config: ServerConfig) -> None:
     def plan(
         action: str,
         name: Optional[str] = None,
-        template: str = "detailed",
         plan_path: Optional[str] = None,
-        review_type: str = "full",
         ai_provider: Optional[str] = None,
         ai_timeout: float = 120.0,
         consultation_cache: bool = True,
@@ -846,15 +781,13 @@ def register_unified_plan_tool(mcp: FastMCP, config: ServerConfig) -> None:
 
         payload = {
             "name": name,
-            "template": template,
             "plan_path": plan_path,
-            "review_type": review_type,
             "ai_provider": ai_provider,
             "ai_timeout": ai_timeout,
             "consultation_cache": consultation_cache,
             "dry_run": dry_run,
         }
-        return _dispatch_plan_action(action=action, payload=payload)
+        return _dispatch_plan_action(action=action, payload=payload, config=config)
 
     logger.debug("Registered unified plan tool")
 

@@ -13,6 +13,13 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+# Analysis functions — extracted to analysis.py, re-imported so that
+# intra-monolith callers continue to resolve without changes.
+from foundry_mcp.core.spec.analysis import (  # noqa: F401 — re-exports
+    check_spec_completeness,
+    detect_duplicate_tasks,
+)
+
 # Hierarchy functions — extracted to hierarchy.py, re-imported so that
 # intra-monolith callers continue to resolve without changes.
 from foundry_mcp.core.spec.hierarchy import (  # noqa: F401 — re-exports
@@ -22,13 +29,11 @@ from foundry_mcp.core.spec.hierarchy import (  # noqa: F401 — re-exports
     _generate_phase_id,
     _normalize_acceptance_criteria,
     _remove_dependency_references,
-    _requires_rich_task_fields,
     add_phase,
     add_phase_bulk,
     get_node,
     move_phase,
     recalculate_actual_hours,
-    recalculate_estimated_hours,
     remove_phase,
     update_node,
     update_phase_metadata,
@@ -56,26 +61,16 @@ from foundry_mcp.core.spec.io import (  # noqa: F401 — re-exports
     save_spec,
 )
 
-
 # Template/creation functions — extracted to templates.py, re-imported so that
 # intra-monolith callers continue to resolve without changes.
 from foundry_mcp.core.spec.templates import (  # noqa: F401 — re-exports
     add_assumption,
     add_revision,
-    apply_phase_template,
     create_spec,
     generate_spec_data,
-    get_phase_template_structure,
     get_template_structure,
     list_assumptions,
     update_frontmatter,
-)
-
-# Analysis functions — extracted to analysis.py, re-imported so that
-# intra-monolith callers continue to resolve without changes.
-from foundry_mcp.core.spec.analysis import (  # noqa: F401 — re-exports
-    check_spec_completeness,
-    detect_duplicate_tasks,
 )
 
 # Safety constraints for find/replace operations
@@ -215,20 +210,20 @@ def find_replace_in_spec(
                     if total_replacements + count > max_replacements:
                         count = max_replacements - total_replacements
                         # Partial replacement not supported, skip this field
-                        warnings.append(
-                            f"max_replacements limit ({max_replacements}) reached"
-                        )
+                        warnings.append(f"max_replacements limit ({max_replacements}) reached")
                         limit_reached = True
                     else:
                         total_replacements += count
                         nodes_affected.add(node_id)
-                        changes.append({
-                            "node_id": node_id,
-                            "field": "title",
-                            "old": title,
-                            "new": new_title,
-                            "replacement_count": count,
-                        })
+                        changes.append(
+                            {
+                                "node_id": node_id,
+                                "field": "title",
+                                "old": title,
+                                "new": new_title,
+                                "replacement_count": count,
+                            }
+                        )
                         if not dry_run:
                             node_data["title"] = new_title
 
@@ -241,20 +236,20 @@ def find_replace_in_spec(
                     new_description, count = do_replace(description)
                     if count > 0:
                         if total_replacements + count > max_replacements:
-                            warnings.append(
-                                f"max_replacements limit ({max_replacements}) reached"
-                            )
+                            warnings.append(f"max_replacements limit ({max_replacements}) reached")
                             limit_reached = True
                         else:
                             total_replacements += count
                             nodes_affected.add(node_id)
-                            changes.append({
-                                "node_id": node_id,
-                                "field": "description",
-                                "old": description,
-                                "new": new_description,
-                                "replacement_count": count,
-                            })
+                            changes.append(
+                                {
+                                    "node_id": node_id,
+                                    "field": "description",
+                                    "old": description,
+                                    "new": new_description,
+                                    "replacement_count": count,
+                                }
+                            )
                             if not dry_run:
                                 metadata["description"] = new_description
 
@@ -290,4 +285,3 @@ def find_replace_in_spec(
         result["message"] = "No matches found"
 
     return result, None
-

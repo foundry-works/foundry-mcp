@@ -13,23 +13,23 @@ import pytest
 def test_all_public_symbols_importable_from_original_path():
     """Verify backward-compat re-exports from the original import path."""
     from foundry_mcp.core.research.workflows.deep_research import (  # noqa: F401
-        DeepResearchWorkflow,
-        SupervisorOrchestrator,
-        SupervisorHooks,
-        AgentRole,
-        AgentDecision,
-        get_domain_quality,
-        ANALYSIS_PHASE_BUDGET_FRACTION,
         ANALYSIS_OUTPUT_RESERVED,
-        SYNTHESIS_PHASE_BUDGET_FRACTION,
-        SYNTHESIS_OUTPUT_RESERVED,
-        REFINEMENT_PHASE_BUDGET_FRACTION,
+        ANALYSIS_PHASE_BUDGET_FRACTION,
         REFINEMENT_OUTPUT_RESERVED,
+        REFINEMENT_PHASE_BUDGET_FRACTION,
+        SYNTHESIS_OUTPUT_RESERVED,
+        SYNTHESIS_PHASE_BUDGET_FRACTION,
+        AgentDecision,
+        AgentRole,
+        DeepResearchWorkflow,
+        SupervisorHooks,
+        SupervisorOrchestrator,
         # These are underscore-prefixed but explicitly re-exported in __init__.py
         # for internal use by infrastructure and tests. We verify re-export
         # availability here, not endorsement for external consumption.
         _active_research_sessions,
         _active_sessions_lock,
+        get_domain_quality,
     )
 
 
@@ -37,9 +37,9 @@ def test_patched_classes_importable_from_package():
     """Verify classes patched by tests are re-exported at package level."""
     from foundry_mcp.core.research.workflows.deep_research import (  # noqa: F401
         ContentSummarizer,
+        ContextBudgetManager,
         DocumentDigestor,
         PDFExtractor,
-        ContextBudgetManager,
     )
 
 

@@ -7,17 +7,18 @@ event injection, and the orchestrator that coordinates phase transitions.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field as dataclass_field
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Optional
 
-from foundry_mcp.core.research.models import (
-    ConfidenceLevel,
+from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
     DeepResearchState,
-    SourceQuality,
 )
+from foundry_mcp.core.research.models.enums import ConfidenceLevel
+from foundry_mcp.core.research.models.sources import SourceQuality
 
 logger = logging.getLogger(__name__)
 
@@ -266,9 +267,7 @@ class SupervisorOrchestrator:
             return {
                 **base_inputs,
                 "source_count": len(state.sources),
-                "high_quality_sources": len(
-                    [s for s in state.sources if s.quality == SourceQuality.HIGH]
-                ),
+                "high_quality_sources": len([s for s in state.sources if s.quality == SourceQuality.HIGH]),
             }
         elif phase == DeepResearchPhase.SYNTHESIS:
             return {
@@ -355,9 +354,7 @@ class SupervisorOrchestrator:
 
         elif phase == DeepResearchPhase.ANALYSIS:
             finding_count = len(state.findings)
-            high_confidence = len(
-                [f for f in state.findings if f.confidence == ConfidenceLevel.HIGH]
-            )
+            high_confidence = len([f for f in state.findings if f.confidence == ConfidenceLevel.HIGH])
             quality_ok = finding_count >= 2
             return {
                 "finding_count": finding_count,
@@ -433,11 +430,7 @@ class SupervisorOrchestrator:
             },
             outputs={
                 "should_iterate": should_iterate,
-                "next_phase": (
-                    DeepResearchPhase.REFINEMENT.value
-                    if should_iterate
-                    else "COMPLETED"
-                ),
+                "next_phase": (DeepResearchPhase.REFINEMENT.value if should_iterate else "COMPLETED"),
             },
         )
 
@@ -453,9 +446,7 @@ class SupervisorOrchestrator:
         if "agent_decisions" not in state.metadata:
             state.metadata["agent_decisions"] = []
 
-        state.metadata["agent_decisions"].extend(
-            [d.to_dict() for d in self._decisions]
-        )
+        state.metadata["agent_decisions"].extend([d.to_dict() for d in self._decisions])
         self._decisions.clear()
 
     def get_reflection_prompt(self, state: DeepResearchState, phase: DeepResearchPhase) -> str:

@@ -275,12 +275,6 @@
             "description": "Update phase blockers to maintain sequential dependencies after move"
           },
           {
-            "name": "estimated_hours",
-            "type": "number",
-            "required": false,
-            "description": "Estimated hours for phase-update-metadata action (must be >= 0)"
-          },
-          {
             "name": "description",
             "type": "string",
             "required": false,
@@ -460,7 +454,6 @@
               "action": "phase-update-metadata",
               "spec_id": "my-feature-spec-001",
               "phase_id": "phase-1",
-              "estimated_hours": 4.5,
               "description": "Core implementation phase",
               "purpose": "Build foundational components"
             }
@@ -706,7 +699,6 @@
               "start-batch",
               "complete-batch",
               "reset-batch",
-              "session-config",
               "next",
               "info",
               "check-deps",
@@ -718,20 +710,50 @@
               "list-blocked",
               "add",
               "remove",
-              "update-estimate",
-              "update-metadata",
-              "progress",
-              "list",
-              "query",
-              "hierarchy",
               "move",
               "add-dependency",
               "remove-dependency",
               "add-requirement",
+              "update-estimate",
+              "update-metadata",
               "metadata-batch",
-              "fix-verification-types"
+              "fix-verification-types",
+              "progress",
+              "list",
+              "query",
+              "hierarchy",
+              "session-config",
+              "session",
+              "session-step",
+              "session-start",
+              "session-pause",
+              "session-resume",
+              "session-end",
+              "session-status",
+              "session-events",
+              "session-list",
+              "session-rebase",
+              "session-heartbeat",
+              "session-reset",
+              "session-step-next",
+              "session-step-report",
+              "session-step-replay",
+              "session-step-heartbeat",
+              "gate-waiver"
             ],
             "description": "Task action"
+          },
+          {
+            "name": "command",
+            "type": "string",
+            "required": false,
+            "description": "Required with action=session (start|status|pause|resume|rebase|end|list|reset) or action=session-step (next|report|replay|heartbeat)"
+          },
+          {
+            "name": "session_id",
+            "type": "string",
+            "required": false,
+            "description": "Target session ID for session/session-step actions"
           },
           {
             "name": "spec_id",
@@ -813,6 +835,21 @@
             "input": {
               "action": "prepare",
               "spec_id": "my-feature-spec-001"
+            }
+          },
+          {
+            "description": "Start autonomous session (canonical shape)",
+            "input": {
+              "action": "session",
+              "command": "start",
+              "spec_id": "my-feature-spec-001"
+            }
+          },
+          {
+            "description": "Session-step next (legacy compatibility)",
+            "input": {
+              "action": "session-step-next",
+              "session_id": "01HXEXAMPLESESSION"
             }
           },
           {
@@ -1115,6 +1152,7 @@
             "enum": [
               "spec",
               "fidelity",
+              "fidelity-gate",
               "parse-feedback",
               "list-tools",
               "list-plan-tools"
@@ -1126,6 +1164,24 @@
             "type": "string",
             "required": false,
             "description": "Target spec ID (required for spec/fidelity actions)"
+          },
+          {
+            "name": "phase_id",
+            "type": "string",
+            "required": false,
+            "description": "Target phase ID (required for phase-scoped fidelity actions)"
+          },
+          {
+            "name": "session_id",
+            "type": "string",
+            "required": false,
+            "description": "Autonomy session ID (required for action=fidelity-gate)"
+          },
+          {
+            "name": "step_id",
+            "type": "string",
+            "required": false,
+            "description": "Session step ID from task(action=session-step-next) (required for action=fidelity-gate)"
           }
         ],
         "version": "1.0.0",
@@ -1231,6 +1287,12 @@
             "description": "Example: server action=tools",
             "input": {
               "action": "tools"
+            }
+          },
+          {
+            "description": "Example: server action=capabilities",
+            "input": {
+              "action": "capabilities"
             }
           }
         ]
@@ -1541,11 +1603,33 @@
         "dependencies": [],
         "created_at": "2025-12-10T00:00:00Z",
         "expires_at": null
+      },
+      "autonomy_sessions": {
+        "description": "Autonomous session management for continuous task execution with persistence",
+        "state": "experimental",
+        "default_enabled": false,
+        "percentage_rollout": 0,
+        "owner": "foundry-mcp core",
+        "dependencies": [],
+        "created_at": "2026-02-14T00:00:00Z",
+        "expires_at": null
+      },
+      "autonomy_fidelity_gates": {
+        "description": "Fidelity gates for autonomous execution - quality checkpoints between phases",
+        "state": "experimental",
+        "default_enabled": false,
+        "percentage_rollout": 0,
+        "owner": "foundry-mcp core",
+        "dependencies": [
+          "autonomy_sessions"
+        ],
+        "created_at": "2026-02-14T00:00:00Z",
+        "expires_at": null
       }
     }
   },
   "server_capabilities": {
-    "_documentation": "Server capabilities returned by capability_get for client negotiation",
+    "_documentation": "Server capability contract for client negotiation. Manifest/discovery is advisory; server(action=capabilities) and runtime responses are the source of truth for currently enabled features.",
     "response_version": {
       "current": "response-v2",
       "supported": [
@@ -1602,6 +1686,21 @@
         "description": "Spec discovery and analysis",
         "tools": [
           "spec"
+        ]
+      },
+      "autonomy": {
+        "supported": true,
+        "description": "Autonomous execution with session persistence and fidelity gates",
+        "actions": [
+          "session",
+          "session-step"
+        ],
+        "tools": [
+          "task"
+        ],
+        "feature_flags": [
+          "autonomy_sessions",
+          "autonomy_fidelity_gates"
         ]
       }
     }

@@ -10,9 +10,17 @@ from pathlib import Path
 
 import pytest
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
+from foundry_mcp.core.authorization import set_server_role
 from foundry_mcp.server import create_server
 from tests.conftest import extract_response_dict
+
+
+@pytest.fixture(autouse=True)
+def maintainer_role():
+    set_server_role("maintainer")
+    yield
+    set_server_role("observer")
 
 
 def test_get_llm_status_handles_import_error(monkeypatch):
@@ -22,8 +30,8 @@ def test_get_llm_status_handles_import_error(monkeypatch):
         raise ImportError("missing")
 
     # Patch both consultation and legacy config paths to simulate broken config
-    monkeypatch.setattr("foundry_mcp.core.llm_config.get_consultation_config", _raise)
-    monkeypatch.setattr("foundry_mcp.core.llm_config.get_llm_config", _raise)
+    monkeypatch.setattr("foundry_mcp.core.llm_config.consultation.get_consultation_config", _raise)
+    monkeypatch.setattr("foundry_mcp.core.llm_config.llm.get_llm_config", _raise)
     status = _get_llm_status()
     assert status["configured"] is False
 
@@ -56,7 +64,11 @@ def test_review_list_tools_returns_envelope(test_config: ServerConfig):
     server = create_server(test_config)
     tools = server._tool_manager._tools
 
-    result = extract_response_dict(tools["review"].fn(action="list-tools"))
+    set_server_role("maintainer")
+    try:
+        result = extract_response_dict(tools["review"].fn(action="list-tools"))
+    finally:
+        set_server_role("observer")
     assert result["success"] is True
     assert "tools" in result["data"]
     assert "review_types" in result["data"]

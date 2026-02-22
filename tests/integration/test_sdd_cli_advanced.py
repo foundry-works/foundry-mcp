@@ -89,9 +89,7 @@ class TestModifyWorkflows:
 
     def test_modify_group_available(self, cli_runner, temp_specs_dir):
         """modify command group is available."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "modify", "--help"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "modify", "--help"])
         assert result.exit_code == 0
         assert "apply" in result.output
         assert "task" in result.output
@@ -102,18 +100,14 @@ class TestModifyWorkflows:
 
     def test_modify_task_subgroup_available(self, cli_runner, temp_specs_dir):
         """modify task subgroup is available."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "modify", "task", "--help"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "modify", "task", "--help"])
         assert result.exit_code == 0
         assert "add" in result.output
         assert "remove" in result.output
 
     def test_modify_phase_subgroup_available(self, cli_runner, temp_specs_dir):
         """modify phase subgroup is available."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "modify", "phase", "--help"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "modify", "phase", "--help"])
         assert result.exit_code == 0
         assert "add" in result.output
 
@@ -123,9 +117,7 @@ class TestDevWorkflows:
 
     def test_dev_group_available(self, cli_runner, temp_specs_dir):
         """dev command group is available."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "dev", "--help"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "dev", "--help"])
         assert result.exit_code == 0
         assert "gendocs" in result.output
         assert "install" in result.output
@@ -134,9 +126,7 @@ class TestDevWorkflows:
 
     def test_dev_check_returns_env_status(self, cli_runner, temp_specs_dir):
         """dev check returns environment status."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "dev", "check"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "dev", "check"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True

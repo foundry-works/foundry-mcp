@@ -18,22 +18,25 @@ try:
 except ImportError:
     pytest.skip("jsonschema not installed", allow_module_level=True)
 
-from foundry_mcp.core.responses import (
-    ErrorCode,
-    ErrorType,
-    ToolResponse,
-    conflict_error,
+from foundry_mcp.core.responses.builders import (
     error_response,
+    success_response,
+)
+from foundry_mcp.core.responses.errors_generic import (
+    conflict_error,
     forbidden_error,
     internal_error,
     not_found_error,
     rate_limit_error,
-    success_response,
     unauthorized_error,
     unavailable_error,
     validation_error,
 )
-
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+    ToolResponse,
+)
 
 # Load schema once at module level
 SCHEMA_PATH = Path(__file__).parent / "response_schema.json"
@@ -60,8 +63,9 @@ def validate_response(response: ToolResponse, validator: Draft7Validator) -> Non
     if errors:
         error_messages = [f"- {e.message} at {list(e.absolute_path)}" for e in errors]
         pytest.fail(
-            "Schema validation failed:\n" + "\n".join(error_messages) +
-            f"\n\nResponse: {json.dumps(response_dict, indent=2)}"
+            "Schema validation failed:\n"
+            + "\n".join(error_messages)
+            + f"\n\nResponse: {json.dumps(response_dict, indent=2)}"
         )
 
 
@@ -76,9 +80,7 @@ class TestSchemaValidity:
         """Verify schema contains all expected definitions."""
         definitions = response_schema.get("definitions", {})
         expected = {"metadata", "pagination", "rate_limit", "telemetry", "error_data"}
-        assert expected.issubset(definitions.keys()), (
-            f"Missing definitions: {expected - definitions.keys()}"
-        )
+        assert expected.issubset(definitions.keys()), f"Missing definitions: {expected - definitions.keys()}"
 
 
 class TestSuccessResponseContract:
@@ -91,9 +93,7 @@ class TestSuccessResponseContract:
 
     def test_success_with_data_payload(self, validator: Draft7Validator):
         """Test success response with data payload."""
-        response = success_response(
-            data={"spec_id": "test-spec", "count": 5, "tasks": ["task-1", "task-2"]}
-        )
+        response = success_response(data={"spec_id": "test-spec", "count": 5, "tasks": ["task-1", "task-2"]})
         validate_response(response, validator)
 
     def test_success_with_nested_data(self, validator: Draft7Validator):

@@ -1,46 +1,24 @@
 """Tests for core spec operations."""
 
 import json
-import tempfile
 from pathlib import Path
 
 import pytest
 
 from foundry_mcp.core.spec import (
-    PHASE_TEMPLATES,
-    apply_phase_template,
-    find_specs_directory,
+    add_phase,
+    add_revision,
     find_spec_file,
+    find_specs_directory,
     get_node,
-    get_phase_template_structure,
     list_specs,
     load_spec,
-    update_node,
-    add_revision,
-    update_frontmatter,
-    add_phase,
-    remove_phase,
     move_phase,
     recalculate_actual_hours,
-    recalculate_estimated_hours,
-    save_spec,
+    remove_phase,
+    update_frontmatter,
+    update_node,
 )
-
-
-@pytest.fixture
-def temp_specs_dir():
-    """Create a temporary specs directory structure."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # Resolve to handle macOS /var -> /private/var symlink
-        specs_dir = (Path(tmpdir) / "specs").resolve()
-
-        # Create status directories
-        (specs_dir / "pending").mkdir(parents=True)
-        (specs_dir / "active").mkdir(parents=True)
-        (specs_dir / "completed").mkdir(parents=True)
-        (specs_dir / "archived").mkdir(parents=True)
-
-        yield specs_dir
 
 
 @pytest.fixture
@@ -141,12 +119,8 @@ class TestListSpecs:
     def test_list_all_specs(self, temp_specs_dir, sample_spec):
         """Should list all specs across folders."""
         # Create specs in different folders
-        (temp_specs_dir / "active" / "spec-1.json").write_text(
-            json.dumps({**sample_spec, "spec_id": "spec-1"})
-        )
-        (temp_specs_dir / "pending" / "spec-2.json").write_text(
-            json.dumps({**sample_spec, "spec_id": "spec-2"})
-        )
+        (temp_specs_dir / "active" / "spec-1.json").write_text(json.dumps({**sample_spec, "spec_id": "spec-1"}))
+        (temp_specs_dir / "pending" / "spec-2.json").write_text(json.dumps({**sample_spec, "spec_id": "spec-2"}))
 
         result = list_specs(specs_dir=temp_specs_dir)
         assert len(result) == 2
@@ -156,12 +130,8 @@ class TestListSpecs:
 
     def test_list_specs_by_status(self, temp_specs_dir, sample_spec):
         """Should filter specs by status."""
-        (temp_specs_dir / "active" / "spec-1.json").write_text(
-            json.dumps({**sample_spec, "spec_id": "spec-1"})
-        )
-        (temp_specs_dir / "pending" / "spec-2.json").write_text(
-            json.dumps({**sample_spec, "spec_id": "spec-2"})
-        )
+        (temp_specs_dir / "active" / "spec-1.json").write_text(json.dumps({**sample_spec, "spec_id": "spec-1"}))
+        (temp_specs_dir / "pending" / "spec-2.json").write_text(json.dumps({**sample_spec, "spec_id": "spec-2"}))
 
         result = list_specs(specs_dir=temp_specs_dir, status="active")
         assert len(result) == 1
@@ -214,7 +184,6 @@ class TestAddPhase:
             "spec_id": spec_id,
             "title": "Test Spec",
             "metadata": {
-                "estimated_hours": 5,
                 "status": "pending",
             },
             "hierarchy": {
@@ -257,7 +226,6 @@ class TestAddPhase:
             title="Implementation",
             description="Async orchestrator",
             purpose="Core work",
-            estimated_hours=3,
             specs_dir=temp_specs_dir,
         )
 
@@ -274,13 +242,11 @@ class TestAddPhase:
 
         phase_two = hierarchy["phase-2"]
         assert phase_two["metadata"]["description"] == "Async orchestrator"
-        assert phase_two["metadata"]["estimated_hours"] == 3
         assert phase_two["children"] == ["verify-2-1", "verify-2-2"]
         assert hierarchy["verify-2-1"]["parent"] == "phase-2"
         assert hierarchy["verify-2-2"]["dependencies"]["blocked_by"] == ["verify-2-1"]
         assert hierarchy["phase-1"]["dependencies"]["blocks"] == ["phase-2"]
         assert hierarchy["phase-2"]["dependencies"]["blocked_by"] == ["phase-1"]
-        assert spec["metadata"]["estimated_hours"] == 8
 
     def test_add_phase_inserts_at_custom_position_without_link(self, temp_specs_dir):
         """add_phase should support insertion at specific index without linking."""
@@ -313,18 +279,6 @@ class TestAddPhase:
         result, error = add_phase(spec_id="", title="New")
         assert result is None
         assert error == "Specification ID is required"
-
-        # Negative estimated hours
-        spec_id = "phase-spec-invalid"
-        self._write_spec(temp_specs_dir, spec_id)
-        result, error = add_phase(
-            spec_id=spec_id,
-            title="Negative",
-            estimated_hours=-1,
-            specs_dir=temp_specs_dir,
-        )
-        assert result is None
-        assert error == "estimated_hours must be non-negative"
 
 
 class TestAddRevision:
@@ -367,21 +321,21 @@ class TestAddRevision:
             version="2.0",
             changelog="Major refactor",
             author="Test Author",
-            modified_by="sdd-cli",
+            modified_by="foundry-cli",
             review_triggered_by="/path/to/review.md",
             specs_dir=temp_specs_dir,
         )
 
         assert error is None
         assert result["author"] == "Test Author"
-        assert result["modified_by"] == "sdd-cli"
+        assert result["modified_by"] == "foundry-cli"
         assert result["review_triggered_by"] == "/path/to/review.md"
 
         # Verify persisted
         spec_data = load_spec("test-spec-001", temp_specs_dir)
         revision = spec_data["metadata"]["revision_history"][0]
         assert revision["author"] == "Test Author"
-        assert revision["modified_by"] == "sdd-cli"
+        assert revision["modified_by"] == "foundry-cli"
         assert revision["review_triggered_by"] == "/path/to/review.md"
 
     def test_add_multiple_revisions(self, temp_specs_dir, sample_spec):
@@ -389,12 +343,8 @@ class TestAddRevision:
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
 
-        add_revision(
-            "test-spec-001", "1.0", "Initial release", specs_dir=temp_specs_dir
-        )
-        result, error = add_revision(
-            "test-spec-001", "1.1", "Bug fix", specs_dir=temp_specs_dir
-        )
+        add_revision("test-spec-001", "1.0", "Initial release", specs_dir=temp_specs_dir)
+        result, error = add_revision("test-spec-001", "1.1", "Bug fix", specs_dir=temp_specs_dir)
 
         assert error is None
         assert result["revision_index"] == 2
@@ -422,9 +372,7 @@ class TestAddRevision:
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
 
-        result, error = add_revision(
-            "test-spec-001", version="", changelog="Test", specs_dir=temp_specs_dir
-        )
+        result, error = add_revision("test-spec-001", version="", changelog="Test", specs_dir=temp_specs_dir)
 
         assert result is None
         assert "Version is required" in error
@@ -434,9 +382,7 @@ class TestAddRevision:
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
 
-        result, error = add_revision(
-            "test-spec-001", version="1.0", changelog="", specs_dir=temp_specs_dir
-        )
+        result, error = add_revision("test-spec-001", version="1.0", changelog="", specs_dir=temp_specs_dir)
 
         assert result is None
         assert "Changelog is required" in error
@@ -507,33 +453,28 @@ class TestUpdateFrontmatter:
         assert result["value"] == "Align labelers on student correctness goals"
 
         spec_data = load_spec("test-spec-001", temp_specs_dir)
-        assert (
-            spec_data["metadata"]["mission"]
-            == "Align labelers on student correctness goals"
-        )
+        assert spec_data["metadata"]["mission"] == "Align labelers on student correctness goals"
 
     def test_update_frontmatter_with_previous_value(self, temp_specs_dir, sample_spec):
         """Should return previous value when updating existing field."""
-        sample_spec["metadata"]["owner"] = "Original Owner"
+        sample_spec["metadata"]["mission"] = "Original Mission"
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = update_frontmatter(
-            "test-spec-001", key="owner", value="New Owner", specs_dir=temp_specs_dir
+            "test-spec-001", key="mission", value="New Mission", specs_dir=temp_specs_dir
         )
 
         assert error is None
-        assert result["previous_value"] == "Original Owner"
-        assert result["value"] == "New Owner"
+        assert result["previous_value"] == "Original Mission"
+        assert result["value"] == "New Mission"
 
     def test_update_frontmatter_top_level_sync(self, temp_specs_dir, sample_spec):
         """Should sync title/status to top-level fields."""
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
 
-        result, error = update_frontmatter(
-            "test-spec-001", key="title", value="New Title", specs_dir=temp_specs_dir
-        )
+        result, error = update_frontmatter("test-spec-001", key="title", value="New Title", specs_dir=temp_specs_dir)
 
         assert error is None
         spec_data = load_spec("test-spec-001", temp_specs_dir)
@@ -547,14 +488,14 @@ class TestUpdateFrontmatter:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = update_frontmatter(
-            "test-spec-001", key="estimated_hours", value=42, specs_dir=temp_specs_dir
+            "test-spec-001", key="progress_percentage", value=42, specs_dir=temp_specs_dir
         )
 
         assert error is None
         assert result["value"] == 42
 
         spec_data = load_spec("test-spec-001", temp_specs_dir)
-        assert spec_data["metadata"]["estimated_hours"] == 42
+        assert spec_data["progress_percentage"] == 42
 
     def test_update_frontmatter_list_value(self, temp_specs_dir, sample_spec):
         """Should handle list values for objectives."""
@@ -574,9 +515,7 @@ class TestUpdateFrontmatter:
 
     def test_update_frontmatter_spec_not_found(self, temp_specs_dir):
         """Should return error for nonexistent spec."""
-        result, error = update_frontmatter(
-            "nonexistent-spec", key="title", value="Test", specs_dir=temp_specs_dir
-        )
+        result, error = update_frontmatter("nonexistent-spec", key="title", value="Test", specs_dir=temp_specs_dir)
 
         assert result is None
         assert "not found" in error
@@ -586,9 +525,7 @@ class TestUpdateFrontmatter:
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
 
-        result, error = update_frontmatter(
-            "test-spec-001", key="", value="Test", specs_dir=temp_specs_dir
-        )
+        result, error = update_frontmatter("test-spec-001", key="", value="Test", specs_dir=temp_specs_dir)
 
         assert result is None
         assert "Key is required" in error
@@ -598,9 +535,7 @@ class TestUpdateFrontmatter:
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
 
-        result, error = update_frontmatter(
-            "test-spec-001", key="description", value=None, specs_dir=temp_specs_dir
-        )
+        result, error = update_frontmatter("test-spec-001", key="description", value=None, specs_dir=temp_specs_dir)
 
         assert result is None
         assert "Value cannot be None" in error
@@ -620,9 +555,7 @@ class TestUpdateFrontmatter:
         assert result is None
         assert "dedicated function" in error
 
-    def test_update_frontmatter_blocks_revision_history(
-        self, temp_specs_dir, sample_spec
-    ):
+    def test_update_frontmatter_blocks_revision_history(self, temp_specs_dir, sample_spec):
         """Should block direct update of revision_history array."""
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
@@ -659,9 +592,7 @@ class TestUpdateFrontmatter:
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
 
-        result, error = update_frontmatter(
-            "test-spec-001", key="description", value="", specs_dir=temp_specs_dir
-        )
+        result, error = update_frontmatter("test-spec-001", key="description", value="", specs_dir=temp_specs_dir)
 
         assert error is None
         assert result["value"] == ""
@@ -1125,247 +1056,6 @@ class TestRemovePhase:
         assert "not found" in error
 
 
-class TestPhaseTemplates:
-    """Tests for phase template functions."""
-
-    def test_phase_templates_constant(self):
-        """Should define valid phase templates."""
-        assert PHASE_TEMPLATES == (
-            "planning",
-            "implementation",
-            "testing",
-            "security",
-            "documentation",
-        )
-
-    def test_get_phase_template_structure_planning(self):
-        """Should return correct structure for planning template."""
-        result = get_phase_template_structure("planning")
-
-        assert result["template_name"] == "planning"
-        assert result["title"] == "Planning & Discovery"
-        assert result["estimated_hours"] == 4
-        assert result["includes_verification"] is True
-        assert len(result["tasks"]) == 2
-        assert result["tasks"][0]["title"] == "Define requirements"
-        assert result["tasks"][1]["title"] == "Design solution approach"
-
-    def test_get_phase_template_structure_implementation(self):
-        """Should return correct structure for implementation template."""
-        result = get_phase_template_structure("implementation")
-
-        assert result["template_name"] == "implementation"
-        assert result["title"] == "Implementation"
-        assert result["estimated_hours"] == 8
-        assert len(result["tasks"]) == 2
-        assert result["tasks"][0]["title"] == "Implement core functionality"
-
-    def test_get_phase_template_structure_testing(self):
-        """Should return correct structure for testing template."""
-        result = get_phase_template_structure("testing")
-
-        assert result["template_name"] == "testing"
-        assert result["title"] == "Testing & Validation"
-        assert result["estimated_hours"] == 6
-        assert len(result["tasks"]) == 2
-        # Testing tasks should have investigation category
-        assert result["tasks"][0]["task_category"] == "investigation"
-
-    def test_get_phase_template_structure_security(self):
-        """Should return correct structure for security template."""
-        result = get_phase_template_structure("security")
-
-        assert result["template_name"] == "security"
-        assert result["title"] == "Security Review"
-        assert result["estimated_hours"] == 6
-        assert len(result["tasks"]) == 2
-
-    def test_get_phase_template_structure_documentation(self):
-        """Should return correct structure for documentation template."""
-        result = get_phase_template_structure("documentation")
-
-        assert result["template_name"] == "documentation"
-        assert result["title"] == "Documentation"
-        assert result["estimated_hours"] == 4
-        assert len(result["tasks"]) == 2
-        # Documentation tasks should have research category
-        assert result["tasks"][0]["task_category"] == "research"
-
-    def test_get_phase_template_structure_with_category_override(self):
-        """Planning template tasks use investigation category (not overridable)."""
-        result = get_phase_template_structure("planning", category="refactoring")
-
-        # Planning tasks always use investigation (hardcoded for validation)
-        assert result["tasks"][0]["task_category"] == "investigation"
-        assert result["tasks"][1]["task_category"] == "investigation"
-
-    def test_get_phase_template_structure_invalid_template(self):
-        """Should raise ValueError for invalid template name."""
-        with pytest.raises(ValueError) as exc_info:
-            get_phase_template_structure("invalid-template")
-
-        assert "Invalid phase template" in str(exc_info.value)
-        assert "invalid-template" in str(exc_info.value)
-
-    def test_all_templates_have_required_fields(self):
-        """Should ensure all templates have required fields."""
-        required_fields = [
-            "title",
-            "description",
-            "purpose",
-            "estimated_hours",
-            "tasks",
-            "includes_verification",
-            "template_name",
-        ]
-
-        for template_name in PHASE_TEMPLATES:
-            result = get_phase_template_structure(template_name)
-            for field in required_fields:
-                assert field in result, f"{template_name} missing field: {field}"
-
-
-class TestApplyPhaseTemplate:
-    """Tests for apply_phase_template function."""
-
-    def _create_base_spec(self, temp_specs_dir, spec_id="test-spec"):
-        """Create a minimal spec for testing."""
-        spec_data = {
-            "spec_id": spec_id,
-            "title": "Test Spec",
-            "metadata": {
-                "title": "Test Spec",
-                "version": "1.0.0",
-            },
-            "hierarchy": {
-                "spec-root": {
-                    "type": "spec",
-                    "title": "Test Spec",
-                    "status": "pending",
-                    "parent": None,
-                    "children": [],
-                    "total_tasks": 0,
-                    "completed_tasks": 0,
-                    "metadata": {"purpose": "Testing", "category": "implementation"},
-                    "dependencies": {"blocks": [], "blocked_by": [], "depends": []},
-                },
-            },
-        }
-        spec_path = temp_specs_dir / "active" / f"{spec_id}.json"
-        spec_path.write_text(json.dumps(spec_data))
-        return spec_path
-
-    def test_apply_phase_template_success(self, temp_specs_dir):
-        """Should successfully apply a phase template."""
-        self._create_base_spec(temp_specs_dir, spec_id="test-apply")
-
-        result, error = apply_phase_template(
-            spec_id="test-apply",
-            template="planning",
-            specs_dir=temp_specs_dir,
-        )
-
-        assert error is None
-        assert result is not None
-        assert result["template_applied"] == "planning"
-        assert result["template_title"] == "Planning & Discovery"
-        assert "phase_id" in result
-        assert result["total_tasks"] == 4  # 2 tasks from template + 2 verify tasks
-
-    def test_apply_phase_template_creates_tasks(self, temp_specs_dir):
-        """Should create tasks from the template."""
-        self._create_base_spec(temp_specs_dir, spec_id="test-tasks")
-
-        result, error = apply_phase_template(
-            spec_id="test-tasks",
-            template="implementation",
-            specs_dir=temp_specs_dir,
-        )
-
-        assert error is None
-        assert result["total_tasks"] == 4  # 2 tasks from template + 2 verify tasks
-
-        # Verify spec was updated
-        spec = load_spec("test-tasks", temp_specs_dir)
-        phase_id = result["phase_id"]
-        assert phase_id in spec["hierarchy"]
-        assert spec["hierarchy"][phase_id]["title"] == "Implementation"
-
-        # Verify verification tasks were created
-        phase_children = spec["hierarchy"][phase_id]["children"]
-        verify_tasks = [
-            tid for tid in phase_children
-            if spec["hierarchy"][tid]["type"] == "verify"
-        ]
-        assert len(verify_tasks) == 2
-
-    def test_apply_phase_template_invalid_template(self, temp_specs_dir):
-        """Should return error for invalid template."""
-        self._create_base_spec(temp_specs_dir, spec_id="test-invalid")
-
-        result, error = apply_phase_template(
-            spec_id="test-invalid",
-            template="nonexistent",
-            specs_dir=temp_specs_dir,
-        )
-
-        assert result is None
-        assert "Invalid phase template" in error
-
-    def test_apply_phase_template_spec_not_found(self, temp_specs_dir):
-        """Should return error for nonexistent spec."""
-        result, error = apply_phase_template(
-            spec_id="nonexistent-spec",
-            template="planning",
-            specs_dir=temp_specs_dir,
-        )
-
-        assert result is None
-        assert error is not None
-
-    def test_apply_phase_template_with_category(self, temp_specs_dir):
-        """Should apply custom category to tasks."""
-        self._create_base_spec(temp_specs_dir, spec_id="test-category")
-
-        result, error = apply_phase_template(
-            spec_id="test-category",
-            template="planning",
-            category="refactoring",
-            specs_dir=temp_specs_dir,
-        )
-
-        assert error is None
-        assert result is not None
-
-    def test_apply_phase_template_with_position(self, temp_specs_dir):
-        """Should respect position parameter."""
-        self._create_base_spec(temp_specs_dir, spec_id="test-position")
-
-        result, error = apply_phase_template(
-            spec_id="test-position",
-            template="planning",
-            position=0,
-            specs_dir=temp_specs_dir,
-        )
-
-        assert error is None
-        assert result is not None
-
-    def test_apply_phase_template_without_linking(self, temp_specs_dir):
-        """Should respect link_previous=False."""
-        self._create_base_spec(temp_specs_dir, spec_id="test-no-link")
-
-        result, error = apply_phase_template(
-            spec_id="test-no-link",
-            template="planning",
-            link_previous=False,
-            specs_dir=temp_specs_dir,
-        )
-
-        assert error is None
-        assert result is not None
-
-
 class TestMovePhase:
     """Tests for move_phase function."""
 
@@ -1490,9 +1180,7 @@ class TestMovePhase:
 
     def test_move_phase_updates_dependencies(self, temp_specs_dir):
         """Should update dependency chain when link_previous=True."""
-        self._create_spec_with_phases(
-            temp_specs_dir, spec_id="test-deps", link_phases=True
-        )
+        self._create_spec_with_phases(temp_specs_dir, spec_id="test-deps", link_phases=True)
 
         # Initially: phase-1 -> phase-2 -> phase-3
         # Move phase-2 to end: phase-1 -> phase-3 -> phase-2
@@ -1525,9 +1213,7 @@ class TestMovePhase:
 
     def test_move_phase_preserves_dependencies(self, temp_specs_dir):
         """Should preserve existing deps when link_previous=False."""
-        self._create_spec_with_phases(
-            temp_specs_dir, spec_id="test-preserve", link_phases=True
-        )
+        self._create_spec_with_phases(temp_specs_dir, spec_id="test-preserve", link_phases=True)
 
         # Get original dependencies
         spec_before = load_spec("test-preserve", temp_specs_dir)
@@ -1713,277 +1399,6 @@ class TestMovePhase:
         assert children == ["phase-1", "phase-2", "phase-3"]  # Unchanged
 
 
-class TestRecalculateEstimatedHours:
-    """Tests for recalculate_estimated_hours function."""
-
-    def _create_spec_with_estimates(self, specs_dir, spec_id="test-hours"):
-        """Create a spec with tasks that have estimated_hours."""
-        spec_data = {
-            "spec_id": spec_id,
-            "title": "Test Hours Spec",
-            "generated": "2026-01-01T00:00:00Z",
-            "last_updated": "2026-01-01T00:00:00Z",
-            "metadata": {
-                "estimated_hours": 0,  # Intentionally stale
-            },
-            "progress_percentage": 0,
-            "status": "pending",
-            "current_phase": "phase-1",
-            "hierarchy": {
-                "spec-root": {
-                    "type": "spec",
-                    "title": "Test Hours Spec",
-                    "status": "pending",
-                    "parent": None,
-                    "children": ["phase-1", "phase-2"],
-                    "total_tasks": 4,
-                    "completed_tasks": 0,
-                    "metadata": {},
-                },
-                "phase-1": {
-                    "type": "phase",
-                    "title": "Phase One",
-                    "status": "pending",
-                    "parent": "spec-root",
-                    "children": ["task-1-1", "task-1-2"],
-                    "total_tasks": 2,
-                    "completed_tasks": 0,
-                    "metadata": {},  # No estimated_hours set
-                },
-                "task-1-1": {
-                    "type": "task",
-                    "title": "Task 1.1",
-                    "status": "pending",
-                    "parent": "phase-1",
-                    "children": [],
-                    "total_tasks": 1,
-                    "completed_tasks": 0,
-                    "metadata": {"estimated_hours": 2.0},
-                },
-                "task-1-2": {
-                    "type": "task",
-                    "title": "Task 1.2",
-                    "status": "pending",
-                    "parent": "phase-1",
-                    "children": [],
-                    "total_tasks": 1,
-                    "completed_tasks": 0,
-                    "metadata": {"estimated_hours": 1.5},
-                },
-                "phase-2": {
-                    "type": "phase",
-                    "title": "Phase Two",
-                    "status": "pending",
-                    "parent": "spec-root",
-                    "children": ["task-2-1", "verify-2-1"],
-                    "total_tasks": 2,
-                    "completed_tasks": 0,
-                    "metadata": {"estimated_hours": 10},  # Stale value
-                },
-                "task-2-1": {
-                    "type": "task",
-                    "title": "Task 2.1",
-                    "status": "pending",
-                    "parent": "phase-2",
-                    "children": [],
-                    "total_tasks": 1,
-                    "completed_tasks": 0,
-                    "metadata": {"estimated_hours": 3.0},
-                },
-                "verify-2-1": {
-                    "type": "verify",
-                    "title": "Verify 2.1",
-                    "status": "pending",
-                    "parent": "phase-2",
-                    "children": [],
-                    "total_tasks": 1,
-                    "completed_tasks": 0,
-                    "metadata": {"estimated_hours": 0.5},
-                },
-            },
-            "journal": [],
-        }
-        spec_file = specs_dir / "pending" / f"{spec_id}.json"
-        spec_file.write_text(json.dumps(spec_data))
-        return spec_data
-
-    def test_recalculate_basic(self, temp_specs_dir):
-        """Test basic recalculation of estimated hours."""
-        self._create_spec_with_estimates(temp_specs_dir)
-
-        result, error = recalculate_estimated_hours(
-            "test-hours", specs_dir=temp_specs_dir
-        )
-
-        assert error is None
-        assert result is not None
-        assert result["spec_id"] == "test-hours"
-
-        # Phase 1: 2.0 + 1.5 = 3.5
-        phase1 = next(p for p in result["phases"] if p["phase_id"] == "phase-1")
-        assert phase1["calculated"] == 3.5
-        assert phase1["task_count"] == 2
-
-        # Phase 2: 3.0 + 0.5 = 3.5
-        phase2 = next(p for p in result["phases"] if p["phase_id"] == "phase-2")
-        assert phase2["calculated"] == 3.5
-        assert phase2["previous"] == 10  # Was stale
-        assert phase2["delta"] == -6.5  # 3.5 - 10
-
-        # Spec level: 3.5 + 3.5 = 7.0
-        assert result["spec_level"]["calculated"] == 7.0
-        assert result["spec_level"]["previous"] == 0
-        assert result["spec_level"]["delta"] == 7.0
-
-        # Verify saved
-        spec = load_spec("test-hours", temp_specs_dir)
-        assert spec["metadata"]["estimated_hours"] == 7.0
-        assert spec["hierarchy"]["phase-1"]["metadata"]["estimated_hours"] == 3.5
-        assert spec["hierarchy"]["phase-2"]["metadata"]["estimated_hours"] == 3.5
-
-    def test_recalculate_dry_run(self, temp_specs_dir):
-        """Dry run should return report without saving changes."""
-        self._create_spec_with_estimates(temp_specs_dir)
-
-        result, error = recalculate_estimated_hours(
-            "test-hours", dry_run=True, specs_dir=temp_specs_dir
-        )
-
-        assert error is None
-        assert result["dry_run"] is True
-        assert "message" in result
-        assert result["spec_level"]["calculated"] == 7.0
-
-        # Verify NOT saved
-        spec = load_spec("test-hours", temp_specs_dir)
-        assert spec["metadata"]["estimated_hours"] == 0  # Unchanged
-        assert "estimated_hours" not in spec["hierarchy"]["phase-1"]["metadata"]
-
-    def test_recalculate_empty_spec(self, temp_specs_dir):
-        """Empty spec with no phases should handle gracefully."""
-        spec_data = {
-            "spec_id": "empty-spec",
-            "title": "Empty Spec",
-            "generated": "2026-01-01T00:00:00Z",
-            "last_updated": "2026-01-01T00:00:00Z",
-            "metadata": {"estimated_hours": 5},  # Should become 0
-            "progress_percentage": 0,
-            "status": "pending",
-            "current_phase": None,
-            "hierarchy": {
-                "spec-root": {
-                    "type": "spec",
-                    "title": "Empty Spec",
-                    "status": "pending",
-                    "parent": None,
-                    "children": [],
-                    "total_tasks": 0,
-                    "completed_tasks": 0,
-                    "metadata": {},
-                },
-            },
-            "journal": [],
-        }
-        spec_file = temp_specs_dir / "pending" / "empty-spec.json"
-        spec_file.write_text(json.dumps(spec_data))
-
-        result, error = recalculate_estimated_hours(
-            "empty-spec", specs_dir=temp_specs_dir
-        )
-
-        assert error is None
-        assert result["spec_level"]["calculated"] == 0.0
-        assert result["spec_level"]["previous"] == 5
-        assert result["phases"] == []
-        assert result["summary"]["total_phases"] == 0
-
-    def test_recalculate_no_estimates(self, temp_specs_dir):
-        """Tasks without estimates should be treated as 0."""
-        spec_data = {
-            "spec_id": "no-estimates",
-            "title": "No Estimates",
-            "generated": "2026-01-01T00:00:00Z",
-            "last_updated": "2026-01-01T00:00:00Z",
-            "metadata": {},
-            "progress_percentage": 0,
-            "status": "pending",
-            "current_phase": "phase-1",
-            "hierarchy": {
-                "spec-root": {
-                    "type": "spec",
-                    "title": "No Estimates",
-                    "status": "pending",
-                    "parent": None,
-                    "children": ["phase-1"],
-                    "total_tasks": 2,
-                    "completed_tasks": 0,
-                    "metadata": {},
-                },
-                "phase-1": {
-                    "type": "phase",
-                    "title": "Phase One",
-                    "status": "pending",
-                    "parent": "spec-root",
-                    "children": ["task-1-1", "task-1-2"],
-                    "total_tasks": 2,
-                    "completed_tasks": 0,
-                    "metadata": {},
-                },
-                "task-1-1": {
-                    "type": "task",
-                    "title": "Task without estimate",
-                    "status": "pending",
-                    "parent": "phase-1",
-                    "children": [],
-                    "total_tasks": 1,
-                    "completed_tasks": 0,
-                    "metadata": {},  # No estimated_hours
-                },
-                "task-1-2": {
-                    "type": "task",
-                    "title": "Task with estimate",
-                    "status": "pending",
-                    "parent": "phase-1",
-                    "children": [],
-                    "total_tasks": 1,
-                    "completed_tasks": 0,
-                    "metadata": {"estimated_hours": 2.0},
-                },
-            },
-            "journal": [],
-        }
-        spec_file = temp_specs_dir / "pending" / "no-estimates.json"
-        spec_file.write_text(json.dumps(spec_data))
-
-        result, error = recalculate_estimated_hours(
-            "no-estimates", specs_dir=temp_specs_dir
-        )
-
-        assert error is None
-        # Only task-1-2 has estimate
-        assert result["phases"][0]["calculated"] == 2.0
-        assert result["phases"][0]["task_count"] == 2
-        assert result["spec_level"]["calculated"] == 2.0
-
-    def test_recalculate_spec_not_found(self, temp_specs_dir):
-        """Should return error for non-existent spec."""
-        result, error = recalculate_estimated_hours(
-            "nonexistent-spec", specs_dir=temp_specs_dir
-        )
-
-        assert result is None
-        assert error is not None
-        assert "not found" in error.lower()
-
-    def test_recalculate_missing_spec_id(self, temp_specs_dir):
-        """Should return error when spec_id is missing."""
-        result, error = recalculate_estimated_hours("", specs_dir=temp_specs_dir)
-
-        assert result is None
-        assert error is not None
-        assert "required" in error.lower()
-
-
 class TestRecalculateActualHours:
     """Tests for recalculate_actual_hours function."""
 
@@ -2082,9 +1497,7 @@ class TestRecalculateActualHours:
         """Test basic recalculation of actual hours."""
         self._create_spec_with_actuals(temp_specs_dir)
 
-        result, error = recalculate_actual_hours(
-            "test-actuals", specs_dir=temp_specs_dir
-        )
+        result, error = recalculate_actual_hours("test-actuals", specs_dir=temp_specs_dir)
 
         assert error is None
         assert result is not None
@@ -2116,9 +1529,7 @@ class TestRecalculateActualHours:
         """Dry run should return report without saving changes."""
         self._create_spec_with_actuals(temp_specs_dir)
 
-        result, error = recalculate_actual_hours(
-            "test-actuals", dry_run=True, specs_dir=temp_specs_dir
-        )
+        result, error = recalculate_actual_hours("test-actuals", dry_run=True, specs_dir=temp_specs_dir)
 
         assert error is None
         assert result["dry_run"] is True
@@ -2188,9 +1599,7 @@ class TestRecalculateActualHours:
         spec_file = temp_specs_dir / "pending" / "no-actuals.json"
         spec_file.write_text(json.dumps(spec_data))
 
-        result, error = recalculate_actual_hours(
-            "no-actuals", specs_dir=temp_specs_dir
-        )
+        result, error = recalculate_actual_hours("no-actuals", specs_dir=temp_specs_dir)
 
         assert error is None
         # Only task-1-2 has actual
@@ -2200,9 +1609,7 @@ class TestRecalculateActualHours:
 
     def test_recalculate_actual_hours_spec_not_found(self, temp_specs_dir):
         """Should return error for non-existent spec."""
-        result, error = recalculate_actual_hours(
-            "nonexistent-spec", specs_dir=temp_specs_dir
-        )
+        result, error = recalculate_actual_hours("nonexistent-spec", specs_dir=temp_specs_dir)
 
         assert result is None
         assert error is not None

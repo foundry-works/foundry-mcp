@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import logging
-import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.observability import get_metrics
-from foundry_mcp.core.responses import ErrorCode
 from foundry_mcp.core.spec import list_assumptions, load_spec
 from foundry_mcp.tools.unified.common import (
     build_request_id,
@@ -28,14 +26,21 @@ _ACTION_SUMMARY = {
     "spec-find-replace": "Find and replace text across spec titles and descriptions",
     "spec-rollback": "Restore a spec from a backup timestamp",
     "phase-add": "Add a new phase under spec-root with verification scaffolding",
-    "phase-add-bulk": "Add a phase with pre-defined tasks in a single atomic operation",
-    "phase-template": "List/show/apply phase templates to add pre-configured phases",
+    "phase-add-bulk": "Add a phase with pre-defined tasks in a single atomic operation (auto-appends verification scaffolding)",
     "phase-move": "Reorder a phase within spec-root children",
     "phase-update-metadata": "Update metadata fields of an existing phase",
     "phase-remove": "Remove an existing phase (and optionally dependents)",
     "assumption-add": "Append an assumption entry to spec metadata",
     "assumption-list": "List recorded assumptions for a spec",
     "revision-add": "Record a revision entry in the spec history",
+    "constraint-add": "Append a constraint entry to spec metadata",
+    "constraint-list": "List recorded constraints for a spec",
+    "risk-add": "Append a risk entry (with optional likelihood/impact/mitigation) to spec metadata",
+    "risk-list": "List recorded risks for a spec",
+    "question-add": "Append an open question to spec metadata",
+    "question-list": "List open questions for a spec",
+    "success-criterion-add": "Append a success criterion to spec metadata",
+    "success-criteria-list": "List success criteria for a spec",
     "intake-add": "Capture a new work idea in the notes intake queue",
     "intake-list": "List new intake items awaiting triage in FIFO order",
     "intake-dismiss": "Dismiss an intake item from the triage queue",
@@ -53,9 +58,7 @@ def _request_id() -> str:
 _validation_error = make_validation_error_fn("authoring")
 
 
-def _resolve_specs_dir(
-    config: ServerConfig, path: Optional[str]
-) -> tuple[Optional[Path], Optional[dict]]:
+def _resolve_specs_dir(config: ServerConfig, path: Optional[str]) -> tuple[Optional[Path], Optional[dict]]:
     """Thin wrapper around the shared helper preserving the local call convention."""
     return resolve_specs_dir(config, path)
 
@@ -64,9 +67,7 @@ def _phase_exists(spec_id: str, specs_dir: Path, title: str) -> bool:
     try:
         spec_data = load_spec(spec_id, specs_dir)
     except Exception:  # pragma: no cover - defensive guard
-        logger.exception(
-            "Failed to inspect spec for duplicate phases", extra={"spec_id": spec_id}
-        )
+        logger.exception("Failed to inspect spec for duplicate phases", extra={"spec_id": spec_id})
         return False
 
     if not spec_data:

@@ -12,14 +12,12 @@ from typing import Generic, Optional, TypeVar
 
 from filelock import FileLock
 
-from foundry_mcp.core.research.models import (
-    ConsensusState,
-    ConversationThread,
-    DeepResearchState,
-    IdeationState,
-    ThinkDeepState,
-    ThreadStatus,
-)
+from foundry_mcp.core.research.models.consensus import ConsensusState
+from foundry_mcp.core.research.models.conversations import ConversationThread
+from foundry_mcp.core.research.models.deep_research import DeepResearchState
+from foundry_mcp.core.research.models.enums import ThreadStatus
+from foundry_mcp.core.research.models.ideation import IdeationState
+from foundry_mcp.core.research.models.thinkdeep import ThinkDeepState
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +82,7 @@ class FileStorageBackend(Generic[T]):
         lock_path = self._get_lock_path(item_id)
 
         with FileLock(lock_path, timeout=10):
-            data = item.model_dump(mode="json")
+            data = item.model_dump(mode="json")  # type: ignore[union-attr]
             file_path.write_text(json.dumps(data, indent=2, default=str))
             logger.debug("Saved %s to %s", item_id, file_path)
 
@@ -119,7 +117,7 @@ class FileStorageBackend(Generic[T]):
 
             try:
                 data = json.loads(file_path.read_text())
-                return self.model_class.model_validate(data)
+                return self.model_class.model_validate(data)  # type: ignore[union-attr]
             except (json.JSONDecodeError, ValueError) as exc:
                 logger.warning("Failed to load %s: %s", item_id, exc)
                 return None
@@ -527,13 +525,7 @@ class ResearchMemory:
 
     def load_session_by_id(
         self, session_id: str
-    ) -> Optional[
-        ConversationThread
-        | ThinkDeepState
-        | IdeationState
-        | ConsensusState
-        | DeepResearchState
-    ]:
+    ) -> Optional[ConversationThread | ThinkDeepState | IdeationState | ConsensusState | DeepResearchState]:
         """Load any research session by its ID prefix.
 
         Determines the session type from the ID prefix and loads from

@@ -13,16 +13,22 @@ import pytest
 
 # Core consultation module
 from foundry_mcp.core.ai_consultation import (
-    ConsultationWorkflow,
     ConsultationRequest,
     ConsultationResult,
+    ConsultationWorkflow,
 )
 
 # Prompts infrastructure
 from foundry_mcp.core.prompts import (
-    PromptTemplate,
     PromptRegistry,
+    PromptTemplate,
     get_prompt_builder,
+)
+from foundry_mcp.core.prompts.fidelity_review import (
+    FIDELITY_RESPONSE_SCHEMA,
+    FIDELITY_REVIEW_V1,
+    SEVERITY_KEYWORDS,
+    FidelityReviewPromptBuilder,
 )
 
 # Workflow-specific prompt builders
@@ -31,26 +37,20 @@ from foundry_mcp.core.prompts.plan_review import (
     PLAN_REVIEW_SECURITY_V1,
     PlanReviewPromptBuilder,
 )
-
-from foundry_mcp.core.prompts.fidelity_review import (
-    FIDELITY_REVIEW_V1,
-    FIDELITY_RESPONSE_SCHEMA,
-    SEVERITY_KEYWORDS,
-    FidelityReviewPromptBuilder,
+from foundry_mcp.core.responses.errors_ai import (
+    ai_cache_stale_error,
+    ai_context_too_large_error,
+    ai_no_provider_error,
+    ai_prompt_not_found_error,
+    ai_provider_error,
+    ai_provider_timeout_error,
 )
 
 # Response helpers
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
-    ai_no_provider_error,
-    ai_provider_timeout_error,
-    ai_provider_error,
-    ai_context_too_large_error,
-    ai_prompt_not_found_error,
-    ai_cache_stale_error,
 )
-
 
 # =============================================================================
 # ConsultationWorkflow Tests
@@ -248,12 +248,8 @@ class TestPromptRegistry:
     def test_registry_list_templates(self):
         """Registry lists all registered template IDs."""
         registry = PromptRegistry()
-        registry.register(
-            PromptTemplate(id="a", version="1.0", system_prompt="S", user_template="U")
-        )
-        registry.register(
-            PromptTemplate(id="b", version="1.0", system_prompt="S", user_template="U")
-        )
+        registry.register(PromptTemplate(id="a", version="1.0", system_prompt="S", user_template="U"))
+        registry.register(PromptTemplate(id="b", version="1.0", system_prompt="S", user_template="U"))
 
         templates = registry.list_templates()
         assert "a" in templates
@@ -357,11 +353,14 @@ class TestFidelityReviewPromptBuilder:
         assert "test-spec-001" in result
         assert "Implementation Fidelity Review" in result
 
-    def test_fidelity_has_six_sections(self):
-        """FIDELITY_REVIEW_V1 metadata includes 6 sections."""
+    def test_fidelity_has_eight_sections(self):
+        """FIDELITY_REVIEW_V1 metadata includes 8 sections."""
         sections = FIDELITY_REVIEW_V1.metadata.get("sections", [])
-        assert len(sections) == 6
+        assert len(sections) == 8
         assert "Context" in sections
+        assert "Spec Overview" in sections
+        assert "Implementation File Paths" in sections
+        assert "Subsequent Phases" in sections
         assert "Review Questions" in sections
 
     def test_severity_keywords_defined(self):
@@ -960,9 +959,9 @@ class TestResultCache:
 
     def test_init_default_path(self, tmp_path):
         """ResultCache initializes with default path if not provided."""
-        from foundry_mcp.core.ai_consultation import ResultCache
-
         import os
+
+        from foundry_mcp.core.ai_consultation import ResultCache
 
         original_cwd = os.getcwd()
         try:
@@ -1014,8 +1013,9 @@ class TestResultCache:
 
     def test_cache_expiration(self, tmp_path):
         """ResultCache.get returns None for expired entries."""
-        from foundry_mcp.core.ai_consultation import ResultCache
         import time
+
+        from foundry_mcp.core.ai_consultation import ResultCache
 
         cache = ResultCache(base_dir=tmp_path / "cache", default_ttl=1)
         result = ConsultationResult(
@@ -1039,8 +1039,9 @@ class TestResultCache:
 
     def test_custom_ttl_override(self, tmp_path):
         """ResultCache.set can override default TTL."""
-        from foundry_mcp.core.ai_consultation import ResultCache
         import time
+
+        from foundry_mcp.core.ai_consultation import ResultCache
 
         cache = ResultCache(base_dir=tmp_path / "cache", default_ttl=3600)
         result = ConsultationResult(
@@ -1388,7 +1389,7 @@ class TestConsultationOrchestrator:
     @pytest.fixture
     def mock_config(self, tmp_path):
         """Create a mock ConsultationConfig."""
-        from foundry_mcp.core.llm_config import ConsultationConfig
+        from foundry_mcp.core.llm_config.consultation import ConsultationConfig
 
         return ConsultationConfig(
             priority=["gemini", "claude"],
@@ -1443,11 +1444,11 @@ class TestConsultationOrchestrator:
         from unittest.mock import patch
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=False,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=[],
             ):
                 assert orchestrator.is_available() is False
@@ -1457,7 +1458,7 @@ class TestConsultationOrchestrator:
         from unittest.mock import patch
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=True,
         ):
             assert orchestrator.is_available() is True
@@ -1470,7 +1471,7 @@ class TestConsultationOrchestrator:
             return provider_id == "gemini"
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             side_effect=mock_check,
         ):
             assert orchestrator.is_available("gemini") is True
@@ -1481,7 +1482,7 @@ class TestConsultationOrchestrator:
         from unittest.mock import patch
 
         with patch(
-            "foundry_mcp.core.ai_consultation.available_providers",
+            "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
             return_value=["claude", "gemini", "openai"],
         ):
             providers = orchestrator.get_available_providers()
@@ -1521,9 +1522,7 @@ class TestConsultationOrchestrator:
         assert outcome.cache_hit is True
         assert outcome.content == "Cached content"
 
-    def test_consult_success_single_provider(
-        self, orchestrator, mock_provider_result
-    ):
+    def test_consult_success_single_provider(self, orchestrator, mock_provider_result):
         """consult succeeds with single provider mode."""
         from unittest.mock import MagicMock, patch
 
@@ -1533,15 +1532,15 @@ class TestConsultationOrchestrator:
         mock_provider.generate.return_value = mock_provider_result()
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=True,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=["gemini"],
             ):
                 with patch(
-                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
                     return_value=mock_provider,
                 ):
                     request = ConsultationRequest(
@@ -1577,15 +1576,15 @@ class TestConsultationOrchestrator:
         )
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=True,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=["gemini"],
             ):
                 with patch(
-                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
                     return_value=mock_provider,
                 ):
                     request = ConsultationRequest(
@@ -1610,11 +1609,11 @@ class TestConsultationOrchestrator:
         from foundry_mcp.core.ai_consultation import ConsultationRequest
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=False,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=[],
             ):
                 request = ConsultationRequest(
@@ -1639,11 +1638,11 @@ class TestConsultationOrchestrator:
         from foundry_mcp.core.ai_consultation import ConsultationRequest
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=True,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=["gemini"],
             ):
                 # Request with invalid/missing context will cause prompt build error
@@ -1657,9 +1656,7 @@ class TestConsultationOrchestrator:
         assert outcome.error is not None
         assert "prompt" in outcome.error.lower() or "failed" in outcome.error.lower()
 
-    def test_consult_fallback_on_provider_failure(
-        self, orchestrator, mock_provider_result
-    ):
+    def test_consult_fallback_on_provider_failure(self, orchestrator, mock_provider_result):
         """consult falls back to next provider on failure."""
         from unittest.mock import MagicMock, patch
 
@@ -1687,15 +1684,15 @@ class TestConsultationOrchestrator:
         mock_provider.generate.side_effect = mock_generate
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=True,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=["gemini", "claude"],
             ):
                 with patch(
-                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
                     return_value=mock_provider,
                 ):
                     request = ConsultationRequest(
@@ -1743,9 +1740,7 @@ class TestConsultationOrchestrator:
         key = orchestrator._generate_cache_key(request)
         assert key == "explicit-key"
 
-    def test_consult_uses_timeout_from_request(
-        self, orchestrator, mock_provider_result
-    ):
+    def test_consult_uses_timeout_from_request(self, orchestrator, mock_provider_result):
         """consult uses timeout from request."""
         from unittest.mock import MagicMock, patch
 
@@ -1755,15 +1750,15 @@ class TestConsultationOrchestrator:
         mock_provider.generate.return_value = mock_provider_result()
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=True,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=["gemini"],
             ):
                 with patch(
-                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
                     return_value=mock_provider,
                 ):
                     request = ConsultationRequest(
@@ -1785,9 +1780,7 @@ class TestConsultationOrchestrator:
         provider_request = call_args[0][0]
         assert provider_request.timeout == 300.0
 
-    def test_consult_result_includes_duration(
-        self, orchestrator, mock_provider_result
-    ):
+    def test_consult_result_includes_duration(self, orchestrator, mock_provider_result):
         """consult result includes duration_ms."""
         from unittest.mock import MagicMock, patch
 
@@ -1797,15 +1790,15 @@ class TestConsultationOrchestrator:
         mock_provider.generate.return_value = mock_provider_result()
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=True,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=["gemini"],
             ):
                 with patch(
-                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
                     return_value=mock_provider,
                 ):
                     request = ConsultationRequest(
@@ -1830,7 +1823,7 @@ class TestConsultationOrchestratorMultiModel:
     @pytest.fixture
     def mock_multi_model_config(self, tmp_path):
         """Create a mock ConsultationConfig for multi-model mode."""
-        from foundry_mcp.core.llm_config import ConsultationConfig, WorkflowConsultationConfig
+        from foundry_mcp.core.llm_config.consultation import ConsultationConfig, WorkflowConsultationConfig
 
         return ConsultationConfig(
             priority=["gemini", "claude", "openai"],
@@ -1874,9 +1867,7 @@ class TestConsultationOrchestratorMultiModel:
 
         return _create
 
-    def test_consult_multi_model_returns_consensus_result(
-        self, multi_model_orchestrator, mock_provider_result
-    ):
+    def test_consult_multi_model_returns_consensus_result(self, multi_model_orchestrator, mock_provider_result):
         """consult returns ConsensusResult when min_models > 1."""
         from unittest.mock import MagicMock, patch
 
@@ -1889,15 +1880,15 @@ class TestConsultationOrchestratorMultiModel:
         mock_provider.generate.return_value = mock_provider_result()
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=True,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=["gemini", "claude"],
             ):
                 with patch(
-                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
                     return_value=mock_provider,
                 ):
                     request = ConsultationRequest(
@@ -1910,18 +1901,14 @@ class TestConsultationOrchestratorMultiModel:
                             "spec_content": "Spec content",
                         },
                     )
-                    outcome = multi_model_orchestrator.consult(
-                        request, use_cache=False
-                    )
+                    outcome = multi_model_orchestrator.consult(request, use_cache=False)
 
         # Should return ConsensusResult for multi-model workflow
         assert isinstance(outcome, ConsensusResult)
         assert len(outcome.responses) >= 1
         assert outcome.agreement is not None
 
-    def test_consult_multi_model_with_failures(
-        self, multi_model_orchestrator, mock_provider_result
-    ):
+    def test_consult_multi_model_with_failures(self, multi_model_orchestrator, mock_provider_result):
         """consult handles partial failures in multi-model mode."""
         from unittest.mock import MagicMock, patch
 
@@ -1952,15 +1939,15 @@ class TestConsultationOrchestratorMultiModel:
         mock_provider.generate.side_effect = mock_generate
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=True,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=["gemini", "claude", "openai"],
             ):
                 with patch(
-                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
                     return_value=mock_provider,
                 ):
                     request = ConsultationRequest(
@@ -1973,9 +1960,7 @@ class TestConsultationOrchestratorMultiModel:
                             "spec_content": "Spec content",
                         },
                     )
-                    outcome = multi_model_orchestrator.consult(
-                        request, use_cache=False
-                    )
+                    outcome = multi_model_orchestrator.consult(request, use_cache=False)
 
         assert isinstance(outcome, ConsensusResult)
         # Should have tracked both successes and failures
@@ -2003,15 +1988,15 @@ class TestConsultationOrchestratorMultiModel:
         )
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=True,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=["gemini", "claude"],
             ):
                 with patch(
-                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
                     return_value=mock_provider,
                 ):
                     request = ConsultationRequest(
@@ -2024,9 +2009,7 @@ class TestConsultationOrchestratorMultiModel:
                             "spec_content": "Spec content",
                         },
                     )
-                    outcome = multi_model_orchestrator.consult(
-                        request, use_cache=False
-                    )
+                    outcome = multi_model_orchestrator.consult(request, use_cache=False)
 
         assert isinstance(outcome, ConsensusResult)
         assert outcome.success is False

@@ -1,15 +1,11 @@
-"""Review commands for SDD CLI.
+"""Review commands for Foundry CLI.
 
 Provides commands for spec review including:
-- Quick structural review (no LLM required)
-- AI-powered full/security/feasibility reviews via ConsultationOrchestrator
+- AI-powered comprehensive reviews via ConsultationOrchestrator
 - AI-powered fidelity reviews to compare implementation against spec
 
 AI-enhanced reviews use:
 - PLAN_REVIEW_FULL_V1: Comprehensive 6-dimension review
-- PLAN_REVIEW_QUICK_V1: Critical blockers and questions focus
-- PLAN_REVIEW_SECURITY_V1: Security-focused review
-- PLAN_REVIEW_FEASIBILITY_V1: Technical complexity assessment
 - SYNTHESIS_PROMPT_V1: Multi-model response synthesis
 - FIDELITY_REVIEW_V1: Implementation vs specification comparison
 """
@@ -38,12 +34,9 @@ from foundry_mcp.tools.unified.documentation_helpers import (
 )
 from foundry_mcp.tools.unified.review_helpers import (
     DEFAULT_AI_TIMEOUT,
-    REVIEW_TYPES,
     _get_llm_status,
     _run_ai_review,
-    _run_quick_review,
 )
-from foundry_mcp.core.llm_config import get_consultation_config
 
 logger = get_cli_logger()
 
@@ -79,31 +72,10 @@ def _emit_review_envelope(envelope: Dict[str, Any], *, duration_ms: float) -> No
 
 REVIEW_TOOL_DEFINITIONS = [
     {
-        "name": "quick-review",
-        "description": "Structural validation with schema & progress checks (native).",
-        "capabilities": ["structure", "progress", "quality"],
-        "requires_llm": False,
-    },
-    {
         "name": "full-review",
-        "description": "LLM-powered deep review via foundry:foundry-spec.",
-        "capabilities": ["structure", "quality", "suggestions"],
+        "description": "Comprehensive LLM-powered review (auto-enhances to spec-vs-plan when plan is available).",
+        "capabilities": ["structure", "quality", "suggestions", "plan_comparison"],
         "requires_llm": True,
-        "alternative": "foundry:foundry-spec",
-    },
-    {
-        "name": "security-review",
-        "description": "Security-focused LLM analysis.",
-        "capabilities": ["security", "trust_boundaries"],
-        "requires_llm": True,
-        "alternative": "foundry:foundry-spec",
-    },
-    {
-        "name": "feasibility-review",
-        "description": "Implementation feasibility assessment (LLM).",
-        "capabilities": ["complexity", "risk", "dependencies"],
-        "requires_llm": True,
-        "alternative": "foundry:foundry-spec",
     },
 ]
 
@@ -119,13 +91,6 @@ def review_group() -> None:
 
 @review_group.command("spec")
 @click.argument("spec_id")
-@click.option(
-    "--type",
-    "review_type",
-    type=click.Choice(REVIEW_TYPES),
-    default=None,
-    help="Type of review to perform (defaults to config value, typically 'full').",
-)
 @click.option(
     "--tools",
     help="Comma-separated list of review tools to use (LLM types only).",
@@ -161,7 +126,6 @@ def review_group() -> None:
 def review_spec_cmd(
     ctx: click.Context,
     spec_id: str,
-    review_type: Optional[str],
     tools: Optional[str],
     model: Optional[str],
     ai_provider: Optional[str],
@@ -169,49 +133,33 @@ def review_spec_cmd(
     no_consultation_cache: bool,
     dry_run: bool,
 ) -> None:
-    """Run a structural or AI-powered review on a specification."""
+    """Run an AI-powered review on a specification."""
     start_time = time.perf_counter()
     cli_ctx = get_context(ctx)
     specs_dir = cli_ctx.specs_dir
-
-    # Get default review_type from config if not provided
-    if review_type is None:
-        consultation_config = get_consultation_config()
-        workflow_config = consultation_config.get_workflow_config("plan_review")
-        review_type = workflow_config.default_review_type
 
     if specs_dir is None:
         emit_error(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
 
     llm_status = _get_llm_status()
 
-    if review_type == "quick":
-        envelope = _run_quick_review(
-            spec_id=spec_id,
-            specs_dir=specs_dir,
-            dry_run=dry_run,
-            llm_status=llm_status,
-            start_time=start_time,
-        )
-    else:
-        envelope = _run_ai_review(
-            spec_id=spec_id,
-            specs_dir=specs_dir,
-            review_type=review_type,
-            ai_provider=ai_provider,
-            model=model,
-            ai_timeout=ai_timeout,
-            consultation_cache=not no_consultation_cache,
-            dry_run=dry_run,
-            llm_status=llm_status,
-            start_time=start_time,
-        )
+    envelope = _run_ai_review(
+        spec_id=spec_id,
+        specs_dir=specs_dir,
+        ai_provider=ai_provider,
+        model=model,
+        ai_timeout=ai_timeout,
+        consultation_cache=not no_consultation_cache,
+        dry_run=dry_run,
+        llm_status=llm_status,
+        start_time=start_time,
+    )
 
     duration_ms = (time.perf_counter() - start_time) * 1000
     _emit_review_envelope(envelope, duration_ms=duration_ms)
@@ -251,7 +199,6 @@ def review_tools_cmd(ctx: click.Context) -> None:
         {
             "tools": tools_info,
             "llm_status": llm_status,
-            "review_types": REVIEW_TYPES,
         },
         telemetry={"duration_ms": round(duration_ms, 2)},
     )
@@ -269,55 +216,24 @@ def review_plan_tools_cmd(ctx: click.Context) -> None:
     llm_status = _get_llm_status()
 
     # Define plan review toolchains
-    plan_tools = [
-        {
-            "name": "quick-review",
-            "description": "Fast structural review for basic validation",
-            "capabilities": ["structure", "syntax", "basic_quality"],
-            "llm_required": False,
-            "estimated_time": "< 10 seconds",
-        },
+    available_tools = [
         {
             "name": "full-review",
-            "description": "Comprehensive review with LLM analysis",
-            "capabilities": ["structure", "quality", "feasibility", "suggestions"],
+            "description": "Comprehensive review with LLM analysis (auto-enhances to spec-vs-plan when plan is available)",
+            "capabilities": ["structure", "quality", "feasibility", "suggestions", "plan_comparison"],
             "llm_required": True,
             "estimated_time": "30-60 seconds",
-        },
-        {
-            "name": "security-review",
-            "description": "Security-focused analysis of plan",
-            "capabilities": ["security", "trust_boundaries", "data_flow"],
-            "llm_required": True,
-            "estimated_time": "30-60 seconds",
-        },
-        {
-            "name": "feasibility-review",
-            "description": "Implementation feasibility assessment",
-            "capabilities": ["complexity", "dependencies", "risk"],
-            "llm_required": True,
-            "estimated_time": "30-60 seconds",
+            "status": "external",
+            "available": False,
+            "reason": "Use the foundry:foundry-spec workflow",
+            "alternative": "foundry:foundry-spec",
         },
     ]
 
-    # Add availability status (only quick review is native today)
-    available_tools = []
-    for tool in plan_tools:
-        tool_info = tool.copy()
-        if tool["llm_required"]:
-            tool_info["status"] = "external"
-            tool_info["available"] = False
-            tool_info["reason"] = "Use the foundry:foundry-spec workflow"
-            tool_info["alternative"] = "foundry:foundry-spec"
-        else:
-            tool_info["status"] = "native"
-            tool_info["available"] = True
-        available_tools.append(tool_info)
-
     recommendations = [
-        "Use 'quick-review' for structural validation inside foundry-mcp",
-        "Invoke foundry:foundry-spec for AI-assisted plan analysis",
-        "Configure LLM credentials when ready to adopt the toolkit workflow",
+        "Use 'spec validate' for structural validation.",
+        "Invoke foundry:foundry-spec for AI-assisted plan analysis.",
+        "Configure LLM credentials when ready to adopt the toolkit workflow.",
     ]
 
     duration_ms = (time.perf_counter() - start_time) * 1000
@@ -407,8 +323,8 @@ def review_fidelity_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
 
     # Validate mutually exclusive options
@@ -506,7 +422,7 @@ def _run_fidelity_review(
 
     # Load spec
     try:
-        from foundry_mcp.core.spec import load_spec, find_spec_file
+        from foundry_mcp.core.spec import find_spec_file, load_spec
 
         spec_file = find_spec_file(spec_id, specs_dir)
         if not spec_file:
@@ -514,14 +430,23 @@ def _run_fidelity_review(
                 f"Specification not found: {spec_id}",
                 code="SPEC_NOT_FOUND",
                 error_type="not_found",
-                remediation="Verify the spec ID exists using 'sdd list'",
+                remediation="Verify the spec ID exists using 'foundry list'",
                 details={"spec_id": spec_id},
             )
-        spec_data = load_spec(spec_file)
+        spec_data = load_spec(str(spec_file))
     except Exception:
-        logger.exception(f"Failed to load spec {spec_id}")
+        logger.error(f"Failed to load spec {spec_id}")
         emit_error(
             "Failed to load spec",
+            code="SPEC_LOAD_ERROR",
+            error_type="error",
+            remediation="Check that the spec file is valid JSON",
+            details={"spec_id": spec_id},
+        )
+
+    if spec_data is None:
+        emit_error(
+            f"Spec data is empty for: {spec_id}",
             code="SPEC_LOAD_ERROR",
             error_type="error",
             remediation="Check that the spec file is valid JSON",
@@ -590,9 +515,7 @@ def _run_fidelity_review(
         context={
             "spec_id": spec_id,
             "spec_title": spec_title,
-            "spec_description": f"**Description:** {spec_description}"
-            if spec_description
-            else "",
+            "spec_description": f"**Description:** {spec_description}" if spec_description else "",
             "review_scope": review_scope,
             "spec_requirements": spec_requirements,
             "implementation_artifacts": implementation_artifacts,
@@ -607,7 +530,7 @@ def _run_fidelity_review(
     try:
         result = orchestrator.consult(request, use_cache=consultation_cache)
     except Exception:
-        logger.exception(f"AI fidelity consultation failed for {spec_id}")
+        logger.error(f"AI fidelity consultation failed for {spec_id}")
         emit_error(
             "AI consultation failed",
             code="AI_CONSULTATION_ERROR",
@@ -619,12 +542,27 @@ def _run_fidelity_review(
             },
         )
 
+    # Extract attributes in a type-safe way for both ConsultationResult and ConsensusResult
+    from foundry_mcp.core.ai_consultation import ConsensusResult
+
+    if isinstance(result, ConsensusResult):
+        primary = result.successful_responses[0] if result.successful_responses else None
+        result_content: str = result.primary_content
+        result_provider_id: Optional[str] = primary.provider_id if primary else ai_provider
+        result_model_used: Optional[str] = primary.model_used if primary else None
+        result_cache_hit: bool = primary.cache_hit if primary else False
+    else:
+        result_content = result.content
+        result_provider_id = result.provider_id
+        result_model_used = result.model_used
+        result_cache_hit = result.cache_hit
+
     # Parse JSON response if possible
     parsed_response = None
-    if result and result.content:
+    if result_content:
         try:
             # Try to extract JSON from markdown code blocks if present
-            content = result.content
+            content = result_content
             if "```json" in content:
                 start = content.find("```json") + 7
                 end = content.find("```", start)
@@ -648,20 +586,14 @@ def _run_fidelity_review(
         "task_id": task_id,
         "phase_id": phase_id,
         "files": files,
-        "verdict": parsed_response.get("verdict", "unknown")
-        if parsed_response
-        else "unknown",
+        "verdict": parsed_response.get("verdict", "unknown") if parsed_response else "unknown",
         "llm_status": llm_status,
-        "ai_provider": result.provider_id if result else ai_provider,
+        "ai_provider": result_provider_id,
         "consultation_cache": consultation_cache,
-        "response": parsed_response
-        if parsed_response
-        else result.content
-        if result
-        else None,
-        "raw_response": result.content if result and not parsed_response else None,
-        "model": result.model_used if result else None,
-        "cached": result.cache_hit if result else False,
+        "response": parsed_response if parsed_response else result_content or None,
+        "raw_response": result_content if not parsed_response else None,
+        "model": result_model_used,
+        "cached": result_cache_hit,
         "incremental": incremental,
         "base_branch": base_branch,
     }

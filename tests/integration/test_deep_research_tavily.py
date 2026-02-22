@@ -10,20 +10,19 @@ including:
 """
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from foundry_mcp.config import ResearchConfig
-from foundry_mcp.core.research.models import (
-    DeepResearchPhase,
+from foundry_mcp.config.research import ResearchConfig
+from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
+)
+from foundry_mcp.core.research.models.sources import (
     ResearchMode,
     ResearchSource,
     SourceType,
 )
 from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
-
 
 # =============================================================================
 # Fixtures
@@ -91,9 +90,7 @@ class TestResearchModeSmartDefaults:
 
     def test_general_mode_uses_basic_search_depth(self, base_config):
         """General research mode should use basic search depth by default."""
-        config = ResearchConfig(
-            **{**base_config.__dict__, "deep_research_mode": "general"}
-        )
+        config = ResearchConfig(**{**base_config.__dict__, "deep_research_mode": "general"})
         assert config.deep_research_mode == "general"
         assert config.tavily_search_depth == "basic"
 
@@ -133,39 +130,27 @@ class TestResearchModeSmartDefaults:
 class TestConfigOverrideBehavior:
     """Tests for config override behavior in deep research."""
 
-    def test_config_search_depth_propagates_to_workflow(
-        self, base_config, mock_memory, mock_tavily_search_response
-    ):
+    def test_config_search_depth_propagates_to_workflow(self, base_config, mock_memory, mock_tavily_search_response):
         """Search depth from config should propagate to Tavily search calls."""
-        config = ResearchConfig(
-            **{**base_config.__dict__, "tavily_search_depth": "advanced"}
-        )
+        config = ResearchConfig(**{**base_config.__dict__, "tavily_search_depth": "advanced"})
 
         workflow = DeepResearchWorkflow(config=config, memory=mock_memory)
 
         # Verify config is stored in workflow
         assert workflow.config.tavily_search_depth == "advanced"
 
-    def test_config_topic_propagates_to_workflow(
-        self, base_config, mock_memory
-    ):
+    def test_config_topic_propagates_to_workflow(self, base_config, mock_memory):
         """Topic from config should propagate to Tavily search calls."""
-        config = ResearchConfig(
-            **{**base_config.__dict__, "tavily_topic": "news", "tavily_news_days": 30}
-        )
+        config = ResearchConfig(**{**base_config.__dict__, "tavily_topic": "news", "tavily_news_days": 30})
 
         workflow = DeepResearchWorkflow(config=config, memory=mock_memory)
 
         assert workflow.config.tavily_topic == "news"
         assert workflow.config.tavily_news_days == 30
 
-    def test_config_country_propagates_to_workflow(
-        self, base_config, mock_memory
-    ):
+    def test_config_country_propagates_to_workflow(self, base_config, mock_memory):
         """Country from config should propagate to Tavily search calls."""
-        config = ResearchConfig(
-            **{**base_config.__dict__, "tavily_country": "US"}
-        )
+        config = ResearchConfig(**{**base_config.__dict__, "tavily_country": "US"})
 
         workflow = DeepResearchWorkflow(config=config, memory=mock_memory)
 
@@ -196,9 +181,7 @@ class TestTavilySearchParameterPropagation:
     """Tests for Tavily search parameter propagation through workflow."""
 
     @pytest.mark.asyncio
-    async def test_get_tavily_search_kwargs_includes_configured_params(
-        self, base_config, mock_memory
-    ):
+    async def test_get_tavily_search_kwargs_includes_configured_params(self, base_config, mock_memory):
         """_get_tavily_search_kwargs should include all configured parameters."""
         config = ResearchConfig(
             **{
@@ -233,9 +216,7 @@ class TestTavilySearchParameterPropagation:
         assert kwargs["auto_parameters"] is True
 
     @pytest.mark.asyncio
-    async def test_get_tavily_search_kwargs_omits_none_values(
-        self, base_config, mock_memory
-    ):
+    async def test_get_tavily_search_kwargs_omits_none_values(self, base_config, mock_memory):
         """_get_tavily_search_kwargs should omit None values."""
         config = ResearchConfig(
             **{
@@ -260,9 +241,7 @@ class TestTavilySearchParameterPropagation:
         assert "country" not in kwargs
 
     @pytest.mark.asyncio
-    async def test_get_tavily_search_kwargs_respects_basic_override(
-        self, mock_memory
-    ):
+    async def test_get_tavily_search_kwargs_respects_basic_override(self, mock_memory):
         """Explicit config should override mode defaults even when matching base defaults."""
         config = ResearchConfig(
             enabled=True,
@@ -300,18 +279,14 @@ class TestExtractFollowupIntegration:
     """Tests for Tavily extract follow-up integration in deep research."""
 
     @pytest.mark.asyncio
-    async def test_extract_followup_disabled_by_default(
-        self, base_config, mock_memory
-    ):
+    async def test_extract_followup_disabled_by_default(self, base_config, mock_memory):
         """Extract follow-up should be disabled by default."""
         workflow = DeepResearchWorkflow(config=base_config, memory=mock_memory)
 
         assert workflow.config.tavily_extract_in_deep_research is False
 
     @pytest.mark.asyncio
-    async def test_extract_followup_enabled_when_configured(
-        self, base_config, mock_memory
-    ):
+    async def test_extract_followup_enabled_when_configured(self, base_config, mock_memory):
         """Extract follow-up should be enabled when config flag is True."""
         config = ResearchConfig(
             **{
@@ -325,9 +300,7 @@ class TestExtractFollowupIntegration:
         assert workflow.config.tavily_extract_in_deep_research is True
 
     @pytest.mark.asyncio
-    async def test_extract_max_urls_configurable(
-        self, base_config, mock_memory
-    ):
+    async def test_extract_max_urls_configurable(self, base_config, mock_memory):
         """Extract max URLs should be configurable."""
         config = ResearchConfig(
             **{
@@ -342,9 +315,7 @@ class TestExtractFollowupIntegration:
         assert workflow.config.tavily_extract_max_urls == 10
 
     @pytest.mark.asyncio
-    async def test_extract_followup_method_exists(
-        self, base_config, mock_memory
-    ):
+    async def test_extract_followup_method_exists(self, base_config, mock_memory):
         """_execute_extract_followup_async method should exist on workflow."""
         config = ResearchConfig(
             **{
@@ -380,9 +351,7 @@ class TestWorkflowStateIntegration:
 
     def test_state_tracks_follow_links(self, base_config, mock_memory):
         """State should track follow_links setting."""
-        config = ResearchConfig(
-            **{**base_config.__dict__, "deep_research_follow_links": True}
-        )
+        config = ResearchConfig(**{**base_config.__dict__, "deep_research_follow_links": True})
 
         state = DeepResearchState(
             original_query="test query",

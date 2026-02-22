@@ -5,15 +5,18 @@ Tests verification type auto-fixer with dry-run, mapping, and persistence.
 """
 
 import json
-import pytest
-from foundry_mcp.server import create_server
-from foundry_mcp.config import ServerConfig
-from tests.conftest import extract_response_dict
+from unittest.mock import patch
 
+import pytest
+
+from foundry_mcp.config.server import ServerConfig
+from foundry_mcp.server import create_server
+from tests.conftest import extract_response_dict
 
 # =============================================================================
 # Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def test_specs_dir(tmp_path):
@@ -29,11 +32,23 @@ def test_config(test_specs_dir):
     return ServerConfig(server_name="test", server_version="0.1.0", specs_dir=test_specs_dir, log_level="WARNING")
 
 
+@pytest.fixture(autouse=True)
+def maintainer_role():
+    """Run fix-verification-types tests with maintainer permissions."""
+    with patch(
+        "foundry_mcp.tools.unified.common.get_server_role",
+        return_value="maintainer",
+    ):
+        yield
+
+
 @pytest.fixture
 def task_tool(test_config):
     raw_fn = create_server(test_config)._tool_manager._tools["task"].fn
+
     def wrapper(*args, **kwargs):
         return extract_response_dict(raw_fn(*args, **kwargs))
+
     return wrapper
 
 
@@ -61,6 +76,7 @@ def read_spec(specs_dir, spec_id: str, status: str = "active") -> dict:
 # Required Parameter Tests
 # =============================================================================
 
+
 class TestRequiredParams:
     def test_missing_spec_id(self, task_tool):
         result = task_tool(action="fix-verification-types")
@@ -82,12 +98,20 @@ class TestRequiredParams:
 # Dry Run Tests
 # =============================================================================
 
+
 class TestDryRun:
     def test_dry_run_does_not_persist(self, task_tool, test_specs_dir):
         """Dry run should report fixes but not save changes."""
         hierarchy = {
             "spec-root": {"type": "spec", "title": "Test", "status": "in_progress", "children": ["verify-1"]},
-            "verify-1": {"type": "verify", "title": "Test verify", "status": "pending", "parent": "spec-root", "children": [], "metadata": {}},
+            "verify-1": {
+                "type": "verify",
+                "title": "Test verify",
+                "status": "pending",
+                "parent": "spec-root",
+                "children": [],
+                "metadata": {},
+            },
         }
         write_spec(test_specs_dir, "dry-run-test-001", hierarchy)
 
@@ -105,7 +129,14 @@ class TestDryRun:
         """Non-dry-run should persist changes."""
         hierarchy = {
             "spec-root": {"type": "spec", "title": "Test", "status": "in_progress", "children": ["verify-1"]},
-            "verify-1": {"type": "verify", "title": "Test verify", "status": "pending", "parent": "spec-root", "children": [], "metadata": {}},
+            "verify-1": {
+                "type": "verify",
+                "title": "Test verify",
+                "status": "pending",
+                "parent": "spec-root",
+                "children": [],
+                "metadata": {},
+            },
         }
         write_spec(test_specs_dir, "persist-test-001", hierarchy)
 
@@ -124,12 +155,20 @@ class TestDryRun:
 # Missing Verification Type Tests
 # =============================================================================
 
+
 class TestMissingVerificationType:
     def test_missing_type_defaults_to_run_tests(self, task_tool, test_specs_dir):
         """Missing verification_type should default to run-tests."""
         hierarchy = {
             "spec-root": {"type": "spec", "title": "Test", "status": "in_progress", "children": ["verify-1"]},
-            "verify-1": {"type": "verify", "title": "Run tests", "status": "pending", "parent": "spec-root", "children": [], "metadata": {}},
+            "verify-1": {
+                "type": "verify",
+                "title": "Run tests",
+                "status": "pending",
+                "parent": "spec-root",
+                "children": [],
+                "metadata": {},
+            },
         }
         write_spec(test_specs_dir, "missing-type-001", hierarchy)
 
@@ -143,7 +182,13 @@ class TestMissingVerificationType:
         """Should create metadata dict if missing entirely."""
         hierarchy = {
             "spec-root": {"type": "spec", "title": "Test", "status": "in_progress", "children": ["verify-1"]},
-            "verify-1": {"type": "verify", "title": "Run tests", "status": "pending", "parent": "spec-root", "children": []},
+            "verify-1": {
+                "type": "verify",
+                "title": "Run tests",
+                "status": "pending",
+                "parent": "spec-root",
+                "children": [],
+            },
         }
         write_spec(test_specs_dir, "no-metadata-001", hierarchy)
 
@@ -160,12 +205,20 @@ class TestMissingVerificationType:
 # Invalid Type Tests
 # =============================================================================
 
+
 class TestInvalidType:
     def test_test_type_defaults_to_manual(self, task_tool, test_specs_dir):
         """Deprecated 'test' verification_type should default to manual."""
         hierarchy = {
             "spec-root": {"type": "spec", "title": "Test", "status": "in_progress", "children": ["verify-1"]},
-            "verify-1": {"type": "verify", "title": "Run tests", "status": "pending", "parent": "spec-root", "children": [], "metadata": {"verification_type": "test"}},
+            "verify-1": {
+                "type": "verify",
+                "title": "Run tests",
+                "status": "pending",
+                "parent": "spec-root",
+                "children": [],
+                "metadata": {"verification_type": "test"},
+            },
         }
         write_spec(test_specs_dir, "deprecated-test-001", hierarchy)
 
@@ -180,7 +233,14 @@ class TestInvalidType:
         """Deprecated 'auto' verification_type should default to manual."""
         hierarchy = {
             "spec-root": {"type": "spec", "title": "Test", "status": "in_progress", "children": ["verify-1"]},
-            "verify-1": {"type": "verify", "title": "Auto verify", "status": "pending", "parent": "spec-root", "children": [], "metadata": {"verification_type": "auto"}},
+            "verify-1": {
+                "type": "verify",
+                "title": "Auto verify",
+                "status": "pending",
+                "parent": "spec-root",
+                "children": [],
+                "metadata": {"verification_type": "auto"},
+            },
         }
         write_spec(test_specs_dir, "deprecated-auto-001", hierarchy)
 
@@ -195,7 +255,14 @@ class TestInvalidType:
         """Unknown verification_type should default to manual."""
         hierarchy = {
             "spec-root": {"type": "spec", "title": "Test", "status": "in_progress", "children": ["verify-1"]},
-            "verify-1": {"type": "verify", "title": "Custom verify", "status": "pending", "parent": "spec-root", "children": [], "metadata": {"verification_type": "unknown-type"}},
+            "verify-1": {
+                "type": "verify",
+                "title": "Custom verify",
+                "status": "pending",
+                "parent": "spec-root",
+                "children": [],
+                "metadata": {"verification_type": "unknown-type"},
+            },
         }
         write_spec(test_specs_dir, "invalid-type-001", hierarchy)
 
@@ -210,7 +277,14 @@ class TestInvalidType:
         """Empty string verification_type should be fixed."""
         hierarchy = {
             "spec-root": {"type": "spec", "title": "Test", "status": "in_progress", "children": ["verify-1"]},
-            "verify-1": {"type": "verify", "title": "Empty verify", "status": "pending", "parent": "spec-root", "children": [], "metadata": {"verification_type": ""}},
+            "verify-1": {
+                "type": "verify",
+                "title": "Empty verify",
+                "status": "pending",
+                "parent": "spec-root",
+                "children": [],
+                "metadata": {"verification_type": ""},
+            },
         }
         write_spec(test_specs_dir, "empty-type-001", hierarchy)
 
@@ -223,12 +297,20 @@ class TestInvalidType:
 # Valid Types Tests
 # =============================================================================
 
+
 class TestValidTypes:
     def test_run_tests_not_changed(self, task_tool, test_specs_dir):
         """Valid 'run-tests' type should not be changed."""
         hierarchy = {
             "spec-root": {"type": "spec", "title": "Test", "status": "in_progress", "children": ["verify-1"]},
-            "verify-1": {"type": "verify", "title": "Run tests", "status": "pending", "parent": "spec-root", "children": [], "metadata": {"verification_type": "run-tests"}},
+            "verify-1": {
+                "type": "verify",
+                "title": "Run tests",
+                "status": "pending",
+                "parent": "spec-root",
+                "children": [],
+                "metadata": {"verification_type": "run-tests"},
+            },
         }
         write_spec(test_specs_dir, "valid-run-tests-001", hierarchy)
 
@@ -240,7 +322,14 @@ class TestValidTypes:
         """Valid 'fidelity' type should not be changed."""
         hierarchy = {
             "spec-root": {"type": "spec", "title": "Test", "status": "in_progress", "children": ["verify-1"]},
-            "verify-1": {"type": "verify", "title": "Fidelity check", "status": "pending", "parent": "spec-root", "children": [], "metadata": {"verification_type": "fidelity"}},
+            "verify-1": {
+                "type": "verify",
+                "title": "Fidelity check",
+                "status": "pending",
+                "parent": "spec-root",
+                "children": [],
+                "metadata": {"verification_type": "fidelity"},
+            },
         }
         write_spec(test_specs_dir, "valid-fidelity-001", hierarchy)
 
@@ -252,7 +341,14 @@ class TestValidTypes:
         """Valid 'manual' type should not be changed."""
         hierarchy = {
             "spec-root": {"type": "spec", "title": "Test", "status": "in_progress", "children": ["verify-1"]},
-            "verify-1": {"type": "verify", "title": "Manual check", "status": "pending", "parent": "spec-root", "children": [], "metadata": {"verification_type": "manual"}},
+            "verify-1": {
+                "type": "verify",
+                "title": "Manual check",
+                "status": "pending",
+                "parent": "spec-root",
+                "children": [],
+                "metadata": {"verification_type": "manual"},
+            },
         }
         write_spec(test_specs_dir, "valid-manual-001", hierarchy)
 
@@ -264,7 +360,14 @@ class TestValidTypes:
         """Response should include list of valid types."""
         hierarchy = {
             "spec-root": {"type": "spec", "title": "Test", "status": "in_progress", "children": ["verify-1"]},
-            "verify-1": {"type": "verify", "title": "Test", "status": "pending", "parent": "spec-root", "children": [], "metadata": {"verification_type": "run-tests"}},
+            "verify-1": {
+                "type": "verify",
+                "title": "Test",
+                "status": "pending",
+                "parent": "spec-root",
+                "children": [],
+                "metadata": {"verification_type": "run-tests"},
+            },
         }
         write_spec(test_specs_dir, "valid-types-001", hierarchy)
 
@@ -278,16 +381,51 @@ class TestValidTypes:
 # Multiple Nodes Tests
 # =============================================================================
 
+
 class TestMultipleNodes:
     def test_fixes_multiple_verify_nodes(self, task_tool, test_specs_dir):
         """Should fix all verify nodes in hierarchy."""
         hierarchy = {
             "spec-root": {"type": "spec", "title": "Test", "status": "in_progress", "children": ["phase-1"]},
-            "phase-1": {"type": "phase", "title": "Phase 1", "status": "pending", "parent": "spec-root", "children": ["task-1", "verify-1", "verify-2", "verify-3"]},
-            "task-1": {"type": "task", "title": "Task", "status": "pending", "parent": "phase-1", "children": [], "metadata": {}},
-            "verify-1": {"type": "verify", "title": "V1", "status": "pending", "parent": "phase-1", "children": [], "metadata": {}},
-            "verify-2": {"type": "verify", "title": "V2", "status": "pending", "parent": "phase-1", "children": [], "metadata": {"verification_type": "test"}},
-            "verify-3": {"type": "verify", "title": "V3", "status": "pending", "parent": "phase-1", "children": [], "metadata": {"verification_type": "unknown"}},
+            "phase-1": {
+                "type": "phase",
+                "title": "Phase 1",
+                "status": "pending",
+                "parent": "spec-root",
+                "children": ["task-1", "verify-1", "verify-2", "verify-3"],
+            },
+            "task-1": {
+                "type": "task",
+                "title": "Task",
+                "status": "pending",
+                "parent": "phase-1",
+                "children": [],
+                "metadata": {},
+            },
+            "verify-1": {
+                "type": "verify",
+                "title": "V1",
+                "status": "pending",
+                "parent": "phase-1",
+                "children": [],
+                "metadata": {},
+            },
+            "verify-2": {
+                "type": "verify",
+                "title": "V2",
+                "status": "pending",
+                "parent": "phase-1",
+                "children": [],
+                "metadata": {"verification_type": "test"},
+            },
+            "verify-3": {
+                "type": "verify",
+                "title": "V3",
+                "status": "pending",
+                "parent": "phase-1",
+                "children": [],
+                "metadata": {"verification_type": "unknown"},
+            },
         }
         write_spec(test_specs_dir, "multi-node-001", hierarchy)
 
@@ -301,8 +439,21 @@ class TestMultipleNodes:
         """Should only process verify nodes, not task/phase nodes."""
         hierarchy = {
             "spec-root": {"type": "spec", "title": "Test", "status": "in_progress", "children": ["phase-1"]},
-            "phase-1": {"type": "phase", "title": "Phase 1", "status": "pending", "parent": "spec-root", "children": ["task-1"]},
-            "task-1": {"type": "task", "title": "Task", "status": "pending", "parent": "phase-1", "children": [], "metadata": {}},
+            "phase-1": {
+                "type": "phase",
+                "title": "Phase 1",
+                "status": "pending",
+                "parent": "spec-root",
+                "children": ["task-1"],
+            },
+            "task-1": {
+                "type": "task",
+                "title": "Task",
+                "status": "pending",
+                "parent": "phase-1",
+                "children": [],
+                "metadata": {},
+            },
         }
         write_spec(test_specs_dir, "no-verify-001", hierarchy)
 
@@ -315,6 +466,7 @@ class TestMultipleNodes:
 # Error Handling Tests
 # =============================================================================
 
+
 class TestErrorHandling:
     def test_spec_not_found(self, task_tool, test_specs_dir):
         """Should return error for non-existent spec."""
@@ -325,7 +477,14 @@ class TestErrorHandling:
         """Should validate dry_run is boolean."""
         hierarchy = {
             "spec-root": {"type": "spec", "title": "Test", "status": "in_progress", "children": ["verify-1"]},
-            "verify-1": {"type": "verify", "title": "Test", "status": "pending", "parent": "spec-root", "children": [], "metadata": {}},
+            "verify-1": {
+                "type": "verify",
+                "title": "Test",
+                "status": "pending",
+                "parent": "spec-root",
+                "children": [],
+                "metadata": {},
+            },
         }
         write_spec(test_specs_dir, "invalid-dry-run-001", hierarchy)
 

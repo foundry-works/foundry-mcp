@@ -9,7 +9,7 @@ Tests cover:
 
 import pytest
 
-from foundry_mcp.config import ResearchConfig
+from foundry_mcp.config.research import ResearchConfig
 
 
 class TestPerplexityConfigParsing:
@@ -17,72 +17,52 @@ class TestPerplexityConfigParsing:
 
     def test_parse_perplexity_search_context_size_low(self):
         """Test perplexity_search_context_size='low' is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "perplexity_search_context_size": "low"
-        })
+        config = ResearchConfig.from_toml_dict({"perplexity_search_context_size": "low"})
         assert config.perplexity_search_context_size == "low"
 
     def test_parse_perplexity_search_context_size_medium(self):
         """Test perplexity_search_context_size='medium' is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "perplexity_search_context_size": "medium"
-        })
+        config = ResearchConfig.from_toml_dict({"perplexity_search_context_size": "medium"})
         assert config.perplexity_search_context_size == "medium"
 
     def test_parse_perplexity_search_context_size_high(self):
         """Test perplexity_search_context_size='high' is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "perplexity_search_context_size": "high"
-        })
+        config = ResearchConfig.from_toml_dict({"perplexity_search_context_size": "high"})
         assert config.perplexity_search_context_size == "high"
 
     def test_parse_perplexity_max_tokens(self):
         """Test perplexity_max_tokens is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "perplexity_max_tokens": 100000
-        })
+        config = ResearchConfig.from_toml_dict({"perplexity_max_tokens": 100000})
         assert config.perplexity_max_tokens == 100000
 
     def test_parse_perplexity_max_tokens_per_page(self):
         """Test perplexity_max_tokens_per_page is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "perplexity_max_tokens_per_page": 4096
-        })
+        config = ResearchConfig.from_toml_dict({"perplexity_max_tokens_per_page": 4096})
         assert config.perplexity_max_tokens_per_page == 4096
 
     def test_parse_perplexity_recency_filter_day(self):
         """Test perplexity_recency_filter='day' is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "perplexity_recency_filter": "day"
-        })
+        config = ResearchConfig.from_toml_dict({"perplexity_recency_filter": "day"})
         assert config.perplexity_recency_filter == "day"
 
     def test_parse_perplexity_recency_filter_week(self):
         """Test perplexity_recency_filter='week' is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "perplexity_recency_filter": "week"
-        })
+        config = ResearchConfig.from_toml_dict({"perplexity_recency_filter": "week"})
         assert config.perplexity_recency_filter == "week"
 
     def test_parse_perplexity_recency_filter_month(self):
         """Test perplexity_recency_filter='month' is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "perplexity_recency_filter": "month"
-        })
+        config = ResearchConfig.from_toml_dict({"perplexity_recency_filter": "month"})
         assert config.perplexity_recency_filter == "month"
 
     def test_parse_perplexity_recency_filter_year(self):
         """Test perplexity_recency_filter='year' is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "perplexity_recency_filter": "year"
-        })
+        config = ResearchConfig.from_toml_dict({"perplexity_recency_filter": "year"})
         assert config.perplexity_recency_filter == "year"
 
     def test_parse_perplexity_country(self):
         """Test perplexity_country is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({
-            "perplexity_country": "US"
-        })
+        config = ResearchConfig.from_toml_dict({"perplexity_country": "US"})
         assert config.perplexity_country == "US"
 
 
@@ -164,11 +144,13 @@ class TestPerplexityConfigPrecedence:
 
     def test_explicit_value_overrides_default(self):
         """Test explicitly set values override defaults."""
-        config = ResearchConfig.from_toml_dict({
-            "perplexity_search_context_size": "high",
-            "perplexity_max_tokens": 100000,
-            "perplexity_recency_filter": "week",
-        })
+        config = ResearchConfig.from_toml_dict(
+            {
+                "perplexity_search_context_size": "high",
+                "perplexity_max_tokens": 100000,
+                "perplexity_recency_filter": "week",
+            }
+        )
 
         assert config.perplexity_search_context_size == "high"  # overridden
         assert config.perplexity_max_tokens == 100000  # overridden
@@ -178,9 +160,11 @@ class TestPerplexityConfigPrecedence:
 
     def test_partial_override_preserves_other_defaults(self):
         """Test partial override preserves other default values."""
-        config = ResearchConfig.from_toml_dict({
-            "perplexity_country": "GB",
-        })
+        config = ResearchConfig.from_toml_dict(
+            {
+                "perplexity_country": "GB",
+            }
+        )
 
         assert config.perplexity_country == "GB"  # overridden
         assert config.perplexity_search_context_size == "medium"  # default preserved
@@ -190,13 +174,15 @@ class TestPerplexityConfigPrecedence:
 
     def test_all_perplexity_fields_combined(self):
         """Test all Perplexity fields can be set together."""
-        config = ResearchConfig.from_toml_dict({
-            "perplexity_search_context_size": "high",
-            "perplexity_max_tokens": 75000,
-            "perplexity_max_tokens_per_page": 4096,
-            "perplexity_recency_filter": "month",
-            "perplexity_country": "US",
-        })
+        config = ResearchConfig.from_toml_dict(
+            {
+                "perplexity_search_context_size": "high",
+                "perplexity_max_tokens": 75000,
+                "perplexity_max_tokens_per_page": 4096,
+                "perplexity_recency_filter": "month",
+                "perplexity_country": "US",
+            }
+        )
 
         assert config.perplexity_search_context_size == "high"
         assert config.perplexity_max_tokens == 75000

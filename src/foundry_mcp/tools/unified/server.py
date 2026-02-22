@@ -15,8 +15,9 @@ from typing import Any, Dict, Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.discovery import get_capabilities, get_tool_registry
+from foundry_mcp.config.server import ServerConfig
+from foundry_mcp.core.discovery.capabilities import get_capabilities
+from foundry_mcp.core.discovery.registry import get_tool_registry
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import (
     get_metrics,
@@ -31,11 +32,13 @@ from foundry_mcp.core.pagination import (
     encode_cursor,
     paginated_response,
 )
-from foundry_mcp.core.responses import (
-    ErrorCode,
-    ErrorType,
+from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
+)
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
 )
 from foundry_mcp.tools.unified.common import (
     build_request_id,
@@ -65,9 +68,7 @@ def _metric(action: str) -> str:
 
 # NOTE: _validation_error is kept local to server.py because it has a unique
 # signature (no field/action params) different from the common helper.
-def _validation_error(
-    *, message: str, request_id: str, remediation: Optional[str] = None
-) -> dict:
+def _validation_error(*, message: str, request_id: str, remediation: Optional[str] = None) -> dict:
     return asdict(
         error_response(
             message,
@@ -178,10 +179,7 @@ def _build_unified_manifest_tools() -> list[Dict[str, Any]]:
     tools: list[Dict[str, Any]] = []
     for name, router in routers.items():
         summaries = router.describe()
-        actions = [
-            {"name": action, "summary": summaries.get(action)}
-            for action in router.allowed_actions()
-        ]
+        actions = [{"name": action, "summary": summaries.get(action)} for action in router.allowed_actions()]
         tools.append(
             {
                 "name": name,
@@ -217,19 +215,13 @@ def _handle_tools(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         )
 
     include_deprecated_value = payload.get("include_deprecated", False)
-    if include_deprecated_value is not None and not isinstance(
-        include_deprecated_value, bool
-    ):
+    if include_deprecated_value is not None and not isinstance(include_deprecated_value, bool):
         return _validation_error(
             message="include_deprecated must be a boolean",
             request_id=request_id,
             remediation="Provide include_deprecated=true|false",
         )
-    include_deprecated = (
-        include_deprecated_value
-        if isinstance(include_deprecated_value, bool)
-        else False
-    )
+    include_deprecated = include_deprecated_value if isinstance(include_deprecated_value, bool) else False
 
     cursor = payload.get("cursor")
     if cursor is not None and not isinstance(cursor, str):
@@ -258,9 +250,7 @@ def _handle_tools(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         all_tools = [tool for tool in all_tools if tool.get("category") == category]
     if tag:
         all_tools = [tool for tool in all_tools if tag in (tool.get("tags") or [])]
-    categories_list = sorted(
-        {tool.get("category", "general") for tool in all_tools}
-    )
+    categories_list = sorted({tool.get("category", "general") for tool in all_tools})
 
     start_idx = 0
     if cursor:
@@ -305,9 +295,7 @@ def _handle_tools(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     telemetry["duration_ms"] = round(elapsed_ms, 2)
 
     manifest_label = "unified"
-    manifest_tokens = _estimate_tokens(
-        json.dumps(all_tools, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-    )
+    manifest_tokens = _estimate_tokens(json.dumps(all_tools, ensure_ascii=False, separators=(",", ":"), sort_keys=True))
     telemetry["manifest_tokens"] = manifest_tokens
     telemetry["manifest_tool_count"] = len(all_tools)
     telemetry["manifest_token_budget"] = MANIFEST_TOKEN_BUDGET
@@ -380,7 +368,53 @@ def _handle_capabilities(*, config: ServerConfig, payload: Dict[str, Any]) -> di
     request_id = _request_id()
     try:
         caps = get_capabilities()
-        return asdict(success_response(data=caps, request_id=request_id))
+        runtime_warnings = caps.pop("runtime_warnings", None)
+        runtime = caps.setdefault("runtime", {})
+        autonomy_runtime = runtime.setdefault("autonomy", {})
+        autonomy_runtime["posture_profile"] = config.autonomy_posture.profile
+        autonomy_runtime["security"] = {
+            "role": config.autonomy_security.role,
+            "allow_lock_bypass": config.autonomy_security.allow_lock_bypass,
+            "allow_gate_waiver": config.autonomy_security.allow_gate_waiver,
+            "enforce_required_phase_gates": (config.autonomy_security.enforce_required_phase_gates),
+        }
+        autonomy_runtime["session_defaults"] = {
+            "gate_policy": config.autonomy_session_defaults.gate_policy,
+            "stop_on_phase_completion": (config.autonomy_session_defaults.stop_on_phase_completion),
+            "auto_retry_fidelity_gate": (config.autonomy_session_defaults.auto_retry_fidelity_gate),
+            "max_tasks_per_session": (config.autonomy_session_defaults.max_tasks_per_session),
+            "max_consecutive_errors": (config.autonomy_session_defaults.max_consecutive_errors),
+            "max_fidelity_review_cycles_per_phase": (
+                config.autonomy_session_defaults.max_fidelity_review_cycles_per_phase
+            ),
+        }
+
+        conventions = runtime.setdefault("conventions", {})
+        conventions["role_preflight"] = {
+            "recommended_call": {
+                "tool": "task",
+                "params": {"action": "session", "command": "list", "limit": 1},
+            },
+            "legacy_fallback": {
+                "tool": "task",
+                "params": {"action": "session-list", "limit": 1},
+            },
+            "fail_fast_on": ["AUTHORIZATION"],
+            "guidance": ("Run role preflight before session-start and stop immediately when authorization is denied."),
+        }
+
+        warnings: list[str] = []
+        if isinstance(runtime_warnings, list):
+            warnings.extend(str(w) for w in runtime_warnings)
+        if config.startup_warnings:
+            warnings.extend(config.startup_warnings)
+        return asdict(
+            success_response(
+                data=caps,
+                request_id=request_id,
+                warnings=warnings or None,
+            )
+        )
     except Exception as exc:
         logger.exception("Error getting capabilities")
         return asdict(
@@ -407,45 +441,31 @@ def _handle_context(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     include_llm = include_llm_value if isinstance(include_llm_value, bool) else True
 
     include_workflow_value = payload.get("include_workflow", True)
-    if include_workflow_value is not None and not isinstance(
-        include_workflow_value, bool
-    ):
+    if include_workflow_value is not None and not isinstance(include_workflow_value, bool):
         return _validation_error(
             message="include_workflow must be a boolean",
             request_id=request_id,
             remediation="Provide include_workflow=true|false",
         )
-    include_workflow = (
-        include_workflow_value if isinstance(include_workflow_value, bool) else True
-    )
+    include_workflow = include_workflow_value if isinstance(include_workflow_value, bool) else True
 
     include_workspace_value = payload.get("include_workspace", True)
-    if include_workspace_value is not None and not isinstance(
-        include_workspace_value, bool
-    ):
+    if include_workspace_value is not None and not isinstance(include_workspace_value, bool):
         return _validation_error(
             message="include_workspace must be a boolean",
             request_id=request_id,
             remediation="Provide include_workspace=true|false",
         )
-    include_workspace = (
-        include_workspace_value if isinstance(include_workspace_value, bool) else True
-    )
+    include_workspace = include_workspace_value if isinstance(include_workspace_value, bool) else True
 
     include_capabilities_value = payload.get("include_capabilities", True)
-    if include_capabilities_value is not None and not isinstance(
-        include_capabilities_value, bool
-    ):
+    if include_capabilities_value is not None and not isinstance(include_capabilities_value, bool):
         return _validation_error(
             message="include_capabilities must be a boolean",
             request_id=request_id,
             remediation="Provide include_capabilities=true|false",
         )
-    include_capabilities = (
-        include_capabilities_value
-        if isinstance(include_capabilities_value, bool)
-        else True
-    )
+    include_capabilities = include_capabilities_value if isinstance(include_capabilities_value, bool) else True
 
     return build_server_context_response(
         config,
@@ -474,12 +494,8 @@ def _build_router() -> ActionRouter:
     return ActionRouter(
         tool_name="server",
         actions=[
-            ActionDefinition(
-                name="tools", handler=_handle_tools, summary=_ACTION_SUMMARY["tools"]
-            ),
-            ActionDefinition(
-                name="schema", handler=_handle_schema, summary=_ACTION_SUMMARY["schema"]
-            ),
+            ActionDefinition(name="tools", handler=_handle_tools, summary=_ACTION_SUMMARY["tools"]),
+            ActionDefinition(name="schema", handler=_handle_schema, summary=_ACTION_SUMMARY["schema"]),
             ActionDefinition(
                 name="capabilities",
                 handler=_handle_capabilities,
@@ -503,12 +519,8 @@ def _build_router() -> ActionRouter:
 _SERVER_ROUTER = _build_router()
 
 
-def _dispatch_server_action(
-    *, action: str, payload: Dict[str, Any], config: ServerConfig
-) -> dict:
-    return dispatch_with_standard_errors(
-        _SERVER_ROUTER, "server", action, config=config, payload=payload
-    )
+def _dispatch_server_action(*, action: str, payload: Dict[str, Any], config: ServerConfig) -> dict:
+    return dispatch_with_standard_errors(_SERVER_ROUTER, "server", action, config=config, payload=payload)
 
 
 def register_unified_server_tool(mcp: FastMCP, config: ServerConfig) -> None:

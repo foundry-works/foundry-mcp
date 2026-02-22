@@ -7,12 +7,12 @@ idea clustering, scoring, and elaboration phases.
 import logging
 from typing import Any, Optional
 
-from foundry_mcp.config import ResearchConfig
+from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.research.memory import ResearchMemory
-from foundry_mcp.core.research.models import (
+from foundry_mcp.core.research.models.enums import IdeationPhase
+from foundry_mcp.core.research.models.ideation import (
     Idea,
     IdeaCluster,
-    IdeationPhase,
     IdeationState,
 )
 from foundry_mcp.core.research.workflows.base import ResearchWorkflowBase, WorkflowResult
@@ -218,7 +218,7 @@ class IdeateWorkflow(ResearchWorkflowBase):
             )
 
         # Build clustering prompt
-        ideas_text = "\n".join(f"{i+1}. {idea.content}" for i, idea in enumerate(state.ideas))
+        ideas_text = "\n".join(f"{i + 1}. {idea.content}" for i, idea in enumerate(state.ideas))
         prompt = f"""Analyze these ideas and group them into 3-5 thematic clusters:
 
 {ideas_text}
@@ -283,7 +283,7 @@ IDEAS: [comma-separated numbers]"""
             )
 
         criteria_text = ", ".join(state.scoring_criteria)
-        ideas_text = "\n".join(f"{i+1}. {idea.content}" for i, idea in enumerate(state.ideas))
+        ideas_text = "\n".join(f"{i + 1}. {idea.content}" for i, idea in enumerate(state.ideas))
 
         prompt = f"""Score each idea on a scale of 0.0 to 1.0 based on these criteria: {criteria_text}
 
@@ -465,10 +465,10 @@ Provide:
 **Updated**: {state.updated_at.isoformat()}
 
 ## Perspectives
-{', '.join(state.perspectives)}
+{", ".join(state.perspectives)}
 
 ## Scoring Criteria
-{', '.join(state.scoring_criteria)}
+{", ".join(state.scoring_criteria)}
 """
 
         if state.clusters:

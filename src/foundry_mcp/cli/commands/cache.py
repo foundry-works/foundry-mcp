@@ -1,4 +1,4 @@
-"""Cache management commands for SDD CLI.
+"""Cache management commands for Foundry CLI.
 
 Provides commands for inspecting and managing the AI consultation cache.
 """
@@ -130,8 +130,6 @@ def cache_cleanup_cmd(ctx: click.Context) -> None:
     emit_success(
         {
             "entries_removed": removed,
-            "message": f"Removed {removed} expired entries"
-            if removed
-            else "No expired entries found",
+            "message": f"Removed {removed} expired entries" if removed else "No expired entries found",
         }
     )

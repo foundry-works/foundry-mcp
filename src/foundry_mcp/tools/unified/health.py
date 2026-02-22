@@ -5,11 +5,11 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import asdict
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.health import (
     HealthStatus,
     check_health,
@@ -17,12 +17,14 @@ from foundry_mcp.core.health import (
     check_readiness,
 )
 from foundry_mcp.core.naming import canonical_tool
-from foundry_mcp.core.prometheus import get_prometheus_exporter
-from foundry_mcp.core.responses import (
-    ErrorCode,
-    ErrorType,
+from foundry_mcp.core.observability.prometheus import get_prometheus_exporter
+from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
+)
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
 )
 from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
 from foundry_mcp.tools.unified.router import (
@@ -181,13 +183,21 @@ def _build_router() -> ActionRouter:
 _HEALTH_ROUTER = _build_router()
 
 
-def _dispatch_health_action(action: str, *, include_details: bool = True) -> dict:
+def _dispatch_health_action(
+    action: str,
+    *,
+    include_details: bool = True,
+    config: Optional[ServerConfig] = None,
+) -> dict:
     kwargs: Dict[str, Any] = {}
     if action.lower() == "check":
         kwargs["include_details"] = include_details
     return dispatch_with_standard_errors(
-        _HEALTH_ROUTER, "health", action,
+        _HEALTH_ROUTER,
+        "health",
+        action,
         include_details_in_router_error=True,
+        config=config,
         **kwargs,
     )
 
@@ -207,7 +217,11 @@ def register_unified_health_tool(mcp: FastMCP, config: ServerConfig) -> None:
             include_details: When action is "check", controls dependency output.
         """
 
-        return _dispatch_health_action(action=action, include_details=include_details)
+        return _dispatch_health_action(
+            action=action,
+            include_details=include_details,
+            config=config,
+        )
 
     logger.debug("Registered unified health tool")
 

@@ -7,21 +7,23 @@ Tests validation functions, auto-fix capabilities, and statistics calculation.
 import copy
 
 import pytest
-from foundry_mcp.core.validation import (
-    validate_spec,
-    get_fix_actions,
-    apply_fixes,
-    calculate_stats,
-    add_verification,
-    execute_verification,
-    format_verification_summary,
-    Diagnostic,
+
+from foundry_mcp.core.validation.application import apply_fixes
+from foundry_mcp.core.validation.constants import (
     VALID_NODE_TYPES,
     VALID_STATUSES,
     VALID_VERIFICATION_TYPES,
     VERIFICATION_RESULTS,
 )
-
+from foundry_mcp.core.validation.fixes import get_fix_actions
+from foundry_mcp.core.validation.models import Diagnostic
+from foundry_mcp.core.validation.rules import validate_spec
+from foundry_mcp.core.validation.stats import calculate_stats
+from foundry_mcp.core.validation.verification import (
+    add_verification,
+    execute_verification,
+    format_verification_summary,
+)
 
 # Test fixtures
 
@@ -33,6 +35,7 @@ def valid_spec():
         "spec_id": "test-spec-2025-01-01-001",
         "generated": "2025-01-01T00:00:00Z",
         "last_updated": "2025-01-01T00:00:00Z",
+        "metadata": {"mission": "Validate core spec handling"},
         "hierarchy": {
             "spec-root": {
                 "type": "spec",
@@ -52,7 +55,12 @@ def valid_spec():
                 "children": [],
                 "total_tasks": 1,
                 "completed_tasks": 0,
-                "metadata": {"task_category": "implementation", "file_path": "test.py"},
+                "metadata": {
+                    "task_category": "implementation",
+                    "file_path": "test.py",
+                    "acceptance_criteria": ["Task works correctly"],
+                    "description": "Implement the test task",
+                },
                 "dependencies": {"blocks": [], "blocked_by": [], "depends": []},
             },
         },
@@ -64,7 +72,7 @@ def medium_spec(valid_spec):
     """Return a medium-complexity spec with required task fields."""
     spec = copy.deepcopy(valid_spec)
     # Use explicit complexity metadata (template no longer indicates complexity)
-    spec["metadata"] = {"complexity": "medium", "mission": "Ship the feature"}
+    spec["metadata"] = {"mission": "Ship the feature"}
     task_metadata = spec["hierarchy"]["task-1"]["metadata"]
     task_metadata["description"] = "Implement the core task"
     task_metadata["acceptance_criteria"] = ["Core behavior matches requirements"]
@@ -207,33 +215,107 @@ class TestValidateSpec:
         codes = [d.code for d in result.diagnostics]
         assert "MISSING_VERIFICATION_TYPE" in codes
 
-    def test_missing_mission_for_medium_spec(self, medium_spec):
-        """Test that medium specs require a mission."""
-        medium_spec["metadata"]["mission"] = ""
-        result = validate_spec(medium_spec)
+    def test_missing_mission(self, valid_spec):
+        """Test that all specs require a mission."""
+        valid_spec["metadata"]["mission"] = ""
+        result = validate_spec(valid_spec)
         codes = [d.code for d in result.diagnostics]
         assert "MISSING_MISSION" in codes
 
-    def test_missing_task_category_for_medium_spec(self, medium_spec):
-        """Test that medium specs require task_category on tasks."""
-        del medium_spec["hierarchy"]["task-1"]["metadata"]["task_category"]
-        result = validate_spec(medium_spec)
+    def test_missing_plan_path_warns(self, valid_spec):
+        """Test that specs without plan_path get a warning (not error) for backward compat."""
+        # Ensure plan_path is absent
+        valid_spec["metadata"].pop("plan_path", None)
+        result = validate_spec(valid_spec)
+        codes = [d.code for d in result.diagnostics]
+        assert "MISSING_PLAN_PATH" in codes
+        # Should be a warning, not an error
+        plan_diags = [d for d in result.diagnostics if d.code == "MISSING_PLAN_PATH"]
+        assert all(d.severity == "warning" for d in plan_diags)
+
+    def test_missing_plan_review_path_warns(self, valid_spec):
+        """Test that specs without plan_review_path get a warning (not error)."""
+        valid_spec["metadata"].pop("plan_review_path", None)
+        result = validate_spec(valid_spec)
+        codes = [d.code for d in result.diagnostics]
+        assert "MISSING_PLAN_REVIEW_PATH" in codes
+        plan_diags = [d for d in result.diagnostics if d.code == "MISSING_PLAN_REVIEW_PATH"]
+        assert all(d.severity == "warning" for d in plan_diags)
+
+    def test_present_plan_paths_no_warning(self, valid_spec):
+        """Test that specs with plan_path and plan_review_path don't get warnings."""
+        valid_spec["metadata"]["plan_path"] = ".plans/feature.md"
+        valid_spec["metadata"]["plan_review_path"] = ".plan-reviews/feature-review.md"
+        result = validate_spec(valid_spec)
+        codes = [d.code for d in result.diagnostics]
+        assert "MISSING_PLAN_PATH" not in codes
+        assert "MISSING_PLAN_REVIEW_PATH" not in codes
+
+    def test_missing_task_category(self, valid_spec):
+        """Test that all specs require task_category on tasks."""
+        del valid_spec["hierarchy"]["task-1"]["metadata"]["task_category"]
+        result = validate_spec(valid_spec)
         codes = [d.code for d in result.diagnostics]
         assert "MISSING_TASK_CATEGORY" in codes
 
-    def test_missing_task_description_for_medium_spec(self, medium_spec):
-        """Test that medium specs require descriptions on tasks."""
-        del medium_spec["hierarchy"]["task-1"]["metadata"]["description"]
-        result = validate_spec(medium_spec)
+    def test_missing_task_description(self, valid_spec):
+        """Test that all specs require descriptions on tasks."""
+        del valid_spec["hierarchy"]["task-1"]["metadata"]["description"]
+        result = validate_spec(valid_spec)
         codes = [d.code for d in result.diagnostics]
         assert "MISSING_TASK_DESCRIPTION" in codes
 
-    def test_missing_acceptance_criteria_for_medium_spec(self, medium_spec):
-        """Test that medium specs require acceptance criteria on tasks."""
-        del medium_spec["hierarchy"]["task-1"]["metadata"]["acceptance_criteria"]
-        result = validate_spec(medium_spec)
+    def test_missing_acceptance_criteria(self, valid_spec):
+        """Test that all specs require acceptance criteria on tasks."""
+        del valid_spec["hierarchy"]["task-1"]["metadata"]["acceptance_criteria"]
+        result = validate_spec(valid_spec)
         codes = [d.code for d in result.diagnostics]
         assert "MISSING_ACCEPTANCE_CRITERIA" in codes
+
+    def test_add_phase_bulk_rejects_missing_acceptance_criteria_regardless_of_complexity(self, tmp_path):
+        """add_phase_bulk rejects tasks without acceptance_criteria for any spec complexity."""
+        import json
+
+        from foundry_mcp.core.spec.hierarchy import add_phase_bulk
+
+        specs_dir = tmp_path / "specs"
+        active_dir = specs_dir / "active"
+        active_dir.mkdir(parents=True)
+        spec_data = {
+            "spec_id": "simple-spec-001",
+            "generated": "2025-01-01T00:00:00Z",
+            "last_updated": "2025-01-01T00:00:00Z",
+            "hierarchy": {
+                "spec-root": {
+                    "type": "spec",
+                    "title": "Simple Spec",
+                    "status": "pending",
+                    "parent": None,
+                    "children": [],
+                    "total_tasks": 0,
+                    "completed_tasks": 0,
+                    "metadata": {},
+                },
+            },
+        }
+        (active_dir / "simple-spec-001.json").write_text(json.dumps(spec_data))
+
+        result, error = add_phase_bulk(
+            spec_id="simple-spec-001",
+            phase_title="Phase 1",
+            tasks=[
+                {
+                    "title": "Task without AC",
+                    "type": "task",
+                    "task_category": "implementation",
+                    "file_path": "foo.py",
+                    "description": "A task",
+                }
+            ],
+            specs_dir=specs_dir,
+        )
+        assert result is None
+        assert "missing acceptance_criteria" in error
 
     def test_orphaned_node_detected(self, valid_spec):
         """Test that orphaned nodes are detected."""
@@ -562,9 +644,7 @@ class TestAddVerification:
         )
         assert success is True
 
-        history = spec_with_verify_node["hierarchy"]["verify-1"]["metadata"][
-            "verification_history"
-        ]
+        history = spec_with_verify_node["hierarchy"]["verify-1"]["metadata"]["verification_history"]
         entry = history[0]
         assert entry["result"] == "PARTIAL"
         assert entry["command"] == "pytest tests/"
@@ -653,9 +733,7 @@ class TestExecuteVerification:
     def test_execute_verification_failing_command(self, spec_with_failing_command):
         """Test execution of a failing command."""
         result = execute_verification(spec_with_failing_command, "verify-1")
-        assert (
-            result["success"] is True
-        )  # Execution completed, even if result is FAILED
+        assert result["success"] is True  # Execution completed, even if result is FAILED
         assert result["result"] == "FAILED"
         assert result["exit_code"] == 1
 
@@ -704,9 +782,7 @@ class TestExecuteVerification:
     def test_execute_verification_timeout(self, spec_with_echo_command):
         """Test command timeout handling."""
         # Change command to sleep longer than timeout
-        spec_with_echo_command["hierarchy"]["verify-1"]["metadata"]["command"] = (
-            "sleep 5"
-        )
+        spec_with_echo_command["hierarchy"]["verify-1"]["metadata"]["command"] = "sleep 5"
         result = execute_verification(spec_with_echo_command, "verify-1", timeout=1)
         assert "timed out" in result["error"]
         assert result["result"] == "FAILED"
@@ -725,9 +801,7 @@ class TestExecuteVerification:
 
     def test_execute_verification_captures_stderr(self, spec_with_echo_command):
         """Test that stderr is captured."""
-        spec_with_echo_command["hierarchy"]["verify-1"]["metadata"]["command"] = (
-            "echo error >&2"
-        )
+        spec_with_echo_command["hierarchy"]["verify-1"]["metadata"]["command"] = "echo error >&2"
         result = execute_verification(spec_with_echo_command, "verify-1")
         assert result["success"] is True
         assert "[stderr]" in result["output"]

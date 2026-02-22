@@ -9,35 +9,39 @@ from typing import Any, Dict, List, Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.llm_provider import RateLimitError
+from foundry_mcp.config.server import ServerConfig
+from foundry_mcp.core.errors.llm import RateLimitError
+from foundry_mcp.core.errors.provider import (
+    ProviderExecutionError,
+    ProviderTimeoutError,
+    ProviderUnavailableError,
+)
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import get_metrics, mcp_tool
 from foundry_mcp.core.providers import (
-    ProviderExecutionError,
     ProviderHooks,
     ProviderRequest,
-    ProviderTimeoutError,
-    ProviderUnavailableError,
     check_provider_available,
     describe_providers,
     get_provider_metadata,
     get_provider_statuses,
     resolve_provider,
 )
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.builders import (
+    error_response,
+    success_response,
+)
+from foundry_mcp.core.responses.sanitization import sanitize_error_message
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
-    error_response,
-    sanitize_error_message,
-    success_response,
 )
 from foundry_mcp.tools.unified.common import (
     build_request_id,
     dispatch_with_standard_errors,
     make_metric_name,
-    make_validation_error_fn,
 )
+from foundry_mcp.tools.unified.param_schema import Bool, Num, Str, validate_payload
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
@@ -61,26 +65,36 @@ def _request_id() -> str:
     return build_request_id("provider")
 
 
-_validation_error = make_validation_error_fn("provider")
+# ---------------------------------------------------------------------------
+# Declarative parameter schemas
+# ---------------------------------------------------------------------------
+
+_LIST_SCHEMA = {
+    "include_unavailable": Bool(default=False),
+}
+
+_STATUS_SCHEMA = {
+    "provider_id": Str(required=True, remediation="Call provider(action=list) to discover valid providers"),
+}
+
+_EXECUTE_SCHEMA = {
+    "provider_id": Str(required=True, remediation="Call provider(action=list) to discover valid providers"),
+    "prompt": Str(required=True, remediation="Supply the text you want to send to the provider"),
+    "model": Str(),
+    "max_tokens": Num(min_val=1, integer_only=True),
+    "temperature": Num(min_val=0, max_val=2),
+    "timeout": Num(min_val=1, integer_only=True),
+}
 
 
-def _handle_list(
-    *,
-    config: ServerConfig,  # noqa: ARG001 - reserved for future hooks
-    include_unavailable: Optional[bool] = False,
-    **_: Any,
-) -> dict:
+def _handle_list(*, config: ServerConfig, **payload: Any) -> dict:  # noqa: ARG001
     request_id = _request_id()
 
-    include = include_unavailable if isinstance(include_unavailable, bool) else False
-    if include_unavailable is not None and not isinstance(include_unavailable, bool):
-        return _validation_error(
-            action="list",
-            field="include_unavailable",
-            message="Expected a boolean value",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
+    err = validate_payload(payload, _LIST_SCHEMA, tool_name="provider", action="list", request_id=request_id)
+    if err:
+        return err
+
+    include = payload.get("include_unavailable", False)
 
     try:
         providers = describe_providers()
@@ -98,21 +112,13 @@ def _handle_list(
         )
 
     total_count = len(providers)
-    available_count = sum(
-        1 for provider in providers if provider.get("available", False)
-    )
-    visible = (
-        providers
-        if include
-        else [provider for provider in providers if provider.get("available", False)]
-    )
+    available_count = sum(1 for provider in providers if provider.get("available", False))
+    visible = providers if include else [provider for provider in providers if provider.get("available", False)]
 
     warnings: List[str] = []
     if not include and available_count < total_count:
         missing = total_count - available_count
-        warnings.append(
-            f"{missing} provider(s) filtered out because they are unavailable"
-        )
+        warnings.append(f"{missing} provider(s) filtered out because they are unavailable")
 
     _metrics.counter(_metric_name("list"), labels={"status": "success"})
     return asdict(
@@ -128,33 +134,21 @@ def _handle_list(
     )
 
 
-def _handle_status(
-    *,
-    config: ServerConfig,  # noqa: ARG001 - reserved for future hooks
-    provider_id: Optional[str] = None,
-    **_: Any,
-) -> dict:
+def _handle_status(*, config: ServerConfig, **payload: Any) -> dict:  # noqa: ARG001
     request_id = _request_id()
 
-    if not isinstance(provider_id, str) or not provider_id.strip():
-        return _validation_error(
-            action="status",
-            field="provider_id",
-            message="Provide a non-empty provider_id",
-            request_id=request_id,
-            remediation="Call provider(action=list) to discover valid providers",
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    provider_id = provider_id.strip()
+    err = validate_payload(payload, _STATUS_SCHEMA, tool_name="provider", action="status", request_id=request_id)
+    if err:
+        return err
+
+    provider_id = payload["provider_id"]
 
     try:
         availability = check_provider_available(provider_id)
         metadata = get_provider_metadata(provider_id)
         statuses = get_provider_statuses()
     except Exception:
-        logger.exception(
-            "Failed to load provider status", extra={"provider_id": provider_id}
-        )
+        logger.exception("Failed to load provider status", extra={"provider_id": provider_id})
         _metrics.counter(_metric_name("status"), labels={"status": "error"})
         return asdict(
             error_response(
@@ -177,16 +171,12 @@ def _handle_status(
                 {
                     "id": model.id,
                     "name": model.display_name or model.id,
-                    "context_window": model.routing_hints.get("context_window")
-                    if model.routing_hints
-                    else None,
+                    "context_window": model.routing_hints.get("context_window") if model.routing_hints else None,
                     "is_default": model.id == metadata.default_model,
                 }
                 for model in (metadata.models or [])
             ],
-            "documentation_url": metadata.extra.get("documentation_url")
-            if metadata.extra
-            else None,
+            "documentation_url": metadata.extra.get("documentation_url") if metadata.extra else None,
             "tags": metadata.extra.get("tags", []) if metadata.extra else [],
         }
         capabilities = [cap.value for cap in (metadata.capabilities or [])]
@@ -226,108 +216,21 @@ def _handle_status(
     )
 
 
-def _handle_execute(
-    *,
-    config: ServerConfig,  # noqa: ARG001 - reserved for future hooks
-    provider_id: Optional[str] = None,
-    prompt: Optional[str] = None,
-    model: Optional[str] = None,
-    max_tokens: Optional[int] = None,
-    temperature: Optional[float] = None,
-    timeout: Optional[int] = None,
-    **_: Any,
-) -> dict:
+def _handle_execute(*, config: ServerConfig, **payload: Any) -> dict:  # noqa: ARG001
     request_id = _request_id()
     action = "execute"
 
-    if not isinstance(provider_id, str) or not provider_id.strip():
-        return _validation_error(
-            action=action,
-            field="provider_id",
-            message="Provide a non-empty provider_id",
-            request_id=request_id,
-            remediation="Call provider(action=list) to discover valid providers",
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    provider_id = provider_id.strip()
+    err = validate_payload(payload, _EXECUTE_SCHEMA, tool_name="provider", action=action, request_id=request_id)
+    if err:
+        return err
 
-    if not isinstance(prompt, str) or not prompt.strip():
-        return _validation_error(
-            action=action,
-            field="prompt",
-            message="Provide a non-empty prompt",
-            request_id=request_id,
-            remediation="Supply the text you want to send to the provider",
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    prompt_text = prompt.strip()
-
-    model_name = None
-    if model is not None:
-        if not isinstance(model, str) or not model.strip():
-            return _validation_error(
-                action=action,
-                field="model",
-                message="Model overrides must be a non-empty string",
-                request_id=request_id,
-            )
-        model_name = model.strip()
-
-    if max_tokens is not None:
-        if isinstance(max_tokens, bool) or not isinstance(max_tokens, int):
-            return _validation_error(
-                action=action,
-                field="max_tokens",
-                message="max_tokens must be an integer",
-                request_id=request_id,
-                code=ErrorCode.INVALID_FORMAT,
-            )
-        if max_tokens <= 0:
-            return _validation_error(
-                action=action,
-                field="max_tokens",
-                message="max_tokens must be greater than zero",
-                request_id=request_id,
-            )
-
-    temp_value: Optional[float] = None
-    if temperature is not None:
-        if isinstance(temperature, bool) or not isinstance(temperature, (int, float)):
-            return _validation_error(
-                action=action,
-                field="temperature",
-                message="temperature must be a numeric value",
-                request_id=request_id,
-                code=ErrorCode.INVALID_FORMAT,
-            )
-        temp_value = float(temperature)
-        if temp_value < 0 or temp_value > 2:
-            return _validation_error(
-                action=action,
-                field="temperature",
-                message="temperature must be between 0.0 and 2.0",
-                request_id=request_id,
-                remediation="Choose a temperature in the inclusive range 0.0-2.0",
-            )
-
-    timeout_value: Optional[int] = None
-    if timeout is not None:
-        if isinstance(timeout, bool) or not isinstance(timeout, int):
-            return _validation_error(
-                action=action,
-                field="timeout",
-                message="timeout must be an integer representing seconds",
-                request_id=request_id,
-                code=ErrorCode.INVALID_FORMAT,
-            )
-        if timeout <= 0:
-            return _validation_error(
-                action=action,
-                field="timeout",
-                message="timeout must be greater than zero",
-                request_id=request_id,
-            )
-        timeout_value = timeout
+    provider_id = payload["provider_id"]
+    assert isinstance(provider_id, str)
+    prompt_text = payload["prompt"]
+    model_name = payload.get("model")
+    max_tokens = payload.get("max_tokens")
+    temp_value = payload.get("temperature")
+    timeout_value = payload.get("timeout")
 
     try:
         provider_summaries = describe_providers()
@@ -344,9 +247,7 @@ def _handle_execute(
             )
         )
 
-    known_providers = {
-        entry.get("id") for entry in provider_summaries if entry.get("id")
-    }
+    known_providers = {entry.get("id") for entry in provider_summaries if entry.get("id")}
     if provider_id not in known_providers:
         _metrics.counter(_metric_name(action), labels={"status": "not_found"})
         return asdict(
@@ -373,9 +274,7 @@ def _handle_execute(
                 )
             )
     except Exception:
-        logger.exception(
-            "Failed to check provider availability", extra={"provider_id": provider_id}
-        )
+        logger.exception("Failed to check provider availability", extra={"provider_id": provider_id})
         _metrics.counter(_metric_name(action), labels={"status": "error"})
         return asdict(
             error_response(
@@ -459,9 +358,7 @@ def _handle_execute(
             )
         )
     except Exception as exc:
-        logger.exception(
-            "Unexpected provider execution failure", extra={"provider_id": provider_id}
-        )
+        logger.exception("Unexpected provider execution failure", extra={"provider_id": provider_id})
         _metrics.counter(metric_key, labels={"status": "error"})
         return asdict(
             error_response(
@@ -522,12 +419,8 @@ _PROVIDER_ROUTER = ActionRouter(
 )
 
 
-def _dispatch_provider_action(
-    *, action: str, payload: Dict[str, Any], config: ServerConfig
-) -> dict:
-    return dispatch_with_standard_errors(
-        _PROVIDER_ROUTER, "provider", action, config=config, **payload
-    )
+def _dispatch_provider_action(*, action: str, payload: Dict[str, Any], config: ServerConfig) -> dict:
+    return dispatch_with_standard_errors(_PROVIDER_ROUTER, "provider", action, config=config, **payload)
 
 
 def register_unified_provider_tool(mcp: FastMCP, config: ServerConfig) -> None:

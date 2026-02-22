@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "foundry-mcp"
-version = "0.11.1"
+version = "0.12.0b29"
 description = "MCP server for spec-driven development management"
 readme = "README.md"
 license = "MIT"
@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 authors = [
     { name = "Tyler Burleigh" }
 ]
-keywords = ["mcp", "sdd", "specification", "spec-driven-development"]
+keywords = ["mcp", "foundry", "specification", "spec-driven-development"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -28,6 +28,8 @@ dependencies = [
     "click>=8.0.0",
     "tomli>=2.0.0; python_version < '3.11'",
     "filelock>=3.20.1",
+    "python-ulid>=2.0.0",
+    "rich>=13.0.0",
 ]
 
 [project.optional-dependencies]
@@ -52,9 +54,15 @@ pdf = [
 observability = [
     "foundry-mcp[tracing,metrics]",
 ]
+dev = [
+    "ruff>=0.9.0,<0.10",
+    "pyright>=1.1.390",
+    "foundry-mcp[test]",
+]
 
 [project.scripts]
 foundry-mcp = "foundry_mcp.server:main"
+foundry = "foundry_mcp.cli.main:cli"
 foundry-cli = "foundry_mcp.cli.main:cli"
 
 [project.urls]
@@ -73,3 +81,23 @@ include = ["src"]
 exclude = ["**/__pycache__"]
 typeCheckingMode = "basic"
 reportMissingImports = "warning"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+src = ["src", "tests"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+[tool.ruff.lint]
+select = ["F", "E", "W", "I", "B"]
+ignore = ["E501", "E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["foundry_mcp"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B007", "B017", "B023", "B028", "E721", "E731", "F401", "F841"]

@@ -1,22 +1,10 @@
 """Tests for find_replace_in_spec function."""
 
 import json
-import tempfile
-from pathlib import Path
 
 import pytest
 
 from foundry_mcp.core.spec import find_replace_in_spec, load_spec
-
-
-@pytest.fixture
-def temp_specs_dir():
-    """Create a temporary specs directory structure."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        specs_dir = (Path(tmpdir) / "specs").resolve()
-        for folder in ["pending", "active", "completed", "archived"]:
-            (specs_dir / folder).mkdir(parents=True)
-        yield specs_dir
 
 
 @pytest.fixture
@@ -71,8 +59,11 @@ class TestFindReplaceLiteral:
         spec_file.write_text(json.dumps(fr_spec))
 
         result, error = find_replace_in_spec(
-            "fr-test-001", "FooBar", "BazQux",
-            scope="titles", specs_dir=temp_specs_dir,
+            "fr-test-001",
+            "FooBar",
+            "BazQux",
+            scope="titles",
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -87,8 +78,11 @@ class TestFindReplaceLiteral:
         spec_file.write_text(json.dumps(fr_spec))
 
         result, error = find_replace_in_spec(
-            "fr-test-001", "FooBar", "NewName",
-            scope="descriptions", specs_dir=temp_specs_dir,
+            "fr-test-001",
+            "FooBar",
+            "NewName",
+            scope="descriptions",
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -102,8 +96,11 @@ class TestFindReplaceLiteral:
         spec_file.write_text(json.dumps(fr_spec))
 
         result, error = find_replace_in_spec(
-            "fr-test-001", "FooBar", "Updated",
-            scope="all", specs_dir=temp_specs_dir,
+            "fr-test-001",
+            "FooBar",
+            "Updated",
+            scope="all",
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -119,8 +116,12 @@ class TestFindReplaceRegex:
         spec_file.write_text(json.dumps(fr_spec))
 
         result, error = find_replace_in_spec(
-            "fr-test-001", r"Foo\w+", "Widget",
-            use_regex=True, scope="all", specs_dir=temp_specs_dir,
+            "fr-test-001",
+            r"Foo\w+",
+            "Widget",
+            use_regex=True,
+            scope="all",
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -132,8 +133,12 @@ class TestFindReplaceRegex:
         spec_file.write_text(json.dumps(fr_spec))
 
         result, error = find_replace_in_spec(
-            "fr-test-001", r"(Foo)(Bar)", r"\2\1",
-            use_regex=True, scope="titles", specs_dir=temp_specs_dir,
+            "fr-test-001",
+            r"(Foo)(Bar)",
+            r"\2\1",
+            use_regex=True,
+            scope="titles",
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -146,8 +151,11 @@ class TestFindReplaceRegex:
         spec_file.write_text(json.dumps(fr_spec))
 
         result, error = find_replace_in_spec(
-            "fr-test-001", "[invalid", "test",
-            use_regex=True, specs_dir=temp_specs_dir,
+            "fr-test-001",
+            "[invalid",
+            "test",
+            use_regex=True,
+            specs_dir=temp_specs_dir,
         )
 
         assert result is None
@@ -163,8 +171,11 @@ class TestFindReplaceCaseSensitive:
         spec_file.write_text(json.dumps(fr_spec))
 
         result, error = find_replace_in_spec(
-            "fr-test-001", "foobar", "test",
-            case_sensitive=True, specs_dir=temp_specs_dir,
+            "fr-test-001",
+            "foobar",
+            "test",
+            case_sensitive=True,
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -176,8 +187,11 @@ class TestFindReplaceCaseSensitive:
         spec_file.write_text(json.dumps(fr_spec))
 
         result, error = find_replace_in_spec(
-            "fr-test-001", "foobar", "Widget",
-            case_sensitive=False, specs_dir=temp_specs_dir,
+            "fr-test-001",
+            "foobar",
+            "Widget",
+            case_sensitive=False,
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -193,8 +207,11 @@ class TestFindReplaceDryRun:
         spec_file.write_text(json.dumps(fr_spec))
 
         result, error = find_replace_in_spec(
-            "fr-test-001", "FooBar", "Changed",
-            dry_run=True, specs_dir=temp_specs_dir,
+            "fr-test-001",
+            "FooBar",
+            "Changed",
+            dry_run=True,
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -211,8 +228,11 @@ class TestFindReplaceDryRun:
         spec_file.write_text(json.dumps(fr_spec))
 
         result, error = find_replace_in_spec(
-            "fr-test-001", "FooBar", "NewText",
-            dry_run=True, specs_dir=temp_specs_dir,
+            "fr-test-001",
+            "FooBar",
+            "NewText",
+            dry_run=True,
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -232,7 +252,10 @@ class TestFindReplaceValidation:
         spec_file.write_text(json.dumps(fr_spec))
 
         result, error = find_replace_in_spec(
-            "fr-test-001", "", "test", specs_dir=temp_specs_dir,
+            "fr-test-001",
+            "",
+            "test",
+            specs_dir=temp_specs_dir,
         )
 
         assert result is None
@@ -244,8 +267,11 @@ class TestFindReplaceValidation:
         spec_file.write_text(json.dumps(fr_spec))
 
         result, error = find_replace_in_spec(
-            "fr-test-001", "test", "new",
-            scope="invalid", specs_dir=temp_specs_dir,
+            "fr-test-001",
+            "test",
+            "new",
+            scope="invalid",
+            specs_dir=temp_specs_dir,
         )
 
         assert result is None
@@ -254,7 +280,10 @@ class TestFindReplaceValidation:
     def test_spec_not_found(self, temp_specs_dir):
         """Should error for nonexistent spec."""
         result, error = find_replace_in_spec(
-            "nonexistent", "test", "new", specs_dir=temp_specs_dir,
+            "nonexistent",
+            "test",
+            "new",
+            specs_dir=temp_specs_dir,
         )
 
         assert result is None
@@ -266,7 +295,9 @@ class TestFindReplaceValidation:
         spec_file.write_text(json.dumps(fr_spec))
 
         result, error = find_replace_in_spec(
-            "fr-test-001", "NonexistentText", "new",
+            "fr-test-001",
+            "NonexistentText",
+            "new",
             specs_dir=temp_specs_dir,
         )
 
@@ -280,8 +311,11 @@ class TestFindReplaceValidation:
         spec_file.write_text(json.dumps(fr_spec))
 
         result, error = find_replace_in_spec(
-            "fr-test-001", "FooBar ", "",
-            scope="titles", specs_dir=temp_specs_dir,
+            "fr-test-001",
+            "FooBar ",
+            "",
+            scope="titles",
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None

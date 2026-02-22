@@ -16,16 +16,17 @@ import pytest
 from pydantic import BaseModel
 
 from foundry_mcp.core.research.memory import FileStorageBackend, ResearchMemory
-from foundry_mcp.core.research.models import (
+from foundry_mcp.core.research.models.consensus import (
     ConsensusConfig,
     ConsensusState,
+)
+from foundry_mcp.core.research.models.conversations import ConversationThread
+from foundry_mcp.core.research.models.enums import (
     ConsensusStrategy,
-    ConversationThread,
-    IdeationState,
-    ThinkDeepState,
     ThreadStatus,
 )
-
+from foundry_mcp.core.research.models.ideation import IdeationState
+from foundry_mcp.core.research.models.thinkdeep import ThinkDeepState
 
 # =============================================================================
 # Test Fixtures
@@ -130,7 +131,7 @@ class TestFileStorageBackendPathSanitization:
 
     def test_sanitizes_special_characters(self, storage_backend: FileStorageBackend):
         """Should remove special characters from IDs."""
-        path = storage_backend._get_file_path("test<>:\"\\|?*item")
+        path = storage_backend._get_file_path('test<>:"\\|?*item')
         assert "<" not in path.name
         assert ">" not in path.name
         assert "testitem.json" == path.name
@@ -164,9 +165,7 @@ class TestFileStorageBackendCRUD:
         loaded = storage_backend.load("nonexistent")
         assert loaded is None
 
-    def test_load_invalid_json_returns_none(
-        self, storage_backend: FileStorageBackend, temp_storage_path: Path
-    ):
+    def test_load_invalid_json_returns_none(self, storage_backend: FileStorageBackend, temp_storage_path: Path):
         """Should return None for invalid JSON."""
         # Create invalid JSON file
         file_path = temp_storage_path / "invalid.json"
@@ -185,9 +184,7 @@ class TestFileStorageBackendCRUD:
         assert result is True
         assert not storage_backend._get_file_path("item-1").exists()
 
-    def test_delete_nonexistent_returns_false(
-        self, storage_backend: FileStorageBackend
-    ):
+    def test_delete_nonexistent_returns_false(self, storage_backend: FileStorageBackend):
         """Should return False when deleting nonexistent item."""
         result = storage_backend.delete("nonexistent")
         assert result is False
@@ -236,9 +233,7 @@ class TestFileStorageBackendCRUD:
 class TestFileStorageBackendTTL:
     """Tests for TTL functionality in FileStorageBackend."""
 
-    def test_is_expired_false_within_ttl(
-        self, storage_backend: FileStorageBackend, temp_storage_path: Path
-    ):
+    def test_is_expired_false_within_ttl(self, storage_backend: FileStorageBackend, temp_storage_path: Path):
         """Should return False for non-expired items."""
         file_path = temp_storage_path / "fresh.json"
         file_path.write_text('{"id": "fresh", "name": "Test"}')
@@ -709,9 +704,7 @@ class TestResearchMemoryMaintenance:
         research_memory.save_thread(ConversationThread())
         research_memory.save_investigation(ThinkDeepState(topic="Test"))
         config = ConsensusConfig(providers=["openai"])
-        research_memory.save_consensus(
-            ConsensusState(prompt="Test", config=config)
-        )
+        research_memory.save_consensus(ConsensusState(prompt="Test", config=config))
 
         stats = research_memory.get_storage_stats()
 
@@ -745,9 +738,7 @@ class TestResearchMemoryConcurrency:
             return loaded is not None
 
         with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [
-                executor.submit(create_and_update_thread, i) for i in range(20)
-            ]
+            futures = [executor.submit(create_and_update_thread, i) for i in range(20)]
             results = [f.result() for f in as_completed(futures)]
 
         assert all(results)

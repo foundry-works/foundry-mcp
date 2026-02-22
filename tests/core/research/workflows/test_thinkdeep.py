@@ -12,20 +12,17 @@ from foundry_mcp.core.research.workflows.base import WorkflowResult
 
 
 @pytest.fixture
-def mock_config():
-    """Create a mock ResearchConfig."""
-    config = MagicMock()
-    config.default_provider = "test-provider"
-    config.thinkdeep_max_depth = 5
-    return config
+def mock_config(mock_config):
+    """Extend base mock_config with thinkdeep-specific attributes."""
+    mock_config.thinkdeep_max_depth = 5
+    return mock_config
 
 
 @pytest.fixture
-def mock_memory():
-    """Create a mock ResearchMemory."""
-    memory = MagicMock()
-    memory.load_investigation = MagicMock(return_value=None)
-    return memory
+def mock_memory(mock_memory):
+    """Extend base mock_memory with investigation-specific methods."""
+    mock_memory.load_investigation = MagicMock(return_value=None)
+    return mock_memory
 
 
 class TestThinkDeepWorkflowExceptionHandling:
@@ -56,9 +53,7 @@ class TestThinkDeepWorkflowExceptionHandling:
         workflow = ThinkDeepWorkflow(mock_config, mock_memory)
 
         # Mock _generate_initial_query to raise an exception
-        with patch.object(
-            workflow, "_generate_initial_query", side_effect=RuntimeError("Query generation failed")
-        ):
+        with patch.object(workflow, "_generate_initial_query", side_effect=RuntimeError("Query generation failed")):
             result = workflow.execute(topic="Test topic")
 
         # Should return error result, not raise exception

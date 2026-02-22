@@ -8,22 +8,21 @@ import asyncio
 import logging
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, List, Optional
 
-from foundry_mcp.config import ResearchConfig
-from foundry_mcp.core.llm_config import ProviderSpec
+from foundry_mcp.config.research import ResearchConfig
+from foundry_mcp.core.errors.provider import ContextWindowError, ProviderTimeoutError
+from foundry_mcp.core.llm_config.provider_spec import ProviderSpec
 from foundry_mcp.core.providers import (
-    ContextWindowError,
     ProviderContext,
     ProviderHooks,
     ProviderRequest,
     ProviderResult,
     ProviderStatus,
-    ProviderTimeoutError,
-    is_context_window_error,
-    extract_token_counts,
     create_context_window_guidance,
+    extract_token_counts,
+    is_context_window_error,
 )
 from foundry_mcp.core.providers.registry import available_providers, resolve_provider
 from foundry_mcp.core.research.memory import ResearchMemory
@@ -77,7 +76,7 @@ class WorkflowResult:
     output_tokens: Optional[int] = None
     cached_tokens: Optional[int] = None
     duration_ms: Optional[float] = None
-    metadata: dict[str, Any] = None
+    metadata: dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
 
     def __post_init__(self) -> None:
@@ -507,8 +506,7 @@ class ResearchWorkflowBase(ABC):
 
         # All providers exhausted
         logger.error(
-            "%s phase: All providers exhausted after %d total attempts. "
-            "Providers tried: %s. Last error: %s",
+            "%s phase: All providers exhausted after %d total attempts. Providers tried: %s. Last error: %s",
             phase or "unknown",
             len(providers_tried),
             providers_tried,

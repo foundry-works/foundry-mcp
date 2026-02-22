@@ -224,10 +224,7 @@ class ContentArchive:
             return True
         except OSError as e:
             self._writable = False
-            warning = (
-                f"{ARCHIVE_WRITE_FAILED}: Storage path not writable: "
-                f"{self.storage_path} ({e})"
-            )
+            warning = f"{ARCHIVE_WRITE_FAILED}: Storage path not writable: {self.storage_path} ({e})"
             self._warnings.append(warning)
             logger.warning(warning)
             return False
@@ -255,10 +252,7 @@ class ContentArchive:
                     )
         except OSError as e:
             self._writable = False
-            warning = (
-                f"{ARCHIVE_WRITE_FAILED}: Could not create archive directory: "
-                f"{self.storage_path} ({e})"
-            )
+            warning = f"{ARCHIVE_WRITE_FAILED}: Could not create archive directory: {self.storage_path} ({e})"
             self._warnings.append(warning)
             logger.warning(warning)
 
@@ -414,10 +408,7 @@ class ContentArchive:
         except OSError as e:
             # Write failure - emit warning and cache disabled state
             self._writable = False
-            warning = (
-                f"{ARCHIVE_WRITE_FAILED}: Failed to archive content "
-                f"{content_hash[:12]} for item {item_id}: {e}"
-            )
+            warning = f"{ARCHIVE_WRITE_FAILED}: Failed to archive content {content_hash[:12]} for item {item_id}: {e}"
             self._warnings.append(warning)
             logger.warning(warning)
             return None
