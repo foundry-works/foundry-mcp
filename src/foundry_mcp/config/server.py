@@ -50,7 +50,6 @@ class ServerConfig(_ServerConfigLoader):
     # Workspace configuration
     workspace_roots: List[Path] = field(default_factory=list)
     specs_dir: Optional[Path] = None
-    notes_dir: Optional[Path] = None  # Intake queue storage (default: specs/.notes)
     research_dir: Optional[Path] = None  # Research state storage (default: specs/.research)
 
     # Logging configuration
@@ -117,28 +116,6 @@ class ServerConfig(_ServerConfigLoader):
             return False
 
         return key in self.api_keys
-
-    def get_notes_dir(self, specs_dir: Optional[Path] = None) -> Path:
-        """
-        Get the resolved notes directory path.
-
-        Priority:
-        1. Explicitly configured notes_dir (from TOML or env var)
-        2. Default: specs_dir/.notes (where specs_dir is resolved)
-
-        Args:
-            specs_dir: Optional specs directory to use for default path.
-                      If not provided, uses self.specs_dir or "./specs"
-
-        Returns:
-            Path to notes directory
-        """
-        if self.notes_dir is not None:
-            return self.notes_dir.expanduser()
-
-        # Fall back to default: specs/.notes
-        base_specs = specs_dir or self.specs_dir or Path("./specs")
-        return base_specs / ".notes"
 
     def get_research_dir(self, specs_dir: Optional[Path] = None) -> Path:
         """

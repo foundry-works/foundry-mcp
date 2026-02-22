@@ -199,7 +199,7 @@ def ai_prompt_not_found_error(
     Example:
         >>> ai_prompt_not_found_error(
         ...     "INVALID_PROMPT",
-        ...     available_prompts=["PLAN_REVIEW_FULL_V1", "PLAN_REVIEW_QUICK_V1"],
+        ...     available_prompts=["PLAN_REVIEW_FULL_V1", "SYNTHESIS_PROMPT_V1"],
         ...     workflow="plan_review",
         ... )
     """

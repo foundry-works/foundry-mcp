@@ -1,6 +1,6 @@
 """Storage and concurrency error classes.
 
-Moved from foundry_mcp.core.pagination, foundry_mcp.core.intake,
+Moved from foundry_mcp.core.pagination,
 foundry_mcp.core.autonomy.state_migrations, foundry_mcp.core.research.state_migrations,
 and foundry_mcp.core.autonomy.memory for centralized error management.
 """
@@ -25,12 +25,6 @@ class CursorError(Exception):
         super().__init__(message)
         self.cursor = cursor
         self.reason = reason
-
-
-class LockAcquisitionError(Exception):
-    """Raised when file lock cannot be acquired within timeout."""
-
-    pass
 
 
 class MigrationError(Exception):

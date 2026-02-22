@@ -11,11 +11,6 @@ from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import mcp_tool
 from foundry_mcp.tools.unified.authoring_handlers._helpers import _ACTION_SUMMARY
-from foundry_mcp.tools.unified.authoring_handlers.handlers_intake import (
-    _handle_intake_add,
-    _handle_intake_dismiss,
-    _handle_intake_list,
-)
 from foundry_mcp.tools.unified.authoring_handlers.handlers_metadata import (
     _handle_assumption_add,
     _handle_assumption_list,
@@ -169,21 +164,6 @@ _ACTION_DEFINITIONS = [
         summary=_ACTION_SUMMARY["success-criteria-list"],
         aliases=("success_criteria_list", "list-success-criteria"),
     ),
-    ActionDefinition(
-        name="intake-add", handler=_handle_intake_add, summary=_ACTION_SUMMARY["intake-add"], aliases=("intake_add",)
-    ),
-    ActionDefinition(
-        name="intake-list",
-        handler=_handle_intake_list,
-        summary=_ACTION_SUMMARY["intake-list"],
-        aliases=("intake_list",),
-    ),
-    ActionDefinition(
-        name="intake-dismiss",
-        handler=_handle_intake_dismiss,
-        summary=_ACTION_SUMMARY["intake-dismiss"],
-        aliases=("intake_dismiss",),
-    ),
 ]
 
 _AUTHORING_ROUTER = ActionRouter(tool_name="authoring", actions=_ACTION_DEFINITIONS)
@@ -239,12 +219,6 @@ def register_unified_authoring_tool(mcp: FastMCP, config: ServerConfig) -> None:
         scope: Optional[str] = None,
         use_regex: bool = False,
         case_sensitive: bool = True,
-        # intake parameters
-        priority: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        source: Optional[str] = None,
-        requester: Optional[str] = None,
-        idempotency_key: Optional[str] = None,
     ) -> dict:
         """Execute authoring workflows via the action router."""
 

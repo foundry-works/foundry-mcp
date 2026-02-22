@@ -88,7 +88,6 @@ from foundry_mcp.core.errors.search import (
 # --- Storage errors ---
 from foundry_mcp.core.errors.storage import (
     CursorError,
-    LockAcquisitionError,
     MigrationError,
     SessionCorrupted,
     VersionConflictError,
@@ -133,7 +132,6 @@ __all__ = [
     "RateLimitWaitError",
     # Storage errors
     "CursorError",
-    "LockAcquisitionError",
     "MigrationError",
     "VersionConflictError",
     "SessionCorrupted",

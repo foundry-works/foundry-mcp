@@ -67,7 +67,6 @@ def build_server_context_response(
         },
         "paths": {
             "specs_dir": str(config.specs_dir) if config.specs_dir else None,
-            "notes_dir": str(config.notes_dir) if config.notes_dir else None,
             "research_dir": str(config.research_dir) if config.research_dir else None,
         },
     }

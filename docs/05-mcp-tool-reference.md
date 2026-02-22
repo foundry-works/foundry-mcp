@@ -14,7 +14,7 @@ foundry-mcp exposes 14 unified tools with an `action` parameter that switches be
 | `health` | Health checks and diagnostics | `liveness`, `readiness`, `check` |
 | `spec` | Spec discovery, validation, analysis | `find`, `get`, `list`, `validate`, `fix`, `stats`, `analyze`, `analyze-deps`, `schema`, `diff`, `history`, `completeness-check`, `duplicate-detection` |
 | `task` | Task management and batch operations | `prepare`, `prepare-batch`, `start-batch`, `complete-batch`, `reset-batch`, `session-config`, `session`, `session-step`, `session-events`, `next`, `info`, `check-deps`, `start`, `complete`, `update-status`, `block`, `unblock`, `list-blocked`, `add`, `remove`, `update-estimate`, `update-metadata`, `progress`, `list`, `query`, `hierarchy`, `move`, `add-dependency`, `remove-dependency`, `add-requirement`, `metadata-batch`, `fix-verification-types`, `gate-waiver` |
-| `authoring` | Spec authoring and mutations | `spec-create`, `spec-template`, `spec-update-frontmatter`, `phase-add`, `phase-add-bulk`, `phase-remove`, `phase-move`, `phase-update-metadata`, `assumption-add`, `assumption-list`, `revision-add`, `constraint-add`, `constraint-list`, `risk-add`, `risk-list`, `question-add`, `question-list`, `success-criterion-add`, `success-criteria-list`, `spec-find-replace`, `spec-rollback`, `intake-add`, `intake-list`, `intake-dismiss` |
+| `authoring` | Spec authoring and mutations | `spec-create`, `spec-template`, `spec-update-frontmatter`, `phase-add`, `phase-add-bulk`, `phase-remove`, `phase-move`, `phase-update-metadata`, `assumption-add`, `assumption-list`, `revision-add`, `constraint-add`, `constraint-list`, `risk-add`, `risk-list`, `question-add`, `question-list`, `success-criterion-add`, `success-criteria-list`, `spec-find-replace`, `spec-rollback` |
 | `lifecycle` | Spec lifecycle transitions | `move`, `activate`, `complete`, `archive`, `state` |
 | `plan` | Planning helpers | `create`, `list`, `review` |
 | `review` | LLM-assisted review workflows | `spec`, `fidelity`, `fidelity-gate`, `parse-feedback`, `list-tools`, `list-plan-tools` |
@@ -368,9 +368,6 @@ Spec authoring mutations.
 | `success-criteria-list` | List success criteria |
 | `spec-find-replace` | Find/replace in spec |
 | `spec-rollback` | Rollback to backup |
-| `intake-add` | Add intake item |
-| `intake-list` | List intake items |
-| `intake-dismiss` | Dismiss intake item |
 
 ### Parameters
 
@@ -391,9 +388,6 @@ Spec authoring mutations.
 | `replace` | string | No | - | Replacement text |
 | `scope` | string | No | `all` | Find-replace scope (`all`, `titles`, `descriptions`) |
 | `use_regex` | boolean | No | `false` | Treat find as regex |
-| `title` | string | Varies | - | Intake item title |
-| `priority` | string | No | `p2` | Priority (`p0`-`p4`) |
-| `tags` | array | No | `[]` | Tags for intake item |
 | `dry_run` | boolean | No | `false` | Preview changes |
 | `description` | string | Varies | - | Risk description (required for `risk-add`) |
 | `text` | string | Varies | - | Text content for `constraint-add`, `question-add`, `success-criterion-add` |
@@ -422,7 +416,6 @@ The `constraint-add`, `risk-add`, `question-add`, and `success-criterion-add` ac
 ```json
 {"action": "spec-create", "name": "my-new-feature", "plan_path": ".plans/my-new-feature.md", "plan_review_path": ".plan-reviews/my-new-feature-review-full.md"}
 {"action": "phase-move", "spec_id": "my-spec", "phase_id": "phase-3", "position": 1}
-{"action": "intake-add", "title": "Add dark mode", "priority": "p2", "tags": ["ui"]}
 {"action": "constraint-add", "spec_id": "my-spec", "text": "Must work offline"}
 {"action": "risk-add", "spec_id": "my-spec", "description": "API rate limits", "likelihood": "medium", "impact": "high", "mitigation": "Add retry with backoff"}
 {"action": "question-add", "spec_id": "my-spec", "text": "Which auth provider?"}
@@ -608,4 +601,3 @@ Runtime capability excerpt:
 - [CLI Command Reference](04-cli-command-reference.md) - CLI equivalents
 - [Response Envelope Guide](concepts/response-envelope.md) - Response format
 - [Error Codes Reference](reference/error-codes.md) - Error handling
-- [Intake Guide](guides/intake.md) - Intake workflow details

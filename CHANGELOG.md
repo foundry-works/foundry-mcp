@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-02-22
+
+### Removed
+
+- **Intake subsystem**: Removed `core/intake.py` (~920 lines), `handlers_intake.py` (~603 lines), intake schema, intake test fixtures, and all related tests (~772 lines). The `intake-add`, `intake-list`, and `intake-dismiss` authoring actions are no longer available. Fast-capture workflow is now handled by the `foundry-note` skill instead.
+
+### Changed
+
+- **Capabilities manifest**: Removed intake parameters and examples from the authoring tool definition.
+- **Error handling**: Removed `IntakeError` from the error hierarchy and storage error mappings.
+- **Config**: Removed intake directory configuration from server config and config loader.
+- **Documentation**: Removed intake guide and references from tool reference docs.
+
 ## [0.13.0] - 2026-02-22
 
 ### Removed

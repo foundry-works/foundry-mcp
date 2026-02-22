@@ -34,7 +34,6 @@ the workflow is organized, and how to use the CLI and MCP tools.
 
 | Doc | Description |
 |-----|-------------|
-| [Intake Guide](guides/intake.md) | Fast-capture notes system |
 | [LLM Configuration](guides/llm-configuration.md) | Provider setup and troubleshooting |
 | [Autonomy Supervisor Runbook](guides/autonomy-supervisor-runbook.md) | Preflight, loop, and escalation operations for autonomous sessions |
 
@@ -102,7 +101,6 @@ docs/
 │   └── deep_research_workflow.md
 │
 ├── guides/
-│   ├── intake.md               # Intake/notes guide
 │   ├── llm-configuration.md    # LLM setup
 │   └── autonomy-supervisor-runbook.md  # Autonomous loop operations
 │

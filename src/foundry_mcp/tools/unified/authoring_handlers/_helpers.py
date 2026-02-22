@@ -41,9 +41,6 @@ _ACTION_SUMMARY = {
     "question-list": "List open questions for a spec",
     "success-criterion-add": "Append a success criterion to spec metadata",
     "success-criteria-list": "List success criteria for a spec",
-    "intake-add": "Capture a new work idea in the notes intake queue",
-    "intake-list": "List new intake items awaiting triage in FIFO order",
-    "intake-dismiss": "Dismiss an intake item from the triage queue",
 }
 
 

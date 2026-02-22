@@ -34,7 +34,6 @@ from foundry_mcp.core.prompts.fidelity_review import (
 # Workflow-specific prompt builders
 from foundry_mcp.core.prompts.plan_review import (
     PLAN_REVIEW_FULL_V1,
-    PLAN_REVIEW_SECURITY_V1,
     PlanReviewPromptBuilder,
 )
 from foundry_mcp.core.responses.errors_ai import (
@@ -289,9 +288,6 @@ class TestPlanReviewPromptBuilder:
         prompts = builder.list_prompts()
 
         assert "PLAN_REVIEW_FULL_V1" in prompts
-        assert "PLAN_REVIEW_QUICK_V1" in prompts
-        assert "PLAN_REVIEW_SECURITY_V1" in prompts
-        assert "PLAN_REVIEW_FEASIBILITY_V1" in prompts
         assert "SYNTHESIS_PROMPT_V1" in prompts
 
     def test_builder_build_full_review(self):
@@ -315,10 +311,10 @@ class TestPlanReviewPromptBuilder:
         assert "Completeness" in dimensions
         assert "Security" in dimensions
 
-    def test_security_review_has_metadata(self):
-        """PLAN_REVIEW_SECURITY_V1 has workflow metadata."""
-        assert "workflow" in PLAN_REVIEW_SECURITY_V1.metadata
-        assert PLAN_REVIEW_SECURITY_V1.id == "PLAN_REVIEW_SECURITY_V1"
+    def test_full_review_has_workflow_metadata(self):
+        """PLAN_REVIEW_FULL_V1 has workflow metadata."""
+        assert "workflow" in PLAN_REVIEW_FULL_V1.metadata
+        assert PLAN_REVIEW_FULL_V1.id == "PLAN_REVIEW_FULL_V1"
 
 
 # =============================================================================

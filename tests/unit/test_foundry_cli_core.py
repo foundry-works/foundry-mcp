@@ -468,7 +468,6 @@ class TestReviewCommands:
         assert data["success"] is True
         assert "tools" in data["data"]
         assert "llm_status" in data["data"]
-        assert "review_types" in data["data"]
 
     def test_review_plan_tools_lists_toolchains(self, cli_runner, temp_specs_dir):
         """review plan-tools returns plan toolchains with status."""
@@ -482,28 +481,6 @@ class TestReviewCommands:
         for tool in data["data"]["plan_tools"]:
             assert "status" in tool
             assert "name" in tool
-
-    def test_review_spec_quick_returns_structural_findings(self, cli_runner, temp_specs_dir):
-        """review spec quick returns native structural findings."""
-        result = cli_runner.invoke(
-            cli,
-            [
-                "--specs-dir",
-                str(temp_specs_dir),
-                "review",
-                "spec",
-                "test-spec-001",
-                "--type",
-                "quick",
-            ],
-        )
-        assert result.exit_code == 0, result.output
-        data = json.loads(result.output)
-        assert data["success"] is True
-        assert data["data"]["review_type"] == "quick"
-        assert "findings" in data["data"]
-        assert "progress" in data["data"]
-
 
 class TestModifyCommands:
     """Tests for foundrymodify commands."""

@@ -55,7 +55,6 @@ from foundry_mcp.core.errors.search import (
 )
 from foundry_mcp.core.errors.storage import (
     CursorError,
-    LockAcquisitionError,
     MigrationError,
     SessionCorrupted,
     VersionConflictError,
@@ -83,7 +82,6 @@ ERROR_MAPPINGS: Dict[Type[Exception], Tuple[ErrorCode, ErrorType]] = {
     SearchAuthenticationError: (ErrorCode.UNAUTHORIZED, ErrorType.AUTHENTICATION),
     # --- Storage / concurrency errors ---
     CursorError: (ErrorCode.INVALID_FORMAT, ErrorType.VALIDATION),
-    LockAcquisitionError: (ErrorCode.UNAVAILABLE, ErrorType.UNAVAILABLE),
     VersionConflictError: (ErrorCode.VERSION_CONFLICT, ErrorType.CONFLICT),
     MigrationError: (ErrorCode.INTERNAL_ERROR, ErrorType.INTERNAL),
     SessionCorrupted: (ErrorCode.INTERNAL_ERROR, ErrorType.INTERNAL),

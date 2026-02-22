@@ -65,7 +65,6 @@ class _ServerConfigLoader:
 
         workspace_roots: List[Path]
         specs_dir: Optional[Path]
-        notes_dir: Optional[Path]
         research_dir: Optional[Path]
         log_level: str
         structured_logging: bool
@@ -157,8 +156,6 @@ class _ServerConfigLoader:
                     self.workspace_roots = [Path(p) for p in ws["roots"]]
                 if "specs_dir" in ws:
                     self.specs_dir = Path(ws["specs_dir"])
-                if "notes_dir" in ws:
-                    self.notes_dir = Path(ws["notes_dir"])
                 if "research_dir" in ws:
                     self.research_dir = Path(ws["research_dir"])
 
@@ -301,10 +298,6 @@ class _ServerConfigLoader:
         # Specs directory
         if specs := os.environ.get("FOUNDRY_MCP_SPECS_DIR"):
             self.specs_dir = Path(specs)
-
-        # Notes directory (intake queue storage)
-        if notes := os.environ.get("FOUNDRY_MCP_NOTES_DIR"):
-            self.notes_dir = Path(notes)
 
         # Research directory (research state storage)
         if research := os.environ.get("FOUNDRY_MCP_RESEARCH_DIR"):
