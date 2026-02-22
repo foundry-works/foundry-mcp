@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0b29] - 2026-02-22
+
+### Removed
+
+- **Sub-phases, phase dependencies, and bulk phase operations**: Removed deprecated complexity from the spec system — sub-phase nesting, inter-phase dependency tracking, and bulk phase management actions.
+- **Phase templates**: Removed `phase-template` action and all supporting code (`PHASE_TEMPLATES`, `get_phase_template_structure`, `apply_phase_template`). Verification scaffolding migrated into `add_phase_bulk()`.
+- **Plan review type variants**: Removed quick/security/feasibility review types — consolidated to a single full review.
+- **Spec/phase-level `estimated_hours`**: Removed from spec-level and phase-level metadata and template defaults. Task-level `estimated_hours` retained.
+
+### Added
+
+- **Spec metadata fields**: Added `success_criteria`, `constraints`, `risks`, and `open_questions` to spec metadata with full CRUD functions, authoring handlers, validation rules, and fidelity context enrichment.
+- **Task complexity support**: Added `complexity` field (low/medium/high) to tasks with validation and hierarchy support.
+- **Plan linkage**: Required `plan_path` and `plan_review_path` metadata fields on `spec-create` with file-existence validation at creation time.
+- **Spec-vs-plan review**: New `SPEC_REVIEW_VS_PLAN_V1` prompt that auto-activates when a spec has a linked `plan_path`, comparing JSON spec against its source markdown plan for translation fidelity.
+- **Verification scaffolding in `add_phase_bulk()`**: Auto-appends run-tests and fidelity-verify nodes with deduplication, replacing the removed phase templates.
+- **Plan context in fidelity reviews**: New `_build_plan_context()` helper enriches fidelity review context with linked plan file content.
+
+### Changed
+
+- **Plan templates consolidated**: Merged simple/detailed plan templates into a single spec-aligned template.
+
+### Fixed
+
+- **Silent kwarg swallowing**: `add_phase_bulk()` and `update_phase_metadata()` now log unexpected kwargs instead of silently ignoring them.
+- **Verification error propagation**: `_add_phase_verification()` wrapped in try/except for clean error messages.
+- **Duplicate risk detection**: `add_risk()` now detects duplicates by description, consistent with `add_constraint`/`add_question`/`add_success_criterion`.
+- **Deterministic review path**: `review_path` set to `None` on persistence failure so callers get a predictable key.
+
 ## [0.12.0b28] - 2026-02-21
 
 ### Fixed
