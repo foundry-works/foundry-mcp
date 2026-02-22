@@ -280,7 +280,11 @@ def _validate_structure(spec_data: Dict[str, Any], result: ValidationResult) -> 
                         )
                     )
                     continue
-                if not risk.get("description") or not isinstance(risk["description"], str) or not risk["description"].strip():
+                if (
+                    not risk.get("description")
+                    or not isinstance(risk["description"], str)
+                    or not risk["description"].strip()
+                ):
                     result.diagnostics.append(
                         Diagnostic(
                             code="MISSING_RISK_DESCRIPTION",

@@ -94,6 +94,7 @@ _RISK_ADD_SCHEMA = {
 # Shared add/list helpers for simple string-array metadata
 # ---------------------------------------------------------------------------
 
+
 def _handle_text_add(
     action: str,
     core_fn: Callable[..., Tuple[Optional[Dict[str, Any]], Optional[str]]],
@@ -261,6 +262,7 @@ def _handle_text_list(
 # ---------------------------------------------------------------------------
 # Assumption handlers (existing — kept with original signature)
 # ---------------------------------------------------------------------------
+
 
 def _handle_assumption_add(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
@@ -476,6 +478,7 @@ def _handle_assumption_list(*, config: ServerConfig, **payload: Any) -> dict:
 # Revision handler (existing)
 # ---------------------------------------------------------------------------
 
+
 def _handle_revision_add(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "revision-add"
@@ -595,6 +598,7 @@ def _handle_revision_add(*, config: ServerConfig, **payload: Any) -> dict:
 # Constraint handlers
 # ---------------------------------------------------------------------------
 
+
 def _handle_constraint_add(*, config: ServerConfig, **payload: Any) -> dict:
     return _handle_text_add("constraint-add", add_constraint, "constraint", config=config, **payload)
 
@@ -606,6 +610,7 @@ def _handle_constraint_list(*, config: ServerConfig, **payload: Any) -> dict:
 # ---------------------------------------------------------------------------
 # Question handlers
 # ---------------------------------------------------------------------------
+
 
 def _handle_question_add(*, config: ServerConfig, **payload: Any) -> dict:
     return _handle_text_add("question-add", add_question, "question", config=config, **payload)
@@ -619,17 +624,23 @@ def _handle_question_list(*, config: ServerConfig, **payload: Any) -> dict:
 # Success criterion handlers
 # ---------------------------------------------------------------------------
 
+
 def _handle_success_criterion_add(*, config: ServerConfig, **payload: Any) -> dict:
-    return _handle_text_add("success-criterion-add", add_success_criterion, "success criterion", config=config, **payload)
+    return _handle_text_add(
+        "success-criterion-add", add_success_criterion, "success criterion", config=config, **payload
+    )
 
 
 def _handle_success_criteria_list(*, config: ServerConfig, **payload: Any) -> dict:
-    return _handle_text_list("success-criteria-list", list_success_criteria, "success_criteria", config=config, **payload)
+    return _handle_text_list(
+        "success-criteria-list", list_success_criteria, "success_criteria", config=config, **payload
+    )
 
 
 # ---------------------------------------------------------------------------
 # Risk handler (structured — not a simple text array)
 # ---------------------------------------------------------------------------
+
 
 def _handle_risk_add(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
@@ -657,7 +668,12 @@ def _handle_risk_add(*, config: ServerConfig, **payload: Any) -> dict:
         _metrics.counter(metric_key, labels={"status": "success", "dry_run": "true"})
         return asdict(
             success_response(
-                data={"spec_id": spec_id, "description": description, "dry_run": True, "note": "Dry run - no changes made"},
+                data={
+                    "spec_id": spec_id,
+                    "description": description,
+                    "dry_run": True,
+                    "note": "Dry run - no changes made",
+                },
                 request_id=request_id,
             )
         )

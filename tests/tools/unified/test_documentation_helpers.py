@@ -438,7 +438,7 @@ class TestBuildTestResults:
                     "task_id": f"t-{i}",
                     "title": f"Test run {i} verification",
                     "entry_type": "note",
-                    "timestamp": f"2025-01-{i+1:02d}T00:00:00Z",
+                    "timestamp": f"2025-01-{i + 1:02d}T00:00:00Z",
                     "content": f"Result {i}",
                 }
                 for i in range(10)
@@ -515,7 +515,7 @@ class TestBuildJournalEntries:
                 {
                     "title": f"Entry {i}",
                     "entry_type": "note",
-                    "timestamp": f"2025-01-{i+1:02d}T00:00:00Z",
+                    "timestamp": f"2025-01-{i + 1:02d}T00:00:00Z",
                     "content": f"Content {i}",
                 }
                 for i in range(10)

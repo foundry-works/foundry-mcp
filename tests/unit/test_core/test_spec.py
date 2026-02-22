@@ -461,7 +461,9 @@ class TestUpdateFrontmatter:
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
 
-        result, error = update_frontmatter("test-spec-001", key="mission", value="New Mission", specs_dir=temp_specs_dir)
+        result, error = update_frontmatter(
+            "test-spec-001", key="mission", value="New Mission", specs_dir=temp_specs_dir
+        )
 
         assert error is None
         assert result["previous_value"] == "Original Mission"
@@ -485,7 +487,9 @@ class TestUpdateFrontmatter:
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
 
-        result, error = update_frontmatter("test-spec-001", key="progress_percentage", value=42, specs_dir=temp_specs_dir)
+        result, error = update_frontmatter(
+            "test-spec-001", key="progress_percentage", value=42, specs_dir=temp_specs_dir
+        )
 
         assert error is None
         assert result["value"] == 42
@@ -1393,8 +1397,6 @@ class TestMovePhase:
         spec = load_spec("test-dry-run", temp_specs_dir)
         children = spec["hierarchy"]["spec-root"]["children"]
         assert children == ["phase-1", "phase-2", "phase-3"]  # Unchanged
-
-
 
 
 class TestRecalculateActualHours:

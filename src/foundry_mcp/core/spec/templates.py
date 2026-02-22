@@ -43,8 +43,7 @@ def get_template_structure(template: str, category: str) -> Dict[str, Any]:
     """
     if template != "empty":
         raise ValueError(
-            f"Invalid template '{template}'. Only 'empty' template is supported. "
-            f"Use phase-add-bulk to add structure."
+            f"Invalid template '{template}'. Only 'empty' template is supported. Use phase-add-bulk to add structure."
         )
 
     return {
@@ -785,9 +784,7 @@ def list_constraints(
 
     constraints = spec_data.get("metadata", {}).get("constraints", [])
     constraint_list = [
-        {"id": f"c-{i}", "text": c, "index": i}
-        for i, c in enumerate(constraints, 1)
-        if isinstance(c, str)
+        {"id": f"c-{i}", "text": c, "index": i} for i, c in enumerate(constraints, 1) if isinstance(c, str)
     ]
 
     return {
@@ -866,11 +863,7 @@ def list_questions(
         return None, f"Failed to load specification '{spec_id}'"
 
     questions = spec_data.get("metadata", {}).get("open_questions", [])
-    question_list = [
-        {"id": f"q-{i}", "text": q, "index": i}
-        for i, q in enumerate(questions, 1)
-        if isinstance(q, str)
-    ]
+    question_list = [{"id": f"q-{i}", "text": q, "index": i} for i, q in enumerate(questions, 1) if isinstance(q, str)]
 
     return {
         "spec_id": spec_id,
@@ -907,11 +900,7 @@ def list_success_criteria(
         return None, f"Failed to load specification '{spec_id}'"
 
     criteria = spec_data.get("metadata", {}).get("success_criteria", [])
-    criteria_list = [
-        {"id": f"sc-{i}", "text": c, "index": i}
-        for i, c in enumerate(criteria, 1)
-        if isinstance(c, str)
-    ]
+    criteria_list = [{"id": f"sc-{i}", "text": c, "index": i} for i, c in enumerate(criteria, 1) if isinstance(c, str)]
 
     return {
         "spec_id": spec_id,

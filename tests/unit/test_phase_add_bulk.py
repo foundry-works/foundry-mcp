@@ -152,7 +152,6 @@ class TestTaskValidation:
         assert "title" in result["error"].lower()
 
 
-
 # =============================================================================
 # Phase Metadata Validation Tests
 # =============================================================================
