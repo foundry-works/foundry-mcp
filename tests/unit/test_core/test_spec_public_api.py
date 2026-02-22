@@ -42,7 +42,7 @@ def _is_defined_in_module(mod: types.ModuleType, name: str) -> bool:
 # Phase 1 baseline: every public symbol in foundry_mcp.core.spec
 # ---------------------------------------------------------------------------
 
-# Functions (40)
+# Functions (38)
 BASELINE_FUNCTIONS = sorted(
     [
         "add_assumption",
@@ -53,7 +53,6 @@ BASELINE_FUNCTIONS = sorted(
         "add_revision",
         "add_risk",
         "add_success_criterion",
-        "apply_phase_template",
         "backup_spec",
         "check_spec_completeness",
         "create_spec",
@@ -66,7 +65,6 @@ BASELINE_FUNCTIONS = sorted(
         "generate_spec_data",
         "generate_spec_id",
         "get_node",
-        "get_phase_template_structure",
         "get_template_structure",
         "list_assumptions",
         "list_constraints",
@@ -88,7 +86,7 @@ BASELINE_FUNCTIONS = sorted(
     ]
 )
 
-# Constants (11)
+# Constants (10)
 BASELINE_CONSTANTS = sorted(
     [
         "CATEGORIES",
@@ -98,7 +96,6 @@ BASELINE_CONSTANTS = sorted(
         "DEFAULT_MAX_BACKUPS",
         "FRONTMATTER_KEYS",
         "MAX_BACKUP_PAGE_SIZE",
-        "PHASE_TEMPLATES",
         "TEMPLATES",
         "TEMPLATE_DESCRIPTIONS",
         "VERIFICATION_TYPES",
@@ -156,18 +153,15 @@ CONSUMER_IMPORTS = {
     ],
     "foundry_mcp.tools.unified.authoring": [
         "CATEGORIES",
-        "PHASE_TEMPLATES",
         "TEMPLATES",
         "add_assumption",
         "add_phase",
         "add_phase_bulk",
         "add_revision",
-        "apply_phase_template",
         "create_spec",
         "find_replace_in_spec",
         "find_specs_directory",
         "generate_spec_data",
-        "get_phase_template_structure",
         "list_assumptions",
         "load_spec",
         "move_phase",
@@ -256,9 +250,9 @@ class TestSpecModulePublicAPI:
 
     def test_baseline_counts(self):
         """Baseline has expected counts."""
-        assert len(BASELINE_FUNCTIONS) == 40
-        assert len(BASELINE_CONSTANTS) == 11
-        assert len(BASELINE_ALL) == 51
+        assert len(BASELINE_FUNCTIONS) == 38
+        assert len(BASELINE_CONSTANTS) == 10
+        assert len(BASELINE_ALL) == 48
 
 
 class TestCoreReexports:

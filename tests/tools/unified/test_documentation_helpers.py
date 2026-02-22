@@ -1,8 +1,11 @@
 """Tests for documentation_helpers including fidelity-verify filtering, limit removal, and new context builders."""
 
+from pathlib import Path
+
 from foundry_mcp.tools.unified.documentation_helpers import (
     _build_implementation_artifacts,
     _build_journal_entries,
+    _build_plan_context,
     _build_spec_overview,
     _build_spec_requirements,
     _build_subsequent_phases,
@@ -646,3 +649,99 @@ class TestBuildSubsequentPhases:
         result = _build_subsequent_phases(spec, "phase-1")
         assert "Tasks (2)" in result  # phase-2 has 2 tasks
         assert "Tasks (1)" in result  # phase-3 has 1 task
+
+
+# ---------------------------------------------------------------------------
+# _build_spec_overview — plan linkage fields
+# ---------------------------------------------------------------------------
+
+
+class TestBuildSpecOverviewPlanLinkage:
+    def test_includes_plan_path_when_present(self):
+        spec = {
+            "title": "Linked Spec",
+            "metadata": {"plan_path": ".plans/my-feature.md"},
+            "hierarchy": {},
+        }
+        result = _build_spec_overview(spec)
+        assert "Plan:" in result
+        assert ".plans/my-feature.md" in result
+
+    def test_includes_plan_review_path_when_present(self):
+        spec = {
+            "title": "Linked Spec",
+            "metadata": {"plan_review_path": ".plan-reviews/my-feature-review-full.md"},
+            "hierarchy": {},
+        }
+        result = _build_spec_overview(spec)
+        assert "Plan Review:" in result
+        assert ".plan-reviews/my-feature-review-full.md" in result
+
+    def test_omits_plan_path_when_absent(self):
+        spec = {"title": "No Plan", "metadata": {}, "hierarchy": {}}
+        result = _build_spec_overview(spec)
+        assert "Plan:" not in result
+        assert "Plan Review:" not in result
+
+    def test_omits_plan_path_when_empty(self):
+        spec = {
+            "title": "Empty Plan",
+            "metadata": {"plan_path": "", "plan_review_path": "  "},
+            "hierarchy": {},
+        }
+        result = _build_spec_overview(spec)
+        assert "Plan:" not in result
+        assert "Plan Review:" not in result
+
+
+# ---------------------------------------------------------------------------
+# _build_plan_context
+# ---------------------------------------------------------------------------
+
+
+class TestBuildPlanContext:
+    def test_returns_content_when_plan_file_exists(self, tmp_path):
+        plan_file = tmp_path / ".plans" / "feature.md"
+        plan_file.parent.mkdir(parents=True)
+        plan_file.write_text("# My Plan\n\nBuild the thing.\n")
+        spec = {"metadata": {"plan_path": ".plans/feature.md"}}
+        result = _build_plan_context(spec, tmp_path)
+        assert "### Original Plan" in result
+        assert "Build the thing." in result
+
+    def test_returns_empty_when_plan_file_missing(self, tmp_path):
+        spec = {"metadata": {"plan_path": ".plans/nonexistent.md"}}
+        result = _build_plan_context(spec, tmp_path)
+        assert result == ""
+
+    def test_returns_empty_when_plan_path_absent(self):
+        spec = {"metadata": {}}
+        result = _build_plan_context(spec, Path("/some/root"))
+        assert result == ""
+
+    def test_returns_empty_when_plan_path_is_empty_string(self):
+        spec = {"metadata": {"plan_path": ""}}
+        result = _build_plan_context(spec, Path("/some/root"))
+        assert result == ""
+
+    def test_returns_empty_when_workspace_root_is_none(self):
+        spec = {"metadata": {"plan_path": ".plans/feature.md"}}
+        result = _build_plan_context(spec, None)
+        assert result == ""
+
+    def test_returns_empty_when_no_metadata(self):
+        spec = {}
+        result = _build_plan_context(spec, Path("/some/root"))
+        assert result == ""
+
+    def test_returns_empty_when_metadata_not_dict(self):
+        spec = {"metadata": "not a dict"}
+        result = _build_plan_context(spec, Path("/some/root"))
+        assert result == ""
+
+    def test_returns_empty_for_empty_file(self, tmp_path):
+        plan_file = tmp_path / "plan.md"
+        plan_file.write_text("")
+        spec = {"metadata": {"plan_path": "plan.md"}}
+        result = _build_plan_context(spec, tmp_path)
+        assert result == ""

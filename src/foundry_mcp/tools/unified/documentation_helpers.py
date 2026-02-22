@@ -393,7 +393,52 @@ def _build_spec_overview(spec_data: Dict[str, Any]) -> str:
             if isinstance(question, str) and question.strip():
                 lines.append(f"  - {question}")
 
+    plan_path = metadata.get("plan_path")
+    if plan_path and isinstance(plan_path, str) and plan_path.strip():
+        lines.append(f"- **Plan:** `{plan_path}`")
+
+    plan_review_path = metadata.get("plan_review_path")
+    if plan_review_path and isinstance(plan_review_path, str) and plan_review_path.strip():
+        lines.append(f"- **Plan Review:** `{plan_review_path}`")
+
     return "\n".join(lines) if lines else "*No spec overview available*"
+
+
+def _build_plan_context(spec_data: Dict[str, Any], workspace_root: Optional[Path]) -> str:
+    """Build plan context section by reading the plan file from disk.
+
+    Resolves ``metadata.plan_path`` relative to *workspace_root*, reads the
+    file, and returns formatted markdown.  Returns an empty string when the
+    plan path is absent or the file is unreadable.
+
+    Unlike other ``_build_*`` helpers (which are pure data transforms), this
+    function performs filesystem I/O.  It degrades gracefully so fidelity
+    review works without it.
+    """
+    metadata = spec_data.get("metadata", {})
+    if not isinstance(metadata, dict):
+        return ""
+
+    plan_path = metadata.get("plan_path")
+    if not isinstance(plan_path, str) or not plan_path.strip():
+        return ""
+
+    if workspace_root is None:
+        return ""
+
+    resolved = Path(workspace_root) / plan_path.strip()
+    if not resolved.exists():
+        return ""
+
+    try:
+        content = resolved.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return ""
+
+    if not content.strip():
+        return ""
+
+    return f"### Original Plan\n\n{content.strip()}"
 
 
 def _build_subsequent_phases(

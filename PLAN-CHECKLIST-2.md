@@ -56,8 +56,8 @@
 
 ## Documentation
 
-- [ ] Add `constraint-add`, `risk-add`, `question-add`, `success-criterion-add` to `docs/05-mcp-tool-reference.md`
-- [ ] Document new metadata fields in spec schema section of docs
+- [x] Add `constraint-add`, `risk-add`, `question-add`, `success-criterion-add` to `docs/05-mcp-tool-reference.md`
+- [x] Document new metadata fields in spec schema section of docs
 
 ## Verification
 

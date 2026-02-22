@@ -19,7 +19,6 @@ from foundry_mcp.core.responses.types import (
 )
 from foundry_mcp.core.spec import (
     CATEGORIES,
-    PHASE_TEMPLATES,
     TEMPLATES,
     create_spec,
     find_replace_in_spec,
@@ -79,10 +78,12 @@ _SPEC_CREATE_SCHEMA = {
     "name": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED),
     "template": Str(
         choices=frozenset(TEMPLATES),
-        remediation="Use template='empty' and add phases via phase-add-bulk or phase-template apply",
+        remediation="Use template='empty' and add phases via phase-add-bulk",
     ),
     "category": Str(choices=frozenset(CATEGORIES), remediation=f"Use one of: {', '.join(CATEGORIES)}"),
     "mission": Str(),
+    "plan_path": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED, remediation="Provide the path to the markdown plan file"),
+    "plan_review_path": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED, remediation="Provide the path to the synthesized plan review file"),
     "dry_run": Bool(default=False),
     "path": Str(),
 }
@@ -104,6 +105,8 @@ def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
     template = payload["template"]
     category = payload["category"]
     mission = payload.get("mission")
+    plan_path = payload["plan_path"]
+    plan_review_path = payload["plan_review_path"]
     dry_run = payload["dry_run"]
     path = payload.get("path")
 
@@ -119,6 +122,8 @@ def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
             template=template,
             category=category,
             mission=mission,
+            plan_path=plan_path,
+            plan_review_path=plan_review_path,
         )
         if gen_error:
             return _validation_error(
@@ -177,6 +182,8 @@ def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
         template=template,
         category=category,
         mission=mission,
+        plan_path=plan_path,
+        plan_review_path=plan_review_path,
         specs_dir=specs_dir,
     )
     elapsed_ms = (time.perf_counter() - start_time) * 1000
@@ -278,19 +285,17 @@ def _handle_spec_template(*, config: ServerConfig, **payload: Any) -> dict:
         data["templates"] = [
             {
                 "name": "empty",
-                "description": "Blank spec with no phases - use phase templates to add structure",
+                "description": "Blank spec with no phases - use phase-add-bulk to add structure",
             },
         ]
-        data["phase_templates"] = [{"name": t, "description": f"Add {t} phase structure"} for t in PHASE_TEMPLATES]
         data["total_count"] = 1
-        data["message"] = "Use 'empty' template, then add phases via phase-add-bulk or phase-template apply"
+        data["message"] = "Use 'empty' template, then add phases via phase-add-bulk"
     elif template_action == "show":
         data["template_name"] = template_name
         data["content"] = {
             "name": template_name,
             "description": "Blank spec with no phases",
-            "usage": "Use authoring(action='spec-create', name='your-spec') to create, then add phases",
-            "phase_templates": list(PHASE_TEMPLATES),
+            "usage": "Use authoring(action='spec-create', name='your-spec') to create, then add phases via phase-add-bulk",
         }
     else:
         data["template_name"] = template_name
@@ -300,8 +305,7 @@ def _handle_spec_template(*, config: ServerConfig, **payload: Any) -> dict:
         }
         data["instructions"] = (
             "1. Create spec: authoring(action='spec-create', name='your-spec-name')\n"
-            "2. Add phases: authoring(action='phase-template', template_action='apply', "
-            "template_name='planning', spec_id='...')"
+            "2. Add phases: authoring(action='phase-add-bulk', spec_id='...', title='Phase 1', tasks=[...])"
         )
 
     return asdict(success_response(data=data, request_id=request_id))

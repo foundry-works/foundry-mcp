@@ -52,6 +52,7 @@ from foundry_mcp.tools.unified.router import (
 from .documentation_helpers import (
     _build_implementation_artifacts,
     _build_journal_entries,
+    _build_plan_context,
     _build_spec_overview,
     _build_spec_requirements,
     _build_subsequent_phases,
@@ -820,6 +821,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     spec_requirements = _build_spec_requirements(spec_data, task_id, phase_id, exclude_fidelity_verify=True)
     spec_overview = _build_spec_overview(spec_data)
+    plan_context = _build_plan_context(spec_data, ws_path)
     implementation_artifacts = _build_implementation_artifacts(
         spec_data,
         task_id,
@@ -863,6 +865,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             "spec_description": spec_data.get("description", ""),
             "review_scope": scope,
             "spec_overview": spec_overview,
+            "plan_context": plan_context,
             "spec_requirements": spec_requirements,
             "implementation_artifacts": implementation_artifacts,
             "test_results": test_results,

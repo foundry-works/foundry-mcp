@@ -319,9 +319,9 @@ def add_phase_bulk(
     """
     Add a new phase with pre-defined tasks in a single atomic operation.
 
-    Creates a phase and all specified tasks/verify nodes without auto-generating
-    verification scaffolding. This enables creating complete phase structures
-    in one operation.
+    Creates a phase and all specified tasks in a single atomic operation.
+    Automatically appends verification scaffolding (run-tests + fidelity review)
+    unless the caller already includes verify-type nodes in the task list.
 
     Args:
         spec_id: Specification ID to mutate.
@@ -617,6 +617,22 @@ def add_phase_bulk(
                 "type": task_type,
             }
         )
+
+    # Auto-append verification scaffolding unless caller already included verify nodes
+    has_verify_nodes = any(t.get("type") == "verify" for t in tasks)
+    if not has_verify_nodes:
+        _add_phase_verification(hierarchy, phase_num, phase_id)
+        # Track the auto-appended verify nodes in the result
+        for child_id in hierarchy[phase_id]["children"]:
+            if child_id.startswith("verify-") and child_id not in [t["task_id"] for t in tasks_created]:
+                node = hierarchy[child_id]
+                tasks_created.append(
+                    {
+                        "task_id": child_id,
+                        "title": node["title"],
+                        "type": "verify",
+                    }
+                )
 
     # Update spec-root total_tasks
     total_tasks = spec_root.get("total_tasks", 0)

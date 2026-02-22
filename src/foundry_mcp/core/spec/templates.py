@@ -1,23 +1,21 @@
 """
 Spec creation, templates, assumptions, revisions, and frontmatter operations.
 
-Functions for creating specs from templates, applying phase templates,
-managing assumptions/revisions, and updating frontmatter metadata.
+Functions for creating specs from templates, managing assumptions/revisions,
+and updating frontmatter metadata.
 
-Imports ``io`` (for find/load/save), ``hierarchy`` (for add_phase_bulk),
-and ``_constants`` only.
+Imports ``io`` (for find/load/save) and ``_constants`` only.
 """
 
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 from foundry_mcp.core.spec._constants import (
     CATEGORIES,
-    PHASE_TEMPLATES,
     TEMPLATES,
 )
-from foundry_mcp.core.spec.hierarchy import add_phase_bulk
 from foundry_mcp.core.spec.io import (
     find_spec_file,
     find_specs_directory,
@@ -31,7 +29,7 @@ def get_template_structure(template: str, category: str) -> Dict[str, Any]:
     """
     Get the hierarchical structure for a spec template.
 
-    Only the 'empty' template is supported. Use phase templates to add structure.
+    Only the 'empty' template is supported. Use phase-add-bulk to add structure.
 
     Args:
         template: Template type (only 'empty' is valid).
@@ -46,7 +44,7 @@ def get_template_structure(template: str, category: str) -> Dict[str, Any]:
     if template != "empty":
         raise ValueError(
             f"Invalid template '{template}'. Only 'empty' template is supported. "
-            f"Use phase templates (phase-add-bulk or phase-template apply) to add structure."
+            f"Use phase-add-bulk to add structure."
         )
 
     return {
@@ -71,246 +69,13 @@ def get_template_structure(template: str, category: str) -> Dict[str, Any]:
     }
 
 
-def get_phase_template_structure(template: str, category: str = "implementation") -> Dict[str, Any]:
-    """
-    Get the structure definition for a phase template.
-
-    Phase templates define reusable phase structures with pre-configured tasks.
-    Each template includes automatic verification scaffolding (run-tests + fidelity).
-
-    Args:
-        template: Phase template type (planning, implementation, testing, security, documentation).
-        category: Default task category for tasks in this phase.
-
-    Returns:
-        Dict with phase structure including:
-        - title: Phase title
-        - description: Phase description
-        - purpose: Phase purpose for metadata
-        - tasks: List of task definitions (title, description, category)
-        - includes_verification: Always True (verification auto-added)
-    """
-    templates: Dict[str, Dict[str, Any]] = {
-        "planning": {
-            "title": "Planning & Discovery",
-            "description": "Requirements gathering, analysis, and initial planning",
-            "purpose": "Define scope, requirements, and acceptance criteria",
-            "tasks": [
-                {
-                    "title": "Define requirements",
-                    "description": "Document functional and non-functional requirements",
-                    "task_category": "investigation",
-                    "acceptance_criteria": [
-                        "Requirements are documented and reviewed",
-                    ],
-                },
-                {
-                    "title": "Design solution approach",
-                    "description": "Outline the technical approach and architecture decisions",
-                    "task_category": "investigation",
-                    "acceptance_criteria": [
-                        "Solution approach and key decisions are documented",
-                    ],
-                },
-            ],
-        },
-        "implementation": {
-            "title": "Implementation",
-            "description": "Core development and feature implementation",
-            "purpose": "Build the primary functionality",
-            "tasks": [
-                {
-                    "title": "Implement core functionality",
-                    "description": "Build the main features and business logic",
-                    "task_category": "investigation",
-                    "acceptance_criteria": [
-                        "Core functionality is implemented and verified",
-                    ],
-                },
-                {
-                    "title": "Add error handling",
-                    "description": "Implement error handling and edge cases",
-                    "task_category": "investigation",
-                    "acceptance_criteria": [
-                        "Error handling covers expected edge cases",
-                    ],
-                },
-            ],
-        },
-        "testing": {
-            "title": "Testing & Validation",
-            "description": "Comprehensive testing and quality assurance",
-            "purpose": "Ensure code quality and correctness",
-            "tasks": [
-                {
-                    "title": "Write unit tests",
-                    "description": "Create unit tests for individual components",
-                    "task_category": "investigation",
-                    "acceptance_criteria": [
-                        "Unit tests cover primary logic paths",
-                    ],
-                },
-                {
-                    "title": "Write integration tests",
-                    "description": "Create integration tests for component interactions",
-                    "task_category": "investigation",
-                    "acceptance_criteria": [
-                        "Integration tests cover critical workflows",
-                    ],
-                },
-            ],
-        },
-        "security": {
-            "title": "Security Review",
-            "description": "Security audit, vulnerability assessment, and hardening",
-            "purpose": "Identify and remediate security vulnerabilities",
-            "tasks": [
-                {
-                    "title": "Security audit",
-                    "description": "Review code for security vulnerabilities (OWASP Top 10)",
-                    "task_category": "investigation",
-                    "acceptance_criteria": [
-                        "Security findings are documented with severity",
-                    ],
-                },
-                {
-                    "title": "Security remediation",
-                    "description": "Fix identified vulnerabilities and harden implementation",
-                    "task_category": "investigation",
-                    "acceptance_criteria": [
-                        "Security findings are addressed or tracked",
-                    ],
-                },
-            ],
-        },
-        "documentation": {
-            "title": "Documentation",
-            "description": "Technical documentation and knowledge capture",
-            "purpose": "Document the implementation for maintainability",
-            "tasks": [
-                {
-                    "title": "Write API documentation",
-                    "description": "Document public APIs, parameters, and return values",
-                    "task_category": "research",
-                    "acceptance_criteria": [
-                        "API documentation is updated with current behavior",
-                    ],
-                },
-                {
-                    "title": "Write user guide",
-                    "description": "Create usage examples and integration guide",
-                    "task_category": "research",
-                    "acceptance_criteria": [
-                        "User guide includes usage examples",
-                    ],
-                },
-            ],
-        },
-    }
-
-    if template not in templates:
-        raise ValueError(f"Invalid phase template '{template}'. Must be one of: {', '.join(PHASE_TEMPLATES)}")
-
-    result = templates[template].copy()
-    result["includes_verification"] = True
-    result["template_name"] = template
-    return result
-
-
-def apply_phase_template(
-    spec_id: str,
-    template: str,
-    specs_dir=None,
-    category: str = "implementation",
-    position: Optional[int] = None,
-    link_previous: bool = True,
-) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-    """
-    Apply a phase template to an existing spec.
-
-    Creates a new phase with pre-configured tasks based on the template.
-    Automatically includes verification scaffolding (run-tests + fidelity).
-
-    Args:
-        spec_id: ID of the spec to add the phase to.
-        template: Phase template name (planning, implementation, testing, security, documentation).
-        specs_dir: Path to specs directory (auto-detected if not provided).
-        category: Default task category for tasks (can be overridden by template).
-        position: Position to insert phase (None = append at end).
-        link_previous: Whether to link this phase to the previous one with dependencies.
-
-    Returns:
-        Tuple of (result_dict, error_message).
-        On success: ({"phase_id": ..., "tasks_created": [...], ...}, None)
-        On failure: (None, "error message")
-    """
-    # Validate template
-    if template not in PHASE_TEMPLATES:
-        return (
-            None,
-            f"Invalid phase template '{template}'. Must be one of: {', '.join(PHASE_TEMPLATES)}",
-        )
-
-    # Get template structure
-    template_struct = get_phase_template_structure(template, category)
-
-    # Build tasks list for add_phase_bulk
-    tasks = []
-    for task_def in template_struct["tasks"]:
-        tasks.append(
-            {
-                "type": "task",
-                "title": task_def["title"],
-                "description": task_def.get("description", ""),
-                "task_category": task_def.get("task_category", task_def.get("category", category)),
-                "acceptance_criteria": task_def.get("acceptance_criteria"),
-            }
-        )
-
-    # Append verification scaffolding (run-tests + fidelity-review)
-    tasks.append(
-        {
-            "type": "verify",
-            "title": "Run tests",
-            "verification_type": "run-tests",
-        }
-    )
-    tasks.append(
-        {
-            "type": "verify",
-            "title": "Fidelity review",
-            "verification_type": "fidelity",
-        }
-    )
-
-    # Use add_phase_bulk to create the phase atomically
-    result, error = add_phase_bulk(
-        spec_id=spec_id,
-        phase_title=template_struct["title"],
-        tasks=tasks,
-        specs_dir=specs_dir,
-        phase_description=template_struct.get("description"),
-        phase_purpose=template_struct.get("purpose"),
-        position=position,
-        link_previous=link_previous,
-    )
-
-    if error:
-        return None, error
-
-    # Enhance result with template info
-    if result:
-        result["template_applied"] = template
-        result["template_title"] = template_struct["title"]
-
-    return result, None
-
-
 def generate_spec_data(
     name: str,
     template: str = "empty",
     category: str = "implementation",
     mission: Optional[str] = None,
+    plan_path: Optional[str] = None,
+    plan_review_path: Optional[str] = None,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
     Generate spec data structure without writing to disk.
@@ -322,6 +87,8 @@ def generate_spec_data(
         template: Template type (only 'empty' is valid).
         category: Default task category.
         mission: Optional mission statement for the spec.
+        plan_path: Optional path to the markdown plan file (relative to specs dir).
+        plan_review_path: Optional path to the synthesized plan review file.
 
     Returns:
         Tuple of (spec_data, error_message).
@@ -332,7 +99,7 @@ def generate_spec_data(
     if template not in TEMPLATES:
         return (
             None,
-            f"Invalid template '{template}'. Only 'empty' template is supported. Use phase templates to add structure.",
+            f"Invalid template '{template}'. Only 'empty' template is supported. Use phase-add-bulk to add structure.",
         )
 
     # Validate category
@@ -352,21 +119,27 @@ def generate_spec_data(
     # Fill in the title
     hierarchy["spec-root"]["title"] = name
 
+    metadata: Dict[str, Any] = {
+        "description": "",
+        "mission": mission.strip() if isinstance(mission, str) else "",
+        "objectives": [],
+        "assumptions": [],
+        "success_criteria": [],
+        "constraints": [],
+        "risks": [],
+        "open_questions": [],
+    }
+    if plan_path is not None:
+        metadata["plan_path"] = plan_path.strip()
+    if plan_review_path is not None:
+        metadata["plan_review_path"] = plan_review_path.strip()
+
     spec_data = {
         "spec_id": spec_id,
         "title": name,
         "generated": now,
         "last_updated": now,
-        "metadata": {
-            "description": "",
-            "mission": mission.strip() if isinstance(mission, str) else "",
-            "objectives": [],
-            "assumptions": [],
-            "success_criteria": [],
-            "constraints": [],
-            "risks": [],
-            "open_questions": [],
-        },
+        "metadata": metadata,
         "progress_percentage": 0,
         "status": "pending",
         "current_phase": None,  # Empty template has no phases
@@ -382,6 +155,8 @@ def create_spec(
     template: str = "empty",
     category: str = "implementation",
     mission: Optional[str] = None,
+    plan_path: Optional[str] = None,
+    plan_review_path: Optional[str] = None,
     specs_dir=None,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
@@ -389,9 +164,11 @@ def create_spec(
 
     Args:
         name: Human-readable name for the specification.
-        template: Template type (only 'empty' is valid). Use phase templates to add structure.
+        template: Template type (only 'empty' is valid). Use phase-add-bulk to add structure.
         category: Default task category. Default: implementation.
         mission: Optional mission statement for the spec.
+        plan_path: Optional path to the markdown plan file (relative to specs dir).
+        plan_review_path: Optional path to the synthesized plan review file.
         specs_dir: Path to specs directory (auto-detected if not provided).
 
     Returns:
@@ -405,6 +182,8 @@ def create_spec(
         template=template,
         category=category,
         mission=mission,
+        plan_path=plan_path,
+        plan_review_path=plan_review_path,
     )
     if error or spec_data is None:
         return None, error or "Failed to generate spec data"
@@ -418,6 +197,17 @@ def create_spec(
             None,
             "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR.",
         )
+
+    # Validate plan file existence at creation time
+    specs_dir_path = Path(specs_dir)
+    if plan_path is not None:
+        resolved_plan = specs_dir_path / plan_path.strip()
+        if not resolved_plan.exists():
+            return None, f"Plan file not found: {resolved_plan}"
+    if plan_review_path is not None:
+        resolved_review = specs_dir_path / plan_review_path.strip()
+        if not resolved_review.exists():
+            return None, f"Plan review file not found: {resolved_review}"
 
     # Ensure pending directory exists
     pending_dir = specs_dir / "pending"

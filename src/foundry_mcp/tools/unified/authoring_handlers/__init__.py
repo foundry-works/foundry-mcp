@@ -34,7 +34,6 @@ from foundry_mcp.tools.unified.authoring_handlers.handlers_phase import (
     _handle_phase_add_bulk,
     _handle_phase_move,
     _handle_phase_remove,
-    _handle_phase_template,
     _handle_phase_update_metadata,
 )
 from foundry_mcp.tools.unified.authoring_handlers.handlers_spec import (
@@ -88,12 +87,6 @@ _ACTION_DEFINITIONS = [
         handler=_handle_phase_add_bulk,
         summary=_ACTION_SUMMARY["phase-add-bulk"],
         aliases=("phase_add_bulk",),
-    ),
-    ActionDefinition(
-        name="phase-template",
-        handler=_handle_phase_template,
-        summary=_ACTION_SUMMARY["phase-template"],
-        aliases=("phase_template",),
     ),
     ActionDefinition(
         name="phase-move", handler=_handle_phase_move, summary=_ACTION_SUMMARY["phase-move"], aliases=("phase_move",)

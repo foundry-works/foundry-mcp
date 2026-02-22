@@ -58,7 +58,7 @@ foundry-cli specs create <NAME> [OPTIONS]
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--template` | choice | `empty` | Spec template (`empty` only - use phase templates to add structure) |
+| `--template` | choice | `empty` | Spec template (`empty` only - use `phase-add-bulk` to add structure) |
 | `--category` | choice | `implementation` | Default task category (`investigation`, `implementation`, `refactoring`, `decision`, `research`) |
 | `--mission` | string | `""` | Optional mission statement for the spec |
 

@@ -304,6 +304,34 @@ def _validate_structure(spec_data: Dict[str, Any], result: ValidationResult) -> 
                             )
                         )
 
+    # Warn if plan linkage fields are missing (backward compat — not errors)
+    if isinstance(metadata, dict):
+        plan_path = metadata.get("plan_path")
+        if not isinstance(plan_path, str) or not plan_path.strip():
+            result.diagnostics.append(
+                Diagnostic(
+                    code="MISSING_PLAN_PATH",
+                    message="Spec metadata.plan_path is missing — new specs should link to their originating plan",
+                    severity="warning",
+                    category="metadata",
+                    location="metadata.plan_path",
+                    suggested_fix="Set metadata.plan_path to the relative path of the markdown plan file",
+                )
+            )
+
+        plan_review_path = metadata.get("plan_review_path")
+        if not isinstance(plan_review_path, str) or not plan_review_path.strip():
+            result.diagnostics.append(
+                Diagnostic(
+                    code="MISSING_PLAN_REVIEW_PATH",
+                    message="Spec metadata.plan_review_path is missing — new specs should link to their plan review",
+                    severity="warning",
+                    category="metadata",
+                    location="metadata.plan_review_path",
+                    suggested_fix="Set metadata.plan_review_path to the relative path of the synthesized plan review",
+                )
+            )
+
     # Check hierarchy is dict
     hierarchy = spec_data.get("hierarchy")
     if hierarchy is not None and not isinstance(hierarchy, dict):

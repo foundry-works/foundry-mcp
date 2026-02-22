@@ -66,10 +66,8 @@ from foundry_mcp.core.spec.io import (  # noqa: F401 — re-exports
 from foundry_mcp.core.spec.templates import (  # noqa: F401 — re-exports
     add_assumption,
     add_revision,
-    apply_phase_template,
     create_spec,
     generate_spec_data,
-    get_phase_template_structure,
     get_template_structure,
     list_assumptions,
     update_frontmatter,

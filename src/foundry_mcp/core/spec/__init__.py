@@ -8,7 +8,7 @@ Sub-modules:
 - ``_constants``: Shared constants
 - ``io``: I/O functions (find, load, save, backup, list, diff, rollback)
 - ``hierarchy``: Hierarchy operations (get/update node, phase CRUD, recalculate hours)
-- ``templates``: Spec creation, phase templates, assumptions, revisions, frontmatter
+- ``templates``: Spec creation, assumptions, revisions, frontmatter
 - ``analysis``: Read-only analysis (completeness checks, duplicate detection)
 - ``_monolith``: Remaining spec operations (find-replace)
 """
@@ -21,7 +21,6 @@ from foundry_mcp.core.spec._constants import (
     DEFAULT_MAX_BACKUPS,
     FRONTMATTER_KEYS,
     MAX_BACKUP_PAGE_SIZE,
-    PHASE_TEMPLATES,
     TEMPLATE_DESCRIPTIONS,
     TEMPLATES,
     VERIFICATION_TYPES,
@@ -71,12 +70,9 @@ from foundry_mcp.core.spec.templates import (
     add_question,
     add_risk,
     add_success_criterion,
-    # Phase template operations
-    apply_phase_template,
     # Spec creation
     create_spec,
     generate_spec_data,
-    get_phase_template_structure,
     get_template_structure,
     list_assumptions,
     list_constraints,
@@ -96,7 +92,6 @@ __all__ = [
     "DEFAULT_MAX_BACKUPS",
     "FRONTMATTER_KEYS",
     "MAX_BACKUP_PAGE_SIZE",
-    "PHASE_TEMPLATES",
     "TEMPLATES",
     "TEMPLATE_DESCRIPTIONS",
     "VERIFICATION_TYPES",
@@ -123,8 +118,6 @@ __all__ = [
     # Phase operations
     "add_phase",
     "add_phase_bulk",
-    "apply_phase_template",
-    "get_phase_template_structure",
     "move_phase",
     "remove_phase",
     "update_phase_metadata",
