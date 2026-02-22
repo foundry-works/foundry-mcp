@@ -197,16 +197,51 @@ def create_spec(
             "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR.",
         )
 
-    # Validate plan file existence at creation time
-    specs_dir_path = Path(specs_dir)
+    # Validate plan file existence at creation time.
+    # Callers may pass paths in several forms:
+    #   - Relative from specs_dir:  .plans/foo.md  (canonical)
+    #   - Prefixed with specs/:     specs/.plans/foo.md
+    #   - Absolute:                 /home/.../specs/.plans/foo.md
+    # We normalise to a relative-from-specs_dir form and store that.
+    specs_dir_path = Path(specs_dir).resolve()
+
+    def _resolve_plan_file(raw: str) -> Tuple[Optional[Path], Optional[str]]:
+        """Return (resolved_absolute_path, normalised_relative_str) or raise."""
+        p = Path(raw.strip())
+        # Absolute path — use directly, then relativise for storage
+        if p.is_absolute():
+            if p.exists():
+                try:
+                    return p, str(p.relative_to(specs_dir_path))
+                except ValueError:
+                    return p, raw.strip()
+            return None, None
+        # Try as-is (relative to specs_dir)
+        candidate = specs_dir_path / p
+        if candidate.exists():
+            return candidate, str(p)
+        # Strip leading "specs/" prefix (common LLM mistake)
+        parts = p.parts
+        if parts and parts[0] == specs_dir_path.name:
+            stripped = Path(*parts[1:]) if len(parts) > 1 else p
+            candidate = specs_dir_path / stripped
+            if candidate.exists():
+                return candidate, str(stripped)
+        return None, None
+
     if plan_path is not None:
-        resolved_plan = specs_dir_path / plan_path.strip()
-        if not resolved_plan.exists():
-            return None, f"Plan file not found: {resolved_plan}"
+        resolved, normed = _resolve_plan_file(plan_path)
+        if resolved is None:
+            return None, f"Plan file not found: {specs_dir_path / plan_path.strip()}"
+        plan_path = normed  # store normalised relative path
+        spec_data["metadata"]["plan_path"] = normed
+
     if plan_review_path is not None:
-        resolved_review = specs_dir_path / plan_review_path.strip()
-        if not resolved_review.exists():
-            return None, f"Plan review file not found: {resolved_review}"
+        resolved, normed = _resolve_plan_file(plan_review_path)
+        if resolved is None:
+            return None, f"Plan review file not found: {specs_dir_path / plan_review_path.strip()}"
+        plan_review_path = normed
+        spec_data["metadata"]["plan_review_path"] = normed
 
     # Ensure pending directory exists
     pending_dir = specs_dir / "pending"

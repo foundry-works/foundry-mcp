@@ -503,6 +503,10 @@ def _handle_update_metadata(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "update-metadata"
 
+    # Remap common LLM alias: update_metadata → custom_metadata
+    if "update_metadata" in payload and "custom_metadata" not in payload:
+        payload["custom_metadata"] = payload.pop("update_metadata")
+
     err = validate_payload(payload, _UPDATE_METADATA_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.3] - 2026-02-22
+
+### Fixed
+
+- **`update_metadata` → `custom_metadata` alias**: Task `update-metadata` action now silently remaps `update_metadata` to `custom_metadata` when the latter is absent, fixing a common LLM parameter-name mismatch.
+- **Spec review persistence**: `review(action="spec")` now persists review results to `.spec-reviews/` for both standalone and plan-enhanced reviews, not just plan-enhanced ones. Dry-run and failed reviews are still excluded.
+- **`spec_review_path` metadata**: After persisting a spec review, the relative review file path is now written to the spec's metadata via `update_frontmatter`, enabling future discovery without scanning the filesystem.
+- **Flexible `plan_path` resolution**: `spec-create` now resolves `plan_path` and `plan_review_path` from absolute paths, `specs/`-prefixed paths, and canonical relative paths, instead of only accepting relative-from-specs_dir.
+
 ## [0.14.2] - 2026-02-22
 
 ### Fixed

@@ -127,3 +127,90 @@ class TestCreateSpecPlanFileValidation:
         )
         assert error is None
         assert result is not None
+
+
+class TestCreateSpecPlanPathResolution:
+    """Tests for flexible plan_path resolution (absolute, prefixed, relative)."""
+
+    def _make_plan_files(self, specs_dir):
+        plans_dir = specs_dir / ".plans"
+        plans_dir.mkdir(parents=True, exist_ok=True)
+        (plans_dir / "feature.md").write_text("# Plan")
+        reviews_dir = specs_dir / ".plan-reviews"
+        reviews_dir.mkdir(parents=True, exist_ok=True)
+        (reviews_dir / "feature-review.md").write_text("# Review")
+
+    def test_absolute_path_resolves(self, tmp_path):
+        specs_dir = tmp_path / "specs"
+        specs_dir.mkdir()
+        self._make_plan_files(specs_dir)
+        abs_plan = str(specs_dir / ".plans" / "feature.md")
+        abs_review = str(specs_dir / ".plan-reviews" / "feature-review.md")
+        result, error = create_spec(
+            name="abs-test",
+            mission="Test absolute paths",
+            plan_path=abs_plan,
+            plan_review_path=abs_review,
+            specs_dir=specs_dir,
+        )
+        assert error is None
+        assert result is not None
+        # Stored path should be normalised to relative
+        with open(result["spec_path"]) as f:
+            data = json.load(f)
+        assert data["metadata"]["plan_path"] == ".plans/feature.md"
+        assert data["metadata"]["plan_review_path"] == ".plan-reviews/feature-review.md"
+
+    def test_specs_prefixed_path_resolves(self, tmp_path):
+        specs_dir = tmp_path / "specs"
+        specs_dir.mkdir()
+        self._make_plan_files(specs_dir)
+        result, error = create_spec(
+            name="prefix-test",
+            mission="Test specs/ prefix stripping",
+            plan_path="specs/.plans/feature.md",
+            plan_review_path="specs/.plan-reviews/feature-review.md",
+            specs_dir=specs_dir,
+        )
+        assert error is None
+        assert result is not None
+        with open(result["spec_path"]) as f:
+            data = json.load(f)
+        assert data["metadata"]["plan_path"] == ".plans/feature.md"
+        assert data["metadata"]["plan_review_path"] == ".plan-reviews/feature-review.md"
+
+    def test_canonical_relative_path_still_works(self, tmp_path):
+        specs_dir = tmp_path / "specs"
+        specs_dir.mkdir()
+        self._make_plan_files(specs_dir)
+        result, error = create_spec(
+            name="rel-test",
+            mission="Test canonical relative paths",
+            plan_path=".plans/feature.md",
+            plan_review_path=".plan-reviews/feature-review.md",
+            specs_dir=specs_dir,
+        )
+        assert error is None
+        assert result is not None
+        with open(result["spec_path"]) as f:
+            data = json.load(f)
+        assert data["metadata"]["plan_path"] == ".plans/feature.md"
+        assert data["metadata"]["plan_review_path"] == ".plan-reviews/feature-review.md"
+
+    def test_absolute_path_outside_specs_dir_still_resolves(self, tmp_path):
+        specs_dir = tmp_path / "specs"
+        specs_dir.mkdir()
+        # Plan files live outside specs_dir
+        external_dir = tmp_path / "external"
+        external_dir.mkdir()
+        (external_dir / "plan.md").write_text("# Plan")
+        (external_dir / "review.md").write_text("# Review")
+        result, error = create_spec(
+            name="external-test",
+            mission="Test external absolute paths",
+            plan_path=str(external_dir / "plan.md"),
+            plan_review_path=str(external_dir / "review.md"),
+            specs_dir=specs_dir,
+        )
+        assert error is None
+        assert result is not None
