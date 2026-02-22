@@ -1,5 +1,5 @@
 """
-Shared constants for SDD spec operations.
+Shared constants for Foundry spec operations.
 
 These constants are used across spec sub-modules. Import from here
 rather than defining inline to avoid duplication.

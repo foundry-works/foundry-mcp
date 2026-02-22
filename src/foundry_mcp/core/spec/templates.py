@@ -607,7 +607,14 @@ def add_risk(
     if "risks" not in spec_data["metadata"]:
         spec_data["metadata"]["risks"] = []
 
-    risk_entry: Dict[str, Any] = {"description": description.strip()}
+    risk_description = description.strip()
+
+    # Check for duplicate by description
+    for existing in spec_data["metadata"]["risks"]:
+        if isinstance(existing, dict) and existing.get("description", "").strip() == risk_description:
+            return None, f"Risk already exists: {risk_description[:50]}..."
+
+    risk_entry: Dict[str, Any] = {"description": risk_description}
     if likelihood:
         risk_entry["likelihood"] = likelihood.strip().lower()
     if impact:

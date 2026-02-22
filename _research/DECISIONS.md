@@ -254,7 +254,7 @@ After spec creation, the spec review process should read the linked plan and ide
 
 ---
 
-## Decision: Remove Estimated Hours from Specs
+## Decision: Remove Estimated Hours from Spec and Phase Levels
 
 **Date:** 2026-02-22
 **Status:** Decided
@@ -265,21 +265,24 @@ The spec schema currently has `estimated_hours` at multiple levels — spec-leve
 
 ### Decision
 
-Remove `estimated_hours` from the spec schema entirely — spec level, phase level, and task level.
+Remove `estimated_hours` from the spec and phase levels. The plan template no longer asks for estimates, and spec/phase validation no longer checks for them.
+
+**Task-level `estimated_hours` is retained.** The task system (`task create`, `task update-estimate`, `task batch-update`) uses `estimated_hours` as an optional metadata field that feeds complexity inference when `complexity` is not explicitly set. This is a runtime concern of the task execution layer, not a spec authoring concern. The plan template does not ask for it — if a task gets estimated hours, it's set during implementation, not planning.
 
 ### Rationale
 
-- **Estimates are fiction.** LLMs generating specs have no reliable basis for time estimates. They produce plausible-looking numbers that don't reflect actual complexity, developer skill, or codebase familiarity.
-- **They create false precision.** "2 hours" for a task suggests a confidence that doesn't exist. This misleads rather than informs.
-- **They don't drive any behavior.** No gate, review, or workflow decision depends on estimated hours. They're collected but never acted on.
+- **Estimates at spec/phase level are fiction.** LLMs generating specs have no reliable basis for time estimates. They produce plausible-looking numbers that don't reflect actual complexity, developer skill, or codebase familiarity.
+- **They create false precision.** "2 hours" for a phase suggests a confidence that doesn't exist. This misleads rather than informs.
+- **They don't drive any spec-level behavior.** No gate, review, or workflow decision depends on spec or phase estimated hours. They were collected but never acted on.
 - **They're noise in the spec review.** If the spec review checks alignment with the plan, estimated hours would need to be in the plan too — propagating fiction further up the chain.
+- **Task-level hours serve a different purpose.** At task level, `estimated_hours` is an optional runtime signal for complexity inference — not a planning artifact. It's set during implementation when actual scope is understood, not during spec authoring when it's guesswork.
 
 ### Action Items
 
-- [ ] Remove `estimated_hours` from spec schema at all levels (spec metadata, phase metadata, task metadata)
-- [ ] Remove `estimated_hours` validation warnings from `core/spec/rules.py`
-- [ ] Remove `estimated_hours` from completeness scoring in `check_spec_completeness()`
-- [ ] Remove `estimated_hours` from phase template definitions
+- [x] Remove `estimated_hours` from spec-level and phase-level schema
+- [x] Remove `estimated_hours` validation warnings from `core/spec/rules.py`
+- [x] Remove `estimated_hours` from completeness scoring in `check_spec_completeness()`
+- [x] Remove `estimated_hours` from phase template definitions
 - [ ] Remove `estimated_hours` from skill guidance (`json-spec.md`, plan template)
 
 ---

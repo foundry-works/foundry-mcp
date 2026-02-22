@@ -1,5 +1,5 @@
 """
-Hierarchy operations for SDD spec nodes.
+Hierarchy operations for Foundry spec nodes.
 
 Functions for traversing and mutating the spec hierarchy: get/update nodes,
 add/remove/move phases, recalculate actual hours, and update phase metadata.
