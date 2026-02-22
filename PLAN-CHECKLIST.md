@@ -1,44 +1,182 @@
-# LLM Ergonomics Fixes — Checklist
+# Research Tools Hardening — Checklist
 
-## Fix 1: `update_metadata` → `custom_metadata` alias
-- [x] Add 2-line remap in `handlers_mutation.py` before `validate_payload()`
-- [x] Add test: alias is remapped when `custom_metadata` absent
-- [x] Add test: `custom_metadata` takes precedence when both present
-- [x] Add test: normal `custom_metadata` usage unchanged
-- [x] Run: `pytest tests/unit/test_core/test_spec_plan_linkage.py -v` (sanity)
+## Phase 0: Test Safety Net
 
-## Fix 2: Always persist spec review to disk
-- [x] Remove `plan_content` and `plan_enhanced` from persistence gate (line 221)
-- [x] Make review type label dynamic (plan-enhanced vs standalone)
-- [x] Make footer label dynamic
-- [x] Add test: standalone review persisted to `.spec-reviews/`
-- [x] Add test: plan-enhanced review still persisted
-- [x] Add test: dry-run review NOT persisted
-- [x] Add test: failed review NOT persisted
-- [x] Add test: standalone markdown has correct labels
+### 0a. Provider error classification tests
+- [ ] Create `tests/core/research/providers/test_error_classification.py`
+- [ ] Test Google `classify_error()` — 403 quota vs. 403 forbidden
+- [ ] Test Google `classify_error()` — 429 rate limit with Retry-After header
+- [ ] Test Perplexity default classification — 429 rate limit
+- [ ] Test SemanticScholar default classification — 504 gateway timeout
+- [ ] Test `base.py` fallback for unrecognized status codes
+- [ ] Test circuit breaker transitions match classification output
 
-## Fix 3: Write `spec_review_path` to spec metadata
-- [x] Add `update_frontmatter` import in `review.py`
-- [x] Call `update_frontmatter()` after review file write
-- [x] Store relative path (`.spec-reviews/{spec_id}-spec-review.md`)
-- [x] Log warning on failure, don't break review
-- [x] Add test: `update_frontmatter` called with correct key/value
-- [x] Add test: frontmatter failure doesn't break review response
-- [x] Add test: stored path is relative, not absolute
+### 0b. Timeout + fallback behavior tests
+- [ ] Create `tests/core/research/workflows/test_timeout_fallback.py`
+- [ ] Test primary provider timeout triggers fallback
+- [ ] Test total wall-clock with primary + fallback timeout (document current bug)
+- [ ] Test no fallback configured — timeout returns error cleanly
 
-## Fix 4: Flexible `plan_path` resolution (in progress)
-- [x] Implement `_resolve_plan_file()` in `templates.py`
-- [x] Handle absolute paths
-- [x] Handle `specs/`-prefixed paths
-- [x] Handle canonical relative paths
-- [x] Add test: absolute path resolves and normalizes
-- [x] Add test: `specs/`-prefixed path strips and resolves
-- [x] Add test: canonical relative path unchanged
-- [x] Add test: absolute path outside specs_dir resolves
-- [x] Run full test suite
+### 0c. Parse failure edge case tests
+- [ ] Create `tests/core/research/workflows/test_parse_edge_cases.py`
+- [ ] ThinkDeep: empty LLM response → no crash, empty hypotheses
+- [ ] ThinkDeep: JSON-formatted response → currently not parsed (baseline)
+- [ ] ThinkDeep: false positive keywords ("unsupported") → document behavior
+- [ ] Ideate `_parse_ideas()`: numbered list format
+- [ ] Ideate `_parse_ideas()`: markdown header format
+- [ ] Ideate `_parse_clusters()`: inconsistent spacing
+- [ ] Ideate `_parse_scores()`: multi-digit scores, decimal scores
+- [ ] DeepResearch `_parse_analysis_response()`: truncated output
+- [ ] DeepResearch `_parse_analysis_response()`: alternative heading styles
+
+### 0d. Consensus "majority" strategy test
+- [ ] Create `tests/core/research/workflows/test_consensus_majority.py`
+- [ ] Test 3 providers, 2 agree, 1 diverges → majority wins
+- [ ] Test 3 providers, all different → tie-breaking behavior
+- [ ] Test fewer responses than `min_responses` → appropriate error
+- [ ] Run: `pytest tests/core/research/ -v`
+
+---
+
+## Phase 1: Structured Output for Response Parsing
+
+### 1a. ThinkDeep structured output
+- [ ] Define `HypothesisUpdate` Pydantic model with `hypothesis`, `evidence: list[EvidenceItem]`
+- [ ] Define `EvidenceItem` with `text`, `strength: Literal["strong", "moderate", "weak"]`, `source`
+- [ ] Update ThinkDeep system prompt to request JSON conforming to schema
+- [ ] Replace keyword matching in `_update_hypotheses_from_response()` (lines 251–301) with JSON parse
+- [ ] Add Pydantic validation with clear error messages
+- [ ] Add fallback: JSON parse failure → current keyword extraction + warning log
+- [ ] Update confidence scoring to use `evidence.strength` instead of fixed-step bumping
+- [ ] Add `parse_method` to result metadata ("json" | "fallback_keyword")
+
+### 1b. Ideate structured output
+- [ ] Define `IdeaOutput` Pydantic model
+- [ ] Define `ClusterOutput` Pydantic model
+- [ ] Define `ScoreOutput` Pydantic model
+- [ ] Update divergent phase system prompt → JSON
+- [ ] Update clustering phase system prompt → JSON
+- [ ] Update scoring phase system prompt → JSON
+- [ ] Replace `_parse_ideas()` (lines 512–545) with JSON parse + validation
+- [ ] Replace `_parse_clusters()` (lines 546–594) with JSON parse + validation
+- [ ] Replace `_parse_scores()` (lines 595–616) with JSON parse + validation
+- [ ] Add fallback: JSON failure → current regex + warning log
+- [ ] Add parse success/failure count to workflow result metadata
+
+### 1c. Deep Research analysis structured output
+- [ ] Define `AnalysisFinding` Pydantic model with `claim`, `evidence`, `confidence`, `source_urls`
+- [ ] Update analysis prompt in `_analysis_prompts.py` to request JSON array
+- [ ] Replace markdown parsing in `_analysis_parsing.py` with JSON parse + validation
+- [ ] Add fallback to current markdown parsing + warning log
+- [ ] Surface `parse_method` in phase metadata
+
+### 1d. Update tests for structured output
+- [ ] Update `test_parse_edge_cases.py` — valid JSON parsed correctly (ThinkDeep)
+- [ ] Update `test_parse_edge_cases.py` — valid JSON parsed correctly (Ideate)
+- [ ] Update `test_parse_edge_cases.py` — valid JSON parsed correctly (DeepResearch)
+- [ ] Test malformed JSON triggers fallback + logs warning
+- [ ] Test Pydantic validation catches missing required fields
+- [ ] Test `parse_method` metadata correctly set in all workflows
+- [ ] Run: `pytest tests/core/research/ -v`
+
+---
+
+## Phase 2: Input Validation & Timeout Fix
+
+### 2a. Input bounds validation
+- [ ] Define validation constants (`MAX_PROMPT_LENGTH`, `MAX_ITERATIONS`, `MAX_SUB_QUERIES`, `MAX_SOURCES_PER_QUERY`, `MAX_CONCURRENT_PROVIDERS`)
+- [ ] Add prompt length validation in base workflow entry point
+- [ ] Add `max_iterations` validation in deep research `start()` handler
+- [ ] Add `max_sub_queries` validation in deep research `start()` handler
+- [ ] Add `max_sources_per_query` validation in deep research `start()` handler
+- [ ] Return clear error envelope on bound violation (not exception)
+
+### 2b. Deadline-based timeout
+- [ ] Compute `deadline = time.monotonic() + timeout_seconds` at `_execute_provider_async` entry
+- [ ] Pass `remaining = max(0, deadline - time.monotonic())` to primary provider attempt
+- [ ] Pass remaining budget to each fallback attempt
+- [ ] Skip fallback if `remaining <= 0`, return timeout error with elapsed duration
+- [ ] Log actual wall-clock vs. configured timeout in result metadata
+- [ ] Update all callers that pass timeout values
+
+### 2c. Tests for bounds and deadline
+- [ ] Create `tests/core/research/workflows/test_input_validation.py`
+- [ ] Test prompt at `MAX_PROMPT_LENGTH` → accepted
+- [ ] Test prompt over `MAX_PROMPT_LENGTH` → clear error
+- [ ] Test `max_iterations` at limit → accepted
+- [ ] Test `max_iterations` over limit → clear error
+- [ ] Test `max_sub_queries` over limit → clear error
+- [ ] Update `test_timeout_fallback.py` — deadline caps total duration (was failing, now passes)
+- [ ] Test deadline: primary consumes 280s of 300s budget → fallback gets 20s
+- [ ] Test deadline: primary consumes full budget → fallback skipped
+- [ ] Run: `pytest tests/core/research/ -v`
+
+---
+
+## Phase 3: Deep Research Thread Safety & Shutdown
+
+### 3a. Cancellation event flag
+- [ ] Add `self._cancel_event = threading.Event()` to `DeepResearchWorkflow.__init__`
+- [ ] Check `_cancel_event.is_set()` at each phase boundary in `workflow_execution.py`
+- [ ] On cancel detection: persist current state, set status `CANCELLED`
+- [ ] Expose `cancel(session_id)` public method
+- [ ] Wire `cancel()` to deep-research `stop` action handler
+
+### 3b. Graceful shutdown on SIGTERM
+- [ ] Register `signal.SIGTERM` handler in background task manager
+- [ ] Handler iterates active sessions, sets cancel events
+- [ ] Persist phase state before thread exit
+- [ ] Set session status to `INTERRUPTED` (distinct from `CANCELLED` and `FAILED`)
+- [ ] Log shutdown with session IDs and phase states
+- [ ] Ensure handler only affects deep research threads, not main MCP process
+
+### 3c. Tests
+- [ ] Create `tests/core/research/workflows/test_deep_research_lifecycle.py`
+- [ ] Test cancel event stops execution between phases
+- [ ] Test cancel persists `CANCELLED` status with correct phase state
+- [ ] Test SIGTERM handler sets cancel events on all active sessions
+- [ ] Test `INTERRUPTED` status is distinguishable from `CANCELLED` and `FAILED`
+- [ ] Test cancel on already-completed session is a no-op
+- [ ] Run: `pytest tests/core/research/ -v`
+
+---
+
+## Phase 4: Provider Boilerplate Consolidation
+
+### 4a. Extract shared utilities
+- [ ] Consolidate `parse_retry_after()` (5 copies → 1 in `shared.py`)
+- [ ] Update all 5 provider imports for `parse_retry_after`
+- [ ] Consolidate `extract_domain()` (3 copies → 1 in `shared.py`)
+- [ ] Update all 3 provider imports for `extract_domain`
+- [ ] Consolidate `parse_iso_date()` (5 copies → 1 in `shared.py`)
+- [ ] Update all 5 provider imports for `parse_iso_date`
+- [ ] Consolidate validation error classification (4 copies → `classify_http_error()` factory)
+- [ ] Update all 4 provider imports for classification
+- [ ] Delete all inline copies after import verification
+
+### 4b. Provider-specific error classifier registry
+- [ ] Add `ERROR_CLASSIFIERS: dict[int, ErrorType]` class variable to `SearchProvider`
+- [ ] Update default `classify_error()` to check registry before generic fallback
+- [ ] Google: register 403-quota, 429-rate-limit classifiers
+- [ ] Perplexity: register 429-rate-limit classifier
+- [ ] SemanticScholar: register 504-gateway classifier
+- [ ] Verify Tavily + TavilyExtract work with defaults (no custom classifiers needed)
+
+### 4c. Tests
+- [ ] Create `tests/core/research/providers/test_shared_utils.py`
+- [ ] Test `parse_retry_after()`: valid header, missing header, malformed header
+- [ ] Test `extract_domain()`: standard URL, subdomain, unicode, malformed
+- [ ] Test `parse_iso_date()`: ISO format, timezone-aware, malformed, None
+- [ ] Test `classify_http_error()`: known codes, unknown codes, edge cases
+- [ ] Update `test_error_classification.py` — registry-based classifiers work
+- [ ] Test providers without custom classifiers use defaults correctly
+- [ ] Run: `pytest tests/core/research/ -v`
+
+---
 
 ## Final
-- [x] Run: `pytest tests/ --timeout=120`
-- [x] Update version to 0.14.3
-- [x] Update CHANGELOG.md
-- [ ] Commit, push, release
+- [ ] Run: `pytest tests/ --timeout=120`
+- [ ] Run: `ruff check src/foundry_mcp/core/research/`
+- [ ] Verify no silent data loss in any workflow (parse failures always logged)
+- [ ] Update CHANGELOG.md
+- [ ] Commit, push, PR to `beta`
