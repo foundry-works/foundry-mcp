@@ -273,9 +273,7 @@ class TestTimeoutAndFallback:
             provider = MagicMock()
 
             def generate(request):
-                call_log.append(
-                    {"name": name, "timeout": request.timeout}
-                )
+                call_log.append({"name": name, "timeout": request.timeout})
                 if delay > 0:
                     time.sleep(delay)
                 result = MagicMock()

@@ -435,9 +435,7 @@ class WorkflowExecutionMixin:
             )
 
             # Mark the state as cancelled with phase context
-            state.mark_cancelled(
-                phase_state=f"phase={state.phase.value}, iteration={state.iteration}"
-            )
+            state.mark_cancelled(phase_state=f"phase={state.phase.value}, iteration={state.iteration}")
             self.memory.save_deep_research(state)
 
             self._write_audit_event(

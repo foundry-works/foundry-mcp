@@ -96,9 +96,7 @@ class BackgroundTaskMixin:
                             return await asyncio.wait_for(coro, timeout=task_timeout)
                         return await coro
                     except asyncio.CancelledError:
-                        state.mark_cancelled(
-                            phase_state=f"phase={state.phase.value}, iteration={state.iteration}"
-                        )
+                        state.mark_cancelled(phase_state=f"phase={state.phase.value}, iteration={state.iteration}")
                         workflow.memory.save_deep_research(state)
                         workflow._write_audit_event(
                             state,

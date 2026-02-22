@@ -265,9 +265,7 @@ class SearchProvider(ABC):
             code = extract_status_code(str(error))
             if code is not None and code in self.ERROR_CLASSIFIERS:
                 error_type = self.ERROR_CLASSIFIERS[code]
-                retryable, trips_breaker = _ERROR_TYPE_DEFAULTS.get(
-                    error_type.value, (False, True)
-                )
+                retryable, trips_breaker = _ERROR_TYPE_DEFAULTS.get(error_type.value, (False, True))
                 return ErrorClassification(
                     retryable=retryable,
                     trips_breaker=trips_breaker,

@@ -572,4 +572,3 @@ class SemanticScholarProvider(SearchProvider):
             self._base_url,
             test_func=lambda: self.search("test", max_results=1),
         )
-

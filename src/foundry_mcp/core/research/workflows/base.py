@@ -332,10 +332,7 @@ class ResearchWorkflowBase(ABC):
             return WorkflowResult(
                 success=False,
                 content="",
-                error=(
-                    f"Prompt length {len(prompt)} exceeds maximum "
-                    f"{MAX_PROMPT_LENGTH} characters"
-                ),
+                error=(f"Prompt length {len(prompt)} exceeds maximum {MAX_PROMPT_LENGTH} characters"),
                 metadata={"phase": phase, "validation_error": "prompt_too_long"},
             )
 
@@ -425,9 +422,7 @@ class ResearchWorkflowBase(ABC):
                         break
 
                     # Success!
-                    total_elapsed_ms = (
-                        time.monotonic() - method_start
-                    ) * 1000
+                    total_elapsed_ms = (time.monotonic() - method_start) * 1000
                     return WorkflowResult(
                         success=True,
                         content=result.content,

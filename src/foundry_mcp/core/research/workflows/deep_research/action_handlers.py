@@ -84,25 +84,15 @@ class ActionHandlersMixin:
         # Input bounds validation
         violations: list[str] = []
         if len(query) > MAX_PROMPT_LENGTH:
-            violations.append(
-                f"query length {len(query)} exceeds maximum {MAX_PROMPT_LENGTH} characters"
-            )
+            violations.append(f"query length {len(query)} exceeds maximum {MAX_PROMPT_LENGTH} characters")
         if max_iterations > MAX_ITERATIONS:
-            violations.append(
-                f"max_iterations {max_iterations} exceeds maximum {MAX_ITERATIONS}"
-            )
+            violations.append(f"max_iterations {max_iterations} exceeds maximum {MAX_ITERATIONS}")
         if max_sub_queries > MAX_SUB_QUERIES:
-            violations.append(
-                f"max_sub_queries {max_sub_queries} exceeds maximum {MAX_SUB_QUERIES}"
-            )
+            violations.append(f"max_sub_queries {max_sub_queries} exceeds maximum {MAX_SUB_QUERIES}")
         if max_sources_per_query > MAX_SOURCES_PER_QUERY:
-            violations.append(
-                f"max_sources_per_query {max_sources_per_query} exceeds maximum {MAX_SOURCES_PER_QUERY}"
-            )
+            violations.append(f"max_sources_per_query {max_sources_per_query} exceeds maximum {MAX_SOURCES_PER_QUERY}")
         if max_concurrent > MAX_CONCURRENT_PROVIDERS:
-            violations.append(
-                f"max_concurrent {max_concurrent} exceeds maximum {MAX_CONCURRENT_PROVIDERS}"
-            )
+            violations.append(f"max_concurrent {max_concurrent} exceeds maximum {MAX_CONCURRENT_PROVIDERS}")
         if violations:
             return WorkflowResult(
                 success=False,
@@ -562,9 +552,7 @@ class ActionHandlersMixin:
         if bg_task.cancel():
             state = self.memory.load_deep_research(research_id)
             if state:
-                state.mark_cancelled(
-                    phase_state=f"phase={state.phase.value}, iteration={state.iteration}"
-                )
+                state.mark_cancelled(phase_state=f"phase={state.phase.value}, iteration={state.iteration}")
                 self.memory.save_deep_research(state)
                 self._write_audit_event(
                     state,

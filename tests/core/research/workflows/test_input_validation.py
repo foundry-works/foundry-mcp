@@ -34,9 +34,7 @@ def mock_config():
     config.ttl_hours = 24
     config.deep_research_mode = "general"
     config.deep_research_timeout = 600
-    config.resolve_phase_provider = MagicMock(
-        return_value=("test-provider", None)
-    )
+    config.resolve_phase_provider = MagicMock(return_value=("test-provider", None))
     config.get_phase_fallback_providers = MagicMock(return_value=[])
     return config
 
@@ -146,8 +144,7 @@ class TestPromptLengthValidation:
         """MAX_PROMPT_LENGTH should allow ~50k tokens worth of text."""
         # At ~4 chars/token, 200k chars ≈ 50k tokens
         assert MAX_PROMPT_LENGTH >= 100_000, (
-            f"MAX_PROMPT_LENGTH={MAX_PROMPT_LENGTH} is too restrictive; "
-            "should allow at least 100k characters"
+            f"MAX_PROMPT_LENGTH={MAX_PROMPT_LENGTH} is too restrictive; should allow at least 100k characters"
         )
 
 
@@ -170,9 +167,7 @@ class TestDeepResearchInputBounds:
         # We test that validation doesn't reject at-limit values.
         # Mock the subsequent workflow execution to avoid real provider calls.
         with patch.object(workflow, "_start_background_task") as mock_bg:
-            mock_bg.return_value = WorkflowResult(
-                success=True, content="started"
-            )
+            mock_bg.return_value = WorkflowResult(success=True, content="started")
             result = workflow.execute(
                 query="test query",
                 action="start",
@@ -217,9 +212,7 @@ class TestDeepResearchInputBounds:
         assert result.error is not None
         assert "max_sub_queries" in result.error
 
-    def test_max_sources_per_query_over_limit_rejected(
-        self, mock_config, mock_memory
-    ):
+    def test_max_sources_per_query_over_limit_rejected(self, mock_config, mock_memory):
         """max_sources_per_query exceeding limit should return error."""
         from foundry_mcp.core.research.workflows.deep_research import (
             DeepResearchWorkflow,
@@ -299,9 +292,7 @@ class TestDeepResearchInputBounds:
         workflow = DeepResearchWorkflow(mock_config, mock_memory)
 
         with patch.object(workflow, "_start_background_task") as mock_bg:
-            mock_bg.return_value = WorkflowResult(
-                success=True, content="started"
-            )
+            mock_bg.return_value = WorkflowResult(success=True, content="started")
             result = workflow.execute(
                 query="test query",
                 action="start",

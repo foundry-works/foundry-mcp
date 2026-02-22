@@ -256,9 +256,7 @@ class TestSigtermHandler:
                 _active_research_sessions.pop(sample_state.id, None)
             task_registry.remove(sample_state.id)
 
-    def test_sigterm_handler_marks_sessions_interrupted(
-        self, sample_state: DeepResearchState
-    ):
+    def test_sigterm_handler_marks_sessions_interrupted(self, sample_state: DeepResearchState):
         """SIGTERM handler should mark active sessions as INTERRUPTED."""
         from foundry_mcp.core.research.workflows.deep_research.infrastructure import (
             _active_research_sessions,
@@ -272,9 +270,7 @@ class TestSigtermHandler:
             _active_research_sessions[sample_state.id] = sample_state
 
         try:
-            with patch(
-                "foundry_mcp.core.research.workflows.deep_research.infrastructure._persist_active_sessions"
-            ):
+            with patch("foundry_mcp.core.research.workflows.deep_research.infrastructure._persist_active_sessions"):
                 _sigterm_handler(signal.SIGTERM, None)
 
             assert sample_state.metadata["interrupted"] is True
@@ -307,9 +303,7 @@ class TestSigtermHandler:
             _active_research_sessions[state.id] = state
 
         try:
-            with patch(
-                "foundry_mcp.core.research.workflows.deep_research.infrastructure._persist_active_sessions"
-            ):
+            with patch("foundry_mcp.core.research.workflows.deep_research.infrastructure._persist_active_sessions"):
                 _sigterm_handler(signal.SIGTERM, None)
 
             # Should NOT have been modified (completed_at was already set)
@@ -346,9 +340,7 @@ class TestSigtermHandler:
                 _active_research_sessions[s.id] = s
 
         try:
-            with patch(
-                "foundry_mcp.core.research.workflows.deep_research.infrastructure._persist_active_sessions"
-            ):
+            with patch("foundry_mcp.core.research.workflows.deep_research.infrastructure._persist_active_sessions"):
                 _sigterm_handler(signal.SIGTERM, None)
 
             for bg_task in tasks:
@@ -376,9 +368,7 @@ class TestSigtermHandler:
             _active_research_sessions.clear()
 
         # Should not raise
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.infrastructure._persist_active_sessions"
-        ):
+        with patch("foundry_mcp.core.research.workflows.deep_research.infrastructure._persist_active_sessions"):
             _sigterm_handler(signal.SIGTERM, None)
 
     def test_sigterm_chains_previous_handler(self):
@@ -394,9 +384,7 @@ class TestSigtermHandler:
         infrastructure._previous_sigterm_handler = mock_previous
 
         try:
-            with patch(
-                "foundry_mcp.core.research.workflows.deep_research.infrastructure._persist_active_sessions"
-            ):
+            with patch("foundry_mcp.core.research.workflows.deep_research.infrastructure._persist_active_sessions"):
                 infrastructure._sigterm_handler(signal.SIGTERM, None)
 
             assert signal.SIGTERM in previous_called
@@ -520,9 +508,7 @@ class TestCleanupOnExit:
             _active_research_sessions[state.id] = state
 
         try:
-            with patch(
-                "foundry_mcp.core.research.workflows.deep_research.infrastructure._persist_active_sessions"
-            ):
+            with patch("foundry_mcp.core.research.workflows.deep_research.infrastructure._persist_active_sessions"):
                 _cleanup_on_exit()
 
             assert state.metadata["interrupted"] is True
