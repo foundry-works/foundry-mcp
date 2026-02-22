@@ -118,7 +118,6 @@ The `hierarchy` object contains all phases, tasks, and their relationships.
     "position": 1,
     "children": ["task-1-1", "task-1-2"],
     "metadata": {
-      "estimated_hours": 4,
       "priority": "high"
     }
   }
@@ -151,7 +150,6 @@ The `hierarchy` object contains all phases, tasks, and their relationships.
       "command": "pytest tests/test_schema.py"
     },
     "metadata": {
-      "estimated_hours": 2,
       "complexity": "medium",
       "owners": ["backend-team"]
     }
@@ -312,7 +310,6 @@ Custom metadata can be added at any level:
 ```json
 {
   "metadata": {
-    "estimated_hours": 2.5,
     "complexity": "high",
     "priority": "p1",
     "owners": ["alice", "bob"],
@@ -328,7 +325,6 @@ Common metadata fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `estimated_hours` | number | Time estimate |
 | `actual_hours` | number | Time spent |
 | `complexity` | string | `low`, `medium`, `high` |
 | `priority` | string | `p0`-`p4` |

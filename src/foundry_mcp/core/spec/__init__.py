@@ -8,19 +8,19 @@ Sub-modules:
 - ``_constants``: Shared constants
 - ``io``: I/O functions (find, load, save, backup, list, diff, rollback)
 - ``hierarchy``: Hierarchy operations (get/update node, phase CRUD, recalculate hours)
-- ``templates``: Spec creation, phase templates, assumptions, revisions, frontmatter
+- ``templates``: Spec creation, assumptions, revisions, frontmatter
 - ``analysis``: Read-only analysis (completeness checks, duplicate detection)
 - ``_monolith``: Remaining spec operations (find-replace)
 """
 
 from foundry_mcp.core.spec._constants import (
     CATEGORIES,
+    COMPLEXITY_LEVELS,
     DEFAULT_BACKUP_PAGE_SIZE,
     DEFAULT_DIFF_MAX_RESULTS,
     DEFAULT_MAX_BACKUPS,
     FRONTMATTER_KEYS,
     MAX_BACKUP_PAGE_SIZE,
-    PHASE_TEMPLATES,
     TEMPLATE_DESCRIPTIONS,
     TEMPLATES,
     VERIFICATION_TYPES,
@@ -42,7 +42,6 @@ from foundry_mcp.core.spec.hierarchy import (
     get_node,
     move_phase,
     recalculate_actual_hours,
-    recalculate_estimated_hours,
     remove_phase,
     update_node,
     update_phase_metadata,
@@ -65,15 +64,21 @@ from foundry_mcp.core.spec.io import (
 from foundry_mcp.core.spec.templates import (
     # Assumptions and revisions
     add_assumption,
+    # Constraints, risks, questions, success criteria
+    add_constraint,
+    add_question,
     add_revision,
-    # Phase template operations
-    apply_phase_template,
+    add_risk,
+    add_success_criterion,
     # Spec creation
     create_spec,
     generate_spec_data,
-    get_phase_template_structure,
     get_template_structure,
     list_assumptions,
+    list_constraints,
+    list_questions,
+    list_risks,
+    list_success_criteria,
     # Frontmatter and metadata
     update_frontmatter,
 )
@@ -81,12 +86,12 @@ from foundry_mcp.core.spec.templates import (
 __all__ = [
     # Constants
     "CATEGORIES",
+    "COMPLEXITY_LEVELS",
     "DEFAULT_BACKUP_PAGE_SIZE",
     "DEFAULT_DIFF_MAX_RESULTS",
     "DEFAULT_MAX_BACKUPS",
     "FRONTMATTER_KEYS",
     "MAX_BACKUP_PAGE_SIZE",
-    "PHASE_TEMPLATES",
     "TEMPLATES",
     "TEMPLATE_DESCRIPTIONS",
     "VERIFICATION_TYPES",
@@ -113,8 +118,6 @@ __all__ = [
     # Phase operations
     "add_phase",
     "add_phase_bulk",
-    "apply_phase_template",
-    "get_phase_template_structure",
     "move_phase",
     "remove_phase",
     "update_phase_metadata",
@@ -124,11 +127,19 @@ __all__ = [
     "add_assumption",
     "add_revision",
     "list_assumptions",
+    # Constraints, risks, questions, success criteria
+    "add_constraint",
+    "add_question",
+    "add_risk",
+    "add_success_criterion",
+    "list_constraints",
+    "list_questions",
+    "list_risks",
+    "list_success_criteria",
     # Analysis and validation
     "check_spec_completeness",
     "detect_duplicate_tasks",
     "recalculate_actual_hours",
-    "recalculate_estimated_hours",
     # Find and replace
     "find_replace_in_spec",
 ]

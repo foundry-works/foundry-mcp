@@ -73,10 +73,6 @@
           "type": "string",
           "description": "Relative complexity indicator."
         },
-        "estimated_hours": {
-          "type": "number",
-          "minimum": 0
-        },
         "owner": {
           "type": "string"
         },
@@ -219,10 +215,6 @@
             "risk_level": {
               "type": "string",
               "description": "Qualitative risk indicator (e.g., low, medium, high)."
-            },
-            "estimated_hours": {
-              "type": "number",
-              "minimum": 0
             },
             "complexity": {
               "type": "string",

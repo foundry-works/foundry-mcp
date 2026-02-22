@@ -34,7 +34,6 @@ from foundry_mcp.core.spec.hierarchy import (  # noqa: F401 — re-exports
     get_node,
     move_phase,
     recalculate_actual_hours,
-    recalculate_estimated_hours,
     remove_phase,
     update_node,
     update_phase_metadata,
@@ -67,10 +66,8 @@ from foundry_mcp.core.spec.io import (  # noqa: F401 — re-exports
 from foundry_mcp.core.spec.templates import (  # noqa: F401 — re-exports
     add_assumption,
     add_revision,
-    apply_phase_template,
     create_spec,
     generate_spec_data,
-    get_phase_template_structure,
     get_template_structure,
     list_assumptions,
     update_frontmatter,

@@ -16,7 +16,7 @@ def _create_spec_with_phase(
 ) -> Path:
     """Helper to create a spec with a phase for testing."""
     if phase_metadata is None:
-        phase_metadata = {"purpose": "Initial purpose", "estimated_hours": 2}
+        phase_metadata = {"purpose": "Initial purpose", "description": "Initial description"}
 
     hierarchy = {
         "spec-root": {
@@ -69,14 +69,14 @@ def _create_spec_with_phase(
 class TestUpdatePhaseMetadata:
     """Tests for update_phase_metadata function."""
 
-    def test_update_single_field_estimated_hours(self, temp_specs_dir):
-        """Should update estimated_hours successfully."""
+    def test_update_single_field_description(self, temp_specs_dir):
+        """Should update description successfully."""
         _create_spec_with_phase(temp_specs_dir, spec_id="test-single-field")
 
         result, error = update_phase_metadata(
             spec_id="test-single-field",
             phase_id="phase-1",
-            estimated_hours=5.0,
+            description="New description",
             specs_dir=temp_specs_dir,
         )
 
@@ -85,13 +85,12 @@ class TestUpdatePhaseMetadata:
         assert result["spec_id"] == "test-single-field"
         assert result["phase_id"] == "phase-1"
         assert len(result["updates"]) == 1
-        assert result["updates"][0]["field"] == "estimated_hours"
-        assert result["updates"][0]["new_value"] == 5.0
-        assert result["updates"][0]["previous_value"] == 2
+        assert result["updates"][0]["field"] == "description"
+        assert result["updates"][0]["new_value"] == "New description"
 
         # Verify persisted
         spec = load_spec("test-single-field", temp_specs_dir)
-        assert spec["hierarchy"]["phase-1"]["metadata"]["estimated_hours"] == 5.0
+        assert spec["hierarchy"]["phase-1"]["metadata"]["description"] == "New description"
 
     def test_update_multi_field(self, temp_specs_dir):
         """Should update multiple fields in one call."""
@@ -100,7 +99,6 @@ class TestUpdatePhaseMetadata:
         result, error = update_phase_metadata(
             spec_id="test-multi-field",
             phase_id="phase-1",
-            estimated_hours=10.0,
             description="New description",
             purpose="New purpose",
             specs_dir=temp_specs_dir,
@@ -108,15 +106,14 @@ class TestUpdatePhaseMetadata:
 
         assert error is None
         assert result is not None
-        assert len(result["updates"]) == 3
+        assert len(result["updates"]) == 2
 
         fields_updated = {u["field"] for u in result["updates"]}
-        assert fields_updated == {"estimated_hours", "description", "purpose"}
+        assert fields_updated == {"description", "purpose"}
 
         # Verify persisted
         spec = load_spec("test-multi-field", temp_specs_dir)
         phase_meta = spec["hierarchy"]["phase-1"]["metadata"]
-        assert phase_meta["estimated_hours"] == 10.0
         assert phase_meta["description"] == "New description"
         assert phase_meta["purpose"] == "New purpose"
 
@@ -127,7 +124,7 @@ class TestUpdatePhaseMetadata:
         result, error = update_phase_metadata(
             spec_id="test-dry-run",
             phase_id="phase-1",
-            estimated_hours=99.0,
+            description="New description",
             dry_run=True,
             specs_dir=temp_specs_dir,
         )
@@ -140,21 +137,21 @@ class TestUpdatePhaseMetadata:
 
         # Verify NOT persisted
         spec = load_spec("test-dry-run", temp_specs_dir)
-        assert spec["hierarchy"]["phase-1"]["metadata"]["estimated_hours"] == 2
+        assert spec["hierarchy"]["phase-1"]["metadata"]["description"] == "Initial description"
 
     def test_previous_value_tracking(self, temp_specs_dir):
         """Should track previous values for each updated field."""
         _create_spec_with_phase(
             temp_specs_dir,
             spec_id="test-previous-value",
-            phase_metadata={"purpose": "Old purpose", "estimated_hours": 5},
+            phase_metadata={"purpose": "Old purpose", "description": "Old description"},
         )
 
         result, error = update_phase_metadata(
             spec_id="test-previous-value",
             phase_id="phase-1",
             purpose="New purpose",
-            estimated_hours=10.0,
+            description="New description",
             specs_dir=temp_specs_dir,
         )
 
@@ -163,15 +160,15 @@ class TestUpdatePhaseMetadata:
 
         assert updates_by_field["purpose"]["previous_value"] == "Old purpose"
         assert updates_by_field["purpose"]["new_value"] == "New purpose"
-        assert updates_by_field["estimated_hours"]["previous_value"] == 5
-        assert updates_by_field["estimated_hours"]["new_value"] == 10.0
+        assert updates_by_field["description"]["previous_value"] == "Old description"
+        assert updates_by_field["description"]["new_value"] == "New description"
 
     def test_error_missing_spec_id(self, temp_specs_dir):
         """Should return error when spec_id is empty."""
         result, error = update_phase_metadata(
             spec_id="",
             phase_id="phase-1",
-            estimated_hours=5.0,
+            description="test",
             specs_dir=temp_specs_dir,
         )
 
@@ -186,7 +183,7 @@ class TestUpdatePhaseMetadata:
         result, error = update_phase_metadata(
             spec_id="test-missing-phase-id",
             phase_id="",
-            estimated_hours=5.0,
+            description="test",
             specs_dir=temp_specs_dir,
         )
 
@@ -215,7 +212,7 @@ class TestUpdatePhaseMetadata:
         result, error = update_phase_metadata(
             spec_id="test-phase-not-found",
             phase_id="phase-999",
-            estimated_hours=5.0,
+            description="test",
             specs_dir=temp_specs_dir,
         )
 
@@ -230,7 +227,7 @@ class TestUpdatePhaseMetadata:
         result, error = update_phase_metadata(
             spec_id="test-not-a-phase",
             phase_id="task-1-1",  # This is a task, not a phase
-            estimated_hours=5.0,
+            description="test",
             specs_dir=temp_specs_dir,
         )
 
@@ -238,50 +235,18 @@ class TestUpdatePhaseMetadata:
         assert error is not None
         assert "not a phase" in error.lower()
 
-    def test_error_negative_estimated_hours(self, temp_specs_dir):
-        """Should return error when estimated_hours is negative."""
-        _create_spec_with_phase(temp_specs_dir, spec_id="test-negative-hours")
-
-        result, error = update_phase_metadata(
-            spec_id="test-negative-hours",
-            phase_id="phase-1",
-            estimated_hours=-5.0,
-            specs_dir=temp_specs_dir,
-        )
-
-        assert result is None
-        assert error is not None
-        assert "must be >= 0" in error or "non-negative" in error.lower()
-
     def test_error_spec_not_found(self, temp_specs_dir):
         """Should return error when spec doesn't exist."""
         result, error = update_phase_metadata(
             spec_id="nonexistent-spec",
             phase_id="phase-1",
-            estimated_hours=5.0,
+            description="test",
             specs_dir=temp_specs_dir,
         )
 
         assert result is None
         assert error is not None
         assert "not found" in error.lower()
-
-    def test_update_with_zero_hours(self, temp_specs_dir):
-        """Should allow setting estimated_hours to zero."""
-        _create_spec_with_phase(temp_specs_dir, spec_id="test-zero-hours")
-
-        result, error = update_phase_metadata(
-            spec_id="test-zero-hours",
-            phase_id="phase-1",
-            estimated_hours=0.0,
-            specs_dir=temp_specs_dir,
-        )
-
-        assert error is None
-        assert result is not None
-
-        spec = load_spec("test-zero-hours", temp_specs_dir)
-        assert spec["hierarchy"]["phase-1"]["metadata"]["estimated_hours"] == 0.0
 
     def test_update_strips_whitespace(self, temp_specs_dir):
         """Should strip whitespace from string fields."""
@@ -341,7 +306,7 @@ class TestUpdatePhaseMetadata:
         result, error = update_phase_metadata(
             spec_id="test-no-metadata",
             phase_id="phase-1",
-            estimated_hours=3.0,
+            description="Added description",
             specs_dir=temp_specs_dir,
         )
 
@@ -349,7 +314,7 @@ class TestUpdatePhaseMetadata:
         assert result is not None
 
         spec = load_spec("test-no-metadata", temp_specs_dir)
-        assert spec["hierarchy"]["phase-1"]["metadata"]["estimated_hours"] == 3.0
+        assert spec["hierarchy"]["phase-1"]["metadata"]["description"] == "Added description"
 
     def test_response_contains_phase_title(self, temp_specs_dir):
         """Should include phase_title in response."""
@@ -358,7 +323,7 @@ class TestUpdatePhaseMetadata:
         result, error = update_phase_metadata(
             spec_id="test-phase-title",
             phase_id="phase-1",
-            estimated_hours=5.0,
+            purpose="Updated purpose",
             specs_dir=temp_specs_dir,
         )
 

@@ -26,7 +26,7 @@ from foundry_mcp.core.ai_consultation import (
     ConsultationWorkflow,
     ProviderResponse,
 )
-from foundry_mcp.core.llm_config.consultation import get_consultation_config, load_consultation_config
+from foundry_mcp.core.llm_config.consultation import load_consultation_config
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import get_metrics, mcp_tool
 from foundry_mcp.core.prompts.fidelity_review import (
@@ -52,6 +52,7 @@ from foundry_mcp.tools.unified.router import (
 from .documentation_helpers import (
     _build_implementation_artifacts,
     _build_journal_entries,
+    _build_plan_context,
     _build_spec_overview,
     _build_spec_requirements,
     _build_subsequent_phases,
@@ -59,10 +60,8 @@ from .documentation_helpers import (
 )
 from .review_helpers import (
     DEFAULT_AI_TIMEOUT,
-    REVIEW_TYPES,
     _get_llm_status,
     _run_ai_review,
-    _run_quick_review,
 )
 
 logger = logging.getLogger(__name__)
@@ -95,11 +94,6 @@ def _parse_json_content(content: str) -> Optional[dict]:
 
 def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     spec_id = payload.get("spec_id")
-    # Get default review_type from consultation config (used when not provided or None)
-    consultation_config = get_consultation_config()
-    workflow_config = consultation_config.get_workflow_config("plan_review")
-    default_review_type = workflow_config.default_review_type
-    review_type = payload.get("review_type") or default_review_type
 
     if not isinstance(spec_id, str) or not spec_id.strip():
         return asdict(
@@ -108,16 +102,6 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
                 error_code=ErrorCode.MISSING_REQUIRED,
                 error_type=ErrorType.VALIDATION,
                 remediation="Provide a valid spec_id",
-            )
-        )
-
-    if review_type not in REVIEW_TYPES:
-        return asdict(
-            error_response(
-                f"Invalid review_type: {review_type}",
-                error_code=ErrorCode.VALIDATION_ERROR,
-                error_type=ErrorType.VALIDATION,
-                remediation=f"Use one of: {', '.join(REVIEW_TYPES)}",
             )
         )
 
@@ -176,15 +160,6 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
         )
     dry_run = dry_run_value if isinstance(dry_run_value, bool) else False
 
-    if review_type == "quick":
-        return _run_quick_review(
-            spec_id=spec_id,
-            specs_dir=specs_dir,
-            dry_run=dry_run,
-            llm_status=llm_status,
-            start_time=start_time,
-        )
-
     try:
         ai_timeout = float(payload.get("ai_timeout", DEFAULT_AI_TIMEOUT))
     except (TypeError, ValueError):
@@ -220,10 +195,18 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
         )
     consultation_cache = consultation_cache_value if isinstance(consultation_cache_value, bool) else True
 
-    return _run_ai_review(
+    # Load plan content for plan-enhanced review (auto-enhances when plan is available)
+    plan_content: Optional[str] = None
+    workspace_root: Optional[Path] = None
+    if specs_dir:
+        workspace_root = specs_dir.parent if specs_dir.name == "specs" else specs_dir
+        spec_data = load_spec(spec_id, specs_dir)
+        if spec_data:
+            plan_content = _build_plan_context(spec_data, workspace_root) or None
+
+    result = _run_ai_review(
         spec_id=spec_id,
         specs_dir=specs_dir,
-        review_type=review_type,
         ai_provider=ai_provider,
         model=model,
         ai_timeout=ai_timeout,
@@ -231,7 +214,54 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
         dry_run=dry_run,
         llm_status=llm_status,
         start_time=start_time,
+        plan_content=plan_content,
     )
+
+    # Persist plan-comparison review results to disk
+    if plan_content and result.get("success") and result.get("plan_enhanced") and not dry_run and specs_dir:
+        try:
+            spec_reviews_dir = Path(specs_dir) / ".spec-reviews"
+            spec_reviews_dir.mkdir(parents=True, exist_ok=True)
+            review_file = spec_reviews_dir / f"{spec_id}-spec-review.md"
+
+            response_content = result.get("response", "")
+            parsed_json = _parse_json_content(response_content) if response_content else None
+            verdict = parsed_json.get("verdict", "unknown") if parsed_json else "unknown"
+
+            review_md_lines = [
+                f"# Spec Review: {result.get('title', spec_id)}",
+                "",
+                f"**Spec ID:** {spec_id}",
+                "**Review Type:** spec-vs-plan (plan-enhanced full review)",
+                f"**Verdict:** {verdict}",
+                f"**Template:** {result.get('template_id', 'SPEC_REVIEW_VS_PLAN_V1')}",
+                f"**Date:** {datetime.now().isoformat()}",
+                f"**Provider:** {result.get('ai_provider', 'unknown')}",
+                "",
+                "## Review Output",
+                "",
+            ]
+
+            if parsed_json:
+                review_md_lines.append(f"```json\n{json.dumps(parsed_json, indent=2)}\n```")
+            else:
+                review_md_lines.append(response_content)
+
+            review_md_lines.extend(
+                [
+                    "",
+                    "---",
+                    "*Generated by Foundry MCP Spec-vs-Plan Review*",
+                ]
+            )
+
+            review_file.write_text("\n".join(review_md_lines), encoding="utf-8")
+            result["review_path"] = str(review_file)
+        except Exception as exc:
+            logger.warning("Failed to persist spec review: %s", exc)
+            result["review_path"] = None
+
+    return result
 
 
 def _handle_list_tools(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -259,7 +289,6 @@ def _handle_list_tools(*, config: ServerConfig, payload: Dict[str, Any]) -> dict
             success_response(
                 tools=tools_info,
                 llm_status=llm_status,
-                review_types=REVIEW_TYPES,
                 available_count=sum(1 for tool in tools_info if tool.get("available")),
                 total_count=len(tools_info),
                 telemetry={"duration_ms": round(duration_ms, 2)},
@@ -286,40 +315,17 @@ def _handle_list_plan_tools(*, config: ServerConfig, payload: Dict[str, Any]) ->
 
         plan_tools = [
             {
-                "name": "quick-review",
-                "description": "Fast structural review for basic validation",
-                "capabilities": ["structure", "syntax", "basic_quality"],
-                "llm_required": False,
-                "estimated_time": "< 10 seconds",
-            },
-            {
                 "name": "full-review",
-                "description": "Comprehensive review with LLM analysis",
-                "capabilities": ["structure", "quality", "feasibility", "suggestions"],
-                "llm_required": True,
-                "estimated_time": "30-60 seconds",
-            },
-            {
-                "name": "security-review",
-                "description": "Security-focused analysis of plan",
-                "capabilities": ["security", "trust_boundaries", "data_flow"],
-                "llm_required": True,
-                "estimated_time": "30-60 seconds",
-            },
-            {
-                "name": "feasibility-review",
-                "description": "Feasibility and complexity assessment",
-                "capabilities": ["complexity", "estimation", "risks"],
+                "description": "Comprehensive review with LLM analysis (auto-enhances to spec-vs-plan when plan is available)",
+                "capabilities": ["structure", "quality", "feasibility", "suggestions", "plan_comparison"],
                 "llm_required": True,
                 "estimated_time": "30-60 seconds",
             },
         ]
 
         recommendations = [
-            "Use 'quick-review' for a fast sanity check.",
             "Use 'full-review' before implementation for comprehensive feedback.",
-            "Use 'security-review' for specs touching auth/data boundaries.",
-            "Use 'feasibility-review' to validate scope/estimates.",
+            "Use 'spec validate' for structural validation.",
         ]
 
         duration_ms = (time.perf_counter() - start_time) * 1000
@@ -820,6 +826,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     spec_requirements = _build_spec_requirements(spec_data, task_id, phase_id, exclude_fidelity_verify=True)
     spec_overview = _build_spec_overview(spec_data)
+    plan_context = _build_plan_context(spec_data, ws_path)
     implementation_artifacts = _build_implementation_artifacts(
         spec_data,
         task_id,
@@ -863,6 +870,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             "spec_description": spec_data.get("description", ""),
             "review_scope": scope,
             "spec_overview": spec_overview,
+            "plan_context": plan_context,
             "spec_requirements": spec_requirements,
             "implementation_artifacts": implementation_artifacts,
             "test_results": test_results,
@@ -1346,7 +1354,6 @@ def register_unified_review_tool(mcp: FastMCP, config: ServerConfig) -> None:
     def review(
         action: str,
         spec_id: Optional[str] = None,
-        review_type: Optional[str] = None,
         tools: Optional[str] = None,
         model: Optional[str] = None,
         ai_provider: Optional[str] = None,
@@ -1370,7 +1377,6 @@ def register_unified_review_tool(mcp: FastMCP, config: ServerConfig) -> None:
     ) -> dict:
         payload = {
             "spec_id": spec_id,
-            "review_type": review_type,
             "tools": tools,
             "model": model,
             "ai_provider": ai_provider,

@@ -1,0 +1,119 @@
+{
+  "spec_id": "hello-world-2026-02-19-001",
+  "title": "hello-world",
+  "generated": "2026-02-19T13:23:16.918545Z",
+  "last_updated": "2026-02-19T13:31:43.046938Z",
+  "metadata": {
+    "description": "",
+    "mission": "Create a hello world Python script that prints a greeting",
+    "objectives": [],
+    "complexity": "low",
+    "estimated_hours": 0,
+    "assumptions": [],
+    "owner": "",
+    "category": "implementation",
+    "template": "empty"
+  },
+  "progress_percentage": 0,
+  "status": "pending",
+  "current_phase": null,
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "hello-world",
+      "status": "pending",
+      "parent": null,
+      "children": [
+        "phase-1"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "Hello World Implementation",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-1-1",
+        "verify-1-1"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "description": "Create a simple hello world script"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "Create hello world script",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Create a Python script that prints 'Hello, World!'",
+        "file_path": "hello.py",
+        "acceptance_criteria": [
+          "Script prints 'Hello, World!' when executed"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-1-1": {
+      "type": "verify",
+      "title": "Verify hello world output",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Run the script and confirm it prints the expected output",
+        "verification_type": "manual"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    }
+  },
+  "journal": [
+    {
+      "timestamp": "2026-02-19T13:31:43.046896Z",
+      "entry_type": "step",
+      "title": "Step pause: success",
+      "content": "Step step_01KHV13MD35ZNC2TEGQWJES4ZN (pause) completed with outcome: success\n\nNote: Phase boundary acknowledged by new agent invocation for next phase",
+      "author": "autonomy",
+      "metadata": {
+        "session_id": "01KHV0ZR07HRJ0W7F1PR9A0PQ4",
+        "step_id": "step_01KHV13MD35ZNC2TEGQWJES4ZN",
+        "step_type": "pause",
+        "outcome": "success",
+        "files_touched": []
+      }
+    }
+  ]
+}

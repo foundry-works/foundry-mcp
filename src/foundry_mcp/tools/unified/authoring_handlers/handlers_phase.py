@@ -1,10 +1,10 @@
-"""Phase management action handlers: phase-add, phase-update-metadata, phase-add-bulk, phase-template, phase-move, phase-remove."""
+"""Phase management action handlers: phase-add, phase-update-metadata, phase-add-bulk, phase-move, phase-remove."""
 
 from __future__ import annotations
 
 import time
 from dataclasses import asdict
-from typing import Any, Dict, List
+from typing import Any, List
 
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.observability import audit_log
@@ -18,12 +18,8 @@ from foundry_mcp.core.responses.types import (
     ErrorType,
 )
 from foundry_mcp.core.spec import (
-    CATEGORIES,
-    PHASE_TEMPLATES,
     add_phase,
     add_phase_bulk,
-    apply_phase_template,
-    get_phase_template_structure,
     move_phase,
     remove_phase,
     update_phase_metadata,
@@ -51,7 +47,6 @@ _PHASE_ADD_SCHEMA = {
     ),
     "description": Str(),
     "purpose": Str(),
-    "estimated_hours": Num(min_val=0, remediation="Set hours to zero or greater"),
     "position": Num(integer_only=True, min_val=0),
     "link_previous": Bool(default=True),
     "dry_run": Bool(default=False),
@@ -65,7 +60,6 @@ _PHASE_UPDATE_METADATA_SCHEMA = {
     "phase_id": Str(
         required=True, error_code=ErrorCode.MISSING_REQUIRED, remediation="Pass the phase identifier (e.g., 'phase-1')"
     ),
-    "estimated_hours": Num(min_val=0, remediation="Set hours to zero or greater"),
     "description": Str(),
     "purpose": Str(),
     "dry_run": Bool(default=False),
@@ -118,7 +112,6 @@ def _handle_phase_add(*, config: ServerConfig, **payload: Any) -> dict:
     title = payload["title"]
     description = payload.get("description")
     purpose = payload.get("purpose")
-    estimated_hours = payload.get("estimated_hours")
     position = payload.get("position")
     link_previous = payload["link_previous"]
     dry_run = payload["dry_run"]
@@ -168,7 +161,6 @@ def _handle_phase_add(*, config: ServerConfig, **payload: Any) -> dict:
             title=title,
             description=description,
             purpose=purpose,
-            estimated_hours=estimated_hours,
             position=position,
             link_previous=link_previous,
             specs_dir=specs_dir,
@@ -236,9 +228,9 @@ def _handle_phase_update_metadata(*, config: ServerConfig, **payload: Any) -> di
         request_id=request_id,
         cross_field_rules=[
             AtLeastOne(
-                fields=("estimated_hours", "description", "purpose"),
+                fields=("description", "purpose"),
                 error_code=ErrorCode.VALIDATION_ERROR,
-                remediation="Include estimated_hours, description, or purpose",
+                remediation="Include description or purpose",
             ),
         ],
     )
@@ -247,7 +239,6 @@ def _handle_phase_update_metadata(*, config: ServerConfig, **payload: Any) -> di
 
     spec_id = payload["spec_id"]
     phase_id = payload["phase_id"]
-    estimated_hours = payload.get("estimated_hours")
     description = payload.get("description")
     purpose = payload.get("purpose")
     dry_run = payload["dry_run"]
@@ -274,7 +265,6 @@ def _handle_phase_update_metadata(*, config: ServerConfig, **payload: Any) -> di
         result, error = update_phase_metadata(
             spec_id=spec_id,
             phase_id=phase_id,
-            estimated_hours=estimated_hours,
             description=description,
             purpose=purpose,
             dry_run=dry_run,
@@ -433,23 +423,6 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
                 code=ErrorCode.MISSING_REQUIRED,
             )
 
-        est_hours = task_def.get("estimated_hours")
-        if est_hours is not None:
-            if isinstance(est_hours, bool) or not isinstance(est_hours, (int, float)):
-                return _validation_error(
-                    field=f"tasks[{idx}].estimated_hours",
-                    action=action,
-                    message="estimated_hours must be a number",
-                    request_id=request_id,
-                )
-            if est_hours < 0:
-                return _validation_error(
-                    field=f"tasks[{idx}].estimated_hours",
-                    action=action,
-                    message="estimated_hours must be non-negative",
-                    request_id=request_id,
-                )
-
         # Validate research-specific parameters when type is "research"
         if task_type == "research":
             blocking_mode = task_def.get("blocking_mode")
@@ -499,25 +472,6 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
             message="Purpose must be a string",
             request_id=request_id,
         )
-
-    estimated_hours = phase_obj.get("estimated_hours")
-    if estimated_hours is not None:
-        if isinstance(estimated_hours, bool) or not isinstance(estimated_hours, (int, float)):
-            return _validation_error(
-                field="phase.estimated_hours",
-                action=action,
-                message="Provide a numeric value",
-                request_id=request_id,
-            )
-        if estimated_hours < 0:
-            return _validation_error(
-                field="phase.estimated_hours",
-                action=action,
-                message="Value must be non-negative",
-                remediation="Set hours to zero or greater",
-                request_id=request_id,
-            )
-        estimated_hours = float(estimated_hours)
 
     # Handle metadata_defaults from both top-level and phase object
     # Top-level serves as base, phase-level overrides
@@ -596,7 +550,6 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
             tasks=tasks,
             phase_description=description,
             phase_purpose=purpose,
-            phase_estimated_hours=estimated_hours,
             metadata_defaults=metadata_defaults,
             position=position,
             link_previous=link_previous,
@@ -660,303 +613,6 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
             request_id=request_id,
         )
     )
-
-
-def _handle_phase_template(*, config: ServerConfig, **payload: Any) -> dict:
-    """Handle phase-template action: list/show/apply phase templates."""
-    request_id = _request_id()
-    action = "phase-template"
-
-    template_action = payload.get("template_action")
-    if not isinstance(template_action, str) or not template_action.strip():
-        return _validation_error(
-            field="template_action",
-            action=action,
-            message="Provide one of: list, show, apply",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    template_action = template_action.strip().lower()
-    if template_action not in ("list", "show", "apply"):
-        return _validation_error(
-            field="template_action",
-            action=action,
-            message="template_action must be one of: list, show, apply",
-            request_id=request_id,
-            remediation="Use list, show, or apply",
-        )
-
-    template_name = payload.get("template_name")
-    if template_action in ("show", "apply"):
-        if not isinstance(template_name, str) or not template_name.strip():
-            return _validation_error(
-                field="template_name",
-                action=action,
-                message="Provide a template name",
-                request_id=request_id,
-                code=ErrorCode.MISSING_REQUIRED,
-            )
-        template_name = template_name.strip()
-        if template_name not in PHASE_TEMPLATES:
-            return asdict(
-                error_response(
-                    f"Phase template '{template_name}' not found",
-                    error_code=ErrorCode.NOT_FOUND,
-                    error_type=ErrorType.NOT_FOUND,
-                    remediation=f"Use template_action='list' to see available templates. Valid: {', '.join(PHASE_TEMPLATES)}",
-                    request_id=request_id,
-                )
-            )
-
-    data: Dict[str, Any] = {"action": template_action}
-
-    if template_action == "list":
-        data["templates"] = [
-            {
-                "name": "planning",
-                "description": "Requirements gathering and initial planning phase",
-                "tasks": 2,
-                "estimated_hours": 4,
-            },
-            {
-                "name": "implementation",
-                "description": "Core development and feature implementation phase",
-                "tasks": 2,
-                "estimated_hours": 8,
-            },
-            {
-                "name": "testing",
-                "description": "Comprehensive testing and quality assurance phase",
-                "tasks": 2,
-                "estimated_hours": 6,
-            },
-            {
-                "name": "security",
-                "description": "Security audit and hardening phase",
-                "tasks": 2,
-                "estimated_hours": 6,
-            },
-            {
-                "name": "documentation",
-                "description": "Technical documentation and knowledge capture phase",
-                "tasks": 2,
-                "estimated_hours": 4,
-            },
-        ]
-        data["total_count"] = len(data["templates"])
-        data["note"] = "All templates include automatic verification scaffolding (run-tests + fidelity)"
-        return asdict(success_response(data=data, request_id=request_id))
-
-    elif template_action == "show":
-        try:
-            assert isinstance(template_name, str)
-            template_struct = get_phase_template_structure(template_name)
-            data["template_name"] = template_name
-            data["content"] = {
-                "name": template_name,
-                "title": template_struct["title"],
-                "description": template_struct["description"],
-                "purpose": template_struct["purpose"],
-                "estimated_hours": template_struct["estimated_hours"],
-                "tasks": template_struct["tasks"],
-                "includes_verification": template_struct["includes_verification"],
-            }
-            data["usage"] = (
-                f"Use authoring(action='phase-template', template_action='apply', "
-                f"template_name='{template_name}', spec_id='your-spec-id') to apply this template"
-            )
-            return asdict(success_response(data=data, request_id=request_id))
-        except ValueError as exc:
-            return asdict(
-                error_response(
-                    str(exc),
-                    error_code=ErrorCode.NOT_FOUND,
-                    error_type=ErrorType.NOT_FOUND,
-                    request_id=request_id,
-                )
-            )
-
-    else:  # apply
-        spec_id = payload.get("spec_id")
-        if not isinstance(spec_id, str) or not spec_id.strip():
-            return _validation_error(
-                field="spec_id",
-                action=action,
-                message="Provide the target spec_id to apply the template to",
-                request_id=request_id,
-                code=ErrorCode.MISSING_REQUIRED,
-            )
-        spec_id = spec_id.strip()
-
-        # Optional parameters for apply
-        category = payload.get("category", "implementation")
-        if not isinstance(category, str):
-            return _validation_error(
-                field="category",
-                action=action,
-                message="Category must be a string",
-                request_id=request_id,
-            )
-        category = category.strip()
-        if category and category not in CATEGORIES:
-            return _validation_error(
-                field="category",
-                action=action,
-                message=f"Category must be one of: {', '.join(CATEGORIES)}",
-                request_id=request_id,
-            )
-
-        position = payload.get("position")
-        if position is not None:
-            if isinstance(position, bool) or not isinstance(position, int):
-                return _validation_error(
-                    field="position",
-                    action=action,
-                    message="Position must be an integer",
-                    request_id=request_id,
-                )
-            if position < 0:
-                return _validation_error(
-                    field="position",
-                    action=action,
-                    message="Position must be >= 0",
-                    request_id=request_id,
-                )
-
-        link_previous = payload.get("link_previous", True)
-        if not isinstance(link_previous, bool):
-            return _validation_error(
-                field="link_previous",
-                action=action,
-                message="Expected a boolean value",
-                request_id=request_id,
-            )
-
-        dry_run = payload.get("dry_run", False)
-        if not isinstance(dry_run, bool):
-            return _validation_error(
-                field="dry_run",
-                action=action,
-                message="Expected a boolean value",
-                request_id=request_id,
-            )
-
-        path = payload.get("path")
-        if path is not None and not isinstance(path, str):
-            return _validation_error(
-                field="path",
-                action=action,
-                message="Workspace path must be a string",
-                request_id=request_id,
-            )
-
-        specs_dir, specs_err = _resolve_specs_dir(config, path)
-        if specs_err:
-            return specs_err
-
-        assert isinstance(template_name, str)
-
-        audit_log(
-            "tool_invocation",
-            tool="authoring",
-            action=action,
-            spec_id=spec_id,
-            template_name=template_name,
-            dry_run=dry_run,
-            link_previous=link_previous,
-        )
-
-        metric_key = _metric_name(action)
-
-        if dry_run:
-            _metrics.counter(metric_key, labels={"status": "success", "dry_run": "true"})
-            template_struct = get_phase_template_structure(template_name, category)
-            return asdict(
-                success_response(
-                    data={
-                        "spec_id": spec_id,
-                        "template_applied": template_name,
-                        "phase_id": "(preview)",
-                        "title": template_struct["title"],
-                        "tasks_created": [
-                            {"task_id": "(preview)", "title": t["title"], "type": "task"}
-                            for t in template_struct["tasks"]
-                        ],
-                        "total_tasks": len(template_struct["tasks"]),
-                        "dry_run": True,
-                        "note": "Dry run - no changes made. Verification scaffolding will be auto-added.",
-                    },
-                    request_id=request_id,
-                )
-            )
-
-        start_time = time.perf_counter()
-        try:
-            result, error = apply_phase_template(
-                spec_id=spec_id,
-                template=template_name,
-                specs_dir=specs_dir,
-                category=category,
-                position=position,
-                link_previous=link_previous,
-            )
-        except Exception as exc:  # pragma: no cover - defensive guard
-            logger.exception("Unexpected error in phase-template apply")
-            _metrics.counter(metric_key, labels={"status": "error"})
-            return asdict(
-                error_response(
-                    sanitize_error_message(exc, context="authoring"),
-                    error_code=ErrorCode.INTERNAL_ERROR,
-                    error_type=ErrorType.INTERNAL,
-                    remediation="Check logs for details",
-                    request_id=request_id,
-                )
-            )
-
-        elapsed_ms = (time.perf_counter() - start_time) * 1000
-        _metrics.timer(metric_key + ".duration_ms", elapsed_ms)
-
-        if error:
-            _metrics.counter(metric_key, labels={"status": "error"})
-            lowered = error.lower()
-            if "specification" in lowered and "not found" in lowered:
-                return asdict(
-                    error_response(
-                        f"Specification '{spec_id}' not found",
-                        error_code=ErrorCode.SPEC_NOT_FOUND,
-                        error_type=ErrorType.NOT_FOUND,
-                        remediation='Verify the spec ID via spec(action="list")',
-                        request_id=request_id,
-                    )
-                )
-            if "invalid phase template" in lowered:
-                return asdict(
-                    error_response(
-                        error,
-                        error_code=ErrorCode.VALIDATION_ERROR,
-                        error_type=ErrorType.VALIDATION,
-                        remediation=f"Valid templates: {', '.join(PHASE_TEMPLATES)}",
-                        request_id=request_id,
-                    )
-                )
-            return asdict(
-                error_response(
-                    f"Failed to apply phase template: {error}",
-                    error_code=ErrorCode.INTERNAL_ERROR,
-                    error_type=ErrorType.INTERNAL,
-                    remediation="Check input values and retry",
-                    request_id=request_id,
-                )
-            )
-
-        _metrics.counter(metric_key, labels={"status": "success"})
-        return asdict(
-            success_response(
-                data={"spec_id": spec_id, "dry_run": False, **(result or {})},
-                telemetry={"duration_ms": round(elapsed_ms, 2)},
-                request_id=request_id,
-            )
-        )
 
 
 def _handle_phase_move(*, config: ServerConfig, **payload: Any) -> dict:

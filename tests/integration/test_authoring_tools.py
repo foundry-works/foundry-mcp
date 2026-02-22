@@ -651,20 +651,6 @@ class TestPhaseOperations:
         assert result["success"] is False
         assert "title" in result["error"].lower()
 
-    def test_phase_add_validates_hours(self, mcp_server):
-        tools = mcp_server._tool_manager._tools
-
-        result = _call_tool(
-            tools,
-            "phase-add",
-            spec_id="test-spec",
-            title="Phase",
-            estimated_hours=-2,
-        )
-
-        assert result["success"] is False
-        assert "estimated_hours" in result["error"].lower()
-
     def test_phase_add_dry_run_option(self, mcp_server):
         tools = mcp_server._tool_manager._tools
 

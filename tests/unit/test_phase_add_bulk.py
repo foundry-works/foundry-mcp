@@ -151,26 +151,6 @@ class TestTaskValidation:
         assert result["success"] is False
         assert "title" in result["error"].lower()
 
-    def test_task_estimated_hours_invalid(self, authoring_tool):
-        result = authoring_tool(
-            action="phase-add-bulk",
-            spec_id="bulk-test-spec-001",
-            phase={"title": "P"},
-            tasks=[{"type": "task", "title": "T", "estimated_hours": "bad"}],
-        )
-        assert result["success"] is False
-        assert "estimated_hours" in result["error"]
-
-    def test_task_estimated_hours_negative(self, authoring_tool):
-        result = authoring_tool(
-            action="phase-add-bulk",
-            spec_id="bulk-test-spec-001",
-            phase={"title": "P"},
-            tasks=[{"type": "task", "title": "T", "estimated_hours": -1}],
-        )
-        assert result["success"] is False
-        assert "non-negative" in result["error"].lower()
-
 
 # =============================================================================
 # Phase Metadata Validation Tests
@@ -198,16 +178,6 @@ class TestPhaseMetadataValidation:
         assert result["success"] is False
         assert "purpose" in result["error"].lower()
 
-    def test_estimated_hours_invalid(self, authoring_tool):
-        result = authoring_tool(
-            action="phase-add-bulk",
-            spec_id="bulk-test-spec-001",
-            phase={"title": "P", "estimated_hours": "bad"},
-            tasks=[{"type": "task", "title": "T"}],
-        )
-        assert result["success"] is False
-        assert "estimated_hours" in result["error"]
-
     def test_metadata_defaults_not_dict(self, authoring_tool):
         result = authoring_tool(
             action="phase-add-bulk",
@@ -217,26 +187,6 @@ class TestPhaseMetadataValidation:
         )
         assert result["success"] is False
         assert "metadata_defaults" in result["error"]
-
-    def test_metadata_defaults_estimated_hours_invalid_string(self, authoring_tool):
-        result = authoring_tool(
-            action="phase-add-bulk",
-            spec_id="bulk-test-spec-001",
-            phase={"title": "P", "metadata_defaults": {"estimated_hours": "invalid"}},
-            tasks=[{"type": "task", "title": "T"}],
-        )
-        assert result["success"] is False
-        assert "metadata_defaults.estimated_hours" in result["error"]
-
-    def test_metadata_defaults_estimated_hours_negative(self, authoring_tool):
-        result = authoring_tool(
-            action="phase-add-bulk",
-            spec_id="bulk-test-spec-001",
-            phase={"title": "P", "metadata_defaults": {"estimated_hours": -5}},
-            tasks=[{"type": "task", "title": "T"}],
-        )
-        assert result["success"] is False
-        assert "metadata_defaults.estimated_hours" in result["error"]
 
     def test_metadata_defaults_category_not_string(self, authoring_tool):
         result = authoring_tool(

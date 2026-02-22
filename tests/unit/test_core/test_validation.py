@@ -222,6 +222,35 @@ class TestValidateSpec:
         codes = [d.code for d in result.diagnostics]
         assert "MISSING_MISSION" in codes
 
+    def test_missing_plan_path_warns(self, valid_spec):
+        """Test that specs without plan_path get a warning (not error) for backward compat."""
+        # Ensure plan_path is absent
+        valid_spec["metadata"].pop("plan_path", None)
+        result = validate_spec(valid_spec)
+        codes = [d.code for d in result.diagnostics]
+        assert "MISSING_PLAN_PATH" in codes
+        # Should be a warning, not an error
+        plan_diags = [d for d in result.diagnostics if d.code == "MISSING_PLAN_PATH"]
+        assert all(d.severity == "warning" for d in plan_diags)
+
+    def test_missing_plan_review_path_warns(self, valid_spec):
+        """Test that specs without plan_review_path get a warning (not error)."""
+        valid_spec["metadata"].pop("plan_review_path", None)
+        result = validate_spec(valid_spec)
+        codes = [d.code for d in result.diagnostics]
+        assert "MISSING_PLAN_REVIEW_PATH" in codes
+        plan_diags = [d for d in result.diagnostics if d.code == "MISSING_PLAN_REVIEW_PATH"]
+        assert all(d.severity == "warning" for d in plan_diags)
+
+    def test_present_plan_paths_no_warning(self, valid_spec):
+        """Test that specs with plan_path and plan_review_path don't get warnings."""
+        valid_spec["metadata"]["plan_path"] = ".plans/feature.md"
+        valid_spec["metadata"]["plan_review_path"] = ".plan-reviews/feature-review.md"
+        result = validate_spec(valid_spec)
+        codes = [d.code for d in result.diagnostics]
+        assert "MISSING_PLAN_PATH" not in codes
+        assert "MISSING_PLAN_REVIEW_PATH" not in codes
+
     def test_missing_task_category(self, valid_spec):
         """Test that all specs require task_category on tasks."""
         del valid_spec["hierarchy"]["task-1"]["metadata"]["task_category"]

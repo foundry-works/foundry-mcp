@@ -14,10 +14,9 @@ from foundry_mcp.core.spec.io import (
 )
 
 # Completeness check constants
-_CC_WEIGHT_TITLES = 0.20
-_CC_WEIGHT_DESCRIPTIONS = 0.30
-_CC_WEIGHT_FILE_PATHS = 0.25
-_CC_WEIGHT_ESTIMATES = 0.25
+_CC_WEIGHT_TITLES = 0.25
+_CC_WEIGHT_DESCRIPTIONS = 0.40
+_CC_WEIGHT_FILE_PATHS = 0.35
 
 
 def check_spec_completeness(
@@ -32,7 +31,6 @@ def check_spec_completeness(
     - Empty titles
     - Missing task descriptions
     - Missing file_path for implementation/refactoring tasks
-    - Missing estimated_hours
 
     Args:
         spec_id: Specification ID to check.
@@ -87,7 +85,6 @@ def check_spec_completeness(
         "titles": {"complete": 0, "total": 0, "score": 0.0},
         "descriptions": {"complete": 0, "total": 0, "score": 0.0},
         "file_paths": {"complete": 0, "total": 0, "score": 0.0},
-        "estimates": {"complete": 0, "total": 0, "score": 0.0},
     }
 
     # Check each node
@@ -145,21 +142,6 @@ def check_spec_completeness(
                         }
                     )
 
-            # Check estimated_hours (tasks only)
-            if node_type == "task":
-                categories["estimates"]["total"] += 1
-                est = metadata.get("estimated_hours")
-                if isinstance(est, (int, float)) and est > 0:
-                    categories["estimates"]["complete"] += 1
-                else:
-                    issues.append(
-                        {
-                            "node_id": node_id,
-                            "category": "estimates",
-                            "message": "Missing or invalid estimated_hours",
-                        }
-                    )
-
     # Calculate category scores
     for cat_data in categories.values():
         if cat_data["total"] > 0:
@@ -182,10 +164,6 @@ def check_spec_completeness(
     if categories["file_paths"]["total"] > 0:
         weighted_score += categories["file_paths"]["score"] * _CC_WEIGHT_FILE_PATHS
         total_weight += _CC_WEIGHT_FILE_PATHS
-
-    if categories["estimates"]["total"] > 0:
-        weighted_score += categories["estimates"]["score"] * _CC_WEIGHT_ESTIMATES
-        total_weight += _CC_WEIGHT_ESTIMATES
 
     # Normalize score
     if total_weight > 0:

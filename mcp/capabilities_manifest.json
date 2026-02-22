@@ -275,12 +275,6 @@
             "description": "Update phase blockers to maintain sequential dependencies after move"
           },
           {
-            "name": "estimated_hours",
-            "type": "number",
-            "required": false,
-            "description": "Estimated hours for phase-update-metadata action (must be >= 0)"
-          },
-          {
             "name": "description",
             "type": "string",
             "required": false,
@@ -460,7 +454,6 @@
               "action": "phase-update-metadata",
               "spec_id": "my-feature-spec-001",
               "phase_id": "phase-1",
-              "estimated_hours": 4.5,
               "description": "Core implementation phase",
               "purpose": "Build foundational components"
             }

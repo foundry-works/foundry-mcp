@@ -28,7 +28,7 @@ from foundry_mcp.core.spec import load_spec
 logger = get_cli_logger()
 
 # Valid templates and categories
-# Note: Only 'empty' template is supported. Use phase templates to add structure.
+# Note: Only 'empty' template is supported. Use phase-add-bulk to add structure.
 TEMPLATES = ("empty",)
 CATEGORIES = ("investigation", "implementation", "refactoring", "decision", "research")
 
@@ -53,7 +53,7 @@ def generate_spec_id(name: str) -> str:
 def get_template_structure(template: str, category: str) -> Dict[str, Any]:
     """Get the hierarchical structure for a spec template.
 
-    Only 'empty' template is supported. Use phase templates to add structure.
+    Only 'empty' template is supported. Use phase-add-bulk to add structure.
 
     Args:
         template: Template type (only 'empty' is valid).
@@ -67,7 +67,7 @@ def get_template_structure(template: str, category: str) -> Dict[str, Any]:
     """
     if template != "empty":
         raise ValueError(
-            f"Invalid template '{template}'. Only 'empty' template is supported. Use phase templates to add structure."
+            f"Invalid template '{template}'. Only 'empty' template is supported. Use phase-add-bulk to add structure."
         )
 
     return {
@@ -102,15 +102,12 @@ def specs() -> None:
 TEMPLATE_INFO = {
     "empty": {
         "name": "empty",
-        "description": "Blank spec with no phases - use phase templates to add structure",
+        "description": "Blank spec with no phases - use phase-add-bulk to add structure",
         "phases": 0,
         "tasks": 0,
-        "use_cases": ["All specs - add phases via phase-add-bulk or phase-template apply"],
+        "use_cases": ["All specs - add phases via phase-add-bulk"],
     },
 }
-
-# Phase templates available for adding structure
-PHASE_TEMPLATES = ("planning", "implementation", "testing", "security", "documentation")
 
 
 @specs.command("template")
@@ -275,7 +272,7 @@ def analyze(ctx: click.Context, directory: Optional[str] = None) -> None:
     "--template",
     type=click.Choice(TEMPLATES),
     default="empty",
-    help="Spec template (only 'empty' supported - use phase templates to add structure).",
+    help="Spec template (only 'empty' supported - use phase-add-bulk to add structure).",
 )
 @click.option(
     "--category",

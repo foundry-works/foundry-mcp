@@ -14,7 +14,7 @@ foundry-mcp exposes 14 unified tools with an `action` parameter that switches be
 | `health` | Health checks and diagnostics | `liveness`, `readiness`, `check` |
 | `spec` | Spec discovery, validation, analysis | `find`, `get`, `list`, `validate`, `fix`, `stats`, `analyze`, `analyze-deps`, `schema`, `diff`, `history`, `completeness-check`, `duplicate-detection` |
 | `task` | Task management and batch operations | `prepare`, `prepare-batch`, `start-batch`, `complete-batch`, `reset-batch`, `session-config`, `session`, `session-step`, `session-events`, `next`, `info`, `check-deps`, `start`, `complete`, `update-status`, `block`, `unblock`, `list-blocked`, `add`, `remove`, `update-estimate`, `update-metadata`, `progress`, `list`, `query`, `hierarchy`, `move`, `add-dependency`, `remove-dependency`, `add-requirement`, `metadata-batch`, `fix-verification-types`, `gate-waiver` |
-| `authoring` | Spec authoring and mutations | `spec-create`, `spec-template`, `spec-update-frontmatter`, `phase-add`, `phase-add-bulk`, `phase-remove`, `phase-move`, `phase-template`, `phase-update-metadata`, `assumption-add`, `assumption-list`, `revision-add`, `spec-find-replace`, `spec-rollback`, `intake-add`, `intake-list`, `intake-dismiss` |
+| `authoring` | Spec authoring and mutations | `spec-create`, `spec-template`, `spec-update-frontmatter`, `phase-add`, `phase-add-bulk`, `phase-remove`, `phase-move`, `phase-update-metadata`, `assumption-add`, `assumption-list`, `revision-add`, `constraint-add`, `constraint-list`, `risk-add`, `risk-list`, `question-add`, `question-list`, `success-criterion-add`, `success-criteria-list`, `spec-find-replace`, `spec-rollback`, `intake-add`, `intake-list`, `intake-dismiss` |
 | `lifecycle` | Spec lifecycle transitions | `move`, `activate`, `complete`, `archive`, `state` |
 | `plan` | Planning helpers | `create`, `list`, `review` |
 | `review` | LLM-assisted review workflows | `spec`, `fidelity`, `fidelity-gate`, `parse-feedback`, `list-tools`, `list-plan-tools` |
@@ -351,14 +351,21 @@ Spec authoring mutations.
 | `spec-template` | List/show/apply templates |
 | `spec-update-frontmatter` | Update frontmatter field |
 | `phase-add` | Add a phase |
-| `phase-add-bulk` | Add multiple phases |
+| `phase-add-bulk` | Add phase with tasks (auto-appends verification scaffolding) |
 | `phase-remove` | Remove a phase |
 | `phase-move` | Move phase position |
-| `phase-template` | Apply phase template |
 | `phase-update-metadata` | Update phase metadata |
 | `assumption-add` | Add assumption |
 | `assumption-list` | List assumptions |
 | `revision-add` | Add revision note |
+| `constraint-add` | Add constraint |
+| `constraint-list` | List constraints |
+| `risk-add` | Add risk (with description, likelihood, impact, mitigation) |
+| `risk-list` | List risks |
+| `question-add` | Add open question |
+| `question-list` | List open questions |
+| `success-criterion-add` | Add success criterion |
+| `success-criteria-list` | List success criteria |
 | `spec-find-replace` | Find/replace in spec |
 | `spec-rollback` | Rollback to backup |
 | `intake-add` | Add intake item |
@@ -374,6 +381,8 @@ Spec authoring mutations.
 | `name` | string | Varies | - | Spec name (for spec-create) |
 | `template` | string | No | - | Template name |
 | `category` | string | No | - | Default task category |
+| `plan_path` | string | Yes (spec-create) | - | Path to markdown plan file (relative to specs dir) |
+| `plan_review_path` | string | Yes (spec-create) | - | Path to synthesized plan review file (relative to specs dir) |
 | `key` | string | Varies | - | Frontmatter key |
 | `value` | string | Varies | - | Frontmatter value |
 | `phase_id` | string | Varies | - | Phase identifier |
@@ -386,13 +395,38 @@ Spec authoring mutations.
 | `priority` | string | No | `p2` | Priority (`p0`-`p4`) |
 | `tags` | array | No | `[]` | Tags for intake item |
 | `dry_run` | boolean | No | `false` | Preview changes |
+| `description` | string | Varies | - | Risk description (required for `risk-add`) |
+| `text` | string | Varies | - | Text content for `constraint-add`, `question-add`, `success-criterion-add` |
+| `assumption_type` | string | No | - | Assumption type for `assumption-add` |
+
+### Metadata Actions
+
+The `constraint-add`, `risk-add`, `question-add`, and `success-criterion-add` actions add structured metadata to a spec. Each has a corresponding list action.
+
+**`risk-add` parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `spec_id` | string | Yes | Target spec ID |
+| `description` | string | Yes | Risk description |
+| `likelihood` | string | No | `low`, `medium`, or `high` |
+| `impact` | string | No | `low`, `medium`, or `high` |
+| `mitigation` | string | No | Mitigation strategy |
+
+**Plan linkage:** The `spec-create` action requires `plan_path` and `plan_review_path` parameters. These store relative paths (from the specs directory) to the originating markdown plan and its synthesized review. Existing specs without these fields receive validation warnings (not errors). The plan content is included in fidelity review context when available.
+
+**Task complexity:** Tasks support a `metadata.complexity` field with values `low`, `medium`, or `high`. Set via `phase-add-bulk` task metadata. Surfaced in fidelity review context.
 
 ### Examples
 
 ```json
-{"action": "spec-create", "name": "my-new-feature", "template": "feature"}
+{"action": "spec-create", "name": "my-new-feature", "plan_path": ".plans/my-new-feature.md", "plan_review_path": ".plan-reviews/my-new-feature-review-full.md"}
 {"action": "phase-move", "spec_id": "my-spec", "phase_id": "phase-3", "position": 1}
 {"action": "intake-add", "title": "Add dark mode", "priority": "p2", "tags": ["ui"]}
+{"action": "constraint-add", "spec_id": "my-spec", "text": "Must work offline"}
+{"action": "risk-add", "spec_id": "my-spec", "description": "API rate limits", "likelihood": "medium", "impact": "high", "mitigation": "Add retry with backoff"}
+{"action": "question-add", "spec_id": "my-spec", "text": "Which auth provider?"}
+{"action": "success-criterion-add", "spec_id": "my-spec", "text": "All endpoints return <200ms p95"}
 ```
 
 **CLI equivalent:** `foundry-cli specs create`, `foundry-cli modify`
@@ -462,7 +496,6 @@ LLM-assisted review workflows.
 | `phase_id` | string | Varies | - | Phase ID (required for phase-scoped fidelity runs) |
 | `session_id` | string | Varies | - | Session ID (required for `fidelity-gate`) |
 | `step_id` | string | Varies | - | Session step ID from `task(action=session-step-next)` (required for `fidelity-gate`) |
-| `review_type` | string | No | `full` | Review type (`quick`, `full`, `security`, `feasibility`) |
 | `ai_provider` | string | No | - | AI provider to use |
 | `ai_timeout` | number | No | 360 | Consultation timeout |
 | `consultation_cache` | boolean | No | `true` | Use consultation cache |
@@ -471,12 +504,14 @@ LLM-assisted review workflows.
 ### Examples
 
 ```json
-{"action": "spec", "spec_id": "my-spec", "review_type": "security"}
+{"action": "spec", "spec_id": "my-spec"}
 {"action": "fidelity", "spec_id": "my-spec", "task_id": "task-1-2"}
 {"action": "fidelity-gate", "spec_id": "my-spec", "phase_id": "phase-1", "session_id": "session_01", "step_id": "step_01"}
 ```
 
 **CLI equivalent:** `foundry-cli review spec`
+
+**Plan-enhanced reviews:** When the spec has `metadata.plan_path` pointing to a readable markdown plan, the review automatically enhances to a spec-vs-plan comparison. This evaluates 7 dimensions: coverage, fidelity, success criteria mapping, constraints preserved, risks preserved, open questions preserved, and undocumented additions. The response is structured JSON with a verdict of `aligned`, `deviation`, or `incomplete`. Results are persisted to `specs/.spec-reviews/{spec_id}-spec-review.md` and the path is returned in `review_path`. Specs without `plan_path` continue to receive the standalone full review (backward compatible).
 
 ---
 

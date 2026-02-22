@@ -42,14 +42,17 @@ def _is_defined_in_module(mod: types.ModuleType, name: str) -> bool:
 # Phase 1 baseline: every public symbol in foundry_mcp.core.spec
 # ---------------------------------------------------------------------------
 
-# Functions (33)
+# Functions (38)
 BASELINE_FUNCTIONS = sorted(
     [
         "add_assumption",
+        "add_constraint",
         "add_phase",
         "add_phase_bulk",
+        "add_question",
         "add_revision",
-        "apply_phase_template",
+        "add_risk",
+        "add_success_criterion",
         "backup_spec",
         "check_spec_completeness",
         "create_spec",
@@ -62,15 +65,17 @@ BASELINE_FUNCTIONS = sorted(
         "generate_spec_data",
         "generate_spec_id",
         "get_node",
-        "get_phase_template_structure",
         "get_template_structure",
         "list_assumptions",
+        "list_constraints",
+        "list_questions",
+        "list_risks",
         "list_spec_backups",
         "list_specs",
+        "list_success_criteria",
         "load_spec",
         "move_phase",
         "recalculate_actual_hours",
-        "recalculate_estimated_hours",
         "remove_phase",
         "resolve_spec_file",
         "rollback_spec",
@@ -85,12 +90,12 @@ BASELINE_FUNCTIONS = sorted(
 BASELINE_CONSTANTS = sorted(
     [
         "CATEGORIES",
+        "COMPLEXITY_LEVELS",
         "DEFAULT_BACKUP_PAGE_SIZE",
         "DEFAULT_DIFF_MAX_RESULTS",
         "DEFAULT_MAX_BACKUPS",
         "FRONTMATTER_KEYS",
         "MAX_BACKUP_PAGE_SIZE",
-        "PHASE_TEMPLATES",
         "TEMPLATES",
         "TEMPLATE_DESCRIPTIONS",
         "VERIFICATION_TYPES",
@@ -145,22 +150,18 @@ CONSUMER_IMPORTS = {
         "list_specs",
         "load_spec",
         "recalculate_actual_hours",
-        "recalculate_estimated_hours",
     ],
     "foundry_mcp.tools.unified.authoring": [
         "CATEGORIES",
-        "PHASE_TEMPLATES",
         "TEMPLATES",
         "add_assumption",
         "add_phase",
         "add_phase_bulk",
         "add_revision",
-        "apply_phase_template",
         "create_spec",
         "find_replace_in_spec",
         "find_specs_directory",
         "generate_spec_data",
-        "get_phase_template_structure",
         "list_assumptions",
         "load_spec",
         "move_phase",
@@ -249,9 +250,9 @@ class TestSpecModulePublicAPI:
 
     def test_baseline_counts(self):
         """Baseline has expected counts."""
-        assert len(BASELINE_FUNCTIONS) == 33
+        assert len(BASELINE_FUNCTIONS) == 38
         assert len(BASELINE_CONSTANTS) == 10
-        assert len(BASELINE_ALL) == 43
+        assert len(BASELINE_ALL) == 48
 
 
 class TestCoreReexports:

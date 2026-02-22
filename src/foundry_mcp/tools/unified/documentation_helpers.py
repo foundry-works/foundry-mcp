@@ -25,6 +25,8 @@ def _build_spec_requirements(
             lines.append(f"- **Status:** {task.get('status', 'unknown')}")
             if task.get("metadata", {}).get("task_category"):
                 lines.append(f"- **Category:** {task['metadata']['task_category']}")
+            if task.get("metadata", {}).get("complexity"):
+                lines.append(f"- **Complexity:** {task['metadata']['complexity']}")
             if task.get("metadata", {}).get("description"):
                 lines.append(f"- **Description:** {task['metadata']['description']}")
             if task.get("metadata", {}).get("details"):
@@ -58,6 +60,9 @@ def _build_spec_requirements(
                     child_cat = child.get("metadata", {}).get("task_category")
                     if child_cat:
                         lines.append(f"    - Category: {child_cat}")
+                    child_complexity = child.get("metadata", {}).get("complexity")
+                    if child_complexity:
+                        lines.append(f"    - Complexity: {child_complexity}")
                     child_desc = child.get("metadata", {}).get("description")
                     if child_desc:
                         lines.append(f"    - Description: {child_desc}")
@@ -351,7 +356,89 @@ def _build_spec_overview(spec_data: Dict[str, Any]) -> str:
             else:
                 lines.append(f"  - {assumption}")
 
+    success_criteria = metadata.get("success_criteria")
+    if success_criteria and isinstance(success_criteria, list):
+        lines.append("- **Success Criteria:**")
+        for criterion in success_criteria:
+            if isinstance(criterion, str) and criterion.strip():
+                lines.append(f"  - {criterion}")
+
+    constraints = metadata.get("constraints")
+    if constraints and isinstance(constraints, list):
+        lines.append("- **Constraints:**")
+        for constraint in constraints:
+            if isinstance(constraint, str) and constraint.strip():
+                lines.append(f"  - {constraint}")
+
+    risks = metadata.get("risks")
+    if risks and isinstance(risks, list):
+        lines.append("- **Risks:**")
+        for risk in risks:
+            if isinstance(risk, dict) and risk.get("description"):
+                parts = [risk["description"]]
+                if risk.get("likelihood"):
+                    parts.append(f"likelihood={risk['likelihood']}")
+                if risk.get("impact"):
+                    parts.append(f"impact={risk['impact']}")
+                if risk.get("mitigation"):
+                    parts.append(f"mitigation: {risk['mitigation']}")
+                lines.append(f"  - {'; '.join(parts)}")
+            elif isinstance(risk, str) and risk.strip():
+                lines.append(f"  - {risk}")
+
+    open_questions = metadata.get("open_questions")
+    if open_questions and isinstance(open_questions, list):
+        lines.append("- **Open Questions:**")
+        for question in open_questions:
+            if isinstance(question, str) and question.strip():
+                lines.append(f"  - {question}")
+
+    plan_path = metadata.get("plan_path")
+    if plan_path and isinstance(plan_path, str) and plan_path.strip():
+        lines.append(f"- **Plan:** `{plan_path}`")
+
+    plan_review_path = metadata.get("plan_review_path")
+    if plan_review_path and isinstance(plan_review_path, str) and plan_review_path.strip():
+        lines.append(f"- **Plan Review:** `{plan_review_path}`")
+
     return "\n".join(lines) if lines else "*No spec overview available*"
+
+
+def _build_plan_context(spec_data: Dict[str, Any], workspace_root: Optional[Path]) -> str:
+    """Build plan context section by reading the plan file from disk.
+
+    Resolves ``metadata.plan_path`` relative to *workspace_root*, reads the
+    file, and returns formatted markdown.  Returns an empty string when the
+    plan path is absent or the file is unreadable.
+
+    Unlike other ``_build_*`` helpers (which are pure data transforms), this
+    function performs filesystem I/O.  It degrades gracefully so fidelity
+    review works without it.
+    """
+    metadata = spec_data.get("metadata", {})
+    if not isinstance(metadata, dict):
+        return ""
+
+    plan_path = metadata.get("plan_path")
+    if not isinstance(plan_path, str) or not plan_path.strip():
+        return ""
+
+    if workspace_root is None:
+        return ""
+
+    resolved = Path(workspace_root) / plan_path.strip()
+    if not resolved.exists():
+        return ""
+
+    try:
+        content = resolved.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return ""
+
+    if not content.strip():
+        return ""
+
+    return f"### Original Plan\n\n{content.strip()}"
 
 
 def _build_subsequent_phases(
