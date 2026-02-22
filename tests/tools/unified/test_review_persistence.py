@@ -14,14 +14,19 @@ def _make_config(specs_dir):
 
 
 def _make_ai_result(success=True, plan_enhanced=False, response="", title="Test Spec"):
-    """Build a mock result dict as returned by _run_ai_review."""
-    return {
-        "success": success,
+    """Build a mock result dict matching asdict(success_response(...)) structure."""
+    data = {
         "plan_enhanced": plan_enhanced,
         "response": response,
         "title": title,
         "template_id": "SPEC_REVIEW_V1",
         "ai_provider": "test-provider",
+    }
+    return {
+        "success": success,
+        "data": data,
+        "error": None,
+        "meta": {"version": "response-v2"},
     }
 
 

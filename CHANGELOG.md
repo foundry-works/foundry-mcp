@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.4] - 2026-02-22
+
+### Fixed
+
+- **Review persistence envelope alignment**: `_handle_spec_review` now reads `plan_enhanced`, `response`, `title`, `template_id`, and `ai_provider` from `result["data"]` instead of the top-level result dict, matching the `response-v2` envelope structure.
+
+### Added
+
+- **Authoring schema regression test**: New `test_authoring_schema.py` verifies that `plan_path`, `plan_review_path`, and other critical parameters remain in the MCP-generated JSON Schema, catching silent parameter drops at the protocol layer.
+
 ## [0.14.3] - 2026-02-22
 
 ### Fixed

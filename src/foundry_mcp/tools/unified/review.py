@@ -219,7 +219,8 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
 
     # Persist spec review results to disk (both plan-enhanced and standalone)
     if result.get("success") and not dry_run and specs_dir:
-        plan_enhanced = bool(plan_content and result.get("plan_enhanced"))
+        result_data = result.get("data", {})
+        plan_enhanced = bool(plan_content and result_data.get("plan_enhanced"))
         review_type_label = (
             "spec-vs-plan (plan-enhanced full review)" if plan_enhanced else "standalone spec review"
         )
@@ -231,19 +232,19 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
             spec_reviews_dir.mkdir(parents=True, exist_ok=True)
             review_file = spec_reviews_dir / f"{spec_id}-spec-review.md"
 
-            response_content = result.get("response", "")
+            response_content = result_data.get("response", "")
             parsed_json = _parse_json_content(response_content) if response_content else None
             verdict = parsed_json.get("verdict", "unknown") if parsed_json else "unknown"
 
             review_md_lines = [
-                f"# Spec Review: {result.get('title', spec_id)}",
+                f"# Spec Review: {result_data.get('title', spec_id)}",
                 "",
                 f"**Spec ID:** {spec_id}",
                 f"**Review Type:** {review_type_label}",
                 f"**Verdict:** {verdict}",
-                f"**Template:** {result.get('template_id', 'SPEC_REVIEW_VS_PLAN_V1')}",
+                f"**Template:** {result_data.get('template_id', 'SPEC_REVIEW_VS_PLAN_V1')}",
                 f"**Date:** {datetime.now().isoformat()}",
-                f"**Provider:** {result.get('ai_provider', 'unknown')}",
+                f"**Provider:** {result_data.get('ai_provider', 'unknown')}",
                 "",
                 "## Review Output",
                 "",
