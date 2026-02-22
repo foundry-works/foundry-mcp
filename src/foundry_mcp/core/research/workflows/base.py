@@ -339,10 +339,8 @@ class ResearchWorkflowBase(ABC):
                 metadata={"phase": phase, "validation_error": "prompt_too_long"},
             )
 
-        # Deadline-based timeout: compute absolute deadline at entry so that
-        # retries and fallback providers share a single time budget instead of
-        # each getting the full timeout (which could multiply wall-clock time).
-        deadline = time.monotonic() + effective_timeout
+        # Track wall-clock time for observability
+        method_start = time.monotonic()
 
         primary_provider = provider_id or self.config.default_provider
         providers_to_try = [primary_provider]
@@ -366,44 +364,8 @@ class ResearchWorkflowBase(ABC):
             except ValueError:
                 current_spec = None
 
-            # Check deadline before trying this provider
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                elapsed = effective_timeout + abs(remaining)
-                last_error = (
-                    f"Deadline exceeded: {elapsed:.1f}s elapsed of "
-                    f"{effective_timeout}s budget"
-                )
-                saw_timeout = True
-                logger.warning(
-                    "%s phase: Skipping provider %s — no time budget remaining "
-                    "(%.1fs elapsed of %.1fs)",
-                    phase or "unknown",
-                    current_provider_id,
-                    elapsed,
-                    effective_timeout,
-                )
-                break
-
             # Try this provider with retries
             for attempt in range(max_retries + 1):
-                # Recheck deadline before each attempt
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    elapsed = effective_timeout + abs(remaining)
-                    last_error = (
-                        f"Deadline exceeded: {elapsed:.1f}s elapsed of "
-                        f"{effective_timeout}s budget"
-                    )
-                    saw_timeout = True
-                    logger.warning(
-                        "%s phase: Skipping retry %d for %s — no time budget remaining",
-                        phase or "unknown",
-                        attempt + 1,
-                        current_provider_id,
-                    )
-                    break
-
                 start_time = time.perf_counter()
                 providers_tried.append(current_provider_id)
 
@@ -430,16 +392,16 @@ class ResearchWorkflowBase(ABC):
                         prompt=prompt,
                         system_prompt=system_prompt,
                         model=request_model,
-                        timeout=remaining,
+                        timeout=effective_timeout,
                         temperature=temperature,
                         max_tokens=max_tokens,
                     )
 
-                    # Run synchronous generate in thread pool with remaining budget
+                    # Run synchronous generate in thread pool
                     loop = asyncio.get_running_loop()
                     result: ProviderResult = await asyncio.wait_for(
                         loop.run_in_executor(None, provider.generate, request),
-                        timeout=remaining,
+                        timeout=effective_timeout,
                     )
 
                     duration_ms = (time.perf_counter() - start_time) * 1000
@@ -464,7 +426,7 @@ class ResearchWorkflowBase(ABC):
 
                     # Success!
                     total_elapsed_ms = (
-                        effective_timeout - (deadline - time.monotonic())
+                        time.monotonic() - method_start
                     ) * 1000
                     return WorkflowResult(
                         success=True,
@@ -487,17 +449,15 @@ class ResearchWorkflowBase(ABC):
 
                 except ProviderTimeoutError as exc:
                     duration_ms = (time.perf_counter() - start_time) * 1000
-                    last_error = str(exc) or f"Timed out after {remaining:.1f}s"
+                    last_error = str(exc) or f"Timed out after {effective_timeout:.1f}s"
                     saw_timeout = True
                     logger.warning(
-                        "%s phase: Provider %s timed out after %.1fs (attempt %d, "
-                        "%.1fs remaining of %.1fs budget)",
+                        "%s phase: Provider %s timed out after %.1fs (attempt %d/%d)",
                         phase or "unknown",
                         current_provider_id,
                         duration_ms / 1000,
                         attempt + 1,
-                        max(0, deadline - time.monotonic()),
-                        effective_timeout,
+                        max_retries + 1,
                     )
                     # Retry on timeout
                     if attempt < max_retries:
@@ -509,17 +469,15 @@ class ResearchWorkflowBase(ABC):
 
                 except asyncio.TimeoutError:
                     duration_ms = (time.perf_counter() - start_time) * 1000
-                    last_error = f"Timed out after {remaining:.1f}s"
+                    last_error = f"Timed out after {effective_timeout:.1f}s"
                     saw_timeout = True
                     logger.warning(
-                        "%s phase: Provider %s timed out after %.1fs (attempt %d, "
-                        "%.1fs remaining of %.1fs budget)",
+                        "%s phase: Provider %s timed out after %.1fs (attempt %d/%d)",
                         phase or "unknown",
                         current_provider_id,
                         duration_ms / 1000,
                         attempt + 1,
-                        max(0, deadline - time.monotonic()),
-                        effective_timeout,
+                        max_retries + 1,
                     )
                     # Retry on timeout
                     if attempt < max_retries:
@@ -575,7 +533,7 @@ class ResearchWorkflowBase(ABC):
                     break
 
         # All providers exhausted
-        total_elapsed_ms = (effective_timeout - (deadline - time.monotonic())) * 1000
+        total_elapsed_ms = (time.monotonic() - method_start) * 1000
         logger.error(
             "%s phase: All providers exhausted after %d total attempts "
             "(%.1fs wall-clock of %.1fs budget). Providers tried: %s. Last error: %s",

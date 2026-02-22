@@ -1,8 +1,8 @@
-"""Tests for deadline-based timeout and fallback behavior.
+"""Tests for timeout and fallback behavior.
 
-Phase 0b (baseline) + Phase 2c (deadline fix): validates that
-_execute_provider_async enforces a single time budget across retries
-and fallback providers, and that wall-clock duration is bounded.
+Phase 0b (baseline) + Phase 2c: validates that _execute_provider_async
+provides independent timeouts per provider, fallback logic, and
+wall-clock observability metadata.
 """
 
 import asyncio
@@ -222,13 +222,13 @@ class TestWorkflowResultTimeoutMetadata:
 
 
 # ──────────────────────────────────────────────────────────────────────
-#  Deadline-based Timeout Tests (Phase 2c)
+#  Timeout & Fallback Tests (Phase 2c)
 # ──────────────────────────────────────────────────────────────────────
 
 
-class TestDeadlineBasedTimeout:
-    """Tests that _execute_provider_async uses deadline-based timeout
-    so that total wall-clock time is bounded by the configured timeout."""
+class TestTimeoutAndFallback:
+    """Tests that _execute_provider_async provides independent timeouts
+    per provider and tracks wall-clock observability metadata."""
 
     def test_success_includes_wall_clock_metadata(self, workflow):
         """Successful result should include wall_clock_ms and configured_timeout_s."""
@@ -264,48 +264,9 @@ class TestDeadlineBasedTimeout:
         assert "wall_clock_ms" in result.metadata
         assert result.metadata["configured_timeout_s"] == 10.0
 
-    def test_deadline_caps_total_duration(self, workflow):
-        """Total wall-clock time should not exceed timeout, even with
-        fallback providers. This is the core deadline fix — previously
-        each provider got the full timeout, potentially doubling wall-clock."""
-        # Provider that takes 0.8s (would succeed within per-attempt timeout
-        # but we set overall timeout to 1s so fallback should get ~0.2s)
-        slow_provider = _make_timeout_provider(delay=0.8)
-        fast_provider = _make_success_provider(content="fast response", delay=0)
-
-        call_count = 0
-
-        def resolve_provider(pid, hooks=None):
-            nonlocal call_count
-            call_count += 1
-            if pid == "slow":
-                return slow_provider
-            return fast_provider
-
-        overall_timeout = 1.0
-
-        with patch.object(workflow, "_resolve_provider", side_effect=resolve_provider):
-            start = time.monotonic()
-            result = asyncio.run(
-                workflow._execute_provider_async(
-                    prompt="test",
-                    provider_id="slow",
-                    timeout=overall_timeout,
-                    phase="test",
-                    fallback_providers=["fast"],
-                    max_retries=0,
-                    retry_delay=0.0,
-                )
-            )
-            elapsed = time.monotonic() - start
-
-        # Total wall-clock must be bounded by timeout + small tolerance
-        assert elapsed < overall_timeout + 0.5, (
-            f"Wall-clock {elapsed:.2f}s exceeded timeout {overall_timeout}s + tolerance"
-        )
-
-    def test_primary_consumes_budget_fallback_gets_remainder(self, workflow):
-        """If primary takes most of the budget, fallback gets the remainder."""
+    def test_each_provider_gets_full_timeout(self, workflow):
+        """Each provider (primary and fallback) should get the full
+        configured timeout independently."""
         call_log = []
 
         def make_provider_that_logs(name, delay=0):
@@ -329,8 +290,6 @@ class TestDeadlineBasedTimeout:
             return provider
 
         primary = make_provider_that_logs("primary", delay=0)
-        # Primary succeeds quickly so no fallback needed, but we verify
-        # that the timeout passed to the request uses remaining budget
 
         with patch.object(workflow, "_resolve_provider", return_value=primary):
             result = asyncio.run(
@@ -343,19 +302,18 @@ class TestDeadlineBasedTimeout:
             )
 
         assert result.success is True
-        # The request timeout should be close to 300 (the full budget minus tiny elapsed)
         assert len(call_log) == 1
-        assert call_log[0]["timeout"] <= 300.0
-        assert call_log[0]["timeout"] > 299.0  # Should be very close to full budget
+        # Each provider gets the full configured timeout
+        assert call_log[0]["timeout"] == 300.0
 
-    def test_no_time_left_fallback_skipped(self, workflow):
-        """If primary exhausts the entire budget, fallback is skipped."""
+    def test_primary_timeout_triggers_fallback(self, workflow):
+        """If primary times out, fallback provider should be tried
+        with its own full timeout."""
         providers_called = []
 
         def slow_generate(request):
-            providers_called.append("primary")
-            # Sleep longer than the budget
-            time.sleep(2.0)
+            providers_called.append(("primary", request.timeout))
+            time.sleep(2.0)  # Will be cancelled by asyncio.wait_for
             result = MagicMock()
             result.status = ProviderStatus.SUCCESS
             result.content = "late"
@@ -365,7 +323,7 @@ class TestDeadlineBasedTimeout:
             return result
 
         def fast_generate(request):
-            providers_called.append("fallback")
+            providers_called.append(("fallback", request.timeout))
             result = MagicMock()
             result.status = ProviderStatus.SUCCESS
             result.content = "fallback response"
@@ -384,12 +342,14 @@ class TestDeadlineBasedTimeout:
                 return primary
             return fallback
 
+        timeout_val = 0.5
+
         with patch.object(workflow, "_resolve_provider", side_effect=resolve):
             result = asyncio.run(
                 workflow._execute_provider_async(
                     prompt="test",
                     provider_id="primary",
-                    timeout=0.5,  # Very short budget
+                    timeout=timeout_val,
                     phase="test",
                     fallback_providers=["fallback"],
                     max_retries=0,
@@ -397,10 +357,12 @@ class TestDeadlineBasedTimeout:
                 )
             )
 
-        # Primary should time out and fallback should be skipped (no budget left)
-        assert result.success is False
-        assert result.metadata.get("timeout") is True
-        assert "fallback" not in providers_called
+        # Fallback should succeed after primary times out
+        assert result.success is True
+        assert result.content == "fallback response"
+        # Fallback got the full timeout, not a remainder
+        assert len(providers_called) == 2
+        assert providers_called[1][1] == timeout_val
 
     def test_no_fallback_timeout_returns_error(self, workflow):
         """Timeout with no fallback configured returns clean error."""

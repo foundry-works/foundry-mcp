@@ -91,13 +91,11 @@
 - [x] Add `max_sources_per_query` validation in deep research `start()` handler
 - [x] Return clear error envelope on bound violation (not exception)
 
-### 2b. Deadline-based timeout
-- [x] Compute `deadline = time.monotonic() + timeout_seconds` at `_execute_provider_async` entry
-- [x] Pass `remaining = max(0, deadline - time.monotonic())` to primary provider attempt
-- [x] Pass remaining budget to each fallback attempt
-- [x] Skip fallback if `remaining <= 0`, return timeout error with elapsed duration
+### 2b. Independent timeout per provider
+- [x] Each provider (primary + fallbacks) gets the full configured timeout independently
+- [x] Track wall-clock time via `method_start = time.monotonic()` for observability
 - [x] Log actual wall-clock vs. configured timeout in result metadata
-- [x] Update all callers that pass timeout values
+- [x] Fallback providers are tried after primary timeout with their own full timeout
 
 ### 2c. Tests for bounds and deadline
 - [x] Create `tests/core/research/workflows/test_input_validation.py`
@@ -106,9 +104,9 @@
 - [x] Test `max_iterations` at limit → accepted
 - [x] Test `max_iterations` over limit → clear error
 - [x] Test `max_sub_queries` over limit → clear error
-- [x] Update `test_timeout_fallback.py` — deadline caps total duration (was failing, now passes)
-- [x] Test deadline: primary consumes 280s of 300s budget → fallback gets 20s
-- [x] Test deadline: primary consumes full budget → fallback skipped
+- [x] Update `test_timeout_fallback.py` — each provider gets full timeout independently
+- [x] Test primary timeout triggers fallback with full timeout
+- [x] Test each provider receives the configured timeout value
 - [x] Run: `pytest tests/core/research/ -v`
 
 ---
