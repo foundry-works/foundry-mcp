@@ -169,21 +169,28 @@ Effective reviews combine critical analysis with actionable guidance.
 
 SYNTHESIS_PROMPT_V1 = PromptTemplate(
     id="SYNTHESIS_PROMPT_V1",
-    version="1.0",
+    version="1.1",
     system_prompt="""You are an expert at synthesizing multiple technical reviews.
 Your task is to consolidate diverse perspectives into actionable consensus.
 
 Guidelines:
-- Attribute findings to specific models
+- Attribute findings to specific models with accurate severity
 - Identify areas of agreement and disagreement
 - Prioritize by consensus strength
 - Preserve unique insights from each model
-- Create actionable, consolidated recommendations""",
+- Create actionable, consolidated recommendations
+- NEVER escalate severity beyond what individual reviewers assigned""",
     user_template="""You are synthesizing {num_models} independent AI reviews of a specification.
 
 **Specification**: {title} (`{spec_id}`)
 
 **Your Task**: Read all reviews below and create a comprehensive synthesis.
+
+**Severity Fidelity Rules** (you MUST follow these):
+1. **No severity escalation**: Place each issue in the section matching the HIGHEST severity any individual reviewer assigned it. Never place an issue in a section ABOVE the maximum severity any reviewer gave it. If all reviewers called something "Minor", it MUST stay in Minor Suggestions.
+2. **Accurate attribution**: When writing "flagged by:", include the severity each reviewer actually used if it differs from the section (e.g., "flagged by: codex (as minor), gemini (as major)").
+3. **Cross-cutting observations**: If you notice that multiple lower-severity items from different reviewers collectively suggest a more significant concern, place this observation in the **Escalation Candidates** section with your reasoning. Do NOT move the individual items to a higher severity section.
+4. **Empty sections**: If no reviewer flagged any issues at a given severity level, that section MUST say "None identified."
 
 **Required Output** (Markdown format):
 
@@ -194,16 +201,29 @@ Guidelines:
 - **Consensus Level**: Strong/Moderate/Weak/Conflicted (based on agreement across models)
 
 ## Critical Blockers
-Issues that must be fixed before implementation (identified by multiple models):
+Issues that must be fixed before implementation (only if at least one reviewer flagged as critical):
 - **[Category]** Issue title - flagged by: [model names]
   - Impact: ...
   - Recommended fix: ...
 
 ## Major Suggestions
-Significant improvements that enhance quality, maintainability, or design:
+Significant improvements (only if at least one reviewer flagged as major):
 - **[Category]** Issue title - flagged by: [model names]
   - Description: ...
   - Recommended fix: ...
+
+## Minor Suggestions
+Smaller improvements and optimizations:
+- **[Category]** Issue title - flagged by: [model names]
+  - Description: ...
+  - Recommended fix: ...
+
+## Escalation Candidates
+Cross-cutting concerns the synthesis believes may warrant higher priority than any single reviewer assigned. These are synthesis-level observations, not attributed to individual reviewers:
+- **[Category]** Concern summary
+  - Related findings: [which reviewers raised related items and at what severity]
+  - Reasoning: [why these collectively may be more significant]
+  - Suggested severity: [what the synthesis recommends the author consider]
 
 ## Questions for Author
 Clarifications needed (common questions across models):
@@ -228,7 +248,9 @@ What the spec does well (areas of agreement):
 ```
 
 **Important**:
-- Attribute issues to specific models (e.g., "flagged by: gemini, codex")
+- Respect the Severity Fidelity Rules above — do not invent Critical Blockers that no reviewer identified
+- Attribute issues to specific models with their original severity
+- Use "None identified." for empty severity sections
 - Note where models agree vs. disagree
 - Focus on synthesizing actionable feedback across all reviews
 
