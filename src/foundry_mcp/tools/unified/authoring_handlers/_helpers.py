@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 _metrics = get_metrics()
 
 _ACTION_SUMMARY = {
-    "spec-create": "Scaffold a new SDD specification",
+    "spec-create": "Scaffold a new SDD specification (requires plan_path and plan_review_path)",
     "spec-template": "List/show/apply spec templates",
     "spec-update-frontmatter": "Update a top-level metadata field",
     "spec-find-replace": "Find and replace text across spec titles and descriptions",

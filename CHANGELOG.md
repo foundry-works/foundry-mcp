@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.1] - 2026-02-22
+
+### Fixed
+
+- **`spec-update-frontmatter` value type coercion**: Changed `value` parameter from `Optional[str]` to `Optional[Any]` so JSON-like string values (e.g. `"[]"`, `"[\"a\"]"`) are no longer pre-parsed by FastMCP into non-string types before Pydantic validation.
+- **`server(action=schema)` for unified tools**: Schema lookups now use the unified manifest (the source of truth) instead of the empty `ToolRegistry`. All 14 unified tools are now discoverable via `server(action=schema, tool_name="authoring")` etc.
+
+### Improved
+
+- **`spec-create` error remediation messages**: Missing `plan_path` and `plan_review_path` errors now include example paths and the prerequisite commands (`plan(action='create')`, `review(action='plan')`).
+- **`spec-create` action summary**: Now mentions the required `plan_path` and `plan_review_path` parameters in the tool listing.
+
 ## [0.14.0] - 2026-02-22
 
 ### Removed

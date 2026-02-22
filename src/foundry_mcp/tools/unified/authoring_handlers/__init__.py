@@ -191,7 +191,7 @@ def register_unified_authoring_tool(mcp: FastMCP, config: ServerConfig) -> None:
         template_action: Optional[str] = None,
         template_name: Optional[str] = None,
         key: Optional[str] = None,
-        value: Optional[str] = None,
+        value: Optional[Any] = None,
         title: Optional[str] = None,
         description: Optional[str] = None,
         purpose: Optional[str] = None,

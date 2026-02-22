@@ -83,12 +83,20 @@ _SPEC_CREATE_SCHEMA = {
     "category": Str(choices=frozenset(CATEGORIES), remediation=f"Use one of: {', '.join(CATEGORIES)}"),
     "mission": Str(),
     "plan_path": Str(
-        required=True, error_code=ErrorCode.MISSING_REQUIRED, remediation="Provide the path to the markdown plan file"
+        required=True,
+        error_code=ErrorCode.MISSING_REQUIRED,
+        remediation=(
+            "Provide plan_path — the relative path to the markdown plan file "
+            "(e.g. '.plans/my-plan.md'). Create with plan(action='create') first."
+        ),
     ),
     "plan_review_path": Str(
         required=True,
         error_code=ErrorCode.MISSING_REQUIRED,
-        remediation="Provide the path to the synthesized plan review file",
+        remediation=(
+            "Provide plan_review_path — the relative path to the synthesized plan review file "
+            "(e.g. '.plan-reviews/my-plan-review.md'). Create with review(action='plan') first."
+        ),
     ),
     "dry_run": Bool(default=False),
     "path": Str(),

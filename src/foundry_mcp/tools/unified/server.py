@@ -17,7 +17,6 @@ from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.discovery.capabilities import get_capabilities
-from foundry_mcp.core.discovery.registry import get_tool_registry
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import (
     get_metrics,
@@ -348,15 +347,19 @@ def _handle_schema(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             remediation="Provide a tool name like 'spec'",
         )
 
-    registry = get_tool_registry()
-    schema = registry.get_tool_schema(tool_name.strip())
+    name = tool_name.strip()
+
+    # Look up from the unified manifest (the source of truth for all tools).
+    all_tools = _build_unified_manifest_tools()
+    schema = next((t for t in all_tools if t["name"] == name), None)
     if schema is None:
+        available = ", ".join(sorted(t["name"] for t in all_tools))
         return asdict(
             error_response(
-                f"Tool '{tool_name}' not found",
+                f"Tool '{name}' not found",
                 error_code=ErrorCode.NOT_FOUND,
                 error_type=ErrorType.NOT_FOUND,
-                remediation="Use server(action=tools) to list available tools",
+                remediation=f"Available tools: {available}",
                 request_id=request_id,
             )
         )
