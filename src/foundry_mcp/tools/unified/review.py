@@ -263,6 +263,7 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
             result["review_path"] = str(review_file)
         except Exception as exc:
             logger.warning("Failed to persist spec review: %s", exc)
+            result["review_path"] = None
 
     return result
 

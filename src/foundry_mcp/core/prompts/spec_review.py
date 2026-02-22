@@ -74,13 +74,24 @@ items in the spec that have no traceable origin in the plan.
 
 CRITICAL CONSTRAINTS:
 - Compare SEMANTICS, not syntax. Markdown prose and JSON will never match word-for-word.
-- A plan task "implement OAuth2 with PKCE" matches a spec task with similar \
-  description even if worded differently.
 - Do NOT re-evaluate whether the plan itself was good — that was the plan review's job.
 - Do NOT check implementation code — that is the fidelity gate's job.
 - "Undocumented additions" are NOT errors. They are items in the spec with no \
   plan origin. Flag them for human review, do not auto-reject.
-- Do NOT focus on ownership, responsibility, or team assignment concerns."""
+- Do NOT focus on ownership, responsibility, or team assignment concerns.
+
+SEMANTIC MATCHING EXAMPLES — use these to calibrate your matching threshold:
+
+These ARE matches (acceptable semantic gaps):
+- Plan: "Implement OAuth2 with PKCE" → Spec: "Add PKCE-based OAuth2 authentication flow" (rewording)
+- Plan: "Add input validation" → Spec: "Validate and sanitize user input" (elaboration)
+- Plan: "Write unit tests for the parser" → Spec: "Create parser test suite with edge cases" (refinement)
+- Plan: "Set up CI pipeline" → Spec: "Configure GitHub Actions workflow for CI" (concretization)
+
+These are NOT matches (real coverage gaps):
+- Plan: "Implement OAuth2 with PKCE" → Spec: "Add basic password authentication" (different approach)
+- Plan: "Add rate limiting to all API endpoints" → Spec: "Add rate limiting to /login endpoint" (reduced scope)
+- Plan: "Migrate database to PostgreSQL" → Spec has no database migration task (dropped entirely)"""
 
 
 # =============================================================================

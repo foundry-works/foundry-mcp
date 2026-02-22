@@ -7,8 +7,11 @@ add/remove/move phases, recalculate actual hours, and update phase metadata.
 Imports ``io`` (for find/load/save) and ``_constants`` only.
 """
 
+import logging
 import re
 from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 from foundry_mcp.core.spec._constants import (
     CATEGORIES,
@@ -314,7 +317,7 @@ def add_phase_bulk(
     position: Optional[int] = None,
     link_previous: bool = True,
     specs_dir=None,
-    **_kwargs: Any,
+    **extra_kwargs: Any,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
     Add a new phase with pre-defined tasks in a single atomic operation.
@@ -347,6 +350,11 @@ def add_phase_bulk(
         On success: ({"phase_id": ..., "tasks_created": [...], ...}, None)
         On failure: (None, "error message")
     """
+    if extra_kwargs:
+        logger.warning(
+            "add_phase_bulk received unexpected keyword arguments (ignored): %s",
+            ", ".join(sorted(extra_kwargs)),
+        )
     # Validate required parameters
     if not spec_id or not spec_id.strip():
         return None, "Specification ID is required"
@@ -621,7 +629,10 @@ def add_phase_bulk(
     # Auto-append verification scaffolding unless caller already included verify nodes
     has_verify_nodes = any(t.get("type") == "verify" for t in tasks)
     if not has_verify_nodes:
-        _add_phase_verification(hierarchy, phase_num, phase_id)
+        try:
+            _add_phase_verification(hierarchy, phase_num, phase_id)
+        except Exception as exc:
+            return None, f"Failed to add verification scaffolding: {exc}"
         # Track the auto-appended verify nodes in the result
         for child_id in hierarchy[phase_id]["children"]:
             if child_id.startswith("verify-") and child_id not in [t["task_id"] for t in tasks_created]:
@@ -1240,7 +1251,7 @@ def update_phase_metadata(
     purpose: Optional[str] = None,
     dry_run: bool = False,
     specs_dir=None,
-    **_kwargs: Any,
+    **extra_kwargs: Any,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
     Update metadata fields of a phase in a specification.
@@ -1261,6 +1272,11 @@ def update_phase_metadata(
         On success: ({"spec_id": ..., "phase_id": ..., "updates": [...], ...}, None)
         On failure: (None, "error message")
     """
+    if extra_kwargs:
+        logger.warning(
+            "update_phase_metadata received unexpected keyword arguments (ignored): %s",
+            ", ".join(sorted(extra_kwargs)),
+        )
     # Validate spec_id
     if not spec_id or not spec_id.strip():
         return None, "Specification ID is required"
