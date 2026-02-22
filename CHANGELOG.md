@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-02-22
+
+### Removed
+
+- **Legacy direct-API LLM provider layer**: Removed `LLMConfig`, `LLMProviderType`, `DEFAULT_MODELS`, `API_KEY_ENV_VARS`, and the entire `core/llm_provider.py` module (~1,850 lines). All AI operations now use the consultation-based multi-provider system exclusively.
+- **`[api]` provider spec notation**: `ProviderSpec` now supports only `[cli]` prefix. Attempting `[api]` raises a clear error directing users to CLI providers.
+- **Legacy LLM fallback in review**: `get_llm_status()` no longer falls back to the removed `LLMConfig`; returns unavailable status directly when consultation config is absent.
+
+### Changed
+
+- **`ProviderSpec`**: Simplified to CLI-only; `type` field is now `Literal["cli"]` instead of `Literal["api", "cli"]`.
+- **Config parsing**: `_parse_provider_spec()` now re-raises `ValueError` on invalid bracket notation instead of silently mangling the provider ID.
+- **Documentation**: Updated LLM configuration guide and configuration reference to reflect CLI-only provider model.
+
 ## [0.12.0] - 2026-02-22
 
 ### Added

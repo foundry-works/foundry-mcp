@@ -10,40 +10,23 @@ from foundry_mcp.core.llm_config.provider_spec import ProviderSpec
 # =============================================================================
 
 
-class TestProviderSpecParseAPI:
-    """Tests for parsing [api] provider specs."""
+class TestProviderSpecParseAPIRejected:
+    """Tests that [api] provider specs are rejected with ValueError."""
 
-    def test_parse_api_openai(self):
-        """Test parsing OpenAI API spec."""
-        spec = ProviderSpec.parse("[api]openai/gpt-4.1")
-        assert spec.type == "api"
-        assert spec.provider == "openai"
-        assert spec.model == "gpt-4.1"
-        assert spec.backend is None
+    def test_parse_api_openai_rejected(self):
+        """Test that [api]openai/gpt-4.1 raises ValueError."""
+        with pytest.raises(ValueError, match="no longer supported"):
+            ProviderSpec.parse("[api]openai/gpt-4.1")
 
-    def test_parse_api_anthropic(self):
-        """Test parsing Anthropic API spec."""
-        spec = ProviderSpec.parse("[api]anthropic/claude-sonnet-4")
-        assert spec.type == "api"
-        assert spec.provider == "anthropic"
-        assert spec.model == "claude-sonnet-4"
+    def test_parse_api_anthropic_rejected(self):
+        """Test that [api]anthropic/claude-sonnet-4 raises ValueError."""
+        with pytest.raises(ValueError, match="no longer supported"):
+            ProviderSpec.parse("[api]anthropic/claude-sonnet-4")
 
-    def test_parse_api_local(self):
-        """Test parsing local API spec."""
-        spec = ProviderSpec.parse("[api]local/llama3.2")
-        assert spec.type == "api"
-        assert spec.provider == "local"
-        assert spec.model == "llama3.2"
-
-    def test_parse_api_preserves_model_case(self):
-        """Test that model names preserve case."""
-        spec = ProviderSpec.parse("[api]openai/GPT-4.1-Turbo")
-        assert spec.model == "GPT-4.1-Turbo"
-
-    def test_parse_api_lowercases_provider(self):
-        """Test that provider names are lowercased."""
-        spec = ProviderSpec.parse("[api]OPENAI/gpt-4.1")
-        assert spec.provider == "openai"
+    def test_parse_api_local_rejected(self):
+        """Test that [api]local/llama3.2 raises ValueError."""
+        with pytest.raises(ValueError, match="no longer supported"):
+            ProviderSpec.parse("[api]local/llama3.2")
 
 
 class TestProviderSpecParseCLI:
@@ -117,27 +100,9 @@ class TestProviderSpecParseErrors:
         with pytest.raises(ValueError, match="Expected format"):
             ProviderSpec.parse("[invalid]openai/gpt-4.1")
 
-    def test_api_missing_model(self):
-        """Test API spec without model raises ValueError."""
-        with pytest.raises(ValueError, match="Expected format"):
-            ProviderSpec.parse("[api]openai")
-
 
 class TestProviderSpecValidation:
     """Tests for ProviderSpec validation."""
-
-    def test_validate_known_api_provider(self):
-        """Test validation passes for known API provider."""
-        spec = ProviderSpec.parse("[api]openai/gpt-4.1")
-        errors = spec.validate()
-        assert errors == []
-
-    def test_validate_unknown_api_provider(self):
-        """Test validation warns for unknown API provider."""
-        spec = ProviderSpec(type="api", provider="unknown", model="model-1")
-        errors = spec.validate()
-        assert len(errors) == 1
-        assert "Unknown API provider" in errors[0]
 
     def test_validate_known_cli_provider(self):
         """Test validation passes for known CLI provider."""
@@ -162,11 +127,6 @@ class TestProviderSpecValidation:
 
 class TestProviderSpecStr:
     """Tests for ProviderSpec string representation."""
-
-    def test_str_api(self):
-        """Test string representation for API spec."""
-        spec = ProviderSpec.parse("[api]openai/gpt-4.1")
-        assert str(spec) == "[api]openai/gpt-4.1"
 
     def test_str_cli_simple(self):
         """Test string representation for simple CLI spec."""
@@ -204,11 +164,10 @@ class TestConsultationConfigPriority:
                 "[cli]gemini:pro",
                 "[cli]claude:opus",
                 "[cli]opencode:openai/gpt-5.2",
-                "[api]openai/gpt-4.1",
             ]
         }
         config = ConsultationConfig.from_dict(data)
-        assert len(config.priority) == 4
+        assert len(config.priority) == 3
         assert config.priority[0] == "[cli]gemini:pro"
 
     def test_get_provider_specs(self):
@@ -216,15 +175,15 @@ class TestConsultationConfigPriority:
         config = ConsultationConfig(
             priority=[
                 "[cli]opencode:openai/gpt-5.2",
-                "[api]openai/gpt-4.1",
+                "[cli]claude:opus",
             ]
         )
         specs = config.get_provider_specs()
         assert len(specs) == 2
         assert specs[0].type == "cli"
         assert specs[0].provider == "opencode"
-        assert specs[1].type == "api"
-        assert specs[1].provider == "openai"
+        assert specs[1].type == "cli"
+        assert specs[1].provider == "claude"
 
 
 class TestConsultationConfigOverrides:
@@ -240,23 +199,22 @@ class TestConsultationConfigOverrides:
         data = {
             "overrides": {
                 "[cli]opencode:openai/gpt-5.2": {"timeout": 600},
-                "[api]openai/gpt-4.1": {"temperature": 0.3},
             }
         }
         config = ConsultationConfig.from_dict(data)
-        assert len(config.overrides) == 2
+        assert len(config.overrides) == 1
         assert config.overrides["[cli]opencode:openai/gpt-5.2"]["timeout"] == 600
 
     def test_get_override_existing(self):
         """Test getting existing override."""
-        config = ConsultationConfig(overrides={"[api]openai/gpt-4.1": {"timeout": 120}})
-        override = config.get_override("[api]openai/gpt-4.1")
+        config = ConsultationConfig(overrides={"[cli]claude:opus": {"timeout": 120}})
+        override = config.get_override("[cli]claude:opus")
         assert override == {"timeout": 120}
 
     def test_get_override_nonexistent(self):
         """Test getting nonexistent override returns empty dict."""
         config = ConsultationConfig()
-        override = config.get_override("[api]openai/gpt-4.1")
+        override = config.get_override("[cli]claude:opus")
         assert override == {}
 
 
@@ -268,7 +226,7 @@ class TestConsultationConfigValidation:
         config = ConsultationConfig(
             priority=[
                 "[cli]gemini:pro",
-                "[api]openai/gpt-4.1",
+                "[cli]claude:opus",
             ]
         )
         # Should not raise
@@ -284,4 +242,10 @@ class TestConsultationConfigValidation:
         """Test validation fails for unknown provider in priority."""
         config = ConsultationConfig(priority=["[cli]unknown-provider:model"])
         with pytest.raises(ValueError, match="Unknown CLI provider"):
+            config.validate()
+
+    def test_validate_api_spec_in_priority_rejected(self):
+        """Test validation fails for [api] spec in priority list."""
+        config = ConsultationConfig(priority=["[api]openai/gpt-4.1"])
+        with pytest.raises(ValueError, match="no longer supported"):
             config.validate()

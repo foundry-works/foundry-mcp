@@ -1,7 +1,4 @@
-"""LLM provider error classes.
-
-Moved from foundry_mcp.core.llm_provider for centralized error management.
-"""
+"""LLM and provider error classes."""
 
 from typing import Optional
 

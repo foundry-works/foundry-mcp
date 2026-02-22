@@ -1,49 +1,43 @@
-"""Provider specification (unified priority notation) and LLM provider types."""
+"""Provider specification (unified priority notation) for CLI-based providers."""
 
 import re
 from dataclasses import dataclass
-from enum import Enum
-from typing import Dict, List, Literal, Optional
+from typing import List, Literal, Optional
 
 
 @dataclass
 class ProviderSpec:
-    """Parsed provider specification from hybrid notation.
+    """Parsed provider specification from bracket notation.
 
-    Supports bracket-prefix notation for unified API/CLI provider configuration:
-        - [api]openai/gpt-4.1           -> API provider with model
-        - [api]anthropic/claude-sonnet-4 -> API provider with model
+    Supports bracket-prefix notation for CLI provider configuration:
         - [cli]gemini:pro               -> CLI provider with model
         - [cli]claude:opus              -> CLI provider with model
         - [cli]opencode:openai/gpt-5.2  -> CLI provider routing to backend
         - [cli]codex                    -> CLI provider with default model
 
     Grammar:
-        spec       := "[api]" api_spec | "[cli]" cli_spec
-        api_spec   := provider "/" model
+        spec       := "[cli]" cli_spec
         cli_spec   := transport (":" backend "/" model | ":" model | "")
 
     Attributes:
-        type: Provider type - "api" for direct API calls, "cli" for CLI tools
-        provider: Provider/transport identifier (openai, gemini, opencode, etc.)
+        type: Provider type - always "cli" for CLI tools
+        provider: Provider/transport identifier (gemini, opencode, etc.)
         backend: Optional backend for CLI routing (openai, anthropic, gemini)
-        model: Optional model identifier (gpt-4.1, pro, opus, etc.)
+        model: Optional model identifier (pro, opus, etc.)
         raw: Original specification string for error messages
     """
 
-    type: Literal["api", "cli"]
+    type: Literal["cli"]
     provider: str
     backend: Optional[str] = None
     model: Optional[str] = None
     raw: str = ""
 
     # Known providers for validation
-    KNOWN_API_PROVIDERS = {"openai", "anthropic", "local"}
     KNOWN_CLI_PROVIDERS = {"gemini", "codex", "cursor-agent", "opencode", "claude"}
     KNOWN_BACKENDS = {"openai", "anthropic", "gemini", "local"}
 
     # Regex patterns for parsing
-    _API_PATTERN = re.compile(r"^\[api\]([^/]+)/(.+)$")
     _CLI_FULL_PATTERN = re.compile(r"^\[cli\]([^:]+):([^/]+)/(.+)$")  # transport:backend/model
     _CLI_MODEL_PATTERN = re.compile(r"^\[cli\]([^:]+):([^/]+)$")  # transport:model
     _CLI_SIMPLE_PATTERN = re.compile(r"^\[cli\]([^:]+)$")  # transport only
@@ -53,18 +47,15 @@ class ProviderSpec:
         """Parse a provider specification string.
 
         Args:
-            spec: Provider spec in bracket notation (e.g., "[api]openai/gpt-4.1")
+            spec: Provider spec in bracket notation (e.g., "[cli]claude:opus")
 
         Returns:
             ProviderSpec instance with parsed components
 
         Raises:
-            ValueError: If the spec format is invalid
+            ValueError: If the spec format is invalid or uses the removed [api] prefix
 
         Examples:
-            >>> ProviderSpec.parse("[api]openai/gpt-4.1")
-            ProviderSpec(type='api', provider='openai', model='gpt-4.1')
-
             >>> ProviderSpec.parse("[cli]gemini:pro")
             ProviderSpec(type='cli', provider='gemini', model='pro')
 
@@ -76,14 +67,11 @@ class ProviderSpec:
         if not spec:
             raise ValueError("Provider spec cannot be empty")
 
-        # Try API pattern: [api]provider/model
-        if match := cls._API_PATTERN.match(spec):
-            provider, model = match.groups()
-            return cls(
-                type="api",
-                provider=provider.lower(),
-                model=model,
-                raw=spec,
+        # Reject removed [api] specs
+        if spec.startswith("[api]"):
+            raise ValueError(
+                f"API provider specs are no longer supported: '{spec}'. "
+                "Use CLI providers instead (e.g., [cli]claude:opus)."
             )
 
         # Try CLI full pattern: [cli]transport:backend/model
@@ -119,7 +107,7 @@ class ProviderSpec:
         # Invalid format
         raise ValueError(
             f"Invalid provider spec '{spec}'. Expected format: "
-            "[api]provider/model or [cli]transport[:backend/model|:model]"
+            "[cli]transport[:backend/model|:model]"
         )
 
     @classmethod
@@ -138,49 +126,22 @@ class ProviderSpec:
         """
         errors = []
 
-        if self.type == "api":
-            if self.provider not in self.KNOWN_API_PROVIDERS:
-                errors.append(f"Unknown API provider '{self.provider}'. Known: {sorted(self.KNOWN_API_PROVIDERS)}")
-            if not self.model:
-                errors.append("API provider spec requires a model")
-        else:  # cli
-            if self.provider not in self.KNOWN_CLI_PROVIDERS:
-                errors.append(f"Unknown CLI provider '{self.provider}'. Known: {sorted(self.KNOWN_CLI_PROVIDERS)}")
-            if self.backend and self.backend not in self.KNOWN_BACKENDS:
-                errors.append(f"Unknown backend '{self.backend}'. Known: {sorted(self.KNOWN_BACKENDS)}")
+        if self.type != "cli":
+            errors.append(f"Unsupported provider type '{self.type}'. Only 'cli' is supported.")
+            return errors
+
+        if self.provider not in self.KNOWN_CLI_PROVIDERS:
+            errors.append(f"Unknown CLI provider '{self.provider}'. Known: {sorted(self.KNOWN_CLI_PROVIDERS)}")
+        if self.backend and self.backend not in self.KNOWN_BACKENDS:
+            errors.append(f"Unknown backend '{self.backend}'. Known: {sorted(self.KNOWN_BACKENDS)}")
 
         return errors
 
     def __str__(self) -> str:
         """Return canonical string representation."""
-        if self.type == "api":
-            return f"[api]{self.provider}/{self.model}"
-        elif self.backend:
+        if self.backend:
             return f"[cli]{self.provider}:{self.backend}/{self.model}"
         elif self.model:
             return f"[cli]{self.provider}:{self.model}"
         else:
             return f"[cli]{self.provider}"
-
-
-class LLMProviderType(str, Enum):
-    """Supported LLM provider types."""
-
-    OPENAI = "openai"
-    ANTHROPIC = "anthropic"
-    LOCAL = "local"
-
-
-# Default models per provider
-DEFAULT_MODELS: Dict[LLMProviderType, str] = {
-    LLMProviderType.OPENAI: "gpt-4.1",
-    LLMProviderType.ANTHROPIC: "claude-sonnet-4-5",
-    LLMProviderType.LOCAL: "llama4",
-}
-
-# Environment variable names for API keys
-API_KEY_ENV_VARS: Dict[LLMProviderType, str] = {
-    LLMProviderType.OPENAI: "OPENAI_API_KEY",
-    LLMProviderType.ANTHROPIC: "ANTHROPIC_API_KEY",
-    LLMProviderType.LOCAL: "",  # Local providers typically don't need keys
-}

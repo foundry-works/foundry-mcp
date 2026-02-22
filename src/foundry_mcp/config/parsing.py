@@ -31,13 +31,17 @@ def _parse_provider_spec(spec: str) -> Tuple[str, Optional[str]]:
     - "gemini" -> ("gemini", None)
     - "[cli]gemini:pro" -> ("gemini", "pro")
     - "[cli]opencode:openai/gpt-5.2" -> ("opencode", "openai/gpt-5.2")
-    - "[api]openai/gpt-4.1" -> ("openai", "gpt-4.1")
+    - "[cli]claude:opus" -> ("claude", "opus")
 
     Args:
         spec: Provider specification string
 
     Returns:
         Tuple of (provider_id, model) where model may be None
+
+    Raises:
+        ValueError: If the spec uses bracket notation but is invalid
+            (e.g., removed [api] prefix or malformed [cli] spec).
     """
     spec = spec.strip()
 
@@ -57,10 +61,14 @@ def _parse_provider_spec(spec: str) -> Tuple[str, Optional[str]]:
         elif parsed.model:
             model = parsed.model
         return (parsed.provider, model)
-    except (ValueError, ImportError) as e:
+    except ImportError as e:
         logger.warning("Failed to parse provider spec '%s': %s", spec, e)
         # Fall back to treating as simple name (strip brackets)
         return (spec.split("]")[-1].split(":")[0], None)
+    except ValueError:
+        # Re-raise parse errors (including [api] rejection) so callers
+        # see the real problem instead of getting a mangled provider ID.
+        raise
 
 
 def _parse_bool(value: Any) -> bool:

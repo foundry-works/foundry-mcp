@@ -1118,17 +1118,17 @@ class TestProviderSpecIntegration:
         assert provider_id == "opencode"
         assert model == "openai/gpt-5.2"
 
-    def test_resolve_phase_provider_api_spec(self):
-        """Should parse [api]provider/model format."""
+    def test_resolve_phase_provider_cli_backend_spec(self):
+        """Should parse [cli]transport:backend/model format."""
         from foundry_mcp.config.research import ResearchConfig
 
         config = ResearchConfig(
-            default_provider="[api]openai/gpt-4.1",
+            default_provider="[cli]opencode:openai/gpt-4.1",
         )
 
         provider_id, model = config.resolve_phase_provider("synthesis")
-        assert provider_id == "openai"
-        assert model == "gpt-4.1"
+        assert provider_id == "opencode"
+        assert model == "openai/gpt-4.1"
 
     def test_get_phase_provider_extracts_provider_id_only(self):
         """get_phase_provider should return just the provider ID."""

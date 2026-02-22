@@ -16,7 +16,7 @@ Configuration is loaded in layers, with each layer overriding the previous:
 
 | Location | Purpose | Example use cases |
 |----------|---------|-------------------|
-| `~/.foundry-mcp.toml` | User defaults | API keys, preferred LLM providers, logging preferences |
+| `~/.foundry-mcp.toml` | User defaults | Preferred CLI providers, logging preferences |
 | `./foundry-mcp.toml` | Project settings | specs_dir, workspace roots, project-specific tool config |
 
 ### Legacy compatibility
@@ -33,10 +33,8 @@ specs_dir = "./specs"
 [logging]
 level = "INFO"
 
-[llm]
-provider = "openai"
-model = "gpt-4.1"
-timeout = 30
+[consultation]
+priority = ["[cli]claude:opus", "[cli]gemini:pro"]
 ```
 
 ## Common environment variables
@@ -115,25 +113,16 @@ When a profile and direct overrides conflict, startup warnings call out unsafe c
 
 ## LLM providers
 
-Quick setup for common providers:
+foundry-mcp uses CLI-based providers (claude, gemini, codex, cursor-agent, opencode) configured via the `[consultation]` section. See the [LLM Configuration Guide](guides/llm-configuration.md) for full details.
 
-- OpenAI: set `FOUNDRY_MCP_LLM_PROVIDER=openai` and `OPENAI_API_KEY`
-- Anthropic: set `FOUNDRY_MCP_LLM_PROVIDER=anthropic` and `ANTHROPIC_API_KEY`
-- Local: set `FOUNDRY_MCP_LLM_PROVIDER=local` and `FOUNDRY_MCP_LLM_BASE_URL`
-
-Common LLM environment variables:
+Common consultation environment variables:
 
 | Variable | Purpose |
 | --- | --- |
-| `FOUNDRY_MCP_LLM_PROVIDER` | Provider name (`openai`, `anthropic`, `local`) |
-| `FOUNDRY_MCP_LLM_API_KEY` | Unified API key override |
-| `FOUNDRY_MCP_LLM_MODEL` | Model identifier |
-| `FOUNDRY_MCP_LLM_BASE_URL` | Custom API endpoint |
-| `FOUNDRY_MCP_LLM_TIMEOUT` | Request timeout (seconds) |
-
-LLM configuration is documented in detail here:
-
-- [LLM Configuration Guide](guides/llm-configuration.md)
+| `FOUNDRY_MCP_CONSULTATION_PRIORITY` | Comma-separated provider priority list |
+| `FOUNDRY_MCP_CONSULTATION_TIMEOUT` | Default timeout in seconds |
+| `FOUNDRY_MCP_CONSULTATION_MAX_RETRIES` | Max retry attempts |
+| `FOUNDRY_MCP_CONSULTATION_FALLBACK_ENABLED` | Enable provider fallback |
 
 ## Research Configuration
 

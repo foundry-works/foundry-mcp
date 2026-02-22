@@ -29,9 +29,8 @@ def test_get_llm_status_handles_import_error(monkeypatch):
     def _raise(*args, **kwargs):
         raise ImportError("missing")
 
-    # Patch both consultation and legacy config paths to simulate broken config
+    # Patch consultation config to simulate broken config
     monkeypatch.setattr("foundry_mcp.core.llm_config.consultation.get_consultation_config", _raise)
-    monkeypatch.setattr("foundry_mcp.core.llm_config.llm.get_llm_config", _raise)
     status = _get_llm_status()
     assert status["configured"] is False
 

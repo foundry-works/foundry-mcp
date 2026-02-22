@@ -251,8 +251,8 @@ class ConsultationOrchestrator:
         """
         Resolve a ProviderSpec to a ResolvedProvider if available.
 
-        For CLI providers, checks registry availability.
-        For API providers, logs a warning (not yet implemented).
+        Checks CLI provider registry availability. Non-CLI specs are
+        skipped with a debug log (only CLI providers are supported).
 
         Args:
             spec: The provider specification to resolve
@@ -260,12 +260,8 @@ class ConsultationOrchestrator:
         Returns:
             ResolvedProvider if available, None otherwise
         """
-        if spec.type == "api":
-            # API providers not yet integrated into registry
-            # TODO: Register API providers (openai, anthropic, local) in registry
-            logger.debug(
-                f"API provider spec '{spec}' skipped - API providers not yet integrated into consultation registry"
-            )
+        if spec.type != "cli":
+            logger.debug(f"Non-CLI provider spec '{spec}' skipped — only CLI providers are supported")
             return None
 
         # CLI provider - check registry availability

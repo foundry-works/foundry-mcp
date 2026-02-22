@@ -86,18 +86,16 @@ class ConsultationConfig:
     TOML Configuration Example:
         [consultation]
         # Provider priority list - first available wins
-        # Format: "[api]provider/model" or "[cli]transport[:backend/model|:model]"
+        # Format: "[cli]transport[:backend/model|:model]"
         priority = [
             "[cli]gemini:pro",
             "[cli]claude:opus",
             "[cli]opencode:openai/gpt-5.2",
-            "[api]openai/gpt-4.1",
         ]
 
         # Per-provider overrides (optional)
         [consultation.overrides]
         "[cli]opencode:openai/gpt-5.2" = { timeout = 600 }
-        "[api]openai/gpt-4.1" = { temperature = 0.3 }
 
         # Operational settings
         default_timeout = 300       # Default timeout in seconds (default: 300)
@@ -157,7 +155,7 @@ class ConsultationConfig:
         """Get override settings for a specific provider spec.
 
         Args:
-            spec: Provider spec string (e.g., "[api]openai/gpt-4.1")
+            spec: Provider spec string (e.g., "[cli]claude:opus")
 
         Returns:
             Override dictionary (empty if no overrides configured)

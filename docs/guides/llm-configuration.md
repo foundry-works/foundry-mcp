@@ -9,7 +9,7 @@ For tool/action listings, see [MCP Tool Reference](../05-mcp-tool-reference.md).
 
 - [Overview](#overview)
 - [Configuration](#configuration)
-- [LLM Providers](#llm-providers)
+- [CLI Providers](#cli-providers)
 - [Provider Management Tools](#provider-management-tools)
 - [LLM-Powered Tools](#llm-powered-tools)
 - [Graceful Degradation](#graceful-degradation)
@@ -23,11 +23,11 @@ For tool/action listings, see [MCP Tool Reference](../05-mcp-tool-reference.md).
 
 ## Overview
 
-foundry-mcp provides LLM-powered features for intelligent spec review and fidelity analysis. These features are designed with resilience in mind, supporting multiple LLM providers and graceful degradation when LLM services are unavailable.
+foundry-mcp provides LLM-powered features for intelligent spec review and fidelity analysis. These features are designed with resilience in mind, supporting multiple CLI-based LLM providers and graceful degradation when LLM services are unavailable.
 
 ### Key Features
 
-- **Multi-provider support**: OpenAI, Anthropic, and local models (Ollama)
+- **Multi-provider support**: CLI-based providers (claude, gemini, codex, cursor-agent, opencode)
 - **Graceful degradation**: Data-only responses when LLM is unavailable
 - **Circuit breaker protection**: Automatic failure handling and recovery
 - **External AI tool integration**: cursor-agent, gemini, codex for spec reviews
@@ -42,15 +42,23 @@ foundry-mcp provides LLM-powered features for intelligent spec review and fideli
 Create a `foundry-mcp.toml` file in your project root:
 
 ```toml
-[llm]
-provider = "openai"           # Required: "openai", "anthropic", or "local"
-api_key = "sk-..."            # Optional: defaults to env var based on provider
-model = "gpt-4.1"             # Optional: provider-specific default
-timeout = 30                  # Optional: request timeout in seconds (default: 30)
-max_tokens = 1024             # Optional: default max tokens
-temperature = 0.7             # Optional: default temperature (0-2)
-base_url = ""                 # Optional: custom API endpoint (proxies, local servers)
-organization = ""             # Optional: OpenAI organization ID
+[consultation]
+# Provider priority list - first available wins
+# Format: "[cli]transport[:backend/model|:model]"
+priority = [
+    "[cli]gemini:pro",
+    "[cli]claude:opus",
+    "[cli]opencode:openai/gpt-5.2",
+]
+
+# Per-provider overrides (optional)
+[consultation.overrides]
+"[cli]opencode:openai/gpt-5.2" = { timeout = 600 }
+
+# Operational settings
+default_timeout = 300
+max_retries = 2
+fallback_enabled = true
 
 [workflow]
 mode = "single"               # Execution mode: "single", "autonomous", or "batch"
@@ -66,105 +74,32 @@ Environment variables provide fallback configuration and can override TOML setti
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `FOUNDRY_MCP_LLM_PROVIDER` | LLM provider type | `openai`, `anthropic`, `local` |
-| `FOUNDRY_MCP_LLM_API_KEY` | Unified API key (takes precedence) | `sk-...` |
-| `FOUNDRY_MCP_LLM_MODEL` | Model identifier | `gpt-4.1`, `claude-sonnet-4-5` |
-| `FOUNDRY_MCP_LLM_TIMEOUT` | Request timeout in seconds | `30` |
-| `FOUNDRY_MCP_LLM_BASE_URL` | Custom API base URL | `https://api.openai.com/v1` |
-| `FOUNDRY_MCP_LLM_MAX_TOKENS` | Default max tokens | `1024` |
-| `FOUNDRY_MCP_LLM_TEMPERATURE` | Default temperature | `0.7` |
-| `FOUNDRY_MCP_LLM_ORGANIZATION` | Organization ID (OpenAI) | `org-...` |
-
-**Provider-specific API key fallbacks:**
-
-| Provider | Environment Variable |
-|----------|---------------------|
-| OpenAI | `OPENAI_API_KEY` |
-| Anthropic | `ANTHROPIC_API_KEY` |
-| Local | No API key required |
+| `FOUNDRY_MCP_CONSULTATION_PRIORITY` | Comma-separated priority list | `[cli]gemini:pro,[cli]claude:opus` |
+| `FOUNDRY_MCP_CONSULTATION_TIMEOUT` | Default timeout in seconds | `300` |
+| `FOUNDRY_MCP_CONSULTATION_MAX_RETRIES` | Max retry attempts | `2` |
+| `FOUNDRY_MCP_CONSULTATION_RETRY_DELAY` | Delay between retries in seconds | `5.0` |
+| `FOUNDRY_MCP_CONSULTATION_FALLBACK_ENABLED` | Enable provider fallback | `true` |
+| `FOUNDRY_MCP_CONSULTATION_CACHE_TTL` | Cache TTL in seconds | `3600` |
 
 ### Configuration Priority
 
 1. TOML config file (explicit values)
-2. `FOUNDRY_MCP_LLM_*` environment variables
-3. Provider-specific environment variables
-4. Default values
+2. `FOUNDRY_MCP_CONSULTATION_*` environment variables
+3. Default values
 
 ---
 
-## LLM Providers
+## CLI Providers
 
-### OpenAI
+foundry-mcp uses CLI-based providers that invoke AI tools via subprocess. Available providers:
 
-The default provider supporting GPT-4.1 and GPT-5.1-Codex models.
-
-```toml
-[llm]
-provider = "openai"
-model = "gpt-4.1"  # or "gpt-5.1-codex", "gpt-4.1-mini"
-```
-
-**Default model:** `gpt-4.1`
-
-**Features:**
-- Chat completions
-- Text embeddings (text-embedding-3-small)
-- Function/tool calling
-- Streaming responses
-- Token counting via tiktoken
-
-### Anthropic
-
-Support for Claude 4.5 models (opus, sonnet, haiku).
-
-```toml
-[llm]
-provider = "anthropic"
-model = "claude-sonnet-4-5"  # or "claude-opus-4-5", "claude-haiku-4-5"
-```
-
-**Default model:** `claude-sonnet-4-5`
-
-**Features:**
-- Chat completions
-- Function/tool calling
-- Streaming responses
-- System message support
-
-**Note:** Anthropic does not support embeddings. Use OpenAI or local models for embedding operations.
-
-### Local (Ollama)
-
-Support for local models via Ollama or llama.cpp compatible endpoints.
-
-```toml
-[llm]
-provider = "local"
-model = "llama4"  # or any model you have pulled
-base_url = "http://localhost:11434/v1"  # Ollama's OpenAI-compatible endpoint
-```
-
-**Default model:** `llama4`
-
-**Setup:**
-
-```bash
-# Install Ollama
-curl -fsSL https://ollama.ai/install.sh | sh
-
-# Pull a model
-ollama pull llama4
-
-# Start Ollama server (if not running as service)
-ollama serve
-```
-
-**Features:**
-- Chat completions
-- Embeddings (nomic-embed-text)
-- Function/tool calling (model-dependent)
-- Streaming responses
-- No API key required
+| Provider | Description | Spec Example |
+|----------|-------------|--------------|
+| `claude` | Anthropic Claude CLI | `[cli]claude:opus` |
+| `gemini` | Google Gemini CLI | `[cli]gemini:pro` |
+| `codex` | OpenAI Codex CLI | `[cli]codex` |
+| `cursor-agent` | Cursor AI integration | `[cli]cursor-agent:claude-sonnet` |
+| `opencode` | OpenCode with backend routing | `[cli]opencode:openai/gpt-5.2` |
 
 ---
 
@@ -235,7 +170,7 @@ Get detailed status for a specific provider.
       "name": "Gemini",
       "version": "2.0",
       "default_model": "gemini-2.0-flash",
-      "supported_models": [...],
+      "supported_models": ["..."],
       "documentation_url": "https://ai.google.dev/",
       "tags": ["ai", "google"]
     },
@@ -297,11 +232,6 @@ Execute a prompt through a specified LLM provider.
 - `UNAVAILABLE`: Provider not configured or available
 - `TIMEOUT`: Request exceeded timeout
 - `EXECUTION_ERROR`: Provider returned an error
-
-**Safety Notes:**
-- Providers validate availability before execution
-- Streaming is not supported through MCP tools (returns complete result)
-- API keys must be configured per provider requirements
 
 ---
 
@@ -401,7 +331,7 @@ When LLM services are unavailable, foundry-mcp automatically falls back to data-
   "success": true,
   "data": {
     "spec_id": "feature-auth-001",
-    "tasks": [...],
+    "tasks": ["..."],
     "progress": 75
   },
   "meta": {
@@ -572,44 +502,20 @@ if is_llm_tool("spec-review"):
 
 | Issue | Cause | Solution |
 |-------|-------|----------|
-| `LLM provider not configured` | Missing API key | Set `OPENAI_API_KEY` or configure in TOML |
+| `LLM provider not configured` | No CLI providers available | Install a supported CLI tool (claude, gemini, codex) |
 | `Rate limit exceeded` | Too many requests | Wait for retry-after period |
-| `Model not found` | Invalid model name | Check provider-specific model names |
-| `Connection refused` (local) | Ollama not running | Run `ollama serve` |
 | `Circuit breaker open` | Too many failures | Wait for recovery timeout |
-
-### Debugging Configuration
-
-```python
-from foundry_mcp.core.llm_config import get_llm_config
-
-config = get_llm_config()
-print(f"Provider: {config.provider.value}")
-print(f"Model: {config.get_model()}")
-print(f"API key configured: {config.get_api_key() is not None}")
-print(f"Timeout: {config.timeout}s")
-```
 
 ### Checking LLM Status
 
 ```python
-from foundry_mcp.tools.review import _get_llm_status
+from foundry_mcp.tools.unified.review_helpers import _get_llm_status
 
 status = _get_llm_status()
 # Returns:
-# {"configured": True, "provider": "openai", "model": "gpt-4"}
+# {"configured": True, "available": True, "providers": [...]}
 # or
-# {"configured": False, "error": "API key not found"}
-```
-
-### Provider Health Check
-
-```python
-from foundry_mcp.core.llm_provider import OpenAIProvider
-
-provider = OpenAIProvider()
-is_healthy = await provider.health_check()
-print(f"Provider healthy: {is_healthy}")
+# {"configured": False, "error": "No AI config available"}
 ```
 
 ---
@@ -632,8 +538,8 @@ if not result.get("meta", {}).get("llm_available", True):
 LLM operations can be slow. Use appropriate timeouts:
 
 ```toml
-[llm]
-timeout = 60  # Increase for complex operations
+[consultation]
+default_timeout = 300  # Increase for complex operations
 ```
 
 ### 3. Respect Rate Limits
@@ -645,17 +551,7 @@ metadata = get_llm_tool_metadata("spec-review-fidelity")
 print(f"Rate limit: {metadata.rate_limit}")
 ```
 
-### 4. Use Local Models for Development
-
-For development and testing, use local models to avoid API costs:
-
-```toml
-[llm]
-provider = "local"
-model = "llama4"
-```
-
-### 5. Monitor Circuit Breaker State
+### 4. Monitor Circuit Breaker State
 
 Check circuit breaker status for diagnostics:
 
@@ -666,7 +562,7 @@ print(f"Circuit state: {_review_breaker.state}")
 print(f"Failure count: {_review_breaker.failure_count}")
 ```
 
-### 6. Use Consensus for Critical Reviews
+### 5. Use Consensus for Critical Reviews
 
 For important fidelity reviews, use multiple AI tools with consensus:
 
@@ -685,6 +581,6 @@ For important fidelity reviews, use multiple AI tools with consensus:
 When transitioning between LLM features or providers:
 
 1. **Clear cached responses:** Remove stale LLM-generated content
-2. **Reset circuit breakers:** Call `reset_llm_config()` after config changes
+2. **Reset circuit breakers:** Restart server after config changes
 3. **Verify feature flags:** Check capabilities after updates
 4. **Test fallback paths:** Ensure data-only mode works correctly

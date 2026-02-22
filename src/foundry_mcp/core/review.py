@@ -103,20 +103,7 @@ def get_llm_status() -> Dict[str, Any]:
     except Exception as e:
         return {"configured": False, "available": False, "error": str(e)}
 
-    # Fallback to legacy LLM config if consultation layer unavailable
-    try:
-        from foundry_mcp.core.llm_config.llm import get_llm_config
-
-        config = get_llm_config()
-        return {
-            "configured": config.get_api_key() is not None,
-            "available": config.get_api_key() is not None,
-            "provider": config.provider.value,
-            "model": config.get_model(),
-            "legacy": True,
-        }
-    except Exception:
-        return {"configured": False, "available": False, "error": "No AI config available"}
+    return {"configured": False, "available": False, "error": "No AI config available"}
 
 
 def prepare_review_context(
