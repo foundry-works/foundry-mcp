@@ -29,11 +29,16 @@ class DigestPolicy(str, Enum):
             This is the recommended default for most workflows.
         ALWAYS: Always digest sources that have content, regardless of
             size or quality. Use for aggressive compression scenarios.
+        PROACTIVE: Digest sources immediately after gathering, before the
+            analysis phase. Behaves like ALWAYS for eligibility but runs
+            earlier in the pipeline, ensuring uniform pre-processed content
+            for downstream phases.
     """
 
     OFF = "off"
     AUTO = "auto"
     ALWAYS = "always"
+    PROACTIVE = "proactive"
 
 
 @dataclass

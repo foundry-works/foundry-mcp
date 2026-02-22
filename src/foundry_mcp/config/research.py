@@ -192,7 +192,7 @@ class ResearchConfig:
     audit_verbosity: str = "full"  # "full" or "minimal" - controls JSONL audit payload size
 
     # Document digest configuration (for large content compression in deep research)
-    deep_research_digest_policy: str = "auto"  # "off", "auto", "always"
+    deep_research_digest_policy: str = "auto"  # "off", "auto", "always", "proactive"
     deep_research_digest_min_chars: int = 10000  # Minimum chars before digest is applied
     deep_research_digest_max_sources: int = 8  # Max sources to digest per batch
     deep_research_digest_timeout: float = 120.0  # Timeout per digest operation (seconds)

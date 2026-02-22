@@ -26,15 +26,17 @@ Tracks progress against [PLAN.md](./PLAN.md). Check items as completed.
 
 ### 4. Proactive Content Digest
 - [x] Add `"proactive"` to `deep_research_digest_policy` validation
-- [ ] In `phases/gathering.py`, add post-gather digest step:
-  - [ ] Check if policy is `proactive`
-  - [ ] Call `DocumentDigestor` on each newly gathered source
-  - [ ] Store digest results on source objects
-  - [ ] Audit event for proactive digest completion
-- [ ] Ensure analysis phase uses pre-digested content when available (skip re-digest)
-- [ ] Update config documentation for new policy option
-- [ ] Unit test: gathering with proactive digest
-- [ ] Verify token counting uses digested content length
+- [x] Add `PROACTIVE` to `DigestPolicy` enum in `document_digest/config.py`
+- [x] Update `_is_eligible()` and `_get_skip_reason()` in digestor to handle PROACTIVE
+- [x] In `workflow_execution.py`, add post-gather digest step:
+  - [x] Check if policy is `proactive`
+  - [x] Call `_execute_digest_step_async` on gathered sources (reuses existing digest pipeline)
+  - [x] Store digest results on source objects
+  - [x] Audit event for proactive digest completion (`proactive_digest_complete`)
+- [x] Ensure analysis phase uses pre-digested content when available (skip re-digest)
+- [x] Update config documentation for new policy option
+- [x] Unit test: gathering with proactive digest (`test_proactive_digest.py`)
+- [x] Verify token counting uses digested content length
 
 ### 6. End-to-End Citation Tracking
 - [ ] Add `citation_number: Optional[int]` to source model

@@ -66,6 +66,7 @@ class WorkflowExecutionMixin:
         async def _execute_synthesis_async(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_refinement_async(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_extract_followup_async(self, *args: Any, **kwargs: Any) -> Any: ...
+        async def _execute_digest_step_async(self, *args: Any, **kwargs: Any) -> Any: ...
 
     def _check_cancellation(self, state: DeepResearchState) -> None:
         """Check if cancellation has been requested for this research session.
@@ -225,6 +226,33 @@ class WorkflowExecutionMixin:
                                 "urls_failed": extract_result.get("urls_failed", 0),
                             },
                         )
+
+                # Proactive digest: digest sources immediately after gathering
+                # when policy is "proactive", ensuring uniform pre-processed
+                # content before the analysis phase.
+                if self.config.deep_research_digest_policy == "proactive":
+                    self._check_cancellation(state)
+                    logger.info(
+                        "Running proactive digest on %d sources for research %s",
+                        len(state.sources),
+                        state.id,
+                    )
+                    digest_stats = await self._execute_digest_step_async(
+                        state=state,
+                        query=state.original_query,
+                    )
+                    self._write_audit_event(
+                        state,
+                        "proactive_digest_complete",
+                        data={
+                            "sources_digested": digest_stats.get("sources_digested", 0),
+                            "sources_selected": digest_stats.get("sources_selected", 0),
+                            "sources_ranked": digest_stats.get("sources_ranked", 0),
+                            "errors": len(digest_stats.get("digest_errors", [])),
+                        },
+                    )
+                    # Persist state with digested content
+                    self.memory.save_deep_research(state)
 
             if state.phase == DeepResearchPhase.ANALYSIS:
                 err = await self._run_phase(
