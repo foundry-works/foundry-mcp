@@ -28,7 +28,7 @@ Example usage:
 import logging
 import os
 from dataclasses import replace
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 import httpx
 
@@ -43,13 +43,12 @@ from foundry_mcp.core.research.providers.base import (
     SearchResult,
 )
 from foundry_mcp.core.research.providers.resilience import (
-    ErrorClassification,
+    ErrorType,
     ProviderResilienceConfig,
     get_provider_config,
 )
 from foundry_mcp.core.research.providers.shared import (
     check_provider_health,
-    classify_http_error,
     create_resilience_executor,
     extract_error_message,
     parse_iso_date,
@@ -175,6 +174,10 @@ class SemanticScholarProvider(SearchProvider):
             sort_by="citationCount",
         )
     """
+
+    ERROR_CLASSIFIERS: ClassVar[dict[int, ErrorType]] = {
+        504: ErrorType.SERVER_ERROR,
+    }
 
     def __init__(
         self,
@@ -349,10 +352,6 @@ class SemanticScholarProvider(SearchProvider):
             self.classify_error,
         )
         return await executor(make_request, timeout=self._timeout)
-
-    def _parse_retry_after(self, response: httpx.Response) -> Optional[float]:
-        """Parse Retry-After header. Delegates to shared utility."""
-        return parse_retry_after(response)
 
     def _parse_response(
         self,
@@ -573,7 +572,3 @@ class SemanticScholarProvider(SearchProvider):
             self._base_url,
             test_func=lambda: self.search("test", max_results=1),
         )
-
-    def classify_error(self, error: Exception) -> ErrorClassification:
-        """Classify an error for resilience decisions."""
-        return classify_http_error(error, "semantic_scholar")

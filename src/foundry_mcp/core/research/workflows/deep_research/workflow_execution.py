@@ -433,6 +433,9 @@ class WorkflowExecutionMixin:
                 "Workflow entering cleanup state for research %s",
                 state.id,
             )
+
+            # Mark the state as cancelled with phase context
+            state.mark_cancelled(phase_state=f"phase={state.phase.value}, iteration={state.iteration}")
             self.memory.save_deep_research(state)
 
             self._write_audit_event(
@@ -445,6 +448,7 @@ class WorkflowExecutionMixin:
                     "last_completed_iteration": state.metadata.get("last_completed_iteration"),
                     "discarded_iteration": state.metadata.get("discarded_iteration"),
                     "cancellation_state": state.metadata.get("cancellation_state"),
+                    "terminal_status": "cancelled",
                 },
                 level="warning",
             )

@@ -384,65 +384,73 @@ class TestPerplexitySearchProviderResponseParsing:
 
 
 class TestPerplexitySearchProviderDateParsing:
-    """Tests for date parsing functionality."""
+    """Tests for date parsing via shared parse_iso_date utility."""
 
-    @pytest.fixture
-    def provider(self):
-        """Create provider instance for tests."""
-        return PerplexitySearchProvider(api_key="pplx-test-key")
-
-    def test_parse_date_iso_format(self, provider):
+    def test_parse_date_iso_format(self):
         """Test parsing ISO format date."""
-        result = provider._parse_date("2024-01-15T10:30:00Z")
+        from foundry_mcp.core.research.providers.shared import parse_iso_date
+
+        result = parse_iso_date("2024-01-15T10:30:00Z")
         assert result is not None
         assert result.year == 2024
         assert result.month == 1
         assert result.day == 15
 
-    def test_parse_date_simple_format(self, provider):
+    def test_parse_date_simple_format(self):
         """Test parsing simple date format."""
-        result = provider._parse_date("2024-01-15")
+        from foundry_mcp.core.research.providers.shared import parse_iso_date
+
+        result = parse_iso_date("2024-01-15")
         assert result is not None
         assert result.year == 2024
         assert result.month == 1
         assert result.day == 15
 
-    def test_parse_date_none(self, provider):
+    def test_parse_date_none(self):
         """Test parsing None returns None."""
-        assert provider._parse_date(None) is None
+        from foundry_mcp.core.research.providers.shared import parse_iso_date
 
-    def test_parse_date_empty_string(self, provider):
+        assert parse_iso_date(None) is None
+
+    def test_parse_date_empty_string(self):
         """Test parsing empty string returns None."""
-        assert provider._parse_date("") is None
+        from foundry_mcp.core.research.providers.shared import parse_iso_date
 
-    def test_parse_date_invalid_format(self, provider):
+        assert parse_iso_date("") is None
+
+    def test_parse_date_invalid_format(self):
         """Test parsing invalid format returns None."""
-        assert provider._parse_date("not-a-date") is None
+        from foundry_mcp.core.research.providers.shared import parse_iso_date
+
+        assert parse_iso_date("not-a-date") is None
 
 
 class TestPerplexitySearchProviderDomainExtraction:
-    """Tests for domain extraction functionality."""
+    """Tests for domain extraction via shared extract_domain utility."""
 
-    @pytest.fixture
-    def provider(self):
-        """Create provider instance for tests."""
-        return PerplexitySearchProvider(api_key="pplx-test-key")
-
-    def test_extract_domain_simple(self, provider):
+    def test_extract_domain_simple(self):
         """Test extracting domain from simple URL."""
-        assert provider._extract_domain("https://example.com/page") == "example.com"
+        from foundry_mcp.core.research.providers.shared import extract_domain
 
-    def test_extract_domain_with_subdomain(self, provider):
+        assert extract_domain("https://example.com/page") == "example.com"
+
+    def test_extract_domain_with_subdomain(self):
         """Test extracting domain with subdomain."""
-        assert provider._extract_domain("https://www.example.com/page") == "www.example.com"
+        from foundry_mcp.core.research.providers.shared import extract_domain
 
-    def test_extract_domain_with_port(self, provider):
+        assert extract_domain("https://www.example.com/page") == "www.example.com"
+
+    def test_extract_domain_with_port(self):
         """Test extracting domain with port."""
-        assert provider._extract_domain("https://example.com:8080/page") == "example.com:8080"
+        from foundry_mcp.core.research.providers.shared import extract_domain
 
-    def test_extract_domain_empty_url(self, provider):
+        assert extract_domain("https://example.com:8080/page") == "example.com:8080"
+
+    def test_extract_domain_empty_url(self):
         """Test extracting domain from empty URL returns None."""
-        assert provider._extract_domain("") is None
+        from foundry_mcp.core.research.providers.shared import extract_domain
+
+        assert extract_domain("") is None
 
 
 class TestPerplexitySearchProviderHealthCheck:

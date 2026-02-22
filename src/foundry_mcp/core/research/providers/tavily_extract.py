@@ -20,6 +20,8 @@ Example usage:
     sources = await provider.extract(["https://example.com/article"])
 """
 
+from __future__ import annotations
+
 import asyncio
 import ipaddress
 import logging
@@ -27,10 +29,13 @@ import os
 import re
 import socket
 from dataclasses import replace
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 from urllib.parse import urlparse
 
 import httpx
+
+if TYPE_CHECKING:
+    from foundry_mcp.core.research.providers.resilience import ErrorClassification
 
 from foundry_mcp.core.errors.search import (
     AuthenticationError,
@@ -39,7 +44,6 @@ from foundry_mcp.core.errors.search import (
 )
 from foundry_mcp.core.research.models.sources import ResearchSource, SourceType
 from foundry_mcp.core.research.providers.resilience import (
-    ErrorClassification,
     ProviderResilienceConfig,
     get_provider_config,
 )
@@ -410,7 +414,7 @@ class TavilyExtractProvider:
             return self._resilience_config
         return get_provider_config("tavily_extract")
 
-    def classify_error(self, error: Exception) -> ErrorClassification:
+    def classify_error(self, error: Exception) -> "ErrorClassification":
         """Classify an error for resilience decisions."""
         return classify_http_error(error, "tavily_extract")
 
@@ -523,10 +527,6 @@ class TavilyExtractProvider:
         )
         return await executor(make_request, timeout=self._timeout)
 
-    def _parse_retry_after(self, response: httpx.Response) -> Optional[float]:
-        """Parse Retry-After header. Delegates to shared utility."""
-        return parse_retry_after(response)
-
     def _parse_response(
         self,
         data: dict[str, Any],
@@ -582,7 +582,7 @@ class TavilyExtractProvider:
             # Extract title from result or derive from URL
             title = result.get("title", "")
             if not title:
-                title = self._extract_domain(url) or "Extracted Content"
+                title = extract_domain(url) or "Extracted Content"
             # Truncate title if too long
             if len(title) > 500:
                 title = title[:497] + "..."
@@ -614,10 +614,6 @@ class TavilyExtractProvider:
             sources.append(source)
 
         return sources
-
-    def _extract_domain(self, url: str) -> Optional[str]:
-        """Extract domain from URL. Delegates to shared utility."""
-        return extract_domain(url)
 
     async def health_check(self) -> bool:
         """Check if Tavily Extract API is accessible.

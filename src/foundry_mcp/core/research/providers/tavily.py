@@ -39,13 +39,11 @@ from foundry_mcp.core.research.providers.base import (
     SearchResult,
 )
 from foundry_mcp.core.research.providers.resilience import (
-    ErrorClassification,
     ProviderResilienceConfig,
     get_provider_config,
 )
 from foundry_mcp.core.research.providers.shared import (
     check_provider_health,
-    classify_http_error,
     create_resilience_executor,
     extract_domain,
     extract_error_message,
@@ -425,13 +423,6 @@ class TavilySearchProvider(SearchProvider):
         )
         return await executor(make_request, timeout=self._timeout)
 
-    def _parse_retry_after(self, response: httpx.Response) -> Optional[float]:
-        """Parse Retry-After header from response.
-
-        Delegates to shared utility. Retained for interface compatibility.
-        """
-        return parse_retry_after(response)
-
     def _parse_response(
         self,
         data: dict[str, Any],
@@ -487,17 +478,3 @@ class TavilySearchProvider(SearchProvider):
             self._base_url,
             test_func=lambda: self.search("test", max_results=1),
         )
-
-    def classify_error(self, error: Exception) -> ErrorClassification:
-        """Classify an error for resilience decisions.
-
-        Maps Tavily-specific errors to ErrorClassification for unified
-        retry and circuit breaker behavior.
-
-        Args:
-            error: The exception to classify
-
-        Returns:
-            ErrorClassification with retryable, trips_breaker, and error_type
-        """
-        return classify_http_error(error, "tavily")

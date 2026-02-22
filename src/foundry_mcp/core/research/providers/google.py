@@ -27,7 +27,7 @@ Example usage:
 import logging
 import os
 from dataclasses import replace
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 import httpx
 
@@ -133,6 +133,11 @@ class GoogleSearchProvider(SearchProvider):
             max_results=5,
         )
     """
+
+    ERROR_CLASSIFIERS: ClassVar[dict[int, ErrorType]] = {
+        403: ErrorType.QUOTA_EXCEEDED,
+        429: ErrorType.RATE_LIMIT,
+    }
 
     def __init__(
         self,
@@ -355,14 +360,6 @@ class GoogleSearchProvider(SearchProvider):
             self.classify_error,
         )
         return await executor(make_request, timeout=self._timeout)
-
-    def _parse_retry_after(self, response: httpx.Response) -> Optional[float]:
-        """Parse Retry-After header. Delegates to shared utility."""
-        return parse_retry_after(response)
-
-    def _parse_date(self, date_str: Optional[str]) -> Optional[Any]:
-        """Parse date string. Delegates to shared utility."""
-        return parse_iso_date(date_str)
 
     def _parse_response(
         self,

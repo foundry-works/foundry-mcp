@@ -29,6 +29,10 @@ from foundry_mcp.core.research.memory import ResearchMemory
 
 logger = logging.getLogger(__name__)
 
+# Input bounds validation constant
+# ~200k chars ≈ 50k tokens at ~4 chars/token, well within 200k-token model limits
+MAX_PROMPT_LENGTH = 200_000  # Maximum prompt length in characters
+
 
 def _estimate_prompt_tokens(prompt: str, system_prompt: str | None = None) -> int:
     """Estimate token count for a prompt using simple heuristic.
@@ -322,6 +326,19 @@ class ResearchWorkflowBase(ABC):
             WorkflowResult with response, error, or timeout metadata
         """
         effective_timeout = timeout or self.config.default_timeout
+
+        # Input bounds validation: reject oversized prompts early
+        if len(prompt) > MAX_PROMPT_LENGTH:
+            return WorkflowResult(
+                success=False,
+                content="",
+                error=(f"Prompt length {len(prompt)} exceeds maximum {MAX_PROMPT_LENGTH} characters"),
+                metadata={"phase": phase, "validation_error": "prompt_too_long"},
+            )
+
+        # Track wall-clock time for observability
+        method_start = time.monotonic()
+
         primary_provider = provider_id or self.config.default_provider
         providers_to_try = [primary_provider]
 
@@ -343,6 +360,7 @@ class ResearchWorkflowBase(ABC):
                 current_spec = ProviderSpec.parse_flexible(current_provider_id)
             except ValueError:
                 current_spec = None
+
             # Try this provider with retries
             for attempt in range(max_retries + 1):
                 start_time = time.perf_counter()
@@ -376,7 +394,7 @@ class ResearchWorkflowBase(ABC):
                         max_tokens=max_tokens,
                     )
 
-                    # Run synchronous generate in thread pool with timeout
+                    # Run synchronous generate in thread pool
                     loop = asyncio.get_running_loop()
                     result: ProviderResult = await asyncio.wait_for(
                         loop.run_in_executor(None, provider.generate, request),
@@ -404,6 +422,7 @@ class ResearchWorkflowBase(ABC):
                         break
 
                     # Success!
+                    total_elapsed_ms = (time.monotonic() - method_start) * 1000
                     return WorkflowResult(
                         success=True,
                         content=result.content,
@@ -418,19 +437,22 @@ class ResearchWorkflowBase(ABC):
                             "phase": phase,
                             "retries": total_retries,
                             "providers_tried": providers_tried,
+                            "wall_clock_ms": total_elapsed_ms,
+                            "configured_timeout_s": effective_timeout,
                         },
                     )
 
                 except ProviderTimeoutError as exc:
                     duration_ms = (time.perf_counter() - start_time) * 1000
-                    last_error = str(exc) or f"Timed out after {effective_timeout}s"
+                    last_error = str(exc) or f"Timed out after {effective_timeout:.1f}s"
                     saw_timeout = True
                     logger.warning(
-                        "%s phase: Provider %s timed out after %.1fs (attempt %d)",
+                        "%s phase: Provider %s timed out after %.1fs (attempt %d/%d)",
                         phase or "unknown",
                         current_provider_id,
-                        effective_timeout,
+                        duration_ms / 1000,
                         attempt + 1,
+                        max_retries + 1,
                     )
                     # Retry on timeout
                     if attempt < max_retries:
@@ -442,14 +464,15 @@ class ResearchWorkflowBase(ABC):
 
                 except asyncio.TimeoutError:
                     duration_ms = (time.perf_counter() - start_time) * 1000
-                    last_error = f"Timed out after {effective_timeout}s"
+                    last_error = f"Timed out after {effective_timeout:.1f}s"
                     saw_timeout = True
                     logger.warning(
-                        "%s phase: Provider %s timed out after %.1fs (attempt %d)",
+                        "%s phase: Provider %s timed out after %.1fs (attempt %d/%d)",
                         phase or "unknown",
                         current_provider_id,
-                        effective_timeout,
+                        duration_ms / 1000,
                         attempt + 1,
+                        max_retries + 1,
                     )
                     # Retry on timeout
                     if attempt < max_retries:
@@ -505,10 +528,14 @@ class ResearchWorkflowBase(ABC):
                     break
 
         # All providers exhausted
+        total_elapsed_ms = (time.monotonic() - method_start) * 1000
         logger.error(
-            "%s phase: All providers exhausted after %d total attempts. Providers tried: %s. Last error: %s",
+            "%s phase: All providers exhausted after %d total attempts "
+            "(%.1fs wall-clock of %.1fs budget). Providers tried: %s. Last error: %s",
             phase or "unknown",
             len(providers_tried),
+            total_elapsed_ms / 1000,
+            effective_timeout,
             providers_tried,
             last_error,
         )
@@ -523,6 +550,8 @@ class ResearchWorkflowBase(ABC):
                 "timeout": timed_out,
                 "retries": total_retries,
                 "providers_tried": providers_tried,
+                "wall_clock_ms": total_elapsed_ms,
+                "configured_timeout_s": effective_timeout,
             },
         )
 

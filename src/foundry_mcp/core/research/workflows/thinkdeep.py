@@ -4,8 +4,11 @@ Provides deep investigation capabilities with hypothesis tracking,
 evidence accumulation, and confidence progression.
 """
 
+import json
 import logging
-from typing import Any, Optional
+from typing import Any, Literal, Optional
+
+from pydantic import BaseModel, Field
 
 from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.research.memory import ResearchMemory
@@ -17,6 +20,33 @@ from foundry_mcp.core.research.models.thinkdeep import (
 from foundry_mcp.core.research.workflows.base import ResearchWorkflowBase, WorkflowResult
 
 logger = logging.getLogger(__name__)
+
+
+# --- Structured output models for LLM response parsing ---
+
+
+class EvidenceItem(BaseModel):
+    """A single piece of evidence from the LLM response."""
+
+    text: str = Field(..., description="Description of the evidence")
+    strength: Literal["strong", "moderate", "weak"] = Field(default="moderate", description="Strength of this evidence")
+    supporting: bool = Field(default=True, description="True if supporting, False if contradicting")
+
+
+class HypothesisUpdate(BaseModel):
+    """An update to an existing hypothesis or a new hypothesis."""
+
+    statement: str = Field(..., description="The hypothesis statement")
+    evidence: list[EvidenceItem] = Field(default_factory=list)
+    is_new: bool = Field(default=False, description="True if this is a newly proposed hypothesis")
+
+
+class ThinkDeepStructuredResponse(BaseModel):
+    """Structured LLM response for ThinkDeep investigation steps."""
+
+    hypotheses: list[HypothesisUpdate] = Field(default_factory=list)
+    next_questions: list[str] = Field(default_factory=list, description="Suggested next investigation questions")
+    key_insights: list[str] = Field(default_factory=list, description="Key insights from this step")
 
 
 class ThinkDeepWorkflow(ResearchWorkflowBase):
@@ -219,11 +249,12 @@ What additional evidence or questions should we explore to increase confidence i
         step.model_used = result.model_used
 
         # Parse and update hypotheses from response
-        self._update_hypotheses_from_response(state, step, result.content)
+        parse_method = self._update_hypotheses_from_response(state, step, result.content)
 
         # Increment depth
         state.current_depth += 1
 
+        result.metadata["parse_method"] = parse_method
         return result
 
     def _build_investigation_system_prompt(self) -> str:
@@ -240,25 +271,201 @@ When analyzing topics:
 3. Update confidence levels based on evidence strength
 4. Suggest next questions to increase understanding
 
-For each response, structure your findings as:
-- Key insights discovered
-- Evidence for/against existing hypotheses
-- New hypotheses to consider
-- Recommended next steps
+Your response MUST be valid JSON with this exact structure:
+{
+    "hypotheses": [
+        {
+            "statement": "The hypothesis statement",
+            "evidence": [
+                {
+                    "text": "Description of the evidence",
+                    "strength": "strong|moderate|weak",
+                    "supporting": true
+                }
+            ],
+            "is_new": true
+        }
+    ],
+    "next_questions": ["Question to explore next"],
+    "key_insights": ["Key insight discovered"]
+}
 
-Be thorough but concise. Focus on advancing understanding systematically."""
+Guidelines:
+- For new hypotheses, set "is_new": true
+- For existing hypotheses being updated with evidence, set "is_new": false and restate the hypothesis
+- "supporting": true means evidence supports the hypothesis, false means it contradicts
+- "strength": "strong" = highly conclusive, "moderate" = suggestive, "weak" = tangential
+- Include 1-3 next questions to guide further investigation
+- Include 1-3 key insights from this step
+
+IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
     def _update_hypotheses_from_response(
         self,
         state: ThinkDeepState,
         step: InvestigationStep,
         response: str,
-    ) -> None:
+    ) -> str:
         """Parse response and update hypotheses.
 
-        This is a simplified implementation that looks for hypothesis-related
-        keywords. A more sophisticated version could use structured output
-        or NLP to extract hypotheses more accurately.
+        Attempts JSON structured output first, falls back to keyword matching.
+
+        Args:
+            state: Investigation state
+            step: Current investigation step
+            response: Provider response
+
+        Returns:
+            Parse method used: "json" or "fallback_keyword"
+        """
+        parsed = self._try_parse_structured_response(response)
+        if parsed is not None:
+            self._apply_structured_response(state, step, parsed)
+            return "json"
+
+        logger.warning("ThinkDeep: JSON parse failed, falling back to keyword extraction")
+        self._apply_keyword_fallback(state, step, response)
+        return "fallback_keyword"
+
+    def _try_parse_structured_response(self, response: str) -> ThinkDeepStructuredResponse | None:
+        """Attempt to parse a structured JSON response.
+
+        Args:
+            response: Raw LLM response
+
+        Returns:
+            Parsed response or None if parsing fails
+        """
+        # Try to extract JSON from the response (may be wrapped in markdown)
+        json_str = self._extract_json(response)
+        if json_str is None:
+            return None
+
+        try:
+            data = json.loads(json_str)
+            return ThinkDeepStructuredResponse.model_validate(data)
+        except (json.JSONDecodeError, Exception) as exc:
+            logger.debug("ThinkDeep structured parse failed: %s", exc)
+            return None
+
+    @staticmethod
+    def _extract_json(content: str) -> str | None:
+        """Extract JSON object from content that may contain other text.
+
+        Args:
+            content: Raw content that may contain JSON
+
+        Returns:
+            Extracted JSON string or None
+        """
+        import re
+
+        # Try code blocks first
+        for match in re.findall(r"```(?:json)?\s*([\s\S]*?)```", content):
+            match = match.strip()
+            if match.startswith("{"):
+                return match
+
+        # Try raw JSON object
+        brace_start = content.find("{")
+        if brace_start == -1:
+            return None
+
+        depth = 0
+        for i, char in enumerate(content[brace_start:], brace_start):
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    return content[brace_start : i + 1]
+        return None
+
+    def _apply_structured_response(
+        self,
+        state: ThinkDeepState,
+        step: InvestigationStep,
+        parsed: ThinkDeepStructuredResponse,
+    ) -> None:
+        """Apply a successfully parsed structured response to state.
+
+        Args:
+            state: Investigation state
+            step: Current investigation step
+            parsed: Parsed structured response
+        """
+        _STRENGTH_TO_CONFIDENCE: dict[str, ConfidenceLevel] = {
+            "strong": ConfidenceLevel.MEDIUM,
+            "moderate": ConfidenceLevel.LOW,
+            "weak": ConfidenceLevel.SPECULATION,
+        }
+
+        for hyp_update in parsed.hypotheses:
+            if hyp_update.is_new:
+                # Create new hypothesis
+                hyp = state.add_hypothesis(
+                    statement=hyp_update.statement,
+                    confidence=ConfidenceLevel.SPECULATION,
+                )
+                step.hypotheses_generated.append(hyp.id)
+
+                # Apply evidence to new hypothesis
+                for ev in hyp_update.evidence:
+                    hyp.add_evidence(f"Step {step.id}: {ev.text}", supporting=ev.supporting)
+
+                # Set confidence based on strongest supporting evidence
+                supporting_evidence = [e for e in hyp_update.evidence if e.supporting]
+                if supporting_evidence:
+                    best_strength = min(
+                        supporting_evidence,
+                        key=lambda e: ["strong", "moderate", "weak"].index(e.strength),
+                    ).strength
+                    hyp.update_confidence(_STRENGTH_TO_CONFIDENCE.get(best_strength, ConfidenceLevel.SPECULATION))
+            else:
+                # Update existing hypothesis — match by statement similarity
+                matched_hyp = self._find_matching_hypothesis(state, hyp_update.statement)
+                if matched_hyp is None:
+                    # No match found; treat as new
+                    matched_hyp = state.add_hypothesis(
+                        statement=hyp_update.statement,
+                        confidence=ConfidenceLevel.SPECULATION,
+                    )
+                    step.hypotheses_generated.append(matched_hyp.id)
+
+                for ev in hyp_update.evidence:
+                    matched_hyp.add_evidence(f"Step {step.id}: {ev.text}", supporting=ev.supporting)
+                    step.hypotheses_updated.append(matched_hyp.id)
+
+                # Update confidence based on evidence strength
+                supporting = [e for e in hyp_update.evidence if e.supporting]
+                contradicting = [e for e in hyp_update.evidence if not e.supporting]
+                if supporting and not contradicting:
+                    best = min(supporting, key=lambda e: ["strong", "moderate", "weak"].index(e.strength)).strength
+                    target = _STRENGTH_TO_CONFIDENCE.get(best, ConfidenceLevel.SPECULATION)
+                    # Only increase confidence
+                    confidence_order = list(ConfidenceLevel)
+                    if confidence_order.index(target) > confidence_order.index(matched_hyp.confidence):
+                        matched_hyp.update_confidence(target)
+
+    @staticmethod
+    def _find_matching_hypothesis(state: ThinkDeepState, statement: str) -> Any:
+        """Find a hypothesis matching the given statement.
+
+        Uses simple substring matching. Returns the first match or None.
+        """
+        statement_lower = statement.lower()
+        for hyp in state.hypotheses:
+            if hyp.statement.lower() in statement_lower or statement_lower in hyp.statement.lower():
+                return hyp
+        return None
+
+    def _apply_keyword_fallback(
+        self,
+        state: ThinkDeepState,
+        step: InvestigationStep,
+        response: str,
+    ) -> None:
+        """Original keyword-based hypothesis extraction (fallback).
 
         Args:
             state: Investigation state
@@ -269,9 +476,7 @@ Be thorough but concise. Focus on advancing understanding systematically."""
 
         # Simple heuristic: if this is early in investigation, look for new hypotheses
         if state.current_depth < 2:
-            # Extract potential hypotheses (simplified)
             if "hypothesis" in response_lower or "suggests that" in response_lower:
-                # For now, create a generic hypothesis if none exist
                 if not state.hypotheses:
                     hyp = state.add_hypothesis(
                         statement=f"Initial investigation of: {state.topic}",
@@ -281,18 +486,15 @@ Be thorough but concise. Focus on advancing understanding systematically."""
 
         # Update existing hypotheses based on evidence language
         for hyp in state.hypotheses:
-            # Look for supporting evidence
             if any(phrase in response_lower for phrase in ["supports", "confirms", "evidence for", "consistent with"]):
                 hyp.add_evidence(f"Step {step.id}: {response[:200]}...", supporting=True)
                 step.hypotheses_updated.append(hyp.id)
 
-                # Update confidence if strong support
                 if hyp.confidence == ConfidenceLevel.SPECULATION:
                     hyp.update_confidence(ConfidenceLevel.LOW)
                 elif hyp.confidence == ConfidenceLevel.LOW:
                     hyp.update_confidence(ConfidenceLevel.MEDIUM)
 
-            # Look for contradicting evidence
             if any(
                 phrase in response_lower for phrase in ["contradicts", "refutes", "evidence against", "inconsistent"]
             ):

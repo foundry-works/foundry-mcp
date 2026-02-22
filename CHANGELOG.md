@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-02-22
+
+### Added
+
+- **Structured JSON output for research parsing** (Phase 1): ThinkDeep, Ideate, and Deep Research workflows now request JSON-schema-constrained output from LLMs. Pydantic models (`HypothesisUpdate`, `EvidenceItem`, `IdeaOutput`, `ClusterOutput`, `ScoreOutput`, `AnalysisFinding`) validate responses. Graceful fallback to legacy keyword/regex parsing on JSON failure with warning logs and `parse_method` metadata tracking.
+- **Input bounds validation** (Phase 2): All research workflows now enforce `MAX_PROMPT_LENGTH` (50k chars), `MAX_ITERATIONS` (10), `MAX_SUB_QUERIES` (20), `MAX_SOURCES_PER_QUERY` (50), and `MAX_CONCURRENT_PROVIDERS` (10). Violations return clear error envelopes.
+- **Cancellation support for deep research** (Phase 3): `cancel(session_id)` method with `threading.Event` flag checked at phase boundaries. Sessions receive `CANCELLED` status with persisted phase state.
+- **SIGTERM graceful shutdown** (Phase 3): Background task manager registers a SIGTERM handler that cancels all active deep research sessions, persists state, and sets `INTERRUPTED` status (distinct from `CANCELLED` and `FAILED`).
+- **Provider error classifier registry** (Phase 4): `SearchProvider` subclasses declare `ERROR_CLASSIFIERS` class variable for status-code-to-error-type mapping. Google (403-quota, 429), Perplexity (429), and SemanticScholar (504) use the registry; base `classify_error()` checks registry before generic fallback.
+- **Shared provider utilities** (Phase 4): Consolidated `parse_retry_after()`, `extract_domain()`, `parse_iso_date()`, `extract_status_code()`, and `classify_http_error()` into `providers/shared.py`, eliminating ~250 lines of duplicated code across 5 providers.
+
 ## [0.14.5] - 2026-02-22
 
 ### Changed
