@@ -105,10 +105,7 @@ class ProviderSpec:
             )
 
         # Invalid format
-        raise ValueError(
-            f"Invalid provider spec '{spec}'. Expected format: "
-            "[cli]transport[:backend/model|:model]"
-        )
+        raise ValueError(f"Invalid provider spec '{spec}'. Expected format: [cli]transport[:backend/model|:model]")
 
     @classmethod
     def parse_flexible(cls, spec: str) -> "ProviderSpec":

@@ -221,12 +221,8 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
     if result.get("success") and not dry_run and specs_dir:
         result_data = result.get("data", {})
         plan_enhanced = bool(plan_content and result_data.get("plan_enhanced"))
-        review_type_label = (
-            "spec-vs-plan (plan-enhanced full review)" if plan_enhanced else "standalone spec review"
-        )
-        footer_label = (
-            "Foundry MCP Spec-vs-Plan Review" if plan_enhanced else "Foundry MCP Spec Review"
-        )
+        review_type_label = "spec-vs-plan (plan-enhanced full review)" if plan_enhanced else "standalone spec review"
+        footer_label = "Foundry MCP Spec-vs-Plan Review" if plan_enhanced else "Foundry MCP Spec Review"
         try:
             spec_reviews_dir = Path(specs_dir) / ".spec-reviews"
             spec_reviews_dir.mkdir(parents=True, exist_ok=True)

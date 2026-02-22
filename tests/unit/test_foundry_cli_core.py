@@ -482,6 +482,7 @@ class TestReviewCommands:
             assert "status" in tool
             assert "name" in tool
 
+
 class TestModifyCommands:
     """Tests for foundrymodify commands."""
 
