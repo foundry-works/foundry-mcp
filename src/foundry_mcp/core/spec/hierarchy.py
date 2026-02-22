@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from foundry_mcp.core.spec._constants import (
     CATEGORIES,
+    COMPLEXITY_LEVELS,
     VERIFICATION_TYPES,
 )
 from foundry_mcp.core.spec.io import (
@@ -569,6 +570,17 @@ def add_phase_bulk(
                     return (
                         None,
                         f"Task '{task_title}' missing file_path for category '{normalized_category}'",
+                    )
+
+            # Apply complexity if provided
+            complexity = task_def.get("complexity")
+            if complexity is not None:
+                if isinstance(complexity, str) and complexity.strip().lower() in COMPLEXITY_LEVELS:
+                    task_metadata["complexity"] = complexity.strip().lower()
+                else:
+                    return (
+                        None,
+                        f"Task '{task_title}' has invalid complexity '{complexity}'. Must be one of: {', '.join(COMPLEXITY_LEVELS)}",
                     )
 
         # Apply verification_type for verify tasks

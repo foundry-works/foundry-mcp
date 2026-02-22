@@ -13,6 +13,9 @@ TEMPLATE_DESCRIPTIONS = {
 }
 CATEGORIES = ("investigation", "implementation", "refactoring", "decision", "research")
 
+# Valid complexity levels for task nodes
+COMPLEXITY_LEVELS = ("low", "medium", "high")
+
 # Valid verification types for verify nodes
 # - run-tests: Automated tests via mcp__foundry-mcp__test-run
 # - fidelity: Implementation-vs-spec comparison via mcp__foundry-mcp__spec-review-fidelity

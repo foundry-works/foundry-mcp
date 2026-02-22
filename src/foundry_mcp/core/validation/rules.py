@@ -12,6 +12,7 @@ from foundry_mcp.core.security import (
     MAX_ARRAY_LENGTH,
     MAX_NESTED_DEPTH,
 )
+from foundry_mcp.core.spec._constants import COMPLEXITY_LEVELS
 from foundry_mcp.core.validation.constants import (
     VALID_NODE_TYPES,
     VALID_STATUSES,
@@ -235,6 +236,73 @@ def _validate_structure(spec_data: Dict[str, Any], result: ValidationResult) -> 
                 auto_fixable=False,
             )
         )
+
+    # Warn if success_criteria or constraints are empty
+    if isinstance(metadata, dict):
+        success_criteria = metadata.get("success_criteria")
+        if isinstance(success_criteria, list) and len(success_criteria) == 0:
+            result.diagnostics.append(
+                Diagnostic(
+                    code="EMPTY_SUCCESS_CRITERIA",
+                    message="Spec metadata.success_criteria is empty — consider defining measurable success criteria",
+                    severity="warning",
+                    category="metadata",
+                    location="metadata.success_criteria",
+                    suggested_fix="Add at least one success criterion",
+                )
+            )
+
+        constraints = metadata.get("constraints")
+        if isinstance(constraints, list) and len(constraints) == 0:
+            result.diagnostics.append(
+                Diagnostic(
+                    code="EMPTY_CONSTRAINTS",
+                    message="Spec metadata.constraints is empty — consider documenting known constraints",
+                    severity="warning",
+                    category="metadata",
+                    location="metadata.constraints",
+                    suggested_fix="Add constraints or remove the empty array if none apply",
+                )
+            )
+
+        # Validate risks structure
+        risks = metadata.get("risks")
+        if isinstance(risks, list):
+            for idx, risk in enumerate(risks):
+                if not isinstance(risk, dict):
+                    result.diagnostics.append(
+                        Diagnostic(
+                            code="INVALID_RISK_ENTRY",
+                            message=f"Risk at index {idx} must be an object with a 'description' field",
+                            severity="error",
+                            category="metadata",
+                            location=f"metadata.risks[{idx}]",
+                        )
+                    )
+                    continue
+                if not risk.get("description") or not isinstance(risk["description"], str) or not risk["description"].strip():
+                    result.diagnostics.append(
+                        Diagnostic(
+                            code="MISSING_RISK_DESCRIPTION",
+                            message=f"Risk at index {idx} missing required 'description' field",
+                            severity="error",
+                            category="metadata",
+                            location=f"metadata.risks[{idx}]",
+                        )
+                    )
+                valid_levels = ("low", "medium", "high")
+                for field in ("likelihood", "impact"):
+                    val = risk.get(field)
+                    if val is not None and (not isinstance(val, str) or val.strip().lower() not in valid_levels):
+                        result.diagnostics.append(
+                            Diagnostic(
+                                code="INVALID_RISK_FIELD",
+                                message=f"Risk at index {idx} has invalid '{field}' value '{val}'. Must be one of: {', '.join(valid_levels)}",
+                                severity="error",
+                                category="metadata",
+                                location=f"metadata.risks[{idx}].{field}",
+                            )
+                        )
 
     # Check hierarchy is dict
     hierarchy = spec_data.get("hierarchy")
@@ -867,3 +935,30 @@ def _validate_metadata(
                             auto_fixable=False,
                         )
                     )
+
+            # Validate complexity if present
+            complexity = metadata.get("complexity")
+            if complexity is not None:
+                if not isinstance(complexity, str) or complexity.strip().lower() not in COMPLEXITY_LEVELS:
+                    result.diagnostics.append(
+                        Diagnostic(
+                            code="INVALID_COMPLEXITY",
+                            message=f"Task node '{node_id}' has invalid complexity '{complexity}'. Must be one of: {', '.join(COMPLEXITY_LEVELS)}",
+                            severity="error",
+                            category="metadata",
+                            location=node_id,
+                            suggested_fix=f"Set complexity to one of: {', '.join(COMPLEXITY_LEVELS)}",
+                            auto_fixable=False,
+                        )
+                    )
+            else:
+                result.diagnostics.append(
+                    Diagnostic(
+                        code="MISSING_COMPLEXITY",
+                        message=f"Task node '{node_id}' missing metadata.complexity",
+                        severity="warning",
+                        category="metadata",
+                        location=node_id,
+                        suggested_fix=f"Set metadata.complexity to one of: {', '.join(COMPLEXITY_LEVELS)}",
+                    )
+                )

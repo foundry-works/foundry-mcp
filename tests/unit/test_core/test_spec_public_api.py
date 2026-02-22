@@ -42,13 +42,17 @@ def _is_defined_in_module(mod: types.ModuleType, name: str) -> bool:
 # Phase 1 baseline: every public symbol in foundry_mcp.core.spec
 # ---------------------------------------------------------------------------
 
-# Functions (33)
+# Functions (40)
 BASELINE_FUNCTIONS = sorted(
     [
         "add_assumption",
+        "add_constraint",
         "add_phase",
         "add_phase_bulk",
+        "add_question",
         "add_revision",
+        "add_risk",
+        "add_success_criterion",
         "apply_phase_template",
         "backup_spec",
         "check_spec_completeness",
@@ -65,8 +69,12 @@ BASELINE_FUNCTIONS = sorted(
         "get_phase_template_structure",
         "get_template_structure",
         "list_assumptions",
+        "list_constraints",
+        "list_questions",
+        "list_risks",
         "list_spec_backups",
         "list_specs",
+        "list_success_criteria",
         "load_spec",
         "move_phase",
         "recalculate_actual_hours",
@@ -80,10 +88,11 @@ BASELINE_FUNCTIONS = sorted(
     ]
 )
 
-# Constants (10)
+# Constants (11)
 BASELINE_CONSTANTS = sorted(
     [
         "CATEGORIES",
+        "COMPLEXITY_LEVELS",
         "DEFAULT_BACKUP_PAGE_SIZE",
         "DEFAULT_DIFF_MAX_RESULTS",
         "DEFAULT_MAX_BACKUPS",
@@ -247,9 +256,9 @@ class TestSpecModulePublicAPI:
 
     def test_baseline_counts(self):
         """Baseline has expected counts."""
-        assert len(BASELINE_FUNCTIONS) == 32
-        assert len(BASELINE_CONSTANTS) == 10
-        assert len(BASELINE_ALL) == 42
+        assert len(BASELINE_FUNCTIONS) == 40
+        assert len(BASELINE_CONSTANTS) == 11
+        assert len(BASELINE_ALL) == 51
 
 
 class TestCoreReexports:

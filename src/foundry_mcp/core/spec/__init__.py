@@ -15,6 +15,7 @@ Sub-modules:
 
 from foundry_mcp.core.spec._constants import (
     CATEGORIES,
+    COMPLEXITY_LEVELS,
     DEFAULT_BACKUP_PAGE_SIZE,
     DEFAULT_DIFF_MAX_RESULTS,
     DEFAULT_MAX_BACKUPS,
@@ -65,6 +66,11 @@ from foundry_mcp.core.spec.templates import (
     # Assumptions and revisions
     add_assumption,
     add_revision,
+    # Constraints, risks, questions, success criteria
+    add_constraint,
+    add_question,
+    add_risk,
+    add_success_criterion,
     # Phase template operations
     apply_phase_template,
     # Spec creation
@@ -73,6 +79,10 @@ from foundry_mcp.core.spec.templates import (
     get_phase_template_structure,
     get_template_structure,
     list_assumptions,
+    list_constraints,
+    list_questions,
+    list_risks,
+    list_success_criteria,
     # Frontmatter and metadata
     update_frontmatter,
 )
@@ -80,6 +90,7 @@ from foundry_mcp.core.spec.templates import (
 __all__ = [
     # Constants
     "CATEGORIES",
+    "COMPLEXITY_LEVELS",
     "DEFAULT_BACKUP_PAGE_SIZE",
     "DEFAULT_DIFF_MAX_RESULTS",
     "DEFAULT_MAX_BACKUPS",
@@ -123,6 +134,15 @@ __all__ = [
     "add_assumption",
     "add_revision",
     "list_assumptions",
+    # Constraints, risks, questions, success criteria
+    "add_constraint",
+    "add_question",
+    "add_risk",
+    "add_success_criterion",
+    "list_constraints",
+    "list_questions",
+    "list_risks",
+    "list_success_criteria",
     # Analysis and validation
     "check_spec_completeness",
     "detect_duplicate_tasks",

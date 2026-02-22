@@ -362,6 +362,10 @@ def generate_spec_data(
             "mission": mission.strip() if isinstance(mission, str) else "",
             "objectives": [],
             "assumptions": [],
+            "success_criteria": [],
+            "constraints": [],
+            "risks": [],
+            "open_questions": [],
         },
         "progress_percentage": 0,
         "status": "pending",
@@ -705,6 +709,420 @@ def list_assumptions(
     }, None
 
 
+def add_constraint(
+    spec_id: str,
+    text: str,
+    specs_dir=None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Add a constraint to a specification's constraints array.
+
+    Args:
+        spec_id: Specification ID to add constraint to.
+        text: Constraint text/description.
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+    """
+    if not text or not text.strip():
+        return None, "Constraint text is required"
+
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+    if specs_dir is None:
+        return None, "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR."
+
+    spec_path = find_spec_file(spec_id, specs_dir)
+    if spec_path is None:
+        return None, f"Specification '{spec_id}' not found"
+
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, f"Failed to load specification '{spec_id}'"
+
+    if "metadata" not in spec_data:
+        spec_data["metadata"] = {}
+    if "constraints" not in spec_data["metadata"]:
+        spec_data["metadata"]["constraints"] = []
+
+    constraints = spec_data["metadata"]["constraints"]
+    constraint_text = text.strip()
+
+    if constraint_text in constraints:
+        return None, f"Constraint already exists: {constraint_text[:50]}..."
+
+    constraints.append(constraint_text)
+
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    spec_data["last_updated"] = now
+
+    success = save_spec(spec_id, spec_data, specs_dir)
+    if not success:
+        return None, "Failed to save specification"
+
+    return {
+        "spec_id": spec_id,
+        "text": constraint_text,
+        "index": len(constraints),
+    }, None
+
+
+def add_risk(
+    spec_id: str,
+    description: str,
+    likelihood: Optional[str] = None,
+    impact: Optional[str] = None,
+    mitigation: Optional[str] = None,
+    specs_dir=None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Add a risk to a specification's risks array.
+
+    Args:
+        spec_id: Specification ID to add risk to.
+        description: Risk description (required).
+        likelihood: Risk likelihood (low, medium, high). Optional.
+        impact: Risk impact (low, medium, high). Optional.
+        mitigation: Mitigation strategy. Optional.
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+    """
+    if not description or not description.strip():
+        return None, "Risk description is required"
+
+    valid_levels = ("low", "medium", "high")
+    if likelihood and likelihood.strip().lower() not in valid_levels:
+        return None, f"Invalid likelihood '{likelihood}'. Must be one of: {', '.join(valid_levels)}"
+    if impact and impact.strip().lower() not in valid_levels:
+        return None, f"Invalid impact '{impact}'. Must be one of: {', '.join(valid_levels)}"
+
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+    if specs_dir is None:
+        return None, "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR."
+
+    spec_path = find_spec_file(spec_id, specs_dir)
+    if spec_path is None:
+        return None, f"Specification '{spec_id}' not found"
+
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, f"Failed to load specification '{spec_id}'"
+
+    if "metadata" not in spec_data:
+        spec_data["metadata"] = {}
+    if "risks" not in spec_data["metadata"]:
+        spec_data["metadata"]["risks"] = []
+
+    risk_entry: Dict[str, Any] = {"description": description.strip()}
+    if likelihood:
+        risk_entry["likelihood"] = likelihood.strip().lower()
+    if impact:
+        risk_entry["impact"] = impact.strip().lower()
+    if mitigation:
+        risk_entry["mitigation"] = mitigation.strip()
+
+    spec_data["metadata"]["risks"].append(risk_entry)
+
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    spec_data["last_updated"] = now
+
+    success = save_spec(spec_id, spec_data, specs_dir)
+    if not success:
+        return None, "Failed to save specification"
+
+    return {
+        "spec_id": spec_id,
+        "risk": risk_entry,
+        "index": len(spec_data["metadata"]["risks"]),
+    }, None
+
+
+def add_question(
+    spec_id: str,
+    text: str,
+    specs_dir=None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Add an open question to a specification's open_questions array.
+
+    Args:
+        spec_id: Specification ID to add question to.
+        text: Question text.
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+    """
+    if not text or not text.strip():
+        return None, "Question text is required"
+
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+    if specs_dir is None:
+        return None, "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR."
+
+    spec_path = find_spec_file(spec_id, specs_dir)
+    if spec_path is None:
+        return None, f"Specification '{spec_id}' not found"
+
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, f"Failed to load specification '{spec_id}'"
+
+    if "metadata" not in spec_data:
+        spec_data["metadata"] = {}
+    if "open_questions" not in spec_data["metadata"]:
+        spec_data["metadata"]["open_questions"] = []
+
+    questions = spec_data["metadata"]["open_questions"]
+    question_text = text.strip()
+
+    if question_text in questions:
+        return None, f"Question already exists: {question_text[:50]}..."
+
+    questions.append(question_text)
+
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    spec_data["last_updated"] = now
+
+    success = save_spec(spec_id, spec_data, specs_dir)
+    if not success:
+        return None, "Failed to save specification"
+
+    return {
+        "spec_id": spec_id,
+        "text": question_text,
+        "index": len(questions),
+    }, None
+
+
+def add_success_criterion(
+    spec_id: str,
+    text: str,
+    specs_dir=None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Add a success criterion to a specification's success_criteria array.
+
+    Args:
+        spec_id: Specification ID to add success criterion to.
+        text: Success criterion text.
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+    """
+    if not text or not text.strip():
+        return None, "Success criterion text is required"
+
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+    if specs_dir is None:
+        return None, "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR."
+
+    spec_path = find_spec_file(spec_id, specs_dir)
+    if spec_path is None:
+        return None, f"Specification '{spec_id}' not found"
+
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, f"Failed to load specification '{spec_id}'"
+
+    if "metadata" not in spec_data:
+        spec_data["metadata"] = {}
+    if "success_criteria" not in spec_data["metadata"]:
+        spec_data["metadata"]["success_criteria"] = []
+
+    criteria = spec_data["metadata"]["success_criteria"]
+    criterion_text = text.strip()
+
+    if criterion_text in criteria:
+        return None, f"Success criterion already exists: {criterion_text[:50]}..."
+
+    criteria.append(criterion_text)
+
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    spec_data["last_updated"] = now
+
+    success = save_spec(spec_id, spec_data, specs_dir)
+    if not success:
+        return None, "Failed to save specification"
+
+    return {
+        "spec_id": spec_id,
+        "text": criterion_text,
+        "index": len(criteria),
+    }, None
+
+
+def list_constraints(
+    spec_id: str,
+    specs_dir=None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    List constraints from a specification.
+
+    Args:
+        spec_id: Specification ID to list constraints from.
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+    """
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+    if specs_dir is None:
+        return None, "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR."
+
+    spec_path = find_spec_file(spec_id, specs_dir)
+    if spec_path is None:
+        return None, f"Specification '{spec_id}' not found"
+
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, f"Failed to load specification '{spec_id}'"
+
+    constraints = spec_data.get("metadata", {}).get("constraints", [])
+    constraint_list = [
+        {"id": f"c-{i}", "text": c, "index": i}
+        for i, c in enumerate(constraints, 1)
+        if isinstance(c, str)
+    ]
+
+    return {
+        "spec_id": spec_id,
+        "constraints": constraint_list,
+        "total_count": len(constraint_list),
+    }, None
+
+
+def list_risks(
+    spec_id: str,
+    specs_dir=None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    List risks from a specification.
+
+    Args:
+        spec_id: Specification ID to list risks from.
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+    """
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+    if specs_dir is None:
+        return None, "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR."
+
+    spec_path = find_spec_file(spec_id, specs_dir)
+    if spec_path is None:
+        return None, f"Specification '{spec_id}' not found"
+
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, f"Failed to load specification '{spec_id}'"
+
+    risks = spec_data.get("metadata", {}).get("risks", [])
+    risk_list = [
+        {"id": f"r-{i}", "index": i, **r}
+        for i, r in enumerate(risks, 1)
+        if isinstance(r, dict) and r.get("description")
+    ]
+
+    return {
+        "spec_id": spec_id,
+        "risks": risk_list,
+        "total_count": len(risk_list),
+    }, None
+
+
+def list_questions(
+    spec_id: str,
+    specs_dir=None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    List open questions from a specification.
+
+    Args:
+        spec_id: Specification ID to list questions from.
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+    """
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+    if specs_dir is None:
+        return None, "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR."
+
+    spec_path = find_spec_file(spec_id, specs_dir)
+    if spec_path is None:
+        return None, f"Specification '{spec_id}' not found"
+
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, f"Failed to load specification '{spec_id}'"
+
+    questions = spec_data.get("metadata", {}).get("open_questions", [])
+    question_list = [
+        {"id": f"q-{i}", "text": q, "index": i}
+        for i, q in enumerate(questions, 1)
+        if isinstance(q, str)
+    ]
+
+    return {
+        "spec_id": spec_id,
+        "questions": question_list,
+        "total_count": len(question_list),
+    }, None
+
+
+def list_success_criteria(
+    spec_id: str,
+    specs_dir=None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    List success criteria from a specification.
+
+    Args:
+        spec_id: Specification ID to list success criteria from.
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+    """
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+    if specs_dir is None:
+        return None, "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR."
+
+    spec_path = find_spec_file(spec_id, specs_dir)
+    if spec_path is None:
+        return None, f"Specification '{spec_id}' not found"
+
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, f"Failed to load specification '{spec_id}'"
+
+    criteria = spec_data.get("metadata", {}).get("success_criteria", [])
+    criteria_list = [
+        {"id": f"sc-{i}", "text": c, "index": i}
+        for i, c in enumerate(criteria, 1)
+        if isinstance(c, str)
+    ]
+
+    return {
+        "spec_id": spec_id,
+        "success_criteria": criteria_list,
+        "total_count": len(criteria_list),
+    }, None
+
+
 def update_frontmatter(
     spec_id: str,
     key: str,
@@ -736,10 +1154,18 @@ def update_frontmatter(
     key = key.strip()
 
     # Block array fields that have dedicated functions
-    if key in ("assumptions", "revision_history"):
+    blocked_array_fields = {
+        "assumptions": "add_assumption",
+        "revision_history": "add_revision",
+        "success_criteria": "add_success_criterion",
+        "constraints": "add_constraint",
+        "risks": "add_risk",
+        "open_questions": "add_question",
+    }
+    if key in blocked_array_fields:
         return (
             None,
-            f"Use dedicated function for '{key}' (add_assumption or add_revision)",
+            f"Use dedicated function for '{key}' ({blocked_array_fields[key]})",
         )
 
     # Validate value is not None (but allow empty string, 0, False, etc.)
