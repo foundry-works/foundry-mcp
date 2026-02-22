@@ -295,6 +295,10 @@ class ResearchSource(BaseModel):
         default=None,
         description="ID of the SubQuery that discovered this source",
     )
+    citation_number: Optional[int] = Field(
+        default=None,
+        description="Stable 1-indexed citation number assigned when the source enters state",
+    )
     discovered_at: datetime = Field(default_factory=datetime.utcnow)
     metadata: dict[str, Any] = Field(default_factory=dict)
 

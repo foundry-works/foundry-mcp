@@ -298,6 +298,24 @@ class DeepResearchState(BaseModel):
                 return gap
         return None
 
+    def get_citation_map(self) -> dict[int, ResearchSource]:
+        """Build a mapping from citation number to source.
+
+        Returns:
+            Dict mapping citation_number → ResearchSource for all sources
+            that have an assigned citation number.
+        """
+        return {s.citation_number: s for s in self.sources if s.citation_number is not None}
+
+    def source_id_to_citation(self) -> dict[str, int]:
+        """Build a mapping from source ID to citation number.
+
+        Returns:
+            Dict mapping source.id → citation_number for all sources
+            that have an assigned citation number.
+        """
+        return {s.id: s.citation_number for s in self.sources if s.citation_number is not None}
+
     def add_source(
         self,
         title: str,
@@ -320,12 +338,15 @@ class DeepResearchState(BaseModel):
         Returns:
             The created ResearchSource instance
         """
+        # Assign the next citation number based on the highest existing number
+        next_citation = max((s.citation_number or 0 for s in self.sources), default=0) + 1
         source = ResearchSource(
             title=title,
             url=url,
             source_type=source_type,
             snippet=snippet,
             sub_query_id=sub_query_id,
+            citation_number=next_citation,
             **kwargs,
         )
         self.sources.append(source)

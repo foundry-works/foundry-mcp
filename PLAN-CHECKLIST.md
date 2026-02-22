@@ -39,22 +39,22 @@ Tracks progress against [PLAN.md](./PLAN.md). Check items as completed.
 - [x] Verify token counting uses digested content length
 
 ### 6. End-to-End Citation Tracking
-- [ ] Add `citation_number: Optional[int]` to source model
-- [ ] Assign citation numbers sequentially in `state.add_source()` or gathering phase
-- [ ] Update `_build_synthesis_user_prompt()`:
-  - [ ] Present findings with `[N]` citation markers
-  - [ ] Include citation legend mapping N → source title + URL
-- [ ] Update synthesis system prompt to instruct inline `[N]` citation usage
-- [ ] Auto-generate `## Sources` section post-synthesis:
-  - [ ] Build from state sources (not LLM output)
-  - [ ] Format: `[N] Title — URL`
-- [ ] Create `_citation_postprocess.py`:
-  - [ ] Scan report for `[N]` references
-  - [ ] Verify all referenced N exist in sources
-  - [ ] Warn on unreferenced sources (optional)
-  - [ ] Remove dangling citations
-- [ ] Unit tests for citation assignment and post-processing
-- [ ] Verify citations survive refinement iterations (re-synthesis)
+- [x] Add `citation_number: Optional[int]` to source model
+- [x] Assign citation numbers sequentially in `state.add_source()` or gathering phase
+- [x] Update `_build_synthesis_user_prompt()`:
+  - [x] Present findings with `[N]` citation markers
+  - [x] Include citation legend mapping N → source title + URL
+- [x] Update synthesis system prompt to instruct inline `[N]` citation usage
+- [x] Auto-generate `## Sources` section post-synthesis:
+  - [x] Build from state sources (not LLM output)
+  - [x] Format: `[N] Title — URL`
+- [x] Create `_citation_postprocess.py`:
+  - [x] Scan report for `[N]` references
+  - [x] Verify all referenced N exist in sources
+  - [x] Warn on unreferenced sources (optional)
+  - [x] Remove dangling citations
+- [x] Unit tests for citation assignment and post-processing
+- [x] Verify citations survive refinement iterations (re-synthesis)
 
 ---
 

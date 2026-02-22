@@ -23,6 +23,9 @@ from foundry_mcp.core.research.workflows.deep_research._constants import (
 from foundry_mcp.core.research.workflows.deep_research._helpers import (
     fidelity_level_from_score,
 )
+from foundry_mcp.core.research.workflows.deep_research.phases._citation_postprocess import (
+    postprocess_citations,
+)
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
     execute_llm_call,
     finalize_phase,
@@ -191,6 +194,9 @@ class SynthesisPhaseMixin:
             # Use raw content as fallback
             report = result.content
 
+        # Post-process citations: remove dangling refs, append Sources section
+        report, citation_metadata = postprocess_citations(report, state)
+
         # Store report in state
         state.report = report
 
@@ -209,6 +215,7 @@ class SynthesisPhaseMixin:
                 "raw_response": result.content,
                 "report": state.report,
                 "report_length": len(state.report),
+                "citation_postprocess": citation_metadata,
             },
         )
 
@@ -258,7 +265,7 @@ A 2-3 paragraph overview of the key insights and conclusions.
 ## Key Findings
 
 ### [Theme/Category 1]
-- Finding with supporting evidence and source citations [Source ID]
+- Finding with supporting evidence and inline citations [1], [2]
 - Related findings grouped together
 
 ### [Theme/Category 2]
@@ -275,9 +282,6 @@ Note any contradictions or disagreements between sources (if present).
 ### Limitations
 Acknowledge gaps in the research and areas needing further investigation.
 
-## Sources
-List sources as markdown links with their IDs: **[src-xxx]** [Title](URL)
-
 ## Conclusions
 Actionable insights and recommendations based on the findings.
 
@@ -285,14 +289,16 @@ Actionable insights and recommendations based on the findings.
 
 Guidelines:
 - Organize findings thematically rather than listing them sequentially
-- Cite source IDs in brackets when referencing specific information [src-xxx]
+- Use inline numbered citations [N] when referencing specific information (e.g. [1], [3])
+- The citation numbers correspond to the numbered sources provided in the input
+- Do NOT generate a Sources section — it will be appended automatically
 - Distinguish between high-confidence findings (well-supported) and lower-confidence insights
 - Be specific and actionable in conclusions
 - Keep the report focused on the original research query
 - Use clear, professional language
 - Include all relevant findings - don't omit information
 
-IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
+IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary. Do NOT include a Sources or References section."""
 
     def _build_synthesis_user_prompt(
         self,
@@ -308,6 +314,9 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         Returns:
             User prompt string
         """
+        # Build source_id → citation_number mapping for inline references
+        id_to_citation = state.source_id_to_citation()
+
         prompt_parts = [
             f"# Research Query\n{state.original_query}",
             "",
@@ -331,7 +340,13 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
             prompt_parts.append(f"### {category}")
             for f in findings:
                 confidence_label = f.confidence.value if hasattr(f.confidence, "value") else str(f.confidence)
-                source_refs = ", ".join(f.source_ids) if f.source_ids else "no sources"
+                # Map source IDs to citation numbers
+                citation_refs = [
+                    f"[{id_to_citation[sid]}]"
+                    for sid in f.source_ids
+                    if sid in id_to_citation
+                ]
+                source_refs = ", ".join(citation_refs) if citation_refs else "no sources"
                 prompt_parts.append(f"- [{confidence_label.upper()}] {f.content}")
                 prompt_parts.append(f"  Sources: {source_refs}")
             prompt_parts.append("")
@@ -344,8 +359,8 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                 prompt_parts.append(f"- [{status}] {gap.description}")
             prompt_parts.append("")
 
-        # Add source reference list - use allocation-aware content
-        prompt_parts.append("## Source Reference")
+        # Add source reference list with citation numbers - use allocation-aware content
+        prompt_parts.append("## Source Reference (use these citation numbers in your report)")
 
         if allocation_result:
             # Use allocated sources in priority order, applying token limits
@@ -358,8 +373,10 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                 if not source:
                     continue
 
+                cn = source.citation_number
+                label = f"[{cn}]" if cn is not None else f"[{source.id}]"
                 quality = source.quality.value if hasattr(source.quality, "value") else str(source.quality)
-                prompt_parts.append(f"- **{source.id}**: {source.title} [{quality}]")
+                prompt_parts.append(f"- **{label}**: {source.title} [{quality}]")
                 if source.url:
                     prompt_parts.append(f"  URL: {source.url}")
 
@@ -390,8 +407,10 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         else:
             # Fallback: use first 30 sources (legacy behavior)
             for source in state.sources[:30]:
+                cn = source.citation_number
+                label = f"[{cn}]" if cn is not None else f"[{source.id}]"
                 quality = source.quality.value if hasattr(source.quality, "value") else str(source.quality)
-                prompt_parts.append(f"- {source.id}: {source.title} [{quality}]")
+                prompt_parts.append(f"- {label}: {source.title} [{quality}]")
                 if source.url:
                     prompt_parts.append(f"  URL: {source.url}")
 

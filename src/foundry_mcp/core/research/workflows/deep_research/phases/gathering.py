@@ -474,6 +474,12 @@ class GatheringPhaseMixin:
                                         if source.quality == SourceQuality.UNKNOWN:
                                             source.quality = get_domain_quality(source.url, state.research_mode)
 
+                                    # Assign stable citation number
+                                    next_cn = max(
+                                        (s.citation_number or 0 for s in state.sources),
+                                        default=0,
+                                    ) + 1
+                                    source.citation_number = next_cn
                                     # Add source to state
                                     state.sources.append(source)
                                     state.total_sources_examined += 1
