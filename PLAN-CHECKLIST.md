@@ -7,25 +7,25 @@ Tracks progress against [PLAN.md](./PLAN.md). Check items as completed.
 ## Phase 1: Quick Wins
 
 ### 1. Query Clarification Phase
-- [ ] Add `CLARIFICATION` to `DeepResearchPhase` enum in `models/deep_research.py`
-- [ ] Add `clarification_constraints` dict field to `DeepResearchState`
-- [ ] Add `CLARIFIER` to `AgentRole` enum in `orchestration.py`
-- [ ] Create `phases/clarification.py` with `ClarificationPhaseMixin`
-  - [ ] `_execute_clarification_async()` — single LLM call
-  - [ ] `_build_clarification_system_prompt()` — structured JSON output instructions
-  - [ ] `_build_clarification_user_prompt()` — original query + any user context
-  - [ ] `_parse_clarification_response()` — extract questions / constraints
-- [ ] Wire into `workflow_execution.py` before planning phase
-- [ ] Register mixin in `core.py` (`DeepResearchWorkflow` class)
-- [ ] Add config keys to `.foundry-mcp.toml`:
-  - [ ] `deep_research_allow_clarification` (default: `true`)
-  - [ ] `deep_research_clarification_provider`
-- [ ] Handle "skip" path — if user doesn't answer, proceed with original query
+- [x] Add `CLARIFICATION` to `DeepResearchPhase` enum in `models/deep_research.py`
+- [x] Add `clarification_constraints` dict field to `DeepResearchState`
+- [x] Add `CLARIFIER` to `AgentRole` enum in `orchestration.py`
+- [x] Create `phases/clarification.py` with `ClarificationPhaseMixin`
+  - [x] `_execute_clarification_async()` — single LLM call
+  - [x] `_build_clarification_system_prompt()` — structured JSON output instructions
+  - [x] `_build_clarification_user_prompt()` — original query + any user context
+  - [x] `_parse_clarification_response()` — extract questions / constraints
+- [x] Wire into `workflow_execution.py` before planning phase
+- [x] Register mixin in `core.py` (`DeepResearchWorkflow` class)
+- [x] Add config keys to `.foundry-mcp.toml`:
+  - [x] `deep_research_allow_clarification` (default: `true`)
+  - [x] `deep_research_clarification_provider`
+- [x] Handle "skip" path — if user doesn't answer, proceed with original query
 - [ ] Unit tests for clarification parsing
 - [ ] Integration test: query → clarification → planning flow
 
 ### 4. Proactive Content Digest
-- [ ] Add `"proactive"` to `deep_research_digest_policy` validation
+- [x] Add `"proactive"` to `deep_research_digest_policy` validation
 - [ ] In `phases/gathering.py`, add post-gather digest step:
   - [ ] Check if policy is `proactive`
   - [ ] Call `DocumentDigestor` on each newly gathered source

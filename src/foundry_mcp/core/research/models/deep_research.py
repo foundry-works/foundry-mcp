@@ -99,7 +99,8 @@ class DeepResearchConfig(BaseModel):
 class DeepResearchPhase(str, Enum):
     """Phases of the DEEP_RESEARCH workflow.
 
-    The deep research workflow progresses through five sequential phases:
+    The deep research workflow progresses through six sequential phases:
+    0. CLARIFICATION - (Optional) Analyze query specificity and ask clarifying questions
     1. PLANNING - Analyze the query and decompose into focused sub-queries
     2. GATHERING - Execute sub-queries in parallel and collect sources
     3. ANALYSIS - Extract findings and assess source quality
@@ -110,6 +111,7 @@ class DeepResearchPhase(str, Enum):
     progression through advance_phase() method.
     """
 
+    CLARIFICATION = "clarification"
     PLANNING = "planning"
     GATHERING = "gathering"
     ANALYSIS = "analysis"
@@ -131,6 +133,10 @@ class DeepResearchState(BaseModel):
 
     id: str = Field(default_factory=lambda: f"deepres-{uuid4().hex[:12]}")
     original_query: str = Field(..., description="The original research query")
+    clarification_constraints: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Constraints and context inferred or provided during CLARIFICATION phase",
+    )
     research_brief: Optional[str] = Field(
         default=None,
         description="Expanded research plan generated in PLANNING phase",

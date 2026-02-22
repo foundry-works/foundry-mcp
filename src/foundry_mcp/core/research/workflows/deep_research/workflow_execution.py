@@ -59,6 +59,7 @@ class WorkflowExecutionMixin:
         def _flush_state(self, *args: Any, **kwargs: Any) -> None: ...
         def _record_workflow_error(self, *args: Any, **kwargs: Any) -> None: ...
         def _safe_orchestrator_transition(self, *args: Any, **kwargs: Any) -> Any: ...
+        async def _execute_clarification_async(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_planning_async(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_gathering_async(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_analysis_async(self, *args: Any, **kwargs: Any) -> Any: ...
@@ -164,6 +165,22 @@ class WorkflowExecutionMixin:
 
         try:
             # Phase execution based on current state
+            if state.phase == DeepResearchPhase.CLARIFICATION:
+                err = await self._run_phase(
+                    state,
+                    DeepResearchPhase.CLARIFICATION,
+                    self._execute_clarification_async(
+                        state=state,
+                        provider_id=(
+                            getattr(self.config, "deep_research_clarification_provider", None)
+                            or self.config.default_provider
+                        ),
+                        timeout=self.config.get_phase_timeout("planning"),  # Reuse planning timeout
+                    ),
+                )
+                if err:
+                    return err
+
             if state.phase == DeepResearchPhase.PLANNING:
                 err = await self._run_phase(
                     state,

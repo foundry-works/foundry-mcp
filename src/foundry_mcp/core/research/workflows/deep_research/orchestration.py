@@ -30,6 +30,8 @@ class AgentRole(str, Enum):
     - SUPERVISOR: Orchestrates phase transitions, evaluates quality gates,
       decides on iteration vs completion. The supervisor runs think-tool
       pauses between phases to evaluate progress and adjust strategy.
+    - CLARIFIER: Evaluates query specificity and generates clarifying
+      questions. Infers constraints from vague queries to focus research.
     - PLANNER: Decomposes the original query into focused sub-queries,
       generates the research brief, and identifies key themes to explore.
     - GATHERER: Executes parallel search across providers, handles rate
@@ -43,6 +45,7 @@ class AgentRole(str, Enum):
     """
 
     SUPERVISOR = "supervisor"
+    CLARIFIER = "clarifier"
     PLANNER = "planner"
     GATHERER = "gatherer"
     ANALYZER = "analyzer"
@@ -52,6 +55,7 @@ class AgentRole(str, Enum):
 
 # Mapping from workflow phases to specialist agents
 PHASE_TO_AGENT: dict[DeepResearchPhase, AgentRole] = {
+    DeepResearchPhase.CLARIFICATION: AgentRole.CLARIFIER,
     DeepResearchPhase.PLANNING: AgentRole.PLANNER,
     DeepResearchPhase.GATHERING: AgentRole.GATHERER,
     DeepResearchPhase.ANALYSIS: AgentRole.ANALYZER,
@@ -250,11 +254,17 @@ class SupervisorOrchestrator:
             "iteration": state.iteration,
         }
 
-        if phase == DeepResearchPhase.PLANNING:
+        if phase == DeepResearchPhase.CLARIFICATION:
+            return {
+                **base_inputs,
+                "system_prompt": state.system_prompt,
+            }
+        elif phase == DeepResearchPhase.PLANNING:
             return {
                 **base_inputs,
                 "system_prompt": state.system_prompt,
                 "max_sub_queries": state.max_sub_queries,
+                "clarification_constraints": state.clarification_constraints,
             }
         elif phase == DeepResearchPhase.GATHERING:
             return {
@@ -327,7 +337,18 @@ class SupervisorOrchestrator:
 
         Returns metrics and a proceed/retry recommendation.
         """
-        if phase == DeepResearchPhase.PLANNING:
+        if phase == DeepResearchPhase.CLARIFICATION:
+            has_constraints = bool(state.clarification_constraints)
+            return {
+                "has_constraints": has_constraints,
+                "quality_ok": True,  # Clarification always proceeds
+                "rationale": (
+                    f"Clarification {'provided constraints' if has_constraints else 'skipped/no constraints needed'}. "
+                    "Proceeding to planning."
+                ),
+            }
+
+        elif phase == DeepResearchPhase.PLANNING:
             sub_query_count = len(state.sub_queries)
             quality_ok = sub_query_count >= 2  # At least 2 sub-queries
             return {
@@ -460,6 +481,10 @@ class SupervisorOrchestrator:
             Prompt for supervisor reflection
         """
         prompts = {
+            DeepResearchPhase.CLARIFICATION: (
+                f"Clarification complete. Constraints: {bool(state.clarification_constraints)}. "
+                "Evaluate: Is the query now specific enough for focused research?"
+            ),
             DeepResearchPhase.PLANNING: (
                 f"Planning complete. Generated {len(state.sub_queries)} sub-queries. "
                 f"Research brief: {bool(state.research_brief)}. "

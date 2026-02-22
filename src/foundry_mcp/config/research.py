@@ -86,6 +86,10 @@ class ResearchConfig:
     thinkdeep_max_depth: int = 5
     ideate_perspectives: List[str] = field(default_factory=lambda: ["technical", "creative", "practical", "visionary"])
     default_timeout: float = 360.0  # 360 seconds default for AI CLI providers
+    # Deep research clarification phase configuration
+    deep_research_allow_clarification: bool = True
+    deep_research_clarification_provider: Optional[str] = None  # Uses default_provider if not set
+
     # Deep research configuration
     deep_research_max_iterations: int = 3
     deep_research_max_sub_queries: int = 5
@@ -263,6 +267,9 @@ class ResearchConfig:
             thinkdeep_max_depth=int(data.get("thinkdeep_max_depth", 5)),
             ideate_perspectives=ideate_perspectives,
             default_timeout=float(data.get("default_timeout", 360.0)),
+            # Deep research clarification phase
+            deep_research_allow_clarification=_parse_bool(data.get("deep_research_allow_clarification", True)),
+            deep_research_clarification_provider=data.get("deep_research_clarification_provider"),
             # Deep research configuration
             deep_research_max_iterations=int(data.get("deep_research_max_iterations", 3)),
             deep_research_max_sub_queries=int(data.get("deep_research_max_sub_queries", 5)),
@@ -564,7 +571,7 @@ class ResearchConfig:
             ValueError: If any digest config field has an invalid value.
         """
         # Validate digest_policy
-        valid_policies = {"off", "auto", "always"}
+        valid_policies = {"off", "auto", "always", "proactive"}
         if self.deep_research_digest_policy not in valid_policies:
             raise ValueError(
                 f"Invalid deep_research_digest_policy: {self.deep_research_digest_policy!r}. "
@@ -644,6 +651,7 @@ class ResearchConfig:
             Timeout in seconds for the phase
         """
         phase_timeouts = {
+            "clarification": self.deep_research_planning_timeout,  # Reuse planning timeout
             "planning": self.deep_research_planning_timeout,
             "analysis": self.deep_research_analysis_timeout,
             "synthesis": self.deep_research_synthesis_timeout,
