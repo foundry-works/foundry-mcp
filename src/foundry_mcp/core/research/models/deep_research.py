@@ -479,6 +479,39 @@ class DeepResearchState(BaseModel):
         self.metadata["failed"] = True
         self.metadata["failure_error"] = error
 
+    def mark_cancelled(self, *, phase_state: Optional[str] = None) -> None:
+        """Mark the research session as cancelled by user request.
+
+        Distinct from mark_failed (error) and mark_interrupted (SIGTERM).
+        Sets completed_at and stores cancellation context in metadata.
+
+        Args:
+            phase_state: Optional description of phase state at cancellation time
+        """
+        self.completed_at = datetime.utcnow()
+        self.updated_at = datetime.utcnow()
+        self.metadata["cancelled"] = True
+        self.metadata["terminal_status"] = "cancelled"
+        if phase_state:
+            self.metadata["cancelled_phase_state"] = phase_state
+
+    def mark_interrupted(self, *, reason: str = "SIGTERM") -> None:
+        """Mark the research session as interrupted by process signal.
+
+        Distinct from mark_cancelled (user-initiated) and mark_failed (error).
+        Used for SIGTERM and other process-level interruptions.
+
+        Args:
+            reason: Reason for interruption (default: "SIGTERM")
+        """
+        self.completed_at = datetime.utcnow()
+        self.updated_at = datetime.utcnow()
+        self.metadata["interrupted"] = True
+        self.metadata["terminal_status"] = "interrupted"
+        self.metadata["interrupt_reason"] = reason
+        self.metadata["interrupt_phase"] = self.phase.value
+        self.metadata["interrupt_iteration"] = self.iteration
+
     # ==========================================================================
     # Content Fidelity Tracking Methods
     # ==========================================================================

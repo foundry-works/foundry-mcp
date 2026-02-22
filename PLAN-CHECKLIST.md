@@ -116,28 +116,28 @@
 ## Phase 3: Deep Research Thread Safety & Shutdown
 
 ### 3a. Cancellation event flag
-- [ ] Add `self._cancel_event = threading.Event()` to `DeepResearchWorkflow.__init__`
-- [ ] Check `_cancel_event.is_set()` at each phase boundary in `workflow_execution.py`
-- [ ] On cancel detection: persist current state, set status `CANCELLED`
-- [ ] Expose `cancel(session_id)` public method
-- [ ] Wire `cancel()` to deep-research `stop` action handler
+- [x] Add `self._cancel_event = threading.Event()` to `DeepResearchWorkflow.__init__`
+- [x] Check `_cancel_event.is_set()` at each phase boundary in `workflow_execution.py`
+- [x] On cancel detection: persist current state, set status `CANCELLED`
+- [x] Expose `cancel(session_id)` public method
+- [x] Wire `cancel()` to deep-research `stop` action handler
 
 ### 3b. Graceful shutdown on SIGTERM
-- [ ] Register `signal.SIGTERM` handler in background task manager
-- [ ] Handler iterates active sessions, sets cancel events
-- [ ] Persist phase state before thread exit
-- [ ] Set session status to `INTERRUPTED` (distinct from `CANCELLED` and `FAILED`)
-- [ ] Log shutdown with session IDs and phase states
-- [ ] Ensure handler only affects deep research threads, not main MCP process
+- [x] Register `signal.SIGTERM` handler in background task manager
+- [x] Handler iterates active sessions, sets cancel events
+- [x] Persist phase state before thread exit
+- [x] Set session status to `INTERRUPTED` (distinct from `CANCELLED` and `FAILED`)
+- [x] Log shutdown with session IDs and phase states
+- [x] Ensure handler only affects deep research threads, not main MCP process
 
 ### 3c. Tests
-- [ ] Create `tests/core/research/workflows/test_deep_research_lifecycle.py`
-- [ ] Test cancel event stops execution between phases
-- [ ] Test cancel persists `CANCELLED` status with correct phase state
-- [ ] Test SIGTERM handler sets cancel events on all active sessions
-- [ ] Test `INTERRUPTED` status is distinguishable from `CANCELLED` and `FAILED`
-- [ ] Test cancel on already-completed session is a no-op
-- [ ] Run: `pytest tests/core/research/ -v`
+- [x] Create `tests/core/research/workflows/test_deep_research_lifecycle.py`
+- [x] Test cancel event stops execution between phases
+- [x] Test cancel persists `CANCELLED` status with correct phase state
+- [x] Test SIGTERM handler sets cancel events on all active sessions
+- [x] Test `INTERRUPTED` status is distinguishable from `CANCELLED` and `FAILED`
+- [x] Test cancel on already-completed session is a no-op
+- [x] Run: `pytest tests/core/research/ -v`
 
 ---
 

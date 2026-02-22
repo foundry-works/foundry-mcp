@@ -562,10 +562,17 @@ class ActionHandlersMixin:
         if bg_task.cancel():
             state = self.memory.load_deep_research(research_id)
             if state:
+                state.mark_cancelled(
+                    phase_state=f"phase={state.phase.value}, iteration={state.iteration}"
+                )
+                self.memory.save_deep_research(state)
                 self._write_audit_event(
                     state,
                     "workflow_cancelled",
-                    data={"cancelled": True},
+                    data={
+                        "cancelled": True,
+                        "terminal_status": "cancelled",
+                    },
                     level="warning",
                 )
             return WorkflowResult(
