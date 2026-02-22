@@ -6,6 +6,7 @@ before converting them to formal JSON specifications.
 
 import re
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -472,9 +473,11 @@ def plan_create_cmd(
         )
         return
 
-    # Generate plan filename
+    # Generate plan filename with date suffix (mirrors spec_id date convention)
     plan_slug = _slugify(name)
-    plan_file = plans_dir / f"{plan_slug}.md"
+    date_suffix = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    plan_slug_dated = f"{plan_slug}-{date_suffix}"
+    plan_file = plans_dir / f"{plan_slug_dated}.md"
 
     # Check if plan already exists
     if plan_file.exists():
@@ -507,7 +510,7 @@ def plan_create_cmd(
     emit_success(
         {
             "plan_name": name,
-            "plan_slug": plan_slug,
+            "plan_slug": plan_slug_dated,
             "plan_path": str(plan_file),
         },
         telemetry={"duration_ms": round(duration_ms, 2)},

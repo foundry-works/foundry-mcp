@@ -6,6 +6,7 @@ import logging
 import re
 import time
 from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -585,7 +586,9 @@ def perform_plan_create(name: str) -> dict:
         )
 
     plan_slug = _slugify(name)
-    plan_file = plans_dir / f"{plan_slug}.md"
+    date_suffix = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    plan_slug_dated = f"{plan_slug}-{date_suffix}"
+    plan_file = plans_dir / f"{plan_slug_dated}.md"
 
     if plan_file.exists():
         return asdict(
@@ -621,7 +624,7 @@ def perform_plan_create(name: str) -> dict:
         success_response(
             data={
                 "plan_name": name,
-                "plan_slug": plan_slug,
+                "plan_slug": plan_slug_dated,
                 "plan_path": str(plan_file),
             },
             telemetry={"duration_ms": round(duration_ms, 2)},
