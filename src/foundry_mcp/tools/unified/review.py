@@ -232,7 +232,7 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
                 f"# Spec Review: {result.get('title', spec_id)}",
                 "",
                 f"**Spec ID:** {spec_id}",
-                f"**Review Type:** spec-vs-plan (plan-enhanced full review)",
+                "**Review Type:** spec-vs-plan (plan-enhanced full review)",
                 f"**Verdict:** {verdict}",
                 f"**Template:** {result.get('template_id', 'SPEC_REVIEW_VS_PLAN_V1')}",
                 f"**Date:** {datetime.now().isoformat()}",

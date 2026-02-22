@@ -64,10 +64,10 @@ from foundry_mcp.core.spec.io import (
 from foundry_mcp.core.spec.templates import (
     # Assumptions and revisions
     add_assumption,
-    add_revision,
     # Constraints, risks, questions, success criteria
     add_constraint,
     add_question,
+    add_revision,
     add_risk,
     add_success_criterion,
     # Spec creation

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import asdict
-from typing import Any, Dict, List
+from typing import Any, List
 
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.observability import audit_log
@@ -18,7 +18,6 @@ from foundry_mcp.core.responses.types import (
     ErrorType,
 )
 from foundry_mcp.core.spec import (
-    CATEGORIES,
     add_phase,
     add_phase_bulk,
     move_phase,
