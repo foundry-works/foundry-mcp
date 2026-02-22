@@ -17,7 +17,7 @@ import time
 from typing import TYPE_CHECKING, Any, Optional
 
 from foundry_mcp.core.research.document_digest import DocumentDigestor  # noqa: F401  # re-export for test patch targets
-from foundry_mcp.core.research.models.deep_research import DeepResearchState
+from foundry_mcp.core.research.models.deep_research import Contradiction, DeepResearchState
 from foundry_mcp.core.research.models.sources import SourceQuality
 from foundry_mcp.core.research.pdf_extractor import PDFExtractor  # noqa: F401  # re-export for test patch targets
 from foundry_mcp.core.research.summarization import ContentSummarizer  # noqa: F401  # re-export for test patch targets
@@ -70,6 +70,7 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
 
         def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
         def _check_cancellation(self, *args: Any, **kwargs: Any) -> None: ...
+        async def _execute_provider_async(self, *args: Any, **kwargs: Any) -> Any: ...
 
     async def _execute_analysis_async(
         self,
@@ -263,6 +264,32 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
                 except ValueError:
                     pass  # Invalid quality value, skip
 
+        # Contradiction detection: identify conflicting claims between findings
+        if len(state.findings) >= 2:
+            contradictions = await self._detect_contradictions(
+                state=state,
+                provider_id=provider_id or state.analysis_provider,
+                timeout=timeout,
+            )
+            if contradictions:
+                state.contradictions.extend(contradictions)
+                self._write_audit_event(
+                    state,
+                    "contradictions_detected",
+                    data={
+                        "count": len(contradictions),
+                        "contradictions": [
+                            {
+                                "id": c.id,
+                                "finding_ids": c.finding_ids,
+                                "description": c.description,
+                                "severity": c.severity,
+                            }
+                            for c in contradictions
+                        ],
+                    },
+                )
+
         # Save state
         self.memory.save_deep_research(state)
         self._write_audit_event(
@@ -303,6 +330,125 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
                 "finding_count": len(parsed["findings"]),
                 "gap_count": len(parsed["gaps"]),
                 "source_count": len(state.sources),
+                "contradiction_count": len(state.contradictions),
                 "parse_method": parsed.get("parse_method"),
             },
         )
+
+    async def _detect_contradictions(
+        self,
+        state: DeepResearchState,
+        provider_id: str | None,
+        timeout: float,
+    ) -> list[Contradiction]:
+        """Detect contradictions between research findings via LLM.
+
+        Sends all findings to a fast model to identify conflicting claims.
+        Returns a list of Contradiction objects.
+
+        Args:
+            state: Current research state with findings
+            provider_id: LLM provider to use
+            timeout: Request timeout in seconds
+
+        Returns:
+            List of detected Contradiction objects (may be empty)
+        """
+        import json
+
+        from foundry_mcp.core.research.workflows.deep_research._helpers import extract_json
+
+        findings_text = []
+        for f in state.findings:
+            confidence_label = f.confidence.value if hasattr(f.confidence, "value") else str(f.confidence)
+            findings_text.append(
+                f"- [{f.id}] ({confidence_label}) {f.content} "
+                f"(sources: {', '.join(f.source_ids[:3])})"
+            )
+
+        if len(findings_text) < 2:
+            return []
+
+        system_prompt = (
+            "You are a research quality analyst. Identify any contradictions or conflicting claims "
+            "between the research findings provided.\n\n"
+            "Respond with valid JSON:\n"
+            '{"contradictions": [\n'
+            '  {"finding_ids": ["find-xxx", "find-yyy"], "description": "what conflicts", '
+            '"resolution": "suggested resolution", "preferred_source_id": "src-xxx or null", '
+            '"severity": "major or minor"}\n'
+            "]}\n\n"
+            "Rules:\n"
+            "- Only report genuine factual contradictions, not differences in emphasis or scope\n"
+            "- severity=major for direct factual conflicts, minor for nuance/interpretation differences\n"
+            "- preferred_source_id should reference the more authoritative source if determinable, otherwise null\n"
+            "- If no contradictions exist, return {\"contradictions\": []}\n"
+            "- Return ONLY valid JSON"
+        )
+
+        user_prompt = (
+            f"Research query: {state.original_query}\n\n"
+            f"Findings to check for contradictions:\n"
+            + "\n".join(findings_text)
+        )
+
+        try:
+            result = await self._execute_provider_async(
+                prompt=user_prompt,
+                provider_id=provider_id or self.config.default_provider,
+                model=None,
+                system_prompt=system_prompt,
+                timeout=min(timeout, 120.0),
+                temperature=0.2,
+                phase="contradiction_detection",
+                fallback_providers=[],
+                max_retries=1,
+                retry_delay=2.0,
+            )
+
+            if not result.success:
+                logger.warning("Contradiction detection LLM call failed: %s", result.error)
+                return []
+
+            if result.tokens_used:
+                state.total_tokens_used += result.tokens_used
+
+            json_str = extract_json(result.content)
+            if not json_str:
+                logger.warning("No JSON found in contradiction detection response")
+                return []
+
+            data = json.loads(json_str)
+            raw_contradictions = data.get("contradictions", [])
+            if not isinstance(raw_contradictions, list):
+                return []
+
+            contradictions = []
+            for c in raw_contradictions:
+                if not isinstance(c, dict):
+                    continue
+                finding_ids = c.get("finding_ids", [])
+                description = c.get("description", "").strip()
+                if not finding_ids or not description:
+                    continue
+                # Validate finding IDs exist in state
+                valid_ids = [fid for fid in finding_ids if any(f.id == fid for f in state.findings)]
+                if len(valid_ids) < 2:
+                    continue
+
+                contradictions.append(
+                    Contradiction(
+                        finding_ids=valid_ids,
+                        description=description,
+                        resolution=c.get("resolution"),
+                        preferred_source_id=c.get("preferred_source_id"),
+                        severity=c.get("severity", "minor") if c.get("severity") in ("major", "minor") else "minor",
+                    )
+                )
+
+            logger.info("Contradiction detection found %d contradiction(s)", len(contradictions))
+            return contradictions
+
+        except Exception as exc:
+            logger.warning("Contradiction detection failed: %s. Continuing without.", exc)
+            return []

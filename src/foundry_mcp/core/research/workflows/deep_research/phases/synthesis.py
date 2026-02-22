@@ -351,6 +351,25 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary. Do N
                 prompt_parts.append(f"  Sources: {source_refs}")
             prompt_parts.append("")
 
+        # Add detected contradictions
+        if state.contradictions:
+            prompt_parts.append("## Contradictions Detected")
+            prompt_parts.append(
+                "The following contradictions were identified between findings. "
+                "Address these explicitly in the report's 'Conflicting Information' section."
+            )
+            for contradiction in state.contradictions:
+                severity_label = contradiction.severity.upper()
+                prompt_parts.append(f"- [{severity_label}] {contradiction.description}")
+                prompt_parts.append(f"  Conflicting findings: {', '.join(contradiction.finding_ids)}")
+                if contradiction.resolution:
+                    prompt_parts.append(f"  Suggested resolution: {contradiction.resolution}")
+                if contradiction.preferred_source_id:
+                    cn = id_to_citation.get(contradiction.preferred_source_id)
+                    if cn is not None:
+                        prompt_parts.append(f"  Preferred source: [{cn}]")
+            prompt_parts.append("")
+
         # Add knowledge gaps
         if state.gaps:
             prompt_parts.append("## Knowledge Gaps Identified")

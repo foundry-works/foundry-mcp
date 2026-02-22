@@ -66,6 +66,9 @@ from foundry_mcp.core.research.workflows.deep_research.phases.clarification impo
 from foundry_mcp.core.research.workflows.deep_research.phases.gathering import (
     GatheringPhaseMixin,
 )
+from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+    TopicResearchMixin,
+)
 
 # Phase mixins
 from foundry_mcp.core.research.workflows.deep_research.phases.planning import (
@@ -104,6 +107,7 @@ class DeepResearchWorkflow(
     ClarificationPhaseMixin,
     PlanningPhaseMixin,
     GatheringPhaseMixin,
+    TopicResearchMixin,
     AnalysisPhaseMixin,
     SynthesisPhaseMixin,
     RefinementPhaseMixin,

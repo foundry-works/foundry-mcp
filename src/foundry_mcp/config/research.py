@@ -95,6 +95,11 @@ class ResearchConfig:
     deep_research_reflection_provider: Optional[str] = None  # Uses default_provider if not set
     deep_research_reflection_timeout: float = 60.0  # Timeout per reflection call (seconds)
 
+    # Deep research parallel topic researcher agents
+    deep_research_enable_topic_agents: bool = False  # Master switch for per-topic ReAct loops in gathering
+    deep_research_topic_max_searches: int = 3  # Max search iterations per topic (ReAct loop limit)
+    deep_research_topic_reflection_provider: Optional[str] = None  # Uses default_provider if not set
+
     # Deep research configuration
     deep_research_max_iterations: int = 3
     deep_research_max_sub_queries: int = 5
@@ -279,6 +284,10 @@ class ResearchConfig:
             deep_research_enable_reflection=_parse_bool(data.get("deep_research_enable_reflection", False)),
             deep_research_reflection_provider=data.get("deep_research_reflection_provider"),
             deep_research_reflection_timeout=float(data.get("deep_research_reflection_timeout", 60.0)),
+            # Deep research parallel topic researcher agents
+            deep_research_enable_topic_agents=_parse_bool(data.get("deep_research_enable_topic_agents", False)),
+            deep_research_topic_max_searches=int(data.get("deep_research_topic_max_searches", 3)),
+            deep_research_topic_reflection_provider=data.get("deep_research_topic_reflection_provider"),
             # Deep research configuration
             deep_research_max_iterations=int(data.get("deep_research_max_iterations", 3)),
             deep_research_max_sub_queries=int(data.get("deep_research_max_sub_queries", 5)),

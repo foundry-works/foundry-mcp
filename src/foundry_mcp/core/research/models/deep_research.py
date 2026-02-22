@@ -24,6 +24,67 @@ from foundry_mcp.core.research.models.sources import (
 )
 
 
+class TopicResearchResult(BaseModel):
+    """Result of a per-topic ReAct research loop.
+
+    Each sub-query can be investigated independently by a topic researcher
+    that runs its own search → reflect → refine cycle. This model captures
+    the outcome of that per-topic investigation.
+    """
+
+    sub_query_id: str = Field(..., description="ID of the SubQuery this result belongs to")
+    searches_performed: int = Field(default=0, description="Number of search iterations executed")
+    sources_found: int = Field(default=0, description="Total unique sources discovered for this topic")
+    per_topic_summary: Optional[str] = Field(
+        default=None,
+        description="LLM-generated summary of findings for this specific topic",
+    )
+    reflection_notes: list[str] = Field(
+        default_factory=list,
+        description="Notes from per-topic reflection steps (e.g., identified gaps, query refinements)",
+    )
+    refined_queries: list[str] = Field(
+        default_factory=list,
+        description="Refined queries generated during the ReAct loop",
+    )
+    source_ids: list[str] = Field(
+        default_factory=list,
+        description="IDs of sources discovered by this topic researcher",
+    )
+
+
+class Contradiction(BaseModel):
+    """A contradiction detected between research findings.
+
+    Identified during the analysis phase when multiple sources provide
+    conflicting information on the same topic. Contradictions are surfaced
+    in the synthesis prompt so the final report can address them explicitly.
+    """
+
+    id: str = Field(default_factory=lambda: f"contra-{uuid4().hex[:8]}")
+    finding_ids: list[str] = Field(
+        ...,
+        description="IDs of the conflicting ResearchFinding objects",
+    )
+    description: str = Field(
+        ...,
+        description="Description of the conflict between findings",
+    )
+    resolution: Optional[str] = Field(
+        default=None,
+        description="Suggested resolution or explanation for the contradiction",
+    )
+    preferred_source_id: Optional[str] = Field(
+        default=None,
+        description="ID of the more authoritative source, if determinable",
+    )
+    severity: str = Field(
+        default="minor",
+        description="Severity of the contradiction: 'major' or 'minor'",
+    )
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class DeepResearchConfig(BaseModel):
     """Configuration for DEEP_RESEARCH workflow execution.
 
@@ -159,6 +220,14 @@ class DeepResearchState(BaseModel):
     sources: list[ResearchSource] = Field(default_factory=list)
     findings: list[ResearchFinding] = Field(default_factory=list)
     gaps: list[ResearchGap] = Field(default_factory=list)
+    contradictions: list[Contradiction] = Field(
+        default_factory=list,
+        description="Contradictions detected between findings during analysis",
+    )
+    topic_research_results: list[TopicResearchResult] = Field(
+        default_factory=list,
+        description="Per-topic research results from parallel topic researcher agents",
+    )
 
     # Final output
     report: Optional[str] = Field(
