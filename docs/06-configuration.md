@@ -327,7 +327,7 @@ planning phase for more focused sub-query generation.
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `deep_research_allow_clarification` | bool | `false` | Enable the clarification phase before planning |
+| `deep_research_allow_clarification` | bool | `true` | Enable the clarification phase before planning |
 | `deep_research_clarification_provider` | string | `null` | LLM provider for clarification (uses `default_provider` if not set) |
 
 When enabled, the clarification step sends the query to a fast model that returns
@@ -350,7 +350,7 @@ with (does not replace) the existing heuristic quality gates.
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `deep_research_enable_reflection` | bool | `false` | Enable LLM reflection at phase boundaries |
+| `deep_research_enable_reflection` | bool | `true` | Enable LLM reflection at phase boundaries |
 | `deep_research_reflection_provider` | string | `null` | LLM provider for reflection (uses `default_provider` if not set) |
 | `deep_research_reflection_timeout` | float | `60.0` | Timeout per reflection call in seconds |
 
@@ -375,7 +375,7 @@ researchers run in parallel, bounded by `deep_research_max_concurrent`.
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `deep_research_enable_topic_agents` | bool | `false` | Enable per-topic ReAct loops in the gathering phase |
+| `deep_research_enable_topic_agents` | bool | `true` | Enable per-topic ReAct loops in the gathering phase |
 | `deep_research_topic_max_searches` | int | `3` | Maximum search iterations per topic |
 | `deep_research_topic_reflection_provider` | string | `null` | LLM provider for per-topic reflection (uses `default_provider` if not set) |
 

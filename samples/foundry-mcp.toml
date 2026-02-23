@@ -438,8 +438,8 @@ deep_research_providers = [
 # for completeness and asks the user to disambiguate scope/timeframe/domain.
 # If the user doesn't answer, research proceeds with the original query.
 
-# Master switch for clarification phase (runs before planning, opt-in)
-deep_research_allow_clarification = false
+# Master switch for clarification phase (runs before planning)
+deep_research_allow_clarification = true
 
 # LLM provider for clarification (uses default_provider if not set)
 # Recommend a fast/cheap model since this is a single quick LLM call
@@ -452,8 +452,8 @@ deep_research_allow_clarification = false
 # whether quality is sufficient to proceed. Coexists with (does not replace)
 # the existing heuristic quality gates.
 
-# Master switch for LLM reflection at phase boundaries (opt-in)
-deep_research_enable_reflection = false
+# Master switch for LLM reflection at phase boundaries
+deep_research_enable_reflection = true
 
 # LLM provider for reflection calls (uses default_provider if not set)
 # Recommend a fast model — reflection is a quick structured-output call
@@ -471,7 +471,7 @@ deep_research_reflection_timeout = 60.0
 # per-topic summaries that feed into the analysis phase.
 
 # Master switch for per-topic ReAct loops in gathering
-deep_research_enable_topic_agents = false
+deep_research_enable_topic_agents = true
 
 # Max search iterations per topic (ReAct loop limit)
 deep_research_topic_max_searches = 3

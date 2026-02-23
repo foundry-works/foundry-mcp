@@ -947,12 +947,12 @@ class TestBudgetSplitting:
 class TestTopicAgentConfig:
     """Tests for topic agent configuration keys."""
 
-    def test_default_config_topic_agents_disabled(self) -> None:
+    def test_default_config_topic_agents_enabled(self) -> None:
         """Topic agents are disabled by default."""
         from foundry_mcp.config.research import ResearchConfig
 
         config = ResearchConfig()
-        assert config.deep_research_enable_topic_agents is False
+        assert config.deep_research_enable_topic_agents is True
         assert config.deep_research_topic_max_searches == 3
         assert config.deep_research_topic_reflection_provider is None
 

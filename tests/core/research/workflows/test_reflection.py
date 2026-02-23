@@ -659,12 +659,12 @@ class TestMaybeReflect:
 class TestReflectionConfig:
     """Tests for reflection config keys."""
 
-    def test_default_reflection_disabled(self) -> None:
-        """Reflection is disabled by default."""
+    def test_default_reflection_enabled(self) -> None:
+        """Reflection is enabled by default."""
         from foundry_mcp.config.research import ResearchConfig
 
         config = ResearchConfig()
-        assert config.deep_research_enable_reflection is False
+        assert config.deep_research_enable_reflection is True
         assert config.deep_research_reflection_provider is None
         assert config.deep_research_reflection_timeout == 60.0
 
