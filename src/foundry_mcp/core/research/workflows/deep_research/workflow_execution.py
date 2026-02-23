@@ -246,9 +246,7 @@ class WorkflowExecutionMixin:
                     DeepResearchPhase.CLARIFICATION,
                     self._execute_clarification_async(
                         state=state,
-                        provider_id=resolve_phase_provider(
-                            self.config, "clarification"
-                        ),
+                        provider_id=resolve_phase_provider(self.config, "clarification"),
                         timeout=self.config.get_phase_timeout("planning"),  # Reuse planning timeout
                     ),
                 )

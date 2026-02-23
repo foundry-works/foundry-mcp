@@ -190,17 +190,19 @@ class TestDetectContradictions:
         async def mock_provider(**kwargs):
             result = MagicMock()
             result.success = True
-            result.content = json.dumps({
-                "contradictions": [
-                    {
-                        "finding_ids": ["find-0", "find-1"],
-                        "description": "Finding 0 says caffeine is harmful, finding 1 says it is beneficial",
-                        "resolution": "Depends on dosage",
-                        "preferred_source_id": "src-0",
-                        "severity": "major",
-                    }
-                ]
-            })
+            result.content = json.dumps(
+                {
+                    "contradictions": [
+                        {
+                            "finding_ids": ["find-0", "find-1"],
+                            "description": "Finding 0 says caffeine is harmful, finding 1 says it is beneficial",
+                            "resolution": "Depends on dosage",
+                            "preferred_source_id": "src-0",
+                            "severity": "major",
+                        }
+                    ]
+                }
+            )
             result.tokens_used = 100
             return result
 
@@ -279,20 +281,22 @@ class TestDetectContradictions:
         async def mock_provider(**kwargs):
             result = MagicMock()
             result.success = True
-            result.content = json.dumps({
-                "contradictions": [
-                    {
-                        "finding_ids": ["find-nonexistent-a", "find-nonexistent-b"],
-                        "description": "This references invalid findings",
-                        "severity": "major",
-                    },
-                    {
-                        "finding_ids": ["find-0", "find-1"],
-                        "description": "This references valid findings",
-                        "severity": "minor",
-                    },
-                ]
-            })
+            result.content = json.dumps(
+                {
+                    "contradictions": [
+                        {
+                            "finding_ids": ["find-nonexistent-a", "find-nonexistent-b"],
+                            "description": "This references invalid findings",
+                            "severity": "major",
+                        },
+                        {
+                            "finding_ids": ["find-0", "find-1"],
+                            "description": "This references valid findings",
+                            "severity": "minor",
+                        },
+                    ]
+                }
+            )
             result.tokens_used = 80
             return result
 
@@ -317,15 +321,17 @@ class TestDetectContradictions:
         async def mock_provider(**kwargs):
             result = MagicMock()
             result.success = True
-            result.content = json.dumps({
-                "contradictions": [
-                    {
-                        "finding_ids": ["find-0", "find-nonexistent"],
-                        "description": "Only one valid ID",
-                        "severity": "minor",
-                    },
-                ]
-            })
+            result.content = json.dumps(
+                {
+                    "contradictions": [
+                        {
+                            "finding_ids": ["find-0", "find-nonexistent"],
+                            "description": "Only one valid ID",
+                            "severity": "minor",
+                        },
+                    ]
+                }
+            )
             result.tokens_used = 60
             return result
 
@@ -348,20 +354,22 @@ class TestDetectContradictions:
         async def mock_provider(**kwargs):
             result = MagicMock()
             result.success = True
-            result.content = json.dumps({
-                "contradictions": [
-                    {
-                        "finding_ids": ["find-0", "find-1"],
-                        "description": "",
-                        "severity": "minor",
-                    },
-                    {
-                        "finding_ids": ["find-1", "find-2"],
-                        "description": "  ",
-                        "severity": "minor",
-                    },
-                ]
-            })
+            result.content = json.dumps(
+                {
+                    "contradictions": [
+                        {
+                            "finding_ids": ["find-0", "find-1"],
+                            "description": "",
+                            "severity": "minor",
+                        },
+                        {
+                            "finding_ids": ["find-1", "find-2"],
+                            "description": "  ",
+                            "severity": "minor",
+                        },
+                    ]
+                }
+            )
             result.tokens_used = 60
             return result
 
@@ -384,20 +392,22 @@ class TestDetectContradictions:
         async def mock_provider(**kwargs):
             result = MagicMock()
             result.success = True
-            result.content = json.dumps({
-                "contradictions": [
-                    {
-                        "finding_ids": ["find-0", "find-1"],
-                        "description": "Conflict with invalid severity",
-                        "severity": "critical",  # Invalid — should default to minor
-                    },
-                    {
-                        "finding_ids": ["find-1", "find-2"],
-                        "description": "Conflict with valid severity",
-                        "severity": "major",
-                    },
-                ]
-            })
+            result.content = json.dumps(
+                {
+                    "contradictions": [
+                        {
+                            "finding_ids": ["find-0", "find-1"],
+                            "description": "Conflict with invalid severity",
+                            "severity": "critical",  # Invalid — should default to minor
+                        },
+                        {
+                            "finding_ids": ["find-1", "find-2"],
+                            "description": "Conflict with valid severity",
+                            "severity": "major",
+                        },
+                    ]
+                }
+            )
             result.tokens_used = 80
             return result
 
@@ -545,20 +555,22 @@ class TestDetectContradictions:
         async def mock_provider(**kwargs):
             result = MagicMock()
             result.success = True
-            result.content = json.dumps({
-                "contradictions": [
-                    {
-                        "finding_ids": ["find-0", "find-1"],
-                        "description": "First contradiction",
-                        "severity": "major",
-                    },
-                    {
-                        "finding_ids": ["find-2", "find-3"],
-                        "description": "Second contradiction",
-                        "severity": "minor",
-                    },
-                ]
-            })
+            result.content = json.dumps(
+                {
+                    "contradictions": [
+                        {
+                            "finding_ids": ["find-0", "find-1"],
+                            "description": "First contradiction",
+                            "severity": "major",
+                        },
+                        {
+                            "finding_ids": ["find-2", "find-3"],
+                            "description": "Second contradiction",
+                            "severity": "minor",
+                        },
+                    ]
+                }
+            )
             result.tokens_used = 120
             return result
 
@@ -606,17 +618,19 @@ class TestDetectContradictions:
         async def mock_provider(**kwargs):
             result = MagicMock()
             result.success = True
-            result.content = json.dumps({
-                "contradictions": [
-                    "not a dict",
-                    42,
-                    {
-                        "finding_ids": ["find-0", "find-1"],
-                        "description": "Valid one",
-                        "severity": "minor",
-                    },
-                ]
-            })
+            result.content = json.dumps(
+                {
+                    "contradictions": [
+                        "not a dict",
+                        42,
+                        {
+                            "finding_ids": ["find-0", "find-1"],
+                            "description": "Valid one",
+                            "severity": "minor",
+                        },
+                    ]
+                }
+            )
             result.tokens_used = 60
             return result
 

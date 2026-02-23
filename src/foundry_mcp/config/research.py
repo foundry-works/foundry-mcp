@@ -291,7 +291,9 @@ class ResearchConfig:
             deep_research_reflection_provider=data.get("deep_research_reflection_provider"),
             deep_research_reflection_timeout=float(data.get("deep_research_reflection_timeout", 60.0)),
             # Deep research contradiction detection
-            deep_research_enable_contradiction_detection=_parse_bool(data.get("deep_research_enable_contradiction_detection", True)),
+            deep_research_enable_contradiction_detection=_parse_bool(
+                data.get("deep_research_enable_contradiction_detection", True)
+            ),
             # Deep research parallel topic researcher agents
             deep_research_enable_topic_agents=_parse_bool(data.get("deep_research_enable_topic_agents", True)),
             deep_research_topic_max_searches=int(data.get("deep_research_topic_max_searches", 3)),

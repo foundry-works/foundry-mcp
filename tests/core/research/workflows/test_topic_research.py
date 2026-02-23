@@ -228,11 +228,13 @@ class TestTopicReflect:
         async def mock_provider(**kwargs):
             result = MagicMock()
             result.success = True
-            result.content = json.dumps({
-                "sufficient": False,
-                "assessment": "Only 1 source found",
-                "refined_query": "deep learning architectures comparison",
-            })
+            result.content = json.dumps(
+                {
+                    "sufficient": False,
+                    "assessment": "Only 1 source found",
+                    "refined_query": "deep learning architectures comparison",
+                }
+            )
             result.tokens_used = 50
             return result
 
@@ -709,11 +711,13 @@ class TestExecuteTopicResearchAsync:
         async def reflection_fn(**kwargs):
             result = MagicMock()
             result.success = True
-            result.content = json.dumps({
-                "sufficient": False,
-                "assessment": "No results found, broadening query",
-                "refined_query": "very specific phrase broader terms",
-            })
+            result.content = json.dumps(
+                {
+                    "sufficient": False,
+                    "assessment": "No results found, broadening query",
+                    "refined_query": "very specific phrase broader terms",
+                }
+            )
             result.tokens_used = 30
             return result
 
@@ -756,11 +760,13 @@ class TestExecuteTopicResearchAsync:
         async def always_insufficient(**kwargs):
             result = MagicMock()
             result.success = True
-            result.content = json.dumps({
-                "sufficient": False,
-                "assessment": "Need more",
-                "refined_query": "better query",
-            })
+            result.content = json.dumps(
+                {
+                    "sufficient": False,
+                    "assessment": "Need more",
+                    "refined_query": "better query",
+                }
+            )
             result.tokens_used = 50
             return result
 
@@ -868,16 +874,20 @@ class TestExecuteTopicResearchAsync:
             result.success = True
             result.tokens_used = 40
             if reflect_call_count == 1:
-                result.content = json.dumps({
-                    "sufficient": False,
-                    "assessment": "Need more data",
-                    "refined_query": "refined deep learning query",
-                })
+                result.content = json.dumps(
+                    {
+                        "sufficient": False,
+                        "assessment": "Need more data",
+                        "refined_query": "refined deep learning query",
+                    }
+                )
             else:
-                result.content = json.dumps({
-                    "sufficient": True,
-                    "assessment": "Sufficient now",
-                })
+                result.content = json.dumps(
+                    {
+                        "sufficient": True,
+                        "assessment": "Sufficient now",
+                    }
+                )
             return result
 
         mixin._provider_async_fn = dynamic_reflect
@@ -916,6 +926,7 @@ class TestBudgetSplitting:
 
         Exercises the same formula used in gathering.py to ensure consistency.
         """
+
         def compute_per_topic_budget(max_sources: int, num_topics: int) -> int:
             """Mirrors the budget formula from GatheringPhaseMixin."""
             num_topics = max(1, num_topics)

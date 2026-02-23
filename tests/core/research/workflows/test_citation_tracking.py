@@ -67,9 +67,7 @@ class TestCitationNumberAssignment:
         assert s2.citation_number == 2
         assert s3.citation_number == 3
 
-    def test_citation_numbers_are_stable_after_addition(
-        self, state_with_sources: DeepResearchState
-    ):
+    def test_citation_numbers_are_stable_after_addition(self, state_with_sources: DeepResearchState):
         """Adding new sources doesn't change existing citation numbers."""
         original_numbers = [s.citation_number for s in state_with_sources.sources]
         state_with_sources.add_source(title="Delta Source")
@@ -248,9 +246,7 @@ class TestStripLlmSourcesSection:
         assert "## References" not in result
 
     def test_preserves_content_before_and_after(self):
-        report = (
-            "# Report\n\nContent.\n\n## Sources\n\n- Src\n\n## Conclusions\n\nFinal."
-        )
+        report = "# Report\n\nContent.\n\n## Sources\n\n- Src\n\n## Conclusions\n\nFinal."
         result = strip_llm_sources_section(report)
         assert "Content." in result
         assert "## Conclusions" in result
@@ -296,9 +292,7 @@ class TestBuildSourcesSection:
         assert "](http" not in section
 
     def test_cited_only_filter(self, state_with_sources: DeepResearchState):
-        section = build_sources_section(
-            state_with_sources, cited_only=True, cited_numbers={1, 3}
-        )
+        section = build_sources_section(state_with_sources, cited_only=True, cited_numbers={1, 3})
         assert "[1]" in section
         assert "[2]" not in section
         assert "[3]" in section
@@ -362,20 +356,14 @@ class TestCitationStabilityAcrossRefinement:
     """Verify citation numbers remain stable when new sources are added
     during refinement iterations."""
 
-    def test_refinement_preserves_citation_numbers(
-        self, state_with_sources: DeepResearchState
-    ):
+    def test_refinement_preserves_citation_numbers(self, state_with_sources: DeepResearchState):
         """Simulates refinement: existing citations stay, new ones are sequential."""
         # Record original citation numbers
         original = {s.id: s.citation_number for s in state_with_sources.sources}
 
         # Simulate refinement adding new sources
-        s4 = state_with_sources.add_source(
-            title="Refinement Source 1", url="https://refine1.example.com"
-        )
-        s5 = state_with_sources.add_source(
-            title="Refinement Source 2", url="https://refine2.example.com"
-        )
+        s4 = state_with_sources.add_source(title="Refinement Source 1", url="https://refine1.example.com")
+        s5 = state_with_sources.add_source(title="Refinement Source 2", url="https://refine2.example.com")
 
         # Original citations unchanged
         for s in state_with_sources.sources[:3]:
@@ -385,9 +373,7 @@ class TestCitationStabilityAcrossRefinement:
         assert s4.citation_number == 4
         assert s5.citation_number == 5
 
-    def test_citations_in_report_survive_resynthesis(
-        self, state_with_sources: DeepResearchState
-    ):
+    def test_citations_in_report_survive_resynthesis(self, state_with_sources: DeepResearchState):
         """Post-processing should work correctly with the same state on re-synthesis."""
         # First synthesis
         report1 = "Finding [1] is key."
@@ -405,9 +391,7 @@ class TestCitationStabilityAcrossRefinement:
         assert meta2["total_citations_in_report"] == 2
         assert meta2["dangling_citations_removed"] == 0
 
-    def test_add_finding_with_citation_references(
-        self, state_with_sources: DeepResearchState
-    ):
+    def test_add_finding_with_citation_references(self, state_with_sources: DeepResearchState):
         """Findings referencing source_ids can be mapped to citation numbers."""
         src_ids = [s.id for s in state_with_sources.sources[:2]]
         state_with_sources.add_finding(

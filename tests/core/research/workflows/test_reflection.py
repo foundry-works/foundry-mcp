@@ -428,9 +428,7 @@ class TestAsyncThinkPause:
         mock_workflow = MagicMock()
         mock_workflow.config.get_reflection_provider.return_value = "test-provider"
         mock_workflow.config.deep_research_reflection_timeout = 60.0
-        mock_workflow._execute_provider_async = AsyncMock(
-            side_effect=RuntimeError("Provider unavailable")
-        )
+        mock_workflow._execute_provider_async = AsyncMock(side_effect=RuntimeError("Provider unavailable"))
 
         decision = await self.orchestrator.async_think_pause(
             state=state,
@@ -601,9 +599,7 @@ class TestMaybeReflect:
         mock_workflow.config.deep_research_enable_reflection = True
 
         # Make the orchestrator raise an exception
-        mock_workflow.orchestrator.async_think_pause = AsyncMock(
-            side_effect=RuntimeError("Unexpected error")
-        )
+        mock_workflow.orchestrator.async_think_pause = AsyncMock(side_effect=RuntimeError("Unexpected error"))
 
         state = _make_state()
 

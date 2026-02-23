@@ -138,9 +138,7 @@ class TestParseClarificationResponse:
 
     def test_no_json_in_content_returns_defaults(self) -> None:
         """Plain text with no JSON returns safe defaults."""
-        result = self.mixin._parse_clarification_response(
-            "I think this query is fine, no changes needed."
-        )
+        result = self.mixin._parse_clarification_response("I think this query is fine, no changes needed.")
 
         assert result["needs_clarification"] is False
         assert result["questions"] == []
@@ -487,11 +485,14 @@ class TestClarificationToPlanningFlow:
         mock_result.cached_tokens = 0
         mock_result.success = True
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.clarification.execute_llm_call",
-            return_value=LLMCallResult(result=mock_result, llm_call_duration_ms=500.0),
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.clarification.finalize_phase",
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.clarification.execute_llm_call",
+                return_value=LLMCallResult(result=mock_result, llm_call_duration_ms=500.0),
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.clarification.finalize_phase",
+            ),
         ):
             result = await mixin._execute_clarification_async(
                 state=state,
@@ -538,11 +539,14 @@ class TestClarificationToPlanningFlow:
         mock_result.cached_tokens = 0
         mock_result.success = True
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.clarification.execute_llm_call",
-            return_value=LLMCallResult(result=mock_result, llm_call_duration_ms=300.0),
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.clarification.finalize_phase",
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.clarification.execute_llm_call",
+                return_value=LLMCallResult(result=mock_result, llm_call_duration_ms=300.0),
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.clarification.finalize_phase",
+            ),
         ):
             result = await mixin._execute_clarification_async(
                 state=state,

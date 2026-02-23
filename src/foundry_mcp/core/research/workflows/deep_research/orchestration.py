@@ -755,11 +755,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             return default
 
         adjustments_raw = data.get("adjustments", [])
-        adjustments = (
-            [str(a) for a in adjustments_raw[:3] if a]
-            if isinstance(adjustments_raw, list)
-            else []
-        )
+        adjustments = [str(a) for a in adjustments_raw[:3] if a] if isinstance(adjustments_raw, list) else []
 
         return ReflectionDecision(
             quality_assessment=str(data.get("quality_assessment", "")),

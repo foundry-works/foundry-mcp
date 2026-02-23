@@ -320,7 +320,7 @@ class TestBashGuardShellWrappers:
 
     def test_python_c_with_git_blocked(self):
         """python -c with git reference is blocked."""
-        allowed, _ = check_command('python3 -c "import subprocess; subprocess.run([\'git\', \'push\'])"')
+        allowed, _ = check_command("python3 -c \"import subprocess; subprocess.run(['git', 'push'])\"")
         assert allowed is False
 
 

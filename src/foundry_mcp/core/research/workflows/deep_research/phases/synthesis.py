@@ -347,11 +347,7 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary. Do N
             for f in findings:
                 confidence_label = f.confidence.value if hasattr(f.confidence, "value") else str(f.confidence)
                 # Map source IDs to citation numbers
-                citation_refs = [
-                    f"[{id_to_citation[sid]}]"
-                    for sid in f.source_ids
-                    if sid in id_to_citation
-                ]
+                citation_refs = [f"[{id_to_citation[sid]}]" for sid in f.source_ids if sid in id_to_citation]
                 source_refs = ", ".join(citation_refs) if citation_refs else "no sources"
                 prompt_parts.append(f"- [{confidence_label.upper()}] {f.content}")
                 prompt_parts.append(f"  Sources: {source_refs}")

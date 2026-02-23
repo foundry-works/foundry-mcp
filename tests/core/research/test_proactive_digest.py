@@ -148,9 +148,7 @@ class TestProactiveEligibility:
         config = DigestConfig(policy=DigestPolicy.PROACTIVE)
         summarizer = MagicMock()
         pdf_extractor = MagicMock()
-        digestor = DocumentDigestor(
-            summarizer=summarizer, pdf_extractor=pdf_extractor, config=config
-        )
+        digestor = DocumentDigestor(summarizer=summarizer, pdf_extractor=pdf_extractor, config=config)
 
         assert digestor._is_eligible("Some content", SourceQuality.HIGH) is True
         assert digestor._is_eligible("Some content", SourceQuality.LOW) is True
@@ -161,9 +159,7 @@ class TestProactiveEligibility:
         config = DigestConfig(policy=DigestPolicy.PROACTIVE)
         summarizer = MagicMock()
         pdf_extractor = MagicMock()
-        digestor = DocumentDigestor(
-            summarizer=summarizer, pdf_extractor=pdf_extractor, config=config
-        )
+        digestor = DocumentDigestor(summarizer=summarizer, pdf_extractor=pdf_extractor, config=config)
 
         assert digestor._is_eligible("", SourceQuality.HIGH) is False
         assert digestor._is_eligible("   ", SourceQuality.HIGH) is False
@@ -173,22 +169,16 @@ class TestProactiveEligibility:
         config = DigestConfig(policy=DigestPolicy.PROACTIVE)
         summarizer = MagicMock()
         pdf_extractor = MagicMock()
-        digestor = DocumentDigestor(
-            summarizer=summarizer, pdf_extractor=pdf_extractor, config=config
-        )
+        digestor = DocumentDigestor(summarizer=summarizer, pdf_extractor=pdf_extractor, config=config)
 
         assert digestor._get_skip_reason("", SourceQuality.HIGH) == "Content is empty"
 
     def test_proactive_ignores_min_content_length(self):
         """PROACTIVE policy ignores min_content_length threshold."""
-        config = DigestConfig(
-            policy=DigestPolicy.PROACTIVE, min_content_length=10000
-        )
+        config = DigestConfig(policy=DigestPolicy.PROACTIVE, min_content_length=10000)
         summarizer = MagicMock()
         pdf_extractor = MagicMock()
-        digestor = DocumentDigestor(
-            summarizer=summarizer, pdf_extractor=pdf_extractor, config=config
-        )
+        digestor = DocumentDigestor(summarizer=summarizer, pdf_extractor=pdf_extractor, config=config)
 
         # Short content is still eligible under PROACTIVE
         assert digestor._is_eligible("Short text", SourceQuality.LOW) is True
@@ -220,12 +210,8 @@ class TestProactiveDigestStep:
             patch(
                 "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
-            ),
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
-            ),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"),
         ):
             mock_instance = MockDigestor.return_value
             mock_instance.digest = AsyncMock(return_value=mock_result)
@@ -254,12 +240,8 @@ class TestProactiveDigestStep:
             patch(
                 "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
-            ),
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
-            ),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"),
         ):
             mock_instance = MockDigestor.return_value
             mock_instance.digest = AsyncMock(return_value=mock_result)
@@ -319,20 +301,14 @@ class TestAnalysisSkipsProactivelyDigested:
         workflow = _make_workflow()
 
         new_payload = _make_digest_payload(original_chars=1000, digest_chars=200)
-        mock_result = DigestResult(
-            payload=new_payload, cache_hit=False, duration_ms=10.0
-        )
+        mock_result = DigestResult(payload=new_payload, cache_hit=False, duration_ms=10.0)
 
         with (
             patch(
                 "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
-            ),
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
-            ),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"),
         ):
             mock_instance = MockDigestor.return_value
             mock_instance.digest = AsyncMock(return_value=mock_result)
@@ -369,12 +345,8 @@ class TestTokenCountingUsesDigestedContent:
             patch(
                 "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
-            ),
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
-            ),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"),
         ):
             mock_instance = MockDigestor.return_value
             mock_instance.digest = AsyncMock(return_value=mock_result)

@@ -252,9 +252,7 @@ class TopicResearchMixin:
         from foundry_mcp.core.research.providers import SearchProviderError
 
         effective_max_results = (
-            max_sources_per_provider
-            if max_sources_per_provider is not None
-            else state.max_sources_per_query
+            max_sources_per_provider if max_sources_per_provider is not None else state.max_sources_per_query
         )
         added = 0
 
@@ -364,9 +362,7 @@ class TopicResearchMixin:
         """
         from foundry_mcp.core.research.workflows.deep_research._helpers import resolve_phase_provider
 
-        provider_id = resolve_phase_provider(
-            self.config, "topic_reflection", "reflection"
-        )
+        provider_id = resolve_phase_provider(self.config, "topic_reflection", "reflection")
 
         system_prompt = (
             "You are a research assistant evaluating search results for a specific sub-topic. "
@@ -406,8 +402,7 @@ class TopicResearchMixin:
             )
 
             if not result.success:
-                return {"sufficient": True, "assessment": "Reflection call failed, proceeding",
-                        "tokens_used": 0}
+                return {"sufficient": True, "assessment": "Reflection call failed, proceeding", "tokens_used": 0}
 
             tokens_used = result.tokens_used or 0
 
@@ -417,8 +412,7 @@ class TopicResearchMixin:
                     data = json.loads(json_str)
                 except json.JSONDecodeError as exc:
                     logger.warning("Topic reflection JSON parse failed: %s", exc)
-                    return {"sufficient": True, "assessment": "Reflection JSON invalid",
-                            "tokens_used": tokens_used}
+                    return {"sufficient": True, "assessment": "Reflection JSON invalid", "tokens_used": tokens_used}
                 return {
                     "sufficient": bool(data.get("sufficient", True)),
                     "assessment": str(data.get("assessment", "")),
@@ -426,11 +420,9 @@ class TopicResearchMixin:
                     "tokens_used": tokens_used,
                 }
 
-            return {"sufficient": True, "assessment": "No JSON in reflection response",
-                    "tokens_used": tokens_used}
+            return {"sufficient": True, "assessment": "No JSON in reflection response", "tokens_used": tokens_used}
 
         except (asyncio.TimeoutError, OSError, ValueError, RuntimeError) as exc:
             logger.warning("Topic reflection failed: %s. Treating as sufficient.", exc)
 
-        return {"sufficient": True, "assessment": "Reflection unavailable",
-                "tokens_used": 0}
+        return {"sufficient": True, "assessment": "Reflection unavailable", "tokens_used": 0}

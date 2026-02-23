@@ -374,8 +374,7 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
         for f in state.findings:
             confidence_label = f.confidence.value if hasattr(f.confidence, "value") else str(f.confidence)
             findings_text.append(
-                f"- [{f.id}] ({confidence_label}) {f.content} "
-                f"(sources: {', '.join(f.source_ids[:3])})"
+                f"- [{f.id}] ({confidence_label}) {f.content} (sources: {', '.join(f.source_ids[:3])})"
             )
 
         if len(findings_text) < 2:
@@ -394,14 +393,12 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
             "- Only report genuine factual contradictions, not differences in emphasis or scope\n"
             "- severity=major for direct factual conflicts, minor for nuance/interpretation differences\n"
             "- preferred_source_id should reference the more authoritative source if determinable, otherwise null\n"
-            "- If no contradictions exist, return {\"contradictions\": []}\n"
+            '- If no contradictions exist, return {"contradictions": []}\n'
             "- Return ONLY valid JSON"
         )
 
-        user_prompt = (
-            f"Research query: {state.original_query}\n\n"
-            f"Findings to check for contradictions:\n"
-            + "\n".join(findings_text)
+        user_prompt = f"Research query: {state.original_query}\n\nFindings to check for contradictions:\n" + "\n".join(
+            findings_text
         )
 
         try:

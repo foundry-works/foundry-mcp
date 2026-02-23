@@ -543,8 +543,7 @@ class GatheringPhaseMixin:
                         # Check if circuit breaker opened mid-gathering (graceful degradation)
                         if not resilience_manager.is_provider_available(provider_name):
                             logger.warning(
-                                "Provider %s circuit breaker opened mid-gathering, "
-                                "skipping for remaining sub-queries",
+                                "Provider %s circuit breaker opened mid-gathering, skipping for remaining sub-queries",
                                 provider_name,
                             )
                             provider_errors.append(f"{provider_name}: circuit breaker open")
