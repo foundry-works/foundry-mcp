@@ -181,6 +181,7 @@ class SynthesisPhaseMixin:
                 "finding_count": len(state.findings),
                 "guidance": "Try reducing the number of findings or source content included",
             },
+            role="report",
         )
         if isinstance(call_result, WorkflowResult):
             return call_result  # Error path

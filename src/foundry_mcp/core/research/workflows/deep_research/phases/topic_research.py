@@ -373,9 +373,14 @@ class TopicResearchMixin:
             tokens_used (int). The caller uses ``parse_reflection_decision``
             on ``raw_response`` to get the structured decision.
         """
-        from foundry_mcp.core.research.workflows.deep_research._helpers import resolve_phase_provider
-
-        provider_id = resolve_phase_provider(self.config, "topic_reflection", "reflection")
+        # Resolve provider and model via role-based hierarchy (Phase 6).
+        # Falls back to phase-specific config, then global default.
+        try:
+            provider_id, reflection_model = self.config.resolve_model_for_role("topic_reflection")
+        except (AttributeError, TypeError, ValueError):
+            from foundry_mcp.core.research.workflows.deep_research._helpers import resolve_phase_provider
+            provider_id = resolve_phase_provider(self.config, "topic_reflection", "reflection")
+            reflection_model = None
 
         # Collect source quality distribution for context
         source_qualities: dict[str, int] = {}
@@ -422,7 +427,7 @@ class TopicResearchMixin:
             result = await self._execute_provider_async(
                 prompt=user_prompt,
                 provider_id=provider_id,
-                model=None,
+                model=reflection_model,
                 system_prompt=system_prompt,
                 timeout=self.config.deep_research_reflection_timeout,
                 temperature=0.2,

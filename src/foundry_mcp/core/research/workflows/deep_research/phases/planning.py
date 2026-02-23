@@ -94,6 +94,7 @@ class PlanningPhaseMixin:
             model=state.planning_model,
             temperature=0.7,  # Some creativity for diverse sub-queries
             timeout=timeout,
+            role="research",
         )
         if isinstance(call_result, WorkflowResult):
             return call_result  # Error path

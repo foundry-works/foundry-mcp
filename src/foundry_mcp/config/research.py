@@ -10,7 +10,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Tuple
 
 from foundry_mcp.config.parsing import _parse_bool, _parse_provider_spec
 
@@ -111,6 +111,20 @@ class ResearchConfig:
     # Per-topic compression before aggregation (Phase 3)
     deep_research_compression_provider: Optional[str] = None  # LLM provider for per-topic compression (defaults to research/default provider)
     deep_research_compression_model: Optional[str] = None  # Model override for per-topic compression
+
+    # Multi-model cost optimization — role-based model hierarchy (Phase 6)
+    # "research" role: main reasoning for analysis, planning, clarification (strongest available)
+    deep_research_research_provider: Optional[str] = None
+    deep_research_research_model: Optional[str] = None
+    # "reflection" role: think-tool pauses (model override — provider already exists above)
+    deep_research_reflection_model: Optional[str] = None
+    # "topic_reflection" role: per-topic ReAct reflection (model override — provider already exists above)
+    deep_research_topic_reflection_model: Optional[str] = None
+    # "report" role: final synthesis / report generation
+    deep_research_report_provider: Optional[str] = None
+    deep_research_report_model: Optional[str] = None
+    # "clarification" role: structured clarification gate (model override — provider already exists above)
+    deep_research_clarification_model: Optional[str] = None
 
     # Deep research configuration
     deep_research_max_iterations: int = 3
@@ -316,6 +330,14 @@ class ResearchConfig:
             # Per-topic compression (Phase 3)
             deep_research_compression_provider=data.get("deep_research_compression_provider"),
             deep_research_compression_model=data.get("deep_research_compression_model"),
+            # Multi-model cost optimization — role-based hierarchy (Phase 6)
+            deep_research_research_provider=data.get("deep_research_research_provider"),
+            deep_research_research_model=data.get("deep_research_research_model"),
+            deep_research_reflection_model=data.get("deep_research_reflection_model"),
+            deep_research_topic_reflection_model=data.get("deep_research_topic_reflection_model"),
+            deep_research_report_provider=data.get("deep_research_report_provider"),
+            deep_research_report_model=data.get("deep_research_report_model"),
+            deep_research_clarification_model=data.get("deep_research_clarification_model"),
             # Deep research configuration
             deep_research_max_iterations=int(data.get("deep_research_max_iterations", 3)),
             deep_research_max_sub_queries=int(data.get("deep_research_max_sub_queries", 5)),
@@ -876,6 +898,79 @@ class ResearchConfig:
             _, model = _parse_provider_spec(self.deep_research_compression_provider)
             return model
         return None
+
+    # ------------------------------------------------------------------
+    # Role-based model resolution (Phase 6: Multi-Model Cost Optimization)
+    # ------------------------------------------------------------------
+
+    #: Maps each model role to the config attribute suffixes to check.
+    #: For each role, we try ``deep_research_{suffix}_provider`` /
+    #: ``deep_research_{suffix}_model`` in order, then fall back to
+    #: ``default_provider``.
+    _ROLE_RESOLUTION_CHAIN: ClassVar[Dict[str, List[str]]] = {
+        "research": ["research", "analysis"],
+        "report": ["report", "synthesis"],
+        "reflection": ["reflection"],
+        "topic_reflection": ["topic_reflection", "reflection"],
+        "summarization": ["summarization"],
+        "compression": ["compression"],
+        "clarification": ["clarification", "research", "analysis"],
+    }
+
+    def resolve_model_for_role(self, role: str) -> Tuple[str, Optional[str]]:
+        """Resolve ``(provider_id, model)`` for a model role.
+
+        Resolution chain (first non-None wins):
+
+        1. **Role-specific config** — ``deep_research_{role}_provider`` /
+           ``deep_research_{role}_model``.
+        2. **Phase-level fallback** — the role maps to one or more phase
+           suffixes (see ``_ROLE_RESOLUTION_CHAIN``), each checked in order.
+        3. **Global default** — ``default_provider``.
+
+        The returned ``model`` may be ``None`` when only the provider is
+        configured (the provider's default model will be used).
+
+        Args:
+            role: Model role name (``"research"``, ``"report"``,
+                ``"reflection"``, ``"topic_reflection"``,
+                ``"summarization"``, ``"compression"``,
+                ``"clarification"``).
+
+        Returns:
+            ``(provider_id, model)`` tuple.
+        """
+        suffixes = self._ROLE_RESOLUTION_CHAIN.get(role, [role])
+
+        resolved_provider: Optional[str] = None
+        resolved_model: Optional[str] = None
+
+        for suffix in suffixes:
+            provider_attr = f"deep_research_{suffix}_provider"
+            model_attr = f"deep_research_{suffix}_model"
+
+            if resolved_provider is None:
+                provider_val = getattr(self, provider_attr, None)
+                if provider_val is not None:
+                    resolved_provider = provider_val
+
+            if resolved_model is None:
+                model_val = getattr(self, model_attr, None)
+                if model_val is not None:
+                    resolved_model = model_val
+
+            # If both found, stop early
+            if resolved_provider is not None and resolved_model is not None:
+                break
+
+        # Parse the resolved provider (or fall back to default_provider)
+        spec_str = resolved_provider or self.default_provider
+        provider_id, spec_model = _parse_provider_spec(spec_str)
+
+        # Model priority: explicit model field > model embedded in provider spec
+        final_model = resolved_model or spec_model
+
+        return provider_id, final_model
 
     def get_search_provider_api_key(
         self,

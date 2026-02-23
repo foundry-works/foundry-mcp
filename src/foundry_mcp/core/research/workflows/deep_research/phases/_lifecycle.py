@@ -128,6 +128,7 @@ async def execute_llm_call(
     temperature: float,
     timeout: float,
     error_metadata: Optional[dict[str, Any]] = None,
+    role: Optional[str] = None,
 ) -> LLMCallResult | WorkflowResult:
     """Execute an LLM call with full lifecycle instrumentation.
 
@@ -143,6 +144,12 @@ async def execute_llm_call(
     modified.  If all retries are exhausted the original hard-error path is
     taken.
 
+    **Role-based model resolution (Phase 6):** When *role* is provided and
+    *provider_id* / *model* are ``None``, the provider and model are resolved
+    from ``workflow.config.resolve_model_for_role(role)``.  Explicit
+    *provider_id* / *model* values always take precedence over role-based
+    resolution.
+
     Args:
         workflow: The DeepResearchWorkflow instance (provides config, memory, etc.)
         state: Current research state
@@ -154,6 +161,10 @@ async def execute_llm_call(
         temperature: Sampling temperature
         timeout: Request timeout in seconds
         error_metadata: Extra fields to include in ContextWindowError response metadata
+        role: Model role for cost-optimized routing (e.g. "research", "report",
+            "reflection", "summarization", "compression", "clarification").
+            When set, resolves provider/model from config if not explicitly
+            provided.
 
     Returns:
         LLMCallResult on success (caller uses .result for the WorkflowResult),
@@ -165,6 +176,15 @@ async def execute_llm_call(
         estimate_token_limit_for_model,
         truncate_to_token_estimate,
     )
+
+    # Role-based model resolution (Phase 6): when role is provided and
+    # provider_id / model are not explicitly set, resolve from config.
+    if role and hasattr(workflow, "config") and hasattr(workflow.config, "resolve_model_for_role"):
+        role_provider, role_model = workflow.config.resolve_model_for_role(role)
+        if provider_id is None:
+            provider_id = role_provider
+        if model is None:
+            model = role_model
 
     effective_provider = provider_id
 
@@ -360,6 +380,8 @@ async def execute_llm_call(
     phase_metrics_metadata: dict[str, Any] = {}
     if token_limit_retries > 0:
         phase_metrics_metadata["token_limit_retries"] = token_limit_retries
+    if role:
+        phase_metrics_metadata["role"] = role
 
     state.phase_metrics.append(
         PhaseMetrics(
@@ -411,6 +433,7 @@ async def execute_structured_llm_call(
     timeout: float,
     parse_fn: Any,
     error_metadata: Optional[dict[str, Any]] = None,
+    role: Optional[str] = None,
 ) -> StructuredLLMCallResult | WorkflowResult:
     """Execute an LLM call expecting structured JSON output.
 
@@ -437,6 +460,8 @@ async def execute_structured_llm_call(
         parse_fn: Callable ``(content: str) -> T`` that parses the LLM
             response content.  Should raise on validation failure.
         error_metadata: Extra fields for error response metadata
+        role: Model role for cost-optimized routing (passed through to
+            :func:`execute_llm_call`)
 
     Returns:
         StructuredLLMCallResult on success or parse-exhaustion (check
@@ -462,6 +487,7 @@ async def execute_structured_llm_call(
             temperature=temperature,
             timeout=timeout,
             error_metadata=error_metadata,
+            role=role,
         )
 
         # LLM-level error — propagate immediately

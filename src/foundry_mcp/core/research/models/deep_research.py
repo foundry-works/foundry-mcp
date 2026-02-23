@@ -540,6 +540,49 @@ class DeepResearchState(BaseModel):
     # Phase Management
     # =========================================================================
 
+    def get_model_role_costs(self) -> dict[str, dict[str, Any]]:
+        """Aggregate cost tracking per model role across all phase metrics.
+
+        Scans ``phase_metrics`` for entries that have a ``role`` key in their
+        metadata (set by ``execute_llm_call`` when a role is provided) and
+        produces a per-role cost summary.
+
+        Returns:
+            Dict keyed by role name, each containing::
+
+                {
+                    "provider": str | None,   # last-seen provider for this role
+                    "model": str | None,       # last-seen model for this role
+                    "input_tokens": int,
+                    "output_tokens": int,
+                    "calls": int,
+                }
+        """
+        role_costs: dict[str, dict[str, Any]] = {}
+        for pm in self.phase_metrics:
+            role = pm.metadata.get("role")
+            if not role:
+                continue
+            if role not in role_costs:
+                role_costs[role] = {
+                    "provider": None,
+                    "model": None,
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "calls": 0,
+                }
+            entry = role_costs[role]
+            entry["provider"] = pm.provider_id or entry["provider"]
+            entry["model"] = pm.model_used or entry["model"]
+            entry["input_tokens"] += pm.input_tokens
+            entry["output_tokens"] += pm.output_tokens
+            entry["calls"] += 1
+        return role_costs
+
+    # =========================================================================
+    # Phase Management
+    # =========================================================================
+
     def advance_phase(self) -> DeepResearchPhase:
         """Advance to the next research phase.
 

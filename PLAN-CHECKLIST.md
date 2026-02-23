@@ -151,38 +151,38 @@ Mark items `[x]` as completed. Items within a phase are ordered by dependency.
 
 ## Phase 6: Multi-Model Cost Optimization
 
-- [ ] **6.1** Formalize model role hierarchy in `config.py`:
-  - [ ] `research_model` / `research_provider` — analysis, synthesis (strongest)
-  - [ ] `summarization_model` / `summarization_provider` — fetch-time (cheapest)
-  - [ ] `compression_model` / `compression_provider` — per-topic compression
-  - [ ] `reflection_model` / `reflection_provider` — think-tool pauses
-  - [ ] `report_model` / `report_provider` — final synthesis
-  - [ ] All default to `None` (falls back to phase-level, then global default)
-- [ ] **6.2** Add `resolve_model_for_role(role: str) -> tuple[str, str]` to config:
-  - [ ] Resolution chain: role-specific → phase-level → global default
-  - [ ] Returns `(provider_id, model)`
-- [ ] **6.3** Add `role: Optional[str]` parameter to `execute_llm_call()` in `_lifecycle.py`:
-  - [ ] When `role` is provided, resolve provider/model from config via `resolve_model_for_role()`
-  - [ ] Explicit `provider_id`/`model` parameters still override role-based resolution
-- [ ] **6.4** Update all phase callsites to pass appropriate roles:
-  - [ ] `gathering.py` (topic research LLM calls) → `role="reflection"`
-  - [ ] `gathering.py` (compression calls) → `role="compression"`
-  - [ ] `topic_research.py` (reflection calls) → `role="reflection"`
-  - [ ] `analysis.py` (finding extraction) → `role="research"`
-  - [ ] `synthesis.py` (report generation) → `role="report"`
-  - [ ] `clarification.py` (structured decision) → `role="research"`
-  - [ ] `planning.py` (sub-query generation) → `role="research"`
-  - [ ] Summarization (Phase 1 code) → `role="summarization"`
-- [ ] **6.5** Add cost tracking per role in `PhaseMetrics.metadata["model_roles"]`:
-  - [ ] `{role: {provider, model, input_tokens, output_tokens, calls}}`
-- [ ] **6.6** Update `server(action="capabilities")` to include model roles in response
-- [ ] **6.7** Write `tests/research/test_model_routing.py`:
-  - [ ] Test role resolution chain (role-specific → phase → global)
-  - [ ] Test explicit provider/model overrides role-based resolution
-  - [ ] Test cost tracking per role
-  - [ ] Test backward-compat when no role-specific config provided
-  - [ ] Test all phase callsites pass expected roles
-- [ ] **6.8** Verify existing deep research contract tests still pass
+- [x] **6.1** Formalize model role hierarchy in `config.py`:
+  - [x] `research_model` / `research_provider` — analysis, planning, clarification (strongest)
+  - [x] `summarization_model` / `summarization_provider` — fetch-time (cheapest)
+  - [x] `compression_model` / `compression_provider` — per-topic compression
+  - [x] `reflection_model` / `reflection_provider` — think-tool pauses
+  - [x] `report_model` / `report_provider` — final synthesis
+  - [x] All default to `None` (falls back to phase-level, then global default)
+- [x] **6.2** Add `resolve_model_for_role(role: str) -> tuple[str, str]` to config:
+  - [x] Resolution chain: role-specific → phase-level → global default
+  - [x] Returns `(provider_id, model)`
+- [x] **6.3** Add `role: Optional[str]` parameter to `execute_llm_call()` in `_lifecycle.py`:
+  - [x] When `role` is provided, resolve provider/model from config via `resolve_model_for_role()`
+  - [x] Explicit `provider_id`/`model` parameters still override role-based resolution
+- [x] **6.4** Update all phase callsites to pass appropriate roles:
+  - [x] `gathering.py` (summarization calls) → `role="summarization"`
+  - [x] `gathering.py` (compression calls) → `role="compression"`
+  - [x] `topic_research.py` (reflection calls) → `role="topic_reflection"`
+  - [x] `analysis.py` (finding extraction) → `role="research"`
+  - [x] `synthesis.py` (report generation) → `role="report"`
+  - [x] `clarification.py` (structured decision) → `role="clarification"`
+  - [x] `planning.py` (sub-query generation) → `role="research"`
+- [x] **6.5** Add cost tracking per role in `PhaseMetrics.metadata["role"]`:
+  - [x] Role stored per-call in PhaseMetrics metadata
+  - [x] `get_model_role_costs()` aggregation on DeepResearchState: `{role: {provider, model, input_tokens, output_tokens, calls}}`
+- [x] **6.6** Update `server(action="capabilities")` to include model roles in response
+- [x] **6.7** Write `tests/core/research/workflows/test_model_routing.py`:
+  - [x] Test role resolution chain (role-specific → phase → global)
+  - [x] Test explicit provider/model overrides role-based resolution
+  - [x] Test cost tracking per role
+  - [x] Test backward-compat when no role-specific config provided
+  - [x] Test all phase callsites pass expected roles (32 tests)
+- [x] **6.8** Verify existing deep research contract tests still pass (1759 passed, 6 skipped)
 
 ---
 

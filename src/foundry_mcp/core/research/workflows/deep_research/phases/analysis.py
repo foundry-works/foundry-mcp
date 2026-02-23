@@ -201,6 +201,7 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
                 "source_count": len(state.sources),
                 "guidance": "Try reducing max_sources_per_query or processing sources in batches",
             },
+            role="research",
         )
         if isinstance(call_result, WorkflowResult):
             return call_result  # Error path

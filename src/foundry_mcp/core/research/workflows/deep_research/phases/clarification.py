@@ -133,6 +133,7 @@ class ClarificationPhaseMixin:
             temperature=0.3,  # Low temperature for analytical assessment
             timeout=timeout,
             parse_fn=_strict_parse_clarification,
+            role="clarification",
         )
 
         # LLM-level error — propagate immediately

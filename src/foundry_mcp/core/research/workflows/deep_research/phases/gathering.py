@@ -110,12 +110,16 @@ class GatheringPhaseMixin:
         if not results_to_compress:
             return {"topics_compressed": 0, "topics_failed": 0, "total_compression_tokens": 0}
 
-        compression_provider = getattr(
-            self.config, "get_compression_provider", lambda: self.config.default_provider
-        )()
-        compression_model = getattr(
-            self.config, "get_compression_model", lambda: None
-        )()
+        # Resolve compression provider/model via role-based hierarchy (Phase 6).
+        try:
+            compression_provider, compression_model = self.config.resolve_model_for_role("compression")
+        except (AttributeError, TypeError, ValueError):
+            compression_provider = getattr(
+                self.config, "get_compression_provider", lambda: self.config.default_provider
+            )()
+            compression_model = getattr(
+                self.config, "get_compression_model", lambda: None
+            )()
 
         semaphore = asyncio.Semaphore(max_concurrent)
         total_compression_tokens = 0
@@ -503,12 +507,16 @@ class GatheringPhaseMixin:
         """
         from foundry_mcp.core.research.providers.shared import SourceSummarizer
 
-        summarization_provider = getattr(
-            self.config, "get_summarization_provider", lambda: self.config.default_provider
-        )()
-        summarization_model = getattr(
-            self.config, "get_summarization_model", lambda: None
-        )()
+        # Resolve summarization provider/model via role-based hierarchy (Phase 6).
+        try:
+            summarization_provider, summarization_model = self.config.resolve_model_for_role("summarization")
+        except (AttributeError, TypeError, ValueError):
+            summarization_provider = getattr(
+                self.config, "get_summarization_provider", lambda: self.config.default_provider
+            )()
+            summarization_model = getattr(
+                self.config, "get_summarization_model", lambda: None
+            )()
         max_concurrent = getattr(self.config, "deep_research_max_concurrent", 3)
 
         provider._source_summarizer = SourceSummarizer(
