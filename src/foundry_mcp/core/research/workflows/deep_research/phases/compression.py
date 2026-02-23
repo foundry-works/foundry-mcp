@@ -97,14 +97,11 @@ class CompressionMixin:
             return {"topics_compressed": 0, "topics_failed": 0, "total_compression_tokens": 0}
 
         # Resolve compression provider/model via role-based hierarchy.
-        # Uses try/except — hasattr is not safe with mock objects that
-        # auto-create attributes on access.
-        compression_provider: str = self.config.default_provider
-        compression_model: str | None = None
-        try:
-            compression_provider, compression_model = self.config.resolve_model_for_role("compression")
-        except (AttributeError, TypeError, ValueError):
-            logger.debug("Role resolution unavailable for compression, using defaults")
+        from foundry_mcp.core.research.workflows.deep_research._helpers import safe_resolve_model_for_role
+
+        role_provider, role_model = safe_resolve_model_for_role(self.config, "compression")
+        compression_provider: str = role_provider or self.config.default_provider
+        compression_model: str | None = role_model
 
         # Source content char limit — configurable, defaults to 50,000
         # (matching open_deep_research's max_content_length).

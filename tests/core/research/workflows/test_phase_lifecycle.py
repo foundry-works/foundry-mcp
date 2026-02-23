@@ -551,7 +551,7 @@ class TestModelTokenLimitsConfig:
         assert MODEL_TOKEN_LIMITS["claude-opus-4-6"] == 200_000
         assert MODEL_TOKEN_LIMITS["gemini-3"] == 1_000_000
 
-    def test_fallback_on_missing_file(self):
+    def test_fallback_on_missing_file(self, tmp_path):
         """Should fall back to hardcoded limits when JSON file is missing."""
         from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
             _FALLBACK_MODEL_TOKEN_LIMITS,
@@ -559,35 +559,25 @@ class TestModelTokenLimitsConfig:
         )
 
         with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases._lifecycle.Path"
-        ) as mock_path_cls:
-            mock_path = MagicMock()
-            mock_path.__truediv__ = MagicMock(return_value=mock_path)
-            mock_path.read_text.side_effect = FileNotFoundError("not found")
-            # Make resolve().parents[5] return our mock
-            mock_path_cls.return_value.resolve.return_value.parents.__getitem__ = MagicMock(
-                return_value=mock_path
-            )
+            "foundry_mcp.core.research.workflows.deep_research.phases._lifecycle._config_pkg"
+        ) as mock_pkg:
+            mock_pkg.__file__ = str(tmp_path / "__init__.py")
             result = _load_model_token_limits()
 
         assert result == _FALLBACK_MODEL_TOKEN_LIMITS
 
-    def test_fallback_on_malformed_json(self):
+    def test_fallback_on_malformed_json(self, tmp_path):
         """Should fall back to hardcoded limits when JSON is malformed."""
         from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
             _FALLBACK_MODEL_TOKEN_LIMITS,
             _load_model_token_limits,
         )
 
+        (tmp_path / "model_token_limits.json").write_text("not valid json")
         with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases._lifecycle.Path"
-        ) as mock_path_cls:
-            mock_path = MagicMock()
-            mock_path.__truediv__ = MagicMock(return_value=mock_path)
-            mock_path.read_text.return_value = "not valid json"
-            mock_path_cls.return_value.resolve.return_value.parents.__getitem__ = MagicMock(
-                return_value=mock_path
-            )
+            "foundry_mcp.core.research.workflows.deep_research.phases._lifecycle._config_pkg"
+        ) as mock_pkg:
+            mock_pkg.__file__ = str(tmp_path / "__init__.py")
             result = _load_model_token_limits()
 
         assert result == _FALLBACK_MODEL_TOKEN_LIMITS
@@ -602,3 +592,22 @@ class TestModelTokenLimitsConfig:
         # gpt-4.1-mini must come before gpt-4.1
         if "gpt-4.1-mini" in keys and "gpt-4.1" in keys:
             assert keys.index("gpt-4.1-mini") < keys.index("gpt-4.1")
+
+    def test_fallback_matches_json(self):
+        """_FALLBACK_MODEL_TOKEN_LIMITS must match model_token_limits.json to prevent divergence."""
+        import json
+        from pathlib import Path
+
+        import foundry_mcp.config as config_pkg
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _FALLBACK_MODEL_TOKEN_LIMITS,
+        )
+
+        json_path = Path(config_pkg.__file__).resolve().parent / "model_token_limits.json"
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+        json_limits = {str(k): int(v) for k, v in data["limits"].items()}
+
+        assert _FALLBACK_MODEL_TOKEN_LIMITS == json_limits, (
+            "Hardcoded _FALLBACK_MODEL_TOKEN_LIMITS has diverged from "
+            "model_token_limits.json. Update both to keep them in sync."
+        )

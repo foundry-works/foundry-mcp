@@ -11,6 +11,7 @@ Covers:
 
 from __future__ import annotations
 
+import re
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -634,10 +635,14 @@ class TestConstants:
         assert _FALLBACK_CONTEXT_WINDOW == 128_000
 
     def test_error_patterns_cover_major_providers(self):
-        providers = {p for p, _ in _CONTEXT_WINDOW_ERROR_PATTERNS}
-        assert "openai" in providers
-        assert "anthropic" in providers
-        assert "google" in providers
+        # Verify patterns match representative error messages from each provider
+        assert len(_CONTEXT_WINDOW_ERROR_PATTERNS) >= 3
+        # OpenAI-style: token/context/length keywords
+        assert any(re.search(p, "maximum context length exceeded") for p in _CONTEXT_WINDOW_ERROR_PATTERNS)
+        # Anthropic-style: prompt is too long
+        assert any(re.search(p, "prompt is too long") for p in _CONTEXT_WINDOW_ERROR_PATTERNS)
+        # Google-style: resource exhausted / token limit
+        assert any(re.search(p, "token limit exceeded") for p in _CONTEXT_WINDOW_ERROR_PATTERNS)
 
     def test_error_classes_cover_google(self):
         assert "ResourceExhausted" in _CONTEXT_WINDOW_ERROR_CLASSES

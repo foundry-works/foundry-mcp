@@ -320,6 +320,31 @@ def parse_clarification_decision(text: str) -> ClarificationDecision:
     return decision
 
 
+def safe_resolve_model_for_role(
+    config: "ResearchConfig",
+    role: str,
+) -> tuple[Optional[str], Optional[str]]:
+    """Resolve ``(provider_id, model)`` for a role, returning ``(None, None)`` on failure.
+
+    Wraps ``config.resolve_model_for_role(role)`` with defensive error
+    handling so callers don't need repeated try/except blocks.
+
+    Args:
+        config: ResearchConfig instance
+        role: Model role (e.g. ``"summarization"``, ``"compression"``)
+
+    Returns:
+        ``(provider_id, model)`` on success, ``(None, None)`` if the config
+        object doesn't support role resolution or the role is invalid.
+    """
+    try:
+        provider, model = config.resolve_model_for_role(role)
+        return provider, model
+    except (AttributeError, TypeError, ValueError):
+        logger.debug("Role resolution unavailable for %s, using defaults", role)
+        return None, None
+
+
 def resolve_phase_provider(config: "ResearchConfig", *phase_names: str) -> str:
     """Resolve LLM provider ID by trying phase-specific config attrs in order.
 

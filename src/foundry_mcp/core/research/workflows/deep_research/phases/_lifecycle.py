@@ -17,11 +17,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
+import foundry_mcp.config as _config_pkg
 from foundry_mcp.core.errors.provider import ContextWindowError
 from foundry_mcp.core.observability import get_metrics
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.models.fidelity import PhaseMetrics
 from foundry_mcp.core.research.workflows.base import WorkflowResult
+from foundry_mcp.core.research.workflows.deep_research._helpers import (
+    estimate_token_limit_for_model,
+    safe_resolve_model_for_role,
+    truncate_to_token_estimate,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +70,7 @@ def _load_model_token_limits() -> dict[str, int]:
     ones (e.g. ``"gpt-4.1-mini"`` before ``"gpt-4.1"``) because
     ``estimate_token_limit_for_model`` returns the first match.
     """
-    config_path = Path(__file__).resolve().parents[5] / "config" / "model_token_limits.json"
+    config_path = Path(_config_pkg.__file__).resolve().parent / "model_token_limits.json"
     try:
         data = json.loads(config_path.read_text(encoding="utf-8"))
         limits = data.get("limits", {})
@@ -95,15 +101,15 @@ MODEL_TOKEN_LIMITS: dict[str, int] = _load_model_token_limits()
 
 #: Regex patterns matched against exception messages to detect context-window
 #: errors that providers raise as generic ``BadRequestError`` or similar.
-#: Each entry is ``(provider_hint, pattern)``.  When the exception class name
-#: **and** message match, the error is re-classified as a ContextWindowError.
-_CONTEXT_WINDOW_ERROR_PATTERNS: list[tuple[str, str]] = [
+#: When the exception message matches any pattern, the error is re-classified
+#: as a ContextWindowError.
+_CONTEXT_WINDOW_ERROR_PATTERNS: list[str] = [
     # OpenAI / Codex: BadRequestError with token/context/length keywords
-    ("openai", r"(?i)\b(?:token|context|length|maximum.*context)\b"),
+    r"(?i)\b(?:token|context|length|maximum.*context)\b",
     # Anthropic: BadRequestError with "prompt is too long"
-    ("anthropic", r"(?i)prompt\s+is\s+too\s+long"),
+    r"(?i)prompt\s+is\s+too\s+long",
     # Google: ResourceExhausted exception type (matched by class name)
-    ("google", r"(?i)\b(?:resource\s*exhausted|context\s*length|token\s*limit)\b"),
+    r"(?i)\b(?:resource\s*exhausted|context\s*length|token\s*limit)\b",
 ]
 
 #: Exception class names that are known context-window indicators for
@@ -132,7 +138,7 @@ def _is_context_window_error(exc: Exception) -> bool:
 
     msg = str(exc)
 
-    for _, pattern in _CONTEXT_WINDOW_ERROR_PATTERNS:
+    for pattern in _CONTEXT_WINDOW_ERROR_PATTERNS:
         if re.search(pattern, msg):
             return True
 
@@ -244,24 +250,14 @@ async def execute_llm_call(
         or WorkflowResult directly on error (ContextWindowError, timeout, failure).
         Callers use ``isinstance(ret, WorkflowResult)`` to branch on error.
     """
-    from foundry_mcp.core.research.workflows.deep_research._helpers import (
-        estimate_token_limit_for_model,
-        truncate_to_token_estimate,
-    )
-
     # Role-based model resolution (Phase 6): when role is provided and
     # provider_id / model are not explicitly set, resolve from config.
-    # Uses try/except rather than hasattr — hasattr is not safe with mock
-    # objects that auto-create attributes on access.
     if role:
-        try:
-            role_provider, role_model = workflow.config.resolve_model_for_role(role)
-            if provider_id is None:
-                provider_id = role_provider
-            if model is None:
-                model = role_model
-        except (AttributeError, TypeError, ValueError):
-            logger.debug("Role resolution unavailable for %s, using defaults", role)
+        role_provider, role_model = safe_resolve_model_for_role(workflow.config, role)
+        if provider_id is None:
+            provider_id = role_provider
+        if model is None:
+            model = role_model
 
     effective_provider = provider_id
 
@@ -550,8 +546,6 @@ async def execute_structured_llm_call(
         StructuredLLMCallResult on success or parse-exhaustion (check
         ``.parsed`` for ``None``), or WorkflowResult on LLM-level error.
     """
-    import json as _json
-
     total_duration_ms = 0.0
     last_llm_result: Optional[LLMCallResult] = None
     parse_retries = 0
@@ -590,7 +584,7 @@ async def execute_structured_llm_call(
                 parsed=parsed,
                 parse_retries=parse_retries,
             )
-        except (ValueError, _json.JSONDecodeError, TypeError, KeyError) as exc:
+        except (ValueError, json.JSONDecodeError, TypeError, KeyError) as exc:
             logger.warning(
                 "%s phase structured parse failed (attempt %d/%d): %s",
                 phase_name.capitalize(),

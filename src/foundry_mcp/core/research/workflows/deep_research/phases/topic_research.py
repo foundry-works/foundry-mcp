@@ -375,17 +375,14 @@ class TopicResearchMixin:
         """
         # Resolve provider and model via role-based hierarchy (Phase 6).
         # Falls back to phase-specific config, then global default.
-        # Uses try/except for unpacking — hasattr alone is not safe with
-        # mock objects that auto-create attributes.
-        provider_id: str | None = None
-        reflection_model: str | None = None
-        try:
-            provider_id, reflection_model = self.config.resolve_model_for_role("topic_reflection")
-        except (AttributeError, TypeError, ValueError):
-            logger.debug("Role resolution unavailable for topic_reflection, using phase fallback")
-            from foundry_mcp.core.research.workflows.deep_research._helpers import resolve_phase_provider
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            resolve_phase_provider,
+            safe_resolve_model_for_role,
+        )
+
+        provider_id, reflection_model = safe_resolve_model_for_role(self.config, "topic_reflection")
+        if provider_id is None:
             provider_id = resolve_phase_provider(self.config, "topic_reflection", "reflection")
-            reflection_model = None
 
         # Collect source quality distribution for context
         source_qualities: dict[str, int] = {}

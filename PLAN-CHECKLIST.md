@@ -55,11 +55,20 @@
 
 ## Phase 4: Cleanup from Code Review
 
-- [ ] **4.1** Fix `_load_model_token_limits()` — use `foundry_mcp.config.__file__` not `parents[5]`
-- [ ] **4.2** Extract `safe_resolve_model_for_role()` helper — replace 5+ try/except sites
-- [ ] **4.3** Remove unused `provider_hint` from `_CONTEXT_WINDOW_ERROR_PATTERNS`
-- [ ] **4.4** Add test: `_FALLBACK_MODEL_TOKEN_LIMITS` matches `model_token_limits.json`
-- [ ] **4.5** Move per-call imports to module level in `_lifecycle.py`
+- [x] **4.1** Fix `_load_model_token_limits()` — use `foundry_mcp.config.__file__` not `parents[5]`
+  - [x] Import `foundry_mcp.config` as `_config_pkg`, resolve path via `Path(_config_pkg.__file__).resolve().parent`
+  - [x] Updated fallback tests to mock `_config_pkg` instead of fragile `parents[5]` chain
+- [x] **4.2** Extract `safe_resolve_model_for_role()` helper — replace 4 try/except sites
+  - [x] Added `safe_resolve_model_for_role()` to `_helpers.py` — returns `(None, None)` on failure
+  - [x] Replaced try/except in `_lifecycle.py`, `gathering.py`, `compression.py`, `topic_research.py`
+- [x] **4.3** Remove unused `provider_hint` from `_CONTEXT_WINDOW_ERROR_PATTERNS`
+  - [x] Simplified from `list[tuple[str, str]]` to `list[str]` (comments document provider coverage)
+  - [x] Updated `_is_context_window_error()` loop and test assertions
+- [x] **4.4** Add test: `_FALLBACK_MODEL_TOKEN_LIMITS` matches `model_token_limits.json`
+  - [x] `test_fallback_matches_json` loads both sources and asserts equality with clear error message
+- [x] **4.5** Move per-call imports to module level in `_lifecycle.py`
+  - [x] Moved `estimate_token_limit_for_model`, `truncate_to_token_estimate`, `safe_resolve_model_for_role` to top-level imports
+  - [x] Replaced `import json as _json` with module-level `json` (already imported)
 
 ---
 
@@ -70,4 +79,4 @@
 | Phase 1 | **Done** | 2026-02-23 | Core fix — compression input alignment |
 | Phase 2 | **Done** | 2026-02-23 | L1 input cap |
 | Phase 3 | **Done** | 2026-02-23 | 12 new tests (7 summarization + 5 cross-phase) |
-| Phase 4 | Pending | — | Review cleanup |
+| Phase 4 | **Done** | 2026-02-23 | Review cleanup — 5 items |

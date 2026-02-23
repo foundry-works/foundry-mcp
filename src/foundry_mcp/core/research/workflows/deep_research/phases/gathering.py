@@ -255,14 +255,11 @@ class GatheringPhaseMixin(CompressionMixin):
         from foundry_mcp.core.research.providers.shared import SourceSummarizer
 
         # Resolve summarization provider/model via role-based hierarchy (Phase 6).
-        # Uses try/except — hasattr is not safe with mock objects that
-        # auto-create attributes on access.
-        summarization_provider: str = self.config.default_provider
-        summarization_model: str | None = None
-        try:
-            summarization_provider, summarization_model = self.config.resolve_model_for_role("summarization")
-        except (AttributeError, TypeError, ValueError):
-            logger.debug("Role resolution unavailable for summarization, using defaults")
+        from foundry_mcp.core.research.workflows.deep_research._helpers import safe_resolve_model_for_role
+
+        role_provider, role_model = safe_resolve_model_for_role(self.config, "summarization")
+        summarization_provider: str = role_provider or self.config.default_provider
+        summarization_model: str | None = role_model
         max_concurrent = getattr(self.config, "deep_research_max_concurrent", 3)
         max_content_length = getattr(self.config, "deep_research_max_content_length", 50000)
 
