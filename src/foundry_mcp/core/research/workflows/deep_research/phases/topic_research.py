@@ -67,6 +67,7 @@ class TopicResearchMixin:
         available_providers: list[Any],
         *,
         max_searches: int = 3,
+        max_sources_per_provider: int | None = None,
         timeout: float = 120.0,
         seen_urls: set[str],
         seen_titles: dict[str, str],
@@ -85,6 +86,9 @@ class TopicResearchMixin:
             state: Current research state (for config access and source storage)
             available_providers: List of initialized search providers
             max_searches: Maximum search iterations for this topic
+            max_sources_per_provider: Max results to request from each provider
+                per search call. When None, falls back to state.max_sources_per_query.
+                Used for budget splitting across parallel topic researchers.
             timeout: Timeout per search operation
             seen_urls: Shared set of already-seen URLs (for deduplication)
             seen_titles: Shared dict of normalized titles (for deduplication)
@@ -107,6 +111,7 @@ class TopicResearchMixin:
                 sub_query=sub_query,
                 state=state,
                 available_providers=available_providers,
+                max_sources_per_provider=max_sources_per_provider,
                 timeout=timeout,
                 seen_urls=seen_urls,
                 seen_titles=seen_titles,
@@ -193,6 +198,7 @@ class TopicResearchMixin:
         sub_query: SubQuery,
         state: DeepResearchState,
         available_providers: list[Any],
+        max_sources_per_provider: int | None,
         timeout: float,
         seen_urls: set[str],
         seen_titles: dict[str, str],
@@ -201,10 +207,24 @@ class TopicResearchMixin:
     ) -> int:
         """Execute search for a single query across all available providers.
 
+        Args:
+            query: Search query string
+            sub_query: The SubQuery being researched
+            state: Current research state
+            available_providers: Search provider instances
+            max_sources_per_provider: Max results per provider call (budget-split).
+                Falls back to state.max_sources_per_query when None.
+            timeout: Per-provider search timeout
+            seen_urls: Shared URL dedup set
+            seen_titles: Shared title dedup dict
+            state_lock: Lock for thread-safe state mutations
+            semaphore: Semaphore bounding concurrent search calls
+
         Returns the number of new (deduplicated) sources added to state.
         """
         from foundry_mcp.core.research.providers import SearchProviderError
 
+        effective_max_results = max_sources_per_provider or state.max_sources_per_query
         added = 0
 
         async with semaphore:
@@ -216,7 +236,7 @@ class TopicResearchMixin:
 
                     search_kwargs: dict[str, Any] = {
                         "query": query,
-                        "max_results": state.max_sources_per_query,
+                        "max_results": effective_max_results,
                         "sub_query_id": sub_query.id,
                     }
 

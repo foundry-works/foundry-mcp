@@ -398,6 +398,19 @@ class GatheringPhaseMixin:
         if getattr(self.config, "deep_research_enable_topic_agents", False):
             topic_max_searches = getattr(self.config, "deep_research_topic_max_searches", 3)
 
+            # Budget splitting: divide max_sources_per_query across topic agents
+            # so the aggregate source count stays within a reasonable bound.
+            # Each topic gets at least 2 results per provider call.
+            num_topics = max(1, len(pending_queries))
+            per_topic_max_sources = max(2, state.max_sources_per_query // num_topics)
+
+            logger.info(
+                "Topic agent budget: %d topics, %d sources/provider/topic (total budget %d)",
+                num_topics,
+                per_topic_max_sources,
+                state.max_sources_per_query,
+            )
+
             self._check_cancellation(state)
 
             async def run_topic_agent(sq):
@@ -406,6 +419,7 @@ class GatheringPhaseMixin:
                     state=state,
                     available_providers=available_providers,
                     max_searches=topic_max_searches,
+                    max_sources_per_provider=per_topic_max_sources,
                     timeout=timeout,
                     seen_urls=seen_urls,
                     seen_titles=seen_titles,
@@ -457,6 +471,7 @@ class GatheringPhaseMixin:
                     "circuit_breaker_states_end": circuit_breaker_states_end,
                     "topic_agents_enabled": True,
                     "topic_max_searches": topic_max_searches,
+                    "per_topic_max_sources": per_topic_max_sources,
                 },
             )
 

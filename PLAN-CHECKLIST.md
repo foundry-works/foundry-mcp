@@ -85,54 +85,54 @@ Tracks progress against [PLAN.md](./PLAN.md). Check items as completed.
 ## Phase 3: Advanced
 
 ### 3. Parallel Sub-Topic Researcher Agents
-- [ ] Design `TopicResearchResult` model:
-  - [ ] `sub_query_id`, `searches_performed`, `sources_found`, `per_topic_summary`
-  - [ ] `reflection_notes` (from per-topic reflect step)
-- [ ] Create `phases/topic_research.py` with `TopicResearchMixin`:
-  - [ ] `_execute_topic_research_async(sub_query)` — single topic ReAct loop
-  - [ ] `_topic_search()` — search scoped to one sub-query
-  - [ ] `_topic_reflect()` — fast LLM evaluates results, suggests refinement
-  - [ ] Loop: search → reflect → (refine query → search)* → compile summary
-  - [ ] Max iterations per topic: configurable (`deep_research_topic_max_searches`)
-- [ ] Modify `phases/gathering.py`:
-  - [ ] When `deep_research_enable_topic_agents = true`, delegate to topic researchers
-  - [ ] Run topic researchers in parallel with `asyncio.gather()` + semaphore
-  - [ ] Collect `TopicResearchResult` per sub-query
-  - [ ] Merge sources and per-topic summaries into state
-- [ ] Budget splitting: divide search budget across sub-queries
-- [ ] Add config keys:
-  - [ ] `deep_research_enable_topic_agents` (default: `false`)
-  - [ ] `deep_research_topic_max_searches` (default: `3`)
-  - [ ] `deep_research_topic_reflection_provider`
-- [ ] Per-topic audit events
-- [ ] Unit tests: single topic research loop
-- [ ] Integration test: multi-topic parallel execution
-- [ ] Verify deduplication across topic researchers
+- [x] Design `TopicResearchResult` model:
+  - [x] `sub_query_id`, `searches_performed`, `sources_found`, `per_topic_summary`
+  - [x] `reflection_notes` (from per-topic reflect step)
+- [x] Create `phases/topic_research.py` with `TopicResearchMixin`:
+  - [x] `_execute_topic_research_async(sub_query)` — single topic ReAct loop
+  - [x] `_topic_search()` — search scoped to one sub-query
+  - [x] `_topic_reflect()` — fast LLM evaluates results, suggests refinement
+  - [x] Loop: search → reflect → (refine query → search)* → compile summary
+  - [x] Max iterations per topic: configurable (`deep_research_topic_max_searches`)
+- [x] Modify `phases/gathering.py`:
+  - [x] When `deep_research_enable_topic_agents = true`, delegate to topic researchers
+  - [x] Run topic researchers in parallel with `asyncio.gather()` + semaphore
+  - [x] Collect `TopicResearchResult` per sub-query
+  - [x] Merge sources and per-topic summaries into state
+- [x] Budget splitting: divide search budget across sub-queries
+- [x] Add config keys:
+  - [x] `deep_research_enable_topic_agents` (default: `false`)
+  - [x] `deep_research_topic_max_searches` (default: `3`)
+  - [x] `deep_research_topic_reflection_provider`
+- [x] Per-topic audit events
+- [x] Unit tests: single topic research loop
+- [x] Integration test: multi-topic parallel execution
+- [x] Verify deduplication across topic researchers
 
 ### 5. Contradiction Detection
-- [ ] Add `Contradiction` model to `models/deep_research.py`:
-  - [ ] `id`, `finding_ids: list[str]`, `description`, `resolution`, `preferred_source_id`
-  - [ ] `severity: str` (major/minor)
-- [ ] Add `contradictions: list[Contradiction]` to `DeepResearchState`
-- [ ] Add post-analysis contradiction detection in `phases/analysis.py`:
-  - [ ] After findings extraction, send findings to LLM
-  - [ ] System prompt: identify conflicting claims between findings
-  - [ ] Parse structured JSON response
-  - [ ] Store contradictions in state
-- [ ] Update `phases/synthesis.py`:
-  - [ ] Include contradictions section in synthesis prompt
-  - [ ] Instruct LLM to address contradictions explicitly in report
-  - [ ] Suggest resolution approach (prefer higher-quality source, note uncertainty)
-- [ ] Optionally create contradiction-type gaps for refinement
-- [ ] Audit events for detected contradictions
-- [ ] Unit tests for contradiction parsing
-- [ ] Integration test: contradictory sources → report addresses them
+- [x] Add `Contradiction` model to `models/deep_research.py`:
+  - [x] `id`, `finding_ids: list[str]`, `description`, `resolution`, `preferred_source_id`
+  - [x] `severity: str` (major/minor)
+- [x] Add `contradictions: list[Contradiction]` to `DeepResearchState`
+- [x] Add post-analysis contradiction detection in `phases/analysis.py`:
+  - [x] After findings extraction, send findings to LLM
+  - [x] System prompt: identify conflicting claims between findings
+  - [x] Parse structured JSON response
+  - [x] Store contradictions in state
+- [x] Update `phases/synthesis.py`:
+  - [x] Include contradictions section in synthesis prompt
+  - [x] Instruct LLM to address contradictions explicitly in report
+  - [x] Suggest resolution approach (prefer higher-quality source, note uncertainty)
+- [x] Optionally create contradiction-type gaps for refinement
+- [x] Audit events for detected contradictions
+- [x] Unit tests for contradiction parsing
+- [x] Integration test: contradictory sources → report addresses them
 
 ---
 
 ## Cross-Cutting
 
-- [ ] Update `.foundry-mcp.toml` with all new config keys (with comments)
-- [ ] Update foundry-sandbox config documentation (`docs/configuration.md`)
-- [ ] Run full test suite after each phase completion
-- [ ] Update CHANGELOG.md with new capabilities
+- [x] Update `.foundry-mcp.toml` with all new config keys (with comments)
+- [x] Update foundry-sandbox config documentation (`docs/configuration.md`)
+- [x] Run full test suite after each phase completion
+- [x] Update CHANGELOG.md with new capabilities

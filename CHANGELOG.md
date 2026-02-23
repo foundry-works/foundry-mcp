@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-02-22
+
+### Added
+
+- **Query clarification phase**: Optional `CLARIFICATION` phase runs before planning to analyze query completeness. Sends the query to a fast model that identifies whether clarification is needed and generates 1-3 disambiguating questions. User answers (or skips) feed constraints into the planning phase for more focused sub-query generation. Enabled by default (`deep_research_allow_clarification = true`).
+- **LLM-driven supervisor reflection**: Opt-in LLM reflection at phase boundaries (`deep_research_enable_reflection`). After each phase completes, a fast model evaluates results and returns a structured quality assessment with proceed/adjust decisions. Coexists with existing heuristic quality gates — reflection runs alongside, not instead of, hardcoded thresholds. Reflection decisions are recorded in the audit trail.
+- **Parallel topic researcher agents**: Opt-in per-topic ReAct loops in the gathering phase (`deep_research_enable_topic_agents`). Each sub-query spawns an independent mini-loop: search → reflect → refine → search, up to `deep_research_topic_max_searches` iterations. Topic researchers run in parallel (bounded by `max_concurrent`), produce per-topic summaries, and deduplicate sources across researchers.
+- **Proactive content digest policy**: New `"proactive"` option for `deep_research_digest_policy`. When set, the digest pipeline runs on every source immediately after retrieval in the gathering phase (not deferred to analysis), ensuring uniform pre-processed content for downstream phases.
+- **Contradiction detection in analysis**: After findings extraction, an LLM identifies conflicting claims between sources. Each contradiction includes finding IDs, description, resolution suggestion, preferred source, and severity (major/minor). Contradictions are stored in state and surfaced in the synthesis prompt so the final report addresses them explicitly.
+- **End-to-end citation tracking**: Sources receive stable citation numbers (1-indexed) on entry. The synthesis prompt presents findings with `[N]` markers, instructs the LLM to use inline citations, and a `## Sources` section is auto-generated from state (not LLM output). Post-processing verifies citation consistency and removes dangling references. Citations survive refinement iterations.
+
+### Changed
+
+- `DeepResearchPhase` enum: added `CLARIFICATION` phase
+- `AgentRole` enum: added `CLARIFIER` role
+- `DeepResearchState`: added `clarification_constraints`, `contradictions`, and per-source `citation_number` fields
+- `DigestPolicy` enum: added `PROACTIVE` variant
+- Synthesis prompt: now includes contradiction context and citation legend
+- Document digest policy validation: accepts `"proactive"` alongside `"off"`, `"auto"`, `"always"`
+
 ## [0.15.0] - 2026-02-22
 
 ### Added
