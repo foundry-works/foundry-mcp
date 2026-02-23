@@ -13,7 +13,8 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Optional
 
 from foundry_mcp.core.observability import audit_log, get_metrics
-from foundry_mcp.core.research.models.deep_research import DeepResearchState
+from foundry_mcp.core.research.models.deep_research import DeepResearchState, TopicResearchResult
+from foundry_mcp.core.research.models.fidelity import PhaseMetrics
 from foundry_mcp.core.research.models.sources import SourceQuality
 from foundry_mcp.core.research.providers import (
     GoogleSearchProvider,
@@ -52,7 +53,255 @@ class GatheringPhaseMixin:
         def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
         def _check_cancellation(self, *args: Any, **kwargs: Any) -> None: ...
         async def _execute_topic_research_async(self, *args: Any, **kwargs: Any) -> Any: ...
+        async def _execute_provider_async(self, *args: Any, **kwargs: Any) -> Any: ...
         def _attach_source_summarizer(self, provider: Any) -> None: ...
+
+    # ------------------------------------------------------------------
+    # Per-topic compression
+    # ------------------------------------------------------------------
+
+    async def _compress_topic_findings_async(
+        self,
+        state: DeepResearchState,
+        max_concurrent: int,
+        timeout: float,
+    ) -> dict[str, Any]:
+        """Compress each topic's sources into citation-rich summaries.
+
+        Runs after all topic researchers complete.  For each
+        ``TopicResearchResult`` that has sources, builds a compression
+        prompt asking the LLM to reformat the raw findings with inline
+        citations — preserving all relevant information without
+        summarising.  Results are stored in
+        ``TopicResearchResult.compressed_findings``.
+
+        Features:
+        - Parallel compression across topics, bounded by *max_concurrent*.
+        - Progressive token-limit handling (3 retries, 10 % truncation each).
+        - Graceful fallback: if compression fails for a topic,
+          ``compressed_findings`` stays ``None`` and the analysis phase
+          falls through to raw sources.
+
+        Args:
+            state: Current research state with topic results and sources.
+            max_concurrent: Maximum parallel compression calls.
+            timeout: Per-compression LLM call timeout in seconds.
+
+        Returns:
+            Dict with compression statistics (topics_compressed,
+            topics_failed, total_compression_tokens).
+        """
+        from foundry_mcp.core.errors.provider import ContextWindowError
+        from foundry_mcp.core.research.providers.base import SearchProvider
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            estimate_token_limit_for_model,
+            truncate_to_token_estimate,
+        )
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _TRUNCATION_FACTOR,
+            _is_context_window_error,
+        )
+
+        results_to_compress = [
+            tr for tr in state.topic_research_results
+            if tr.source_ids and tr.compressed_findings is None
+        ]
+
+        if not results_to_compress:
+            return {"topics_compressed": 0, "topics_failed": 0, "total_compression_tokens": 0}
+
+        compression_provider = getattr(
+            self.config, "get_compression_provider", lambda: self.config.default_provider
+        )()
+        compression_model = getattr(
+            self.config, "get_compression_model", lambda: None
+        )()
+
+        semaphore = asyncio.Semaphore(max_concurrent)
+        total_compression_tokens = 0
+        topics_compressed = 0
+        topics_failed = 0
+        compression_lock = asyncio.Lock()
+
+        async def compress_one(topic_result: TopicResearchResult) -> None:
+            nonlocal total_compression_tokens, topics_compressed, topics_failed
+
+            async with semaphore:
+                # Collect sources belonging to this topic
+                topic_sources = [
+                    s for s in state.sources if s.id in topic_result.source_ids
+                ]
+                if not topic_sources:
+                    return
+
+                # Look up the sub-query text for context
+                sub_query = state.get_sub_query(topic_result.sub_query_id)
+                query_text = sub_query.query if sub_query else "Unknown query"
+
+                # Build source block for the prompt
+                source_lines: list[str] = []
+                for idx, src in enumerate(topic_sources, 1):
+                    source_lines.append(f"[{idx}] Title: {src.title}")
+                    if src.url:
+                        source_lines.append(f"    URL: {src.url}")
+                    content = src.content or src.snippet or ""
+                    if content:
+                        # Limit each source to ~2000 chars for the compression prompt
+                        if len(content) > 2000:
+                            content = content[:2000] + "..."
+                        source_lines.append(f"    Content: {content}")
+                    source_lines.append("")
+
+                sources_block = "\n".join(source_lines)
+
+                system_prompt = (
+                    "You are a research assistant. Your task is to reformat research "
+                    "findings into a structured, citation-rich summary.\n\n"
+                    "IMPORTANT RULES:\n"
+                    "- DO NOT summarize or remove information. Preserve ALL relevant details.\n"
+                    "- Add inline citations using [1], [2], etc. matching the source numbers.\n"
+                    "- Organize findings into a coherent narrative grouped by theme.\n"
+                    "- Include a source list at the end.\n\n"
+                    "OUTPUT FORMAT:\n"
+                    "## Queries Made\n"
+                    "- List the search queries used\n\n"
+                    "## Comprehensive Findings\n"
+                    "- All findings with inline citations [1], [2], etc.\n"
+                    "- Group by theme when applicable\n\n"
+                    "## Source List\n"
+                    "- [1] Title — URL\n"
+                    "- [2] Title — URL\n"
+                )
+
+                user_prompt = (
+                    f"Research sub-query: {query_text}\n\n"
+                    f"Sources ({len(topic_sources)} total):\n\n"
+                    f"{sources_block}\n"
+                    "Reformat these findings with inline citations. "
+                    "Preserve all relevant information."
+                )
+
+                # Progressive token-limit recovery (up to 3 retries)
+                max_retries = 3
+                current_prompt = user_prompt
+                compressed: str | None = None
+                tokens_used = 0
+
+                for attempt in range(max_retries + 1):
+                    try:
+                        self._check_cancellation(state)
+
+                        result = await self._execute_provider_async(
+                            prompt=current_prompt,
+                            provider_id=compression_provider,
+                            model=compression_model,
+                            system_prompt=system_prompt,
+                            timeout=timeout,
+                            temperature=0.2,
+                            phase="compression",
+                            fallback_providers=self.config.get_phase_fallback_providers("analysis"),
+                            max_retries=1,
+                            retry_delay=2.0,
+                        )
+
+                        if result.success and result.content:
+                            compressed = result.content
+                            tokens_used = result.tokens_used or 0
+                        break
+
+                    except ContextWindowError as e:
+                        if attempt >= max_retries:
+                            break
+                        # Truncate user prompt by 10% and retry
+                        max_tokens = e.max_tokens or estimate_token_limit_for_model(
+                            compression_model, SearchProvider.TOKEN_LIMITS
+                        ) or 128_000
+                        reduced = int(max_tokens * (_TRUNCATION_FACTOR ** (attempt + 1)))
+                        current_prompt = truncate_to_token_estimate(current_prompt, reduced)
+                        logger.warning(
+                            "Compression context window exceeded for topic %s "
+                            "(attempt %d/%d), truncating and retrying",
+                            topic_result.sub_query_id,
+                            attempt + 1,
+                            max_retries,
+                        )
+                    except Exception as e:
+                        if _is_context_window_error(e) and attempt < max_retries:
+                            max_tokens = estimate_token_limit_for_model(
+                                compression_model, SearchProvider.TOKEN_LIMITS
+                            ) or 128_000
+                            reduced = int(max_tokens * (_TRUNCATION_FACTOR ** (attempt + 1)))
+                            current_prompt = truncate_to_token_estimate(current_prompt, reduced)
+                            logger.warning(
+                                "Compression detected provider-specific context error "
+                                "for topic %s (attempt %d/%d)",
+                                topic_result.sub_query_id,
+                                attempt + 1,
+                                max_retries,
+                            )
+                        else:
+                            logger.error(
+                                "Compression failed for topic %s: %s",
+                                topic_result.sub_query_id,
+                                e,
+                            )
+                            break
+
+                async with compression_lock:
+                    if compressed:
+                        topic_result.compressed_findings = compressed
+                        total_compression_tokens += tokens_used
+                        topics_compressed += 1
+                    else:
+                        topics_failed += 1
+
+        # Run compression tasks in parallel
+        tasks = [compress_one(tr) for tr in results_to_compress]
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Record compression phase metrics
+        if total_compression_tokens > 0:
+            state.total_tokens_used += total_compression_tokens
+            state.phase_metrics.append(
+                PhaseMetrics(
+                    phase="compression",
+                    duration_ms=0.0,  # Tracked at the gathering level
+                    input_tokens=total_compression_tokens,
+                    output_tokens=0,
+                    cached_tokens=0,
+                    provider_id=compression_provider,
+                    model_used=compression_model,
+                    metadata={
+                        "topics_compressed": topics_compressed,
+                        "topics_failed": topics_failed,
+                    },
+                )
+            )
+
+        self._write_audit_event(
+            state,
+            "topic_compression_complete",
+            data={
+                "topics_compressed": topics_compressed,
+                "topics_failed": topics_failed,
+                "total_compression_tokens": total_compression_tokens,
+                "compression_provider": compression_provider,
+                "compression_model": compression_model,
+            },
+        )
+
+        logger.info(
+            "Per-topic compression complete: %d compressed, %d failed, %d tokens",
+            topics_compressed,
+            topics_failed,
+            total_compression_tokens,
+        )
+
+        return {
+            "topics_compressed": topics_compressed,
+            "topics_failed": topics_failed,
+            "total_compression_tokens": total_compression_tokens,
+        }
 
     # ------------------------------------------------------------------
     # Search provider configuration
@@ -482,6 +731,18 @@ class GatheringPhaseMixin:
             finally:
                 state.updated_at = datetime.now(timezone.utc)
 
+            # --- Per-topic compression step ---
+            # Compress each topic's sources into citation-rich summaries
+            # before analysis.  Runs only when sources were gathered.
+            compression_stats: dict[str, Any] = {}
+            if total_sources_added > 0 and state.topic_research_results:
+                self._check_cancellation(state)
+                compression_stats = await self._compress_topic_findings_async(
+                    state=state,
+                    max_concurrent=max_concurrent,
+                    timeout=timeout,
+                )
+
             # Save state and emit audit events (same as flat path)
             circuit_breaker_states_end = {
                 name: resilience_manager.get_breaker_state(name).value for name in configured_provider_names
@@ -502,6 +763,7 @@ class GatheringPhaseMixin:
                     "topic_agents_enabled": True,
                     "topic_max_searches": topic_max_searches,
                     "per_topic_max_sources": per_topic_max_sources,
+                    "compression": compression_stats,
                 },
             )
 
@@ -550,6 +812,7 @@ class GatheringPhaseMixin:
                     "unique_urls": len(seen_urls),
                     "providers_used": [p.get_provider_name() for p in available_providers],
                     "topic_agents_enabled": True,
+                    "compression": compression_stats,
                 },
             )
 

@@ -51,6 +51,14 @@ class TopicResearchResult(BaseModel):
         default_factory=list,
         description="IDs of sources discovered by this topic researcher",
     )
+    compressed_findings: Optional[str] = Field(
+        default=None,
+        description=(
+            "Citation-rich compressed summary of this topic's sources, "
+            "produced by the per-topic compression step before analysis. "
+            "When present, analysis prefers this over raw source content."
+        ),
+    )
     early_completion: bool = Field(
         default=False,
         description="Whether the topic researcher signalled early research completion",

@@ -108,6 +108,10 @@ class ResearchConfig:
     deep_research_summarization_provider: Optional[str] = None  # LLM provider for fetch-time summarization (cheapest available)
     deep_research_summarization_model: Optional[str] = None  # Model override for fetch-time summarization
 
+    # Per-topic compression before aggregation (Phase 3)
+    deep_research_compression_provider: Optional[str] = None  # LLM provider for per-topic compression (defaults to research/default provider)
+    deep_research_compression_model: Optional[str] = None  # Model override for per-topic compression
+
     # Deep research configuration
     deep_research_max_iterations: int = 3
     deep_research_max_sub_queries: int = 5
@@ -309,6 +313,9 @@ class ResearchConfig:
             ),
             deep_research_summarization_provider=data.get("deep_research_summarization_provider"),
             deep_research_summarization_model=data.get("deep_research_summarization_model"),
+            # Per-topic compression (Phase 3)
+            deep_research_compression_provider=data.get("deep_research_compression_provider"),
+            deep_research_compression_model=data.get("deep_research_compression_model"),
             # Deep research configuration
             deep_research_max_iterations=int(data.get("deep_research_max_iterations", 3)),
             deep_research_max_sub_queries=int(data.get("deep_research_max_sub_queries", 5)),
@@ -836,6 +843,37 @@ class ResearchConfig:
             return self.deep_research_summarization_model
         if self.deep_research_summarization_provider:
             _, model = _parse_provider_spec(self.deep_research_summarization_provider)
+            return model
+        return None
+
+    def get_compression_provider(self) -> str:
+        """Get LLM provider ID for per-topic compression.
+
+        Returns the compression-specific provider if configured, otherwise
+        falls back to default_provider.
+
+        Returns:
+            Provider ID for per-topic compression
+        """
+        if self.deep_research_compression_provider:
+            provider_id, _ = _parse_provider_spec(self.deep_research_compression_provider)
+            return provider_id
+        provider_id, _ = _parse_provider_spec(self.default_provider)
+        return provider_id
+
+    def get_compression_model(self) -> Optional[str]:
+        """Get model override for per-topic compression.
+
+        Returns the compression-specific model if configured, otherwise None
+        (provider default will be used).
+
+        Returns:
+            Model name or None
+        """
+        if self.deep_research_compression_model:
+            return self.deep_research_compression_model
+        if self.deep_research_compression_provider:
+            _, model = _parse_provider_spec(self.deep_research_compression_provider)
             return model
         return None
 
