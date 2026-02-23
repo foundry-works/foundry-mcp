@@ -28,7 +28,9 @@ import re
 import sys
 
 
-# Git subcommands that are write operations (blocked by default)
+# Git subcommands that are always write operations (blocked by default).
+# Subcommands whose read/write classification depends on arguments
+# (branch, remote, stash, config) are handled by _COMPOUND_* tables instead.
 _GIT_WRITE_SUBCOMMANDS = {
     "commit",
     "push",
@@ -39,25 +41,16 @@ _GIT_WRITE_SUBCOMMANDS = {
     "merge",
     "cherry-pick",
     "revert",
-    "stash",
     "tag",
-    "branch -d",
-    "branch -D",
-    "branch -m",
-    "branch -M",
-    "remote add",
-    "remote remove",
-    "remote set-url",
 }
 
-# Git subcommands that are read-only (always allowed)
+# Git subcommands that are always read-only (always allowed).
+# For subcommands with mixed read/write behaviour, see _COMPOUND_* tables.
 _GIT_READ_SUBCOMMANDS = {
     "status",
     "diff",
     "log",
     "show",
-    "branch",
-    "remote",
     "describe",
     "rev-parse",
     "ls-files",
@@ -68,11 +61,6 @@ _GIT_READ_SUBCOMMANDS = {
     "blame",
     "bisect",
     "grep",
-    "stash list",
-    "stash show",
-    "config --get",
-    "config --list",
-    "config -l",
 }
 
 # Patterns for config/spec file writes via shell commands
@@ -95,12 +83,83 @@ _SHELL_WRITE_PATTERNS = [
 
 
 def _extract_git_subcommand(command: str) -> str | None:
-    """Extract the git subcommand from a command string."""
-    # Match 'git <subcommand>' patterns, handling flags before subcommand
-    match = re.search(r"\bgit\s+(?:-\w+\s+)*(\S+(?:\s+-[dDmM])?(?:\s+\S+)?)", command)
+    """Extract the git subcommand from a command string.
+
+    Returns the base subcommand (e.g. "branch", "remote", "commit").
+    """
+    match = re.search(r"\bgit\s+(?:-\w+\s+)*(\S+)", command)
     if match:
         return match.group(1).strip()
     return None
+
+
+def _extract_git_args_after_subcommand(command: str, subcommand: str) -> str:
+    """Extract the arguments following 'git <subcommand>' for compound checking.
+
+    Returns the remainder of the command after the subcommand, stripped.
+    """
+    pattern = re.compile(rf"\bgit\s+(?:-\w+\s+)*{re.escape(subcommand)}\b\s*(.*)", re.DOTALL)
+    match = pattern.search(command)
+    if match:
+        return match.group(1).strip()
+    return ""
+
+
+# Compound subcommand classification tables.
+# Subcommands listed here have mixed read/write behaviour depending on
+# the arguments that follow. When the base subcommand is in this table
+# it is classified exclusively via these patterns — the simple read/write
+# sets above are skipped.
+#
+# "write_prefixes": argument prefixes that make the operation a write.
+# "read_prefixes": argument prefixes that are explicitly read-only.
+# "default": disposition when no prefix matches ("read" or "write").
+_COMPOUND_SUBCOMMANDS: dict[str, dict] = {
+    "branch": {
+        "write_prefixes": ["-d", "-D", "-m", "-M", "--delete", "--move"],
+        "read_prefixes": ["-a", "-r", "-v", "--list", "--contains", "--merged", "--no-merged"],
+        "default": "read",  # bare 'git branch' lists branches
+    },
+    "remote": {
+        "write_prefixes": ["add", "remove", "set-url", "rename", "rm", "set-head", "prune"],
+        "read_prefixes": ["-v", "show", "get-url"],
+        "default": "read",  # bare 'git remote' lists remotes
+    },
+    "stash": {
+        "write_prefixes": ["drop", "pop", "clear", "apply", "push", "save"],
+        "read_prefixes": ["list", "show"],
+        "default": "write",  # bare 'git stash' = stash push (write)
+    },
+    "config": {
+        "write_prefixes": ["--global", "--system", "--unset", "--replace-all", "--add"],
+        "read_prefixes": ["--get", "--list", "-l", "--get-all", "--get-regexp"],
+        "default": "read",  # bare 'git config' shows help
+    },
+}
+
+
+def _classify_compound(subcommand: str, args: str) -> tuple[str | None, str]:
+    """Classify a compound subcommand as read or write.
+
+    Returns (matched_pattern | None, disposition) where disposition is
+    "read", "write", or "unknown" (not a compound subcommand).
+    """
+    entry = _COMPOUND_SUBCOMMANDS.get(subcommand)
+    if entry is None:
+        return None, "unknown"
+
+    # Check writes first (more specific)
+    for prefix in entry["write_prefixes"]:
+        if args.startswith(prefix):
+            return f"{subcommand} {prefix}", "write"
+
+    # Check reads
+    for prefix in entry["read_prefixes"]:
+        if args.startswith(prefix):
+            return f"{subcommand} {prefix}", "read"
+
+    # No args or unrecognised args → use default
+    return None, entry["default"]
 
 
 def _is_git_read_only(subcommand: str) -> bool:
@@ -114,7 +173,7 @@ def _is_git_read_only(subcommand: str) -> bool:
 def _is_git_write(subcommand: str) -> bool:
     """Check if a git subcommand is a write operation."""
     for write_cmd in _GIT_WRITE_SUBCOMMANDS:
-        if subcommand.startswith(write_cmd):
+        if subcommand == write_cmd:
             return True
     return False
 
@@ -136,14 +195,26 @@ def check_command(command: str) -> tuple[bool, str]:
             # Bare 'git' or unrecognized — allow (e.g., 'git --version')
             return True, "bare git command allowed"
 
-        # Check read-only first
+        # Check compound subcommands FIRST (branch, remote, stash, config).
+        # These have both read and write variants based on arguments.
+        args = _extract_git_args_after_subcommand(command, subcommand)
+        matched_pattern, disposition = _classify_compound(subcommand, args)
+        if disposition == "write":
+            label = matched_pattern or subcommand
+            return False, f"blocked: git write operation '{label}' is not allowed during autonomous execution"
+        elif disposition == "read":
+            label = matched_pattern or subcommand
+            return True, f"git read-only operation: {label}"
+        # disposition == "unknown" → not a compound subcommand, fall through
+
+        # Check simple read-only subcommands
         if _is_git_read_only(subcommand):
             return True, f"git read-only operation: {subcommand}"
 
-        # Check write operations
+        # Check simple write operations
         if _is_git_write(subcommand):
             # Special case: allow git commit when explicitly permitted
-            if subcommand.startswith("commit") and os.environ.get("FOUNDRY_GUARD_ALLOW_GIT_COMMIT") == "1":
+            if subcommand == "commit" and os.environ.get("FOUNDRY_GUARD_ALLOW_GIT_COMMIT") == "1":
                 return True, "git commit allowed via FOUNDRY_GUARD_ALLOW_GIT_COMMIT=1"
 
             return False, f"blocked: git write operation '{subcommand}' is not allowed during autonomous execution"

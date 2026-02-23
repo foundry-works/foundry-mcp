@@ -17,8 +17,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Matches [N] where N is one or more digits, but NOT inside markdown link
-# syntax like [text](url) — we only match bare numeric brackets.
-_CITATION_RE = re.compile(r"\[(\d+)\]")
+# syntax like [text](url). The negative lookahead (?!\() ensures we skip
+# patterns followed by a parenthesised URL.
+_CITATION_RE = re.compile(r"\[(\d+)\](?!\()")
 
 
 def extract_cited_numbers(report: str) -> set[int]:

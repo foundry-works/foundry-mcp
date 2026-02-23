@@ -25,7 +25,6 @@ from foundry_mcp.core.research.providers import (
     TavilySearchProvider,
 )
 from foundry_mcp.core.research.providers.resilience import get_resilience_manager
-from foundry_mcp.core.research.models.deep_research import TopicResearchResult
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research.source_quality import (
     _normalize_title,
@@ -608,15 +607,8 @@ class GatheringPhaseMixin:
                                         if source.quality == SourceQuality.UNKNOWN:
                                             source.quality = get_domain_quality(source.url, state.research_mode)
 
-                                    # Assign stable citation number
-                                    next_cn = max(
-                                        (s.citation_number or 0 for s in state.sources),
-                                        default=0,
-                                    ) + 1
-                                    source.citation_number = next_cn
-                                    # Add source to state
-                                    state.sources.append(source)
-                                    state.total_sources_examined += 1
+                                    # Add source to state (centralised citation assignment)
+                                    state.append_source(source)
                                     sub_query.source_ids.append(source.id)
                                     added += 1
 

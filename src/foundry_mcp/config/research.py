@@ -87,13 +87,16 @@ class ResearchConfig:
     ideate_perspectives: List[str] = field(default_factory=lambda: ["technical", "creative", "practical", "visionary"])
     default_timeout: float = 360.0  # 360 seconds default for AI CLI providers
     # Deep research clarification phase configuration
-    deep_research_allow_clarification: bool = True
+    deep_research_allow_clarification: bool = False
     deep_research_clarification_provider: Optional[str] = None  # Uses default_provider if not set
 
     # Deep research LLM-driven supervisor reflection
     deep_research_enable_reflection: bool = False  # Master switch for LLM reflection at phase boundaries
     deep_research_reflection_provider: Optional[str] = None  # Uses default_provider if not set
     deep_research_reflection_timeout: float = 60.0  # Timeout per reflection call (seconds)
+
+    # Deep research contradiction detection in analysis phase
+    deep_research_enable_contradiction_detection: bool = True  # LLM-based contradiction detection between findings
 
     # Deep research parallel topic researcher agents
     deep_research_enable_topic_agents: bool = False  # Master switch for per-topic ReAct loops in gathering
@@ -281,12 +284,14 @@ class ResearchConfig:
             ideate_perspectives=ideate_perspectives,
             default_timeout=float(data.get("default_timeout", 360.0)),
             # Deep research clarification phase
-            deep_research_allow_clarification=_parse_bool(data.get("deep_research_allow_clarification", True)),
+            deep_research_allow_clarification=_parse_bool(data.get("deep_research_allow_clarification", False)),
             deep_research_clarification_provider=data.get("deep_research_clarification_provider"),
             # Deep research LLM-driven reflection
             deep_research_enable_reflection=_parse_bool(data.get("deep_research_enable_reflection", False)),
             deep_research_reflection_provider=data.get("deep_research_reflection_provider"),
             deep_research_reflection_timeout=float(data.get("deep_research_reflection_timeout", 60.0)),
+            # Deep research contradiction detection
+            deep_research_enable_contradiction_detection=_parse_bool(data.get("deep_research_enable_contradiction_detection", True)),
             # Deep research parallel topic researcher agents
             deep_research_enable_topic_agents=_parse_bool(data.get("deep_research_enable_topic_agents", False)),
             deep_research_topic_max_searches=int(data.get("deep_research_topic_max_searches", 3)),

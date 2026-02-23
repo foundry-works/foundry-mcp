@@ -1,6 +1,6 @@
 """Deep research workflow models (multi-phase iterative research)."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 from uuid import uuid4
@@ -82,7 +82,7 @@ class Contradiction(BaseModel):
         default="minor",
         description="Severity of the contradiction: 'major' or 'minor'",
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class DeepResearchConfig(BaseModel):
@@ -407,7 +407,9 @@ class DeepResearchState(BaseModel):
         Returns:
             The created ResearchSource instance
         """
-        # Assign the next citation number based on the highest existing number
+        # Assign the next citation number based on the highest existing number.
+        # This is the SINGLE source of truth for citation numbering — callers
+        # must NOT assign citation_number manually.
         next_citation = max((s.citation_number or 0 for s in self.sources), default=0) + 1
         source = ResearchSource(
             title=title,
@@ -420,7 +422,26 @@ class DeepResearchState(BaseModel):
         )
         self.sources.append(source)
         self.total_sources_examined += 1
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
+        return source
+
+    def append_source(self, source: ResearchSource) -> ResearchSource:
+        """Append a pre-constructed source, assigning it the next citation number.
+
+        Use this when the source is already constructed (e.g., from a search
+        provider) but needs a stable citation number and state tracking.
+
+        Args:
+            source: Pre-constructed ResearchSource (citation_number will be overwritten)
+
+        Returns:
+            The same source instance, with citation_number set
+        """
+        next_citation = max((s.citation_number or 0 for s in self.sources), default=0) + 1
+        source.citation_number = next_citation
+        self.sources.append(source)
+        self.total_sources_examined += 1
+        self.updated_at = datetime.now(timezone.utc)
         return source
 
     def add_finding(

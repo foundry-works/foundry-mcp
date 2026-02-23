@@ -438,8 +438,8 @@ deep_research_providers = [
 # for completeness and asks the user to disambiguate scope/timeframe/domain.
 # If the user doesn't answer, research proceeds with the original query.
 
-# Master switch for clarification phase (runs before planning)
-deep_research_allow_clarification = true
+# Master switch for clarification phase (runs before planning, opt-in)
+deep_research_allow_clarification = false
 
 # LLM provider for clarification (uses default_provider if not set)
 # Recommend a fast/cheap model since this is a single quick LLM call

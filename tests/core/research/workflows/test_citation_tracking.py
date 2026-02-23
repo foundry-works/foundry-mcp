@@ -89,6 +89,52 @@ class TestCitationNumberAssignment:
 
 
 # =============================================================================
+# append_source (centralised citation assignment for pre-constructed sources)
+# =============================================================================
+
+
+class TestAppendSource:
+    """Tests for DeepResearchState.append_source()."""
+
+    def test_append_source_assigns_citation_number(self, state: DeepResearchState):
+        """append_source() assigns the next citation number."""
+        src = ResearchSource(title="Pre-built Source", url="https://example.com")
+        result = state.append_source(src)
+        assert result.citation_number == 1
+        assert result is src  # Same object returned
+
+    def test_append_source_sequential_numbering(self, state: DeepResearchState):
+        """Multiple append_source calls produce sequential citation numbers."""
+        s1 = state.append_source(ResearchSource(title="First"))
+        s2 = state.append_source(ResearchSource(title="Second"))
+        s3 = state.append_source(ResearchSource(title="Third"))
+        assert s1.citation_number == 1
+        assert s2.citation_number == 2
+        assert s3.citation_number == 3
+
+    def test_append_source_overwrites_existing_citation_number(self, state: DeepResearchState):
+        """append_source() overwrites any pre-set citation_number."""
+        src = ResearchSource(title="Pre-numbered", citation_number=999)
+        result = state.append_source(src)
+        assert result.citation_number == 1  # Overwritten to next in sequence
+
+    def test_append_source_interleaves_with_add_source(self, state: DeepResearchState):
+        """Mixing add_source() and append_source() preserves sequencing."""
+        s1 = state.add_source(title="Via add_source")
+        s2 = state.append_source(ResearchSource(title="Via append_source"))
+        s3 = state.add_source(title="Via add_source again")
+        assert s1.citation_number == 1
+        assert s2.citation_number == 2
+        assert s3.citation_number == 3
+
+    def test_append_source_increments_total_sources(self, state: DeepResearchState):
+        """append_source() increments total_sources_examined."""
+        assert state.total_sources_examined == 0
+        state.append_source(ResearchSource(title="Test"))
+        assert state.total_sources_examined == 1
+
+
+# =============================================================================
 # State Helper Methods
 # =============================================================================
 
@@ -146,6 +192,16 @@ class TestExtractCitedNumbers:
     def test_adjacent_citations(self):
         report = "Evidence [1][2][3] supports this."
         assert extract_cited_numbers(report) == {1, 2, 3}
+
+    def test_markdown_links_not_matched(self):
+        """[N](url) patterns should NOT be extracted as citations."""
+        report = "See [1](https://example.com) and also [2]."
+        assert extract_cited_numbers(report) == {2}
+
+    def test_markdown_link_mixed_with_citations(self):
+        """Markdown links and bare citations coexist correctly."""
+        report = "Ref [1] and link [2](https://x.com) and [3]."
+        assert extract_cited_numbers(report) == {1, 3}
 
 
 # =============================================================================

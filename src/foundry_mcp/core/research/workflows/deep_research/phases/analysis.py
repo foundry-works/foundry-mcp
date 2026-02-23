@@ -265,7 +265,7 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
                     pass  # Invalid quality value, skip
 
         # Contradiction detection: identify conflicting claims between findings
-        if len(state.findings) >= 2:
+        if len(state.findings) >= 2 and getattr(self.config, "deep_research_enable_contradiction_detection", True):
             contradictions = await self._detect_contradictions(
                 state=state,
                 provider_id=provider_id or state.analysis_provider,

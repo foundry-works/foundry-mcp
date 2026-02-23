@@ -162,7 +162,7 @@ def set_server_role(role: str) -> None:
     try:
         Role(role)
     except ValueError:
-        logger.warning(
+        logger.error(
             "Invalid role '%s', falling back to observer (fail-closed). Valid roles: %s",
             role,
             ", ".join(r.value for r in Role),

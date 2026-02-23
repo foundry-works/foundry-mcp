@@ -125,14 +125,30 @@ class TopicResearchMixin:
             if iteration >= max_searches - 1:
                 break
 
-            # If no sources found at all, try a refined query
+            # If no sources found at all, try a refined query via reflection
             if sources_added == 0 and iteration == 0:
                 result.reflection_notes.append(
-                    f"No sources found for query: {current_query!r}. Will try broader search."
+                    f"No sources found for query: {current_query!r}. Requesting LLM refinement."
                 )
-                # Simple query broadening: remove quotes and limiting terms
-                current_query = sub_query.query.replace('"', "")
-                result.refined_queries.append(current_query)
+                # Use the reflect step to get a properly refined query
+                zero_reflection = await self._topic_reflect(
+                    original_query=sub_query.query,
+                    current_query=current_query,
+                    sources_found=0,
+                    iteration=1,
+                    max_iterations=max_searches,
+                    state=state,
+                )
+                refined_query = zero_reflection.get("refined_query")
+                if refined_query and refined_query != current_query:
+                    current_query = refined_query
+                    result.refined_queries.append(refined_query)
+                else:
+                    # Fallback: strip quotes if present, otherwise broaden
+                    broadened = sub_query.query.replace('"', "").strip()
+                    if broadened != current_query:
+                        current_query = broadened
+                        result.refined_queries.append(broadened)
                 continue
 
             # --- Reflect step ---
@@ -279,14 +295,8 @@ class TopicResearchMixin:
                                 if source.quality == SourceQuality.UNKNOWN:
                                     source.quality = get_domain_quality(source.url, state.research_mode)
 
-                            # Assign stable citation number
-                            next_cn = max(
-                                (s.citation_number or 0 for s in state.sources),
-                                default=0,
-                            ) + 1
-                            source.citation_number = next_cn
-                            state.sources.append(source)
-                            state.total_sources_examined += 1
+                            # Add source to state (centralised citation assignment)
+                            state.append_source(source)
                             sub_query.source_ids.append(source.id)
                             added += 1
 

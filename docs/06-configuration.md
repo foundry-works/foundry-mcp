@@ -320,19 +320,20 @@ deep_research_archive_retention_days = 60
 ### Query Clarification
 
 Before research begins, an optional clarification phase analyzes the query
-for completeness and asks the user to disambiguate scope, timeframe, or domain
-preferences. If the user skips clarification, research proceeds with the
-original query.
+for completeness and infers scope, timeframe, or domain constraints. Since
+the workflow runs non-interactively, the LLM infers reasonable constraints
+rather than blocking on user input. Inferred constraints are fed into the
+planning phase for more focused sub-query generation.
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `deep_research_allow_clarification` | bool | `true` | Enable the clarification phase before planning |
+| `deep_research_allow_clarification` | bool | `false` | Enable the clarification phase before planning |
 | `deep_research_clarification_provider` | string | `null` | LLM provider for clarification (uses `default_provider` if not set) |
 
 When enabled, the clarification step sends the query to a fast model that returns
-structured JSON indicating whether the query needs clarification and what questions
-to ask. Constraints inferred from the user's answers are fed into the planning
-phase for more focused sub-query generation.
+structured JSON indicating whether the query needs clarification and what
+constraints can be inferred. Constraints are fed into the planning phase for
+more focused sub-query generation.
 
 ```toml
 [research]

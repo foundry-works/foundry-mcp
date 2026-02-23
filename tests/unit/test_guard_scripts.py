@@ -100,10 +100,6 @@ class TestBashGuardWriteBlocked:
     @pytest.mark.parametrize(
         "command",
         [
-            # These are in _GIT_WRITE_SUBCOMMANDS but read-only check matches first
-            # because "branch" and "remote" are in _GIT_READ_SUBCOMMANDS.
-            # Documenting actual behavior: these pass the read-only check
-            # before the write check can run.
             "git branch -d old-branch",
             "git branch -D old-branch",
             "git branch -m old new",
@@ -113,11 +109,12 @@ class TestBashGuardWriteBlocked:
             "git remote set-url origin new-url",
         ],
     )
-    def test_compound_subcommands_match_read_before_write(self, command):
-        """Compound subcommands (branch -d, remote add) match the read-only
-        base command first due to prefix matching order."""
+    def test_compound_write_subcommands_blocked(self, command):
+        """Compound subcommands (branch -D, remote add) are correctly blocked
+        as write operations despite the base command being in the read list."""
         allowed, reason = check_command(command)
-        assert allowed is True, f"Expected allowed (read prefix match) for '{command}': {reason}"
+        assert allowed is False, f"Expected blocked for '{command}', got allowed: {reason}"
+        assert "blocked" in reason.lower()
 
 
 # =============================================================================
@@ -199,6 +196,31 @@ class TestBashGuardEdgeCases:
         """In-place sed edits of spec files should be blocked."""
         allowed, _ = check_command("sed -i 's/old/new/' specs/test.json")
         assert allowed is False
+
+    def test_stash_list_and_show_still_read_only(self):
+        """git stash list/show remain allowed as read-only."""
+        allowed, _ = check_command("git stash list")
+        assert allowed is True
+        allowed, _ = check_command("git stash show")
+        assert allowed is True
+
+    def test_stash_drop_and_pop_blocked(self):
+        """Stash write operations should be blocked."""
+        allowed, _ = check_command("git stash drop")
+        assert allowed is False
+        allowed, _ = check_command("git stash pop")
+        assert allowed is False
+        allowed, _ = check_command("git stash clear")
+        assert allowed is False
+
+    def test_bare_branch_and_remote_still_allowed(self):
+        """Plain 'git branch' and 'git remote' (no args) remain read-only."""
+        allowed, _ = check_command("git branch")
+        assert allowed is True
+        allowed, _ = check_command("git branch -a")
+        assert allowed is True
+        allowed, _ = check_command("git remote -v")
+        assert allowed is True
 
     def test_git_with_flags_before_subcommand(self):
         """Git commands with flags before the subcommand.

@@ -685,21 +685,35 @@ class TestExecuteTopicResearchAsync:
 
     @pytest.mark.asyncio
     async def test_no_sources_triggers_broadened_search(self) -> None:
-        """Zero sources on first search triggers a broadened query."""
+        """Zero sources on first search triggers LLM reflection for query refinement."""
         mixin = StubTopicResearch()
         state = _make_state(num_sub_queries=1)
         sq = state.sub_queries[0]
         sq.query = '"very specific phrase"'  # Quoted query
 
         # First call returns nothing, second returns results
-        call_count = 0
+        search_count = 0
 
         async def dynamic_search(**kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
+            nonlocal search_count
+            search_count += 1
+            if search_count == 1:
                 return []
-            return [_make_source("src-retry", f"https://retry.com/{call_count}")]
+            return [_make_source("src-retry", f"https://retry.com/{search_count}")]
+
+        # LLM reflection returns a refined query
+        async def reflection_fn(**kwargs):
+            result = MagicMock()
+            result.success = True
+            result.content = json.dumps({
+                "sufficient": False,
+                "assessment": "No results found, broadening query",
+                "refined_query": "very specific phrase broader terms",
+            })
+            result.tokens_used = 30
+            return result
+
+        mixin._provider_async_fn = reflection_fn
 
         provider = MagicMock()
         provider.get_provider_name.return_value = "tavily"
@@ -722,9 +736,8 @@ class TestExecuteTopicResearchAsync:
 
         assert result.searches_performed >= 2
         assert result.sources_found >= 1
-        # Check that quotes were removed for the broadened query
+        # Check that a refined query was generated
         assert len(result.refined_queries) >= 1
-        assert '"' not in result.refined_queries[0]
 
     @pytest.mark.asyncio
     async def test_max_searches_respected(self) -> None:
