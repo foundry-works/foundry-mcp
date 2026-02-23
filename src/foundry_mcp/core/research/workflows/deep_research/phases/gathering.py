@@ -51,6 +51,7 @@ class GatheringPhaseMixin:
 
         def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
         def _check_cancellation(self, *args: Any, **kwargs: Any) -> None: ...
+        async def _execute_topic_research_async(self, *args: Any, **kwargs: Any) -> Any: ...
 
     # ------------------------------------------------------------------
     # Search provider configuration
@@ -327,8 +328,9 @@ class GatheringPhaseMixin:
 
         if circuit_breaker_filtered:
             logger.warning(
-                f"Filtered {len(circuit_breaker_filtered)} provider(s) due to open "
-                f"circuit breaker: {circuit_breaker_filtered}"
+                "Filtered %d provider(s) due to open circuit breaker: %s",
+                len(circuit_breaker_filtered),
+                circuit_breaker_filtered,
             )
 
         available_providers = filtered_providers
@@ -347,7 +349,7 @@ class GatheringPhaseMixin:
                     configured_providers=configured_provider_names,
                     unavailable_providers=unavailable_providers,
                 )
-                logger.error(f"All providers have open circuit breakers: {breaker_states}")
+                logger.error("All providers have open circuit breakers: %s", breaker_states)
                 return WorkflowResult(
                     success=False,
                     content="",
@@ -390,6 +392,138 @@ class GatheringPhaseMixin:
         total_sources_added = 0
         failed_queries = 0
 
+        # --- Topic agent delegation path ---
+        # When topic agents are enabled, each sub-query runs its own ReAct
+        # loop (search → reflect → refine → search) instead of flat parallel search.
+        if getattr(self.config, "deep_research_enable_topic_agents", False):
+            topic_max_searches = getattr(self.config, "deep_research_topic_max_searches", 3)
+
+            # Budget splitting: divide max_sources_per_query across topic agents
+            # so the aggregate source count stays within a reasonable bound.
+            # Each topic gets at least 2 results per provider call.
+            num_topics = max(1, len(pending_queries))
+            per_topic_max_sources = max(2, state.max_sources_per_query // num_topics)
+
+            logger.info(
+                "Topic agent budget: %d topics, %d sources/provider/topic (total budget %d)",
+                num_topics,
+                per_topic_max_sources,
+                state.max_sources_per_query,
+            )
+
+            self._check_cancellation(state)
+
+            async def run_topic_agent(sq):
+                return await self._execute_topic_research_async(
+                    sub_query=sq,
+                    state=state,
+                    available_providers=available_providers,
+                    max_searches=topic_max_searches,
+                    max_sources_per_provider=per_topic_max_sources,
+                    timeout=timeout,
+                    seen_urls=seen_urls,
+                    seen_titles=seen_titles,
+                    state_lock=state_lock,
+                    semaphore=semaphore,
+                )
+
+            try:
+                tasks = [run_topic_agent(sq) for sq in pending_queries]
+                topic_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                for i, result in enumerate(topic_results):
+                    if isinstance(result, BaseException):
+                        failed_queries += 1
+                        logger.error("Topic agent exception for sub-query %s: %s", pending_queries[i].id, result)
+                    else:
+                        total_sources_added += result.sources_found
+                        state.topic_research_results.append(result)
+                        if result.sources_found == 0:
+                            failed_queries += 1
+
+            except asyncio.CancelledError:
+                logger.warning("Gathering phase (topic agents) cancelled for research %s", state.id)
+                try:
+                    state.updated_at = datetime.now(timezone.utc)
+                    self.memory.save_deep_research(state)
+                except Exception as save_exc:
+                    logger.error("Error saving state during topic agent cancellation: %s", save_exc)
+                raise
+            finally:
+                state.updated_at = datetime.now(timezone.utc)
+
+            # Save state and emit audit events (same as flat path)
+            circuit_breaker_states_end = {
+                name: resilience_manager.get_breaker_state(name).value for name in configured_provider_names
+            }
+            self.memory.save_deep_research(state)
+            self._write_audit_event(
+                state,
+                "gathering_result",
+                data={
+                    "source_count": total_sources_added,
+                    "queries_executed": len(pending_queries),
+                    "queries_failed": failed_queries,
+                    "unique_urls": len(seen_urls),
+                    "providers_used": [p.get_provider_name() for p in available_providers],
+                    "providers_unavailable": unavailable_providers,
+                    "circuit_breaker_states_start": circuit_breaker_states_start,
+                    "circuit_breaker_states_end": circuit_breaker_states_end,
+                    "topic_agents_enabled": True,
+                    "topic_max_searches": topic_max_searches,
+                    "per_topic_max_sources": per_topic_max_sources,
+                },
+            )
+
+            success = total_sources_added > 0 or failed_queries < len(pending_queries)
+            error_msg = None
+            if not success and failed_queries == len(pending_queries):
+                error_msg = (
+                    f"All {failed_queries} topic researchers failed to find sources. "
+                    f"Providers used: {[p.get_provider_name() for p in available_providers]}"
+                )
+
+            logger.info(
+                "Gathering phase (topic agents) complete: %d sources from %d queries (%d failed)",
+                total_sources_added,
+                len(pending_queries),
+                failed_queries,
+            )
+
+            phase_duration_ms = (time.perf_counter() - phase_start_time) * 1000
+            self._write_audit_event(
+                state,
+                "phase.completed",
+                data={
+                    "phase_name": "gathering",
+                    "iteration": state.iteration,
+                    "task_id": state.id,
+                    "duration_ms": phase_duration_ms,
+                    "topic_agents_enabled": True,
+                },
+            )
+            get_metrics().histogram(
+                "foundry_mcp_research_phase_duration_seconds",
+                phase_duration_ms / 1000.0,
+                labels={"phase_name": "gathering", "status": "success" if success else "error"},
+            )
+
+            return WorkflowResult(
+                success=success,
+                content=f"Gathered {total_sources_added} sources from {len(pending_queries)} topic researchers",
+                error=error_msg,
+                metadata={
+                    "research_id": state.id,
+                    "source_count": total_sources_added,
+                    "queries_executed": len(pending_queries),
+                    "queries_failed": failed_queries,
+                    "unique_urls": len(seen_urls),
+                    "providers_used": [p.get_provider_name() for p in available_providers],
+                    "topic_agents_enabled": True,
+                },
+            )
+
+        # --- Flat parallel search path (original behavior) ---
         try:
 
             async def execute_sub_query(sub_query) -> tuple[int, Optional[str]]:
@@ -409,8 +543,8 @@ class GatheringPhaseMixin:
                         # Check if circuit breaker opened mid-gathering (graceful degradation)
                         if not resilience_manager.is_provider_available(provider_name):
                             logger.warning(
-                                f"Provider {provider_name} circuit breaker opened mid-gathering, "
-                                "skipping for remaining sub-queries"
+                                "Provider %s circuit breaker opened mid-gathering, skipping for remaining sub-queries",
+                                provider_name,
                             )
                             provider_errors.append(f"{provider_name}: circuit breaker open")
                             continue
@@ -474,9 +608,8 @@ class GatheringPhaseMixin:
                                         if source.quality == SourceQuality.UNKNOWN:
                                             source.quality = get_domain_quality(source.url, state.research_mode)
 
-                                    # Add source to state
-                                    state.sources.append(source)
-                                    state.total_sources_examined += 1
+                                    # Add source to state (centralised citation assignment)
+                                    state.append_source(source)
                                     sub_query.source_ids.append(source.id)
                                     added += 1
 

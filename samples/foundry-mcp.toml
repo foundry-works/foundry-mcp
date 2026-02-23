@@ -432,6 +432,54 @@ deep_research_providers = [
 ]
 
 # -----------------------------------------------------------------------------
+# Query Clarification Phase
+# -----------------------------------------------------------------------------
+# Before research begins, an optional clarification step analyzes the query
+# for completeness and asks the user to disambiguate scope/timeframe/domain.
+# If the user doesn't answer, research proceeds with the original query.
+
+# Master switch for clarification phase (runs before planning)
+deep_research_allow_clarification = true
+
+# LLM provider for clarification (uses default_provider if not set)
+# Recommend a fast/cheap model since this is a single quick LLM call
+# deep_research_clarification_provider = "[cli]gemini:flash"
+
+# -----------------------------------------------------------------------------
+# LLM-Driven Supervisor Reflection
+# -----------------------------------------------------------------------------
+# After each phase completes, an LLM evaluates phase results and decides
+# whether quality is sufficient to proceed. Coexists with (does not replace)
+# the existing heuristic quality gates.
+
+# Master switch for LLM reflection at phase boundaries
+deep_research_enable_reflection = true
+
+# LLM provider for reflection calls (uses default_provider if not set)
+# Recommend a fast model — reflection is a quick structured-output call
+# deep_research_reflection_provider = "[cli]gemini:flash"
+
+# Timeout per reflection call in seconds
+deep_research_reflection_timeout = 60.0
+
+# -----------------------------------------------------------------------------
+# Parallel Topic Researcher Agents
+# -----------------------------------------------------------------------------
+# When enabled, each sub-query in the gathering phase runs its own mini
+# ReAct loop: search → reflect → refine → search → ... → compile summary.
+# Topic researchers run in parallel (bounded by max_concurrent) and produce
+# per-topic summaries that feed into the analysis phase.
+
+# Master switch for per-topic ReAct loops in gathering
+deep_research_enable_topic_agents = true
+
+# Max search iterations per topic (ReAct loop limit)
+deep_research_topic_max_searches = 3
+
+# LLM provider for per-topic reflection (uses default_provider if not set)
+# deep_research_topic_reflection_provider = "[cli]gemini:flash"
+
+# -----------------------------------------------------------------------------
 # Per-Phase Timeouts (override deep_research_timeout)
 # Minimum recommended: 600s per operation for AI CLI providers
 # -----------------------------------------------------------------------------
@@ -653,9 +701,11 @@ tavily_extract_max_urls = 5
 # preserving essential information.
 
 # Digest policy: controls when digestion is applied
-# - "off"    : Never digest content (preserve raw text)
-# - "auto"   : Digest when content exceeds min_chars threshold (default)
-# - "always" : Always digest eligible sources regardless of size
+# - "off"       : Never digest content (preserve raw text)
+# - "auto"      : Digest when content exceeds min_chars threshold (default)
+# - "always"    : Always digest eligible sources regardless of size
+# - "proactive" : Digest every source immediately at retrieval time in the
+#                 gathering phase, ensuring uniform content for analysis
 deep_research_digest_policy = "auto"
 
 # Minimum character count before digest is applied (auto mode only)
@@ -665,7 +715,7 @@ deep_research_digest_min_chars = 10000
 deep_research_digest_max_sources = 8
 
 # Timeout per digest operation in seconds
-deep_research_digest_timeout = 180.0
+deep_research_digest_timeout = 120.0
 
 # Maximum concurrent digest operations
 deep_research_digest_max_concurrent = 3
@@ -674,7 +724,7 @@ deep_research_digest_max_concurrent = 3
 deep_research_digest_include_evidence = true
 
 # Maximum characters per evidence snippet
-deep_research_digest_evidence_max_chars = 600
+deep_research_digest_evidence_max_chars = 400
 
 # Maximum evidence snippets per digest
 deep_research_digest_max_evidence_snippets = 5

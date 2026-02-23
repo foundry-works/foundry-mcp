@@ -466,8 +466,8 @@ class DocumentDigestor(
         if self.config.policy == DigestPolicy.OFF:
             return False
 
-        # ALWAYS policy: digest any non-empty content
-        if self.config.policy == DigestPolicy.ALWAYS:
+        # ALWAYS / PROACTIVE policy: digest any non-empty content
+        if self.config.policy in (DigestPolicy.ALWAYS, DigestPolicy.PROACTIVE):
             return bool(content and content.strip())
 
         # AUTO policy: check size and quality thresholds
@@ -511,7 +511,7 @@ class DocumentDigestor(
         if self.config.policy == DigestPolicy.OFF:
             return "Digest policy is OFF"
 
-        if self.config.policy == DigestPolicy.ALWAYS:
+        if self.config.policy in (DigestPolicy.ALWAYS, DigestPolicy.PROACTIVE):
             return "Content is empty"
 
         # AUTO policy - determine specific reason

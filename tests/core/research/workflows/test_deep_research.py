@@ -58,6 +58,15 @@ def mock_config():
     config.deep_research_analysis_provider = None
     config.deep_research_synthesis_provider = None
     config.deep_research_refinement_provider = None
+    # Clarification provider configuration
+    config.deep_research_clarification_provider = None
+    # Topic agent configuration
+    config.deep_research_topic_reflection_provider = None
+    config.deep_research_reflection_provider = None
+    config.deep_research_topic_max_searches = 3
+    config.deep_research_enable_topic_agents = False
+    # Stale task threshold
+    config.deep_research_stale_task_seconds = 300.0
 
     # Helper method mocks
     def get_phase_timeout(phase: str) -> float:

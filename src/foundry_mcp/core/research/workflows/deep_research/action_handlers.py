@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from foundry_mcp.core import task_registry
 from foundry_mcp.core.research.models.deep_research import (
+    DeepResearchPhase,
     DeepResearchState,
 )
 from foundry_mcp.core.research.models.sources import ResearchMode
@@ -108,9 +109,15 @@ class ActionHandlersMixin:
         synthesis_pid, synthesis_model = self.config.resolve_phase_provider("synthesis")
         refinement_pid, refinement_model = self.config.resolve_phase_provider("refinement")
 
+        # Determine initial phase: CLARIFICATION if enabled, else PLANNING
+        initial_phase = DeepResearchPhase.PLANNING
+        if getattr(self.config, "deep_research_allow_clarification", False):
+            initial_phase = DeepResearchPhase.CLARIFICATION
+
         # Create initial state with per-phase provider configuration
         state = DeepResearchState(
             original_query=query,
+            phase=initial_phase,
             max_iterations=max_iterations,
             max_sub_queries=max_sub_queries,
             max_sources_per_query=max_sources_per_query,
@@ -328,8 +335,8 @@ class ActionHandlersMixin:
                 if bg_task.timeout_elapsed_seconds:
                     metadata["timeout_elapsed_seconds"] = bg_task.timeout_elapsed_seconds
             if hasattr(bg_task, "is_stale") and callable(bg_task.is_stale):
-                # Check staleness with default threshold (300s)
-                if bg_task.is_stale(300.0):
+                # Check staleness with configurable threshold
+                if bg_task.is_stale(self.config.deep_research_stale_task_seconds):
                     metadata["is_stale"] = True
                     metadata["last_activity"] = bg_task.last_activity
             # Include progress from persisted state if available

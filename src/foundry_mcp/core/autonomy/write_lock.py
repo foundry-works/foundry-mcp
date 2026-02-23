@@ -206,6 +206,17 @@ def _find_active_session_for_spec(
     Delegates to AutonomyStorage for consistent session discovery
     using per-spec pointer files.
 
+    Note on TOCTOU: ``get_active_session()`` returns a session ID from a
+    pointer file, and ``load()`` then reads the full session JSON — a
+    two-step read sequence.  This is *not* a security-relevant TOCTOU
+    because both operations are reads (no mutation decision is made between
+    them), and the storage layer's atomic-write guarantees ensure that
+    ``load()`` always returns a structurally valid session even if a
+    concurrent writer updates the file between the two calls.  The
+    double-read is intentional: pointer files are lightweight lookups
+    while full session loads are heavier, so the pointer check serves as
+    an early-exit fast path.
+
     Args:
         spec_id: The spec ID to check
         workspace: Path to workspace

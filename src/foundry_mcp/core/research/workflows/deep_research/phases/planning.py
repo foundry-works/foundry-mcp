@@ -228,6 +228,12 @@ Generate the research plan as JSON."""
         if state.system_prompt:
             prompt += f"\n\nAdditional context: {state.system_prompt}"
 
+        # Add clarification constraints if available (from clarification phase)
+        if state.clarification_constraints:
+            prompt += "\n\nClarification constraints (use these to focus the research):"
+            for key, value in state.clarification_constraints.items():
+                prompt += f"\n- {key}: {value}"
+
         return prompt
 
     def _parse_planning_response(

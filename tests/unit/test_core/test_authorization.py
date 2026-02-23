@@ -83,9 +83,10 @@ class TestServerRoleVar:
         # Reset
         set_server_role("maintainer")
 
-    def test_set_invalid_role_falls_back_to_maintainer(self):
+    def test_set_invalid_role_falls_back_to_observer(self):
+        """Invalid roles fall back to observer (fail-closed) instead of maintainer."""
         set_server_role("invalid_role")
-        assert get_server_role() == "maintainer"
+        assert get_server_role() == "observer"
 
     def test_role_propagates_to_new_thread_via_process_fallback(self):
         set_server_role("maintainer")
@@ -272,27 +273,29 @@ class TestRateLimitTracker:
         assert stats["is_limited"] is False
 
     def test_rate_limit_expires_after_window(self):
-        """Rate limit should expire after denial_window_seconds."""
+        """Rate limit should expire after denial_window_seconds.
+
+        Uses denial_window_seconds=0 so denials expire immediately,
+        making the test deterministic without sleeps.
+        """
         config = RateLimitConfig(
             max_consecutive_denials=2,
             denial_window_seconds=0,  # Immediate expiration for testing
             retry_after_seconds=1,
+            global_cleanup_interval_seconds=0,  # Always run cleanup
         )
         tracker = RateLimitTracker(config)
 
-        # Record denials
+        # Record first denial
         tracker.record_denial("action-1")
 
-        # Wait a tiny bit
-        time.sleep(0.01)
-
-        # The denial should have expired due to 0 second window
+        # With window=0, the first denial expires immediately on next check.
+        # Recording a second denial should NOT trigger rate limiting because
+        # the first one already expired — count never reaches 2.
+        tracker.record_denial("action-1")
         stats = tracker.get_stats("action-1")
-        # Denial count might be 0 or 1 depending on timing
-        # But we shouldn't be able to trigger rate limiting with just 1 denial
-        tracker.record_denial("action-1")
-        # Now we should be rate limited (if window wasn't 0)
-        # With 0 window, first denial already expired
+        # Should not be rate-limited since denials expire within the 0s window
+        assert stats["is_limited"] is False
 
     def test_successful_dispatch_resets_counter(self):
         """Simulate successful dispatch by calling reset."""

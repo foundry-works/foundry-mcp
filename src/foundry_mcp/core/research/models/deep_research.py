@@ -1,8 +1,8 @@
 """Deep research workflow models (multi-phase iterative research)."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -22,6 +22,67 @@ from foundry_mcp.core.research.models.sources import (
     SourceType,
     SubQuery,
 )
+
+
+class TopicResearchResult(BaseModel):
+    """Result of a per-topic ReAct research loop.
+
+    Each sub-query can be investigated independently by a topic researcher
+    that runs its own search → reflect → refine cycle. This model captures
+    the outcome of that per-topic investigation.
+    """
+
+    sub_query_id: str = Field(..., description="ID of the SubQuery this result belongs to")
+    searches_performed: int = Field(default=0, description="Number of search iterations executed")
+    sources_found: int = Field(default=0, description="Total unique sources discovered for this topic")
+    per_topic_summary: Optional[str] = Field(
+        default=None,
+        description="LLM-generated summary of findings for this specific topic",
+    )
+    reflection_notes: list[str] = Field(
+        default_factory=list,
+        description="Notes from per-topic reflection steps (e.g., identified gaps, query refinements)",
+    )
+    refined_queries: list[str] = Field(
+        default_factory=list,
+        description="Refined queries generated during the ReAct loop",
+    )
+    source_ids: list[str] = Field(
+        default_factory=list,
+        description="IDs of sources discovered by this topic researcher",
+    )
+
+
+class Contradiction(BaseModel):
+    """A contradiction detected between research findings.
+
+    Identified during the analysis phase when multiple sources provide
+    conflicting information on the same topic. Contradictions are surfaced
+    in the synthesis prompt so the final report can address them explicitly.
+    """
+
+    id: str = Field(default_factory=lambda: f"contra-{uuid4().hex[:8]}")
+    finding_ids: list[str] = Field(
+        ...,
+        description="IDs of the conflicting ResearchFinding objects",
+    )
+    description: str = Field(
+        ...,
+        description="Description of the conflict between findings",
+    )
+    resolution: Optional[str] = Field(
+        default=None,
+        description="Suggested resolution or explanation for the contradiction",
+    )
+    preferred_source_id: Optional[str] = Field(
+        default=None,
+        description="ID of the more authoritative source, if determinable",
+    )
+    severity: Literal["major", "minor"] = Field(
+        default="minor",
+        description="Severity of the contradiction: 'major' or 'minor'",
+    )
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class DeepResearchConfig(BaseModel):
@@ -99,7 +160,8 @@ class DeepResearchConfig(BaseModel):
 class DeepResearchPhase(str, Enum):
     """Phases of the DEEP_RESEARCH workflow.
 
-    The deep research workflow progresses through five sequential phases:
+    The deep research workflow progresses through six sequential phases:
+    0. CLARIFICATION - (Optional) Analyze query specificity and ask clarifying questions
     1. PLANNING - Analyze the query and decompose into focused sub-queries
     2. GATHERING - Execute sub-queries in parallel and collect sources
     3. ANALYSIS - Extract findings and assess source quality
@@ -110,6 +172,7 @@ class DeepResearchPhase(str, Enum):
     progression through advance_phase() method.
     """
 
+    CLARIFICATION = "clarification"
     PLANNING = "planning"
     GATHERING = "gathering"
     ANALYSIS = "analysis"
@@ -131,6 +194,10 @@ class DeepResearchState(BaseModel):
 
     id: str = Field(default_factory=lambda: f"deepres-{uuid4().hex[:12]}")
     original_query: str = Field(..., description="The original research query")
+    clarification_constraints: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Constraints and context inferred or provided during CLARIFICATION phase",
+    )
     research_brief: Optional[str] = Field(
         default=None,
         description="Expanded research plan generated in PLANNING phase",
@@ -153,6 +220,14 @@ class DeepResearchState(BaseModel):
     sources: list[ResearchSource] = Field(default_factory=list)
     findings: list[ResearchFinding] = Field(default_factory=list)
     gaps: list[ResearchGap] = Field(default_factory=list)
+    contradictions: list[Contradiction] = Field(
+        default_factory=list,
+        description="Contradictions detected between findings during analysis",
+    )
+    topic_research_results: list[TopicResearchResult] = Field(
+        default_factory=list,
+        description="Per-topic research results from parallel topic researcher agents",
+    )
 
     # Final output
     report: Optional[str] = Field(
@@ -227,8 +302,8 @@ class DeepResearchState(BaseModel):
     )
 
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: Optional[datetime] = Field(default=None)
 
     # Provider tracking (per-phase LLM provider configuration)
@@ -268,7 +343,7 @@ class DeepResearchState(BaseModel):
         """
         sub_query = SubQuery(query=query, rationale=rationale, priority=priority)
         self.sub_queries.append(sub_query)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         return sub_query
 
     def get_sub_query(self, sub_query_id: str) -> Optional[SubQuery]:
@@ -292,6 +367,24 @@ class DeepResearchState(BaseModel):
                 return gap
         return None
 
+    def get_citation_map(self) -> dict[int, ResearchSource]:
+        """Build a mapping from citation number to source.
+
+        Returns:
+            Dict mapping citation_number → ResearchSource for all sources
+            that have an assigned citation number.
+        """
+        return {s.citation_number: s for s in self.sources if s.citation_number is not None}
+
+    def source_id_to_citation(self) -> dict[str, int]:
+        """Build a mapping from source ID to citation number.
+
+        Returns:
+            Dict mapping source.id → citation_number for all sources
+            that have an assigned citation number.
+        """
+        return {s.id: s.citation_number for s in self.sources if s.citation_number is not None}
+
     def add_source(
         self,
         title: str,
@@ -314,17 +407,41 @@ class DeepResearchState(BaseModel):
         Returns:
             The created ResearchSource instance
         """
+        # Assign the next citation number based on the highest existing number.
+        # This is the SINGLE source of truth for citation numbering — callers
+        # must NOT assign citation_number manually.
+        next_citation = max((s.citation_number or 0 for s in self.sources), default=0) + 1
         source = ResearchSource(
             title=title,
             url=url,
             source_type=source_type,
             snippet=snippet,
             sub_query_id=sub_query_id,
+            citation_number=next_citation,
             **kwargs,
         )
         self.sources.append(source)
         self.total_sources_examined += 1
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
+        return source
+
+    def append_source(self, source: ResearchSource) -> ResearchSource:
+        """Append a pre-constructed source, assigning it the next citation number.
+
+        Use this when the source is already constructed (e.g., from a search
+        provider) but needs a stable citation number and state tracking.
+
+        Args:
+            source: Pre-constructed ResearchSource (citation_number will be overwritten)
+
+        Returns:
+            The same source instance, with citation_number set
+        """
+        next_citation = max((s.citation_number or 0 for s in self.sources), default=0) + 1
+        source.citation_number = next_citation
+        self.sources.append(source)
+        self.total_sources_examined += 1
+        self.updated_at = datetime.now(timezone.utc)
         return source
 
     def add_finding(
@@ -355,7 +472,7 @@ class DeepResearchState(BaseModel):
             category=category,
         )
         self.findings.append(finding)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         return finding
 
     def add_gap(
@@ -380,7 +497,7 @@ class DeepResearchState(BaseModel):
             priority=priority,
         )
         self.gaps.append(gap)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         return gap
 
     # =========================================================================
@@ -410,8 +527,10 @@ class DeepResearchState(BaseModel):
     def advance_phase(self) -> DeepResearchPhase:
         """Advance to the next research phase.
 
-        Phases advance in order: PLANNING -> GATHERING -> ANALYSIS ->
-        SYNTHESIS -> REFINEMENT. Does nothing if already at REFINEMENT.
+        Phases advance in order: CLARIFICATION -> PLANNING -> GATHERING ->
+        ANALYSIS -> SYNTHESIS -> REFINEMENT. Does nothing if already at
+        REFINEMENT. The phase order is derived from the DeepResearchPhase
+        enum definition order.
 
         Returns:
             The new phase after advancement
@@ -420,7 +539,7 @@ class DeepResearchState(BaseModel):
         current_index = phase_order.index(self.phase)
         if current_index < len(phase_order) - 1:
             self.phase = phase_order[current_index + 1]
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         return self.phase
 
     def should_continue_refinement(self) -> bool:
@@ -445,12 +564,18 @@ class DeepResearchState(BaseModel):
         Increments iteration counter and resets phase to GATHERING
         to begin collecting sources for the new sub-queries.
 
+        Note: We intentionally skip CLARIFICATION and PLANNING here.
+        Clarification is a one-time pre-planning step (query refinement
+        is not needed once research is underway), and planning has
+        already decomposed the query into sub-queries. Refinement
+        iterations only need to re-gather, re-analyze, and re-synthesize.
+
         Returns:
             The new iteration number
         """
         self.iteration += 1
         self.phase = DeepResearchPhase.GATHERING
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         return self.iteration
 
     def mark_completed(self, report: Optional[str] = None) -> None:
@@ -460,8 +585,8 @@ class DeepResearchState(BaseModel):
             report: Optional final report content
         """
         self.phase = DeepResearchPhase.SYNTHESIS
-        self.completed_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
         if report:
             self.report = report
 
@@ -474,8 +599,8 @@ class DeepResearchState(BaseModel):
         Args:
             error: Description of why the research failed
         """
-        self.completed_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
         self.metadata["failed"] = True
         self.metadata["failure_error"] = error
 
@@ -488,8 +613,8 @@ class DeepResearchState(BaseModel):
         Args:
             phase_state: Optional description of phase state at cancellation time
         """
-        self.completed_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
         self.metadata["cancelled"] = True
         self.metadata["terminal_status"] = "cancelled"
         if phase_state:
@@ -504,8 +629,8 @@ class DeepResearchState(BaseModel):
         Args:
             reason: Reason for interruption (default: "SIGTERM")
         """
-        self.completed_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
         self.metadata["interrupted"] = True
         self.metadata["terminal_status"] = "interrupted"
         self.metadata["interrupt_reason"] = reason
@@ -566,7 +691,7 @@ class DeepResearchState(BaseModel):
         if level == FidelityLevel.DROPPED and item_id not in self.dropped_content_ids:
             self.dropped_content_ids.append(item_id)
 
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         return record
 
     def get_item_fidelity(self, item_id: str) -> Optional[ContentFidelityRecord]:
@@ -730,7 +855,7 @@ class DeepResearchState(BaseModel):
         if record.current_level == FidelityLevel.DROPPED and item_id not in self.dropped_content_ids:
             self.dropped_content_ids.append(item_id)
 
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         return record
 
     def get_aggregate_chunk_fidelity(self, base_id: str) -> Optional[FidelityLevel]:

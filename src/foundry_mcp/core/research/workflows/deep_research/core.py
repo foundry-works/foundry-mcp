@@ -60,6 +60,9 @@ from foundry_mcp.core.research.workflows.deep_research.persistence import (
 from foundry_mcp.core.research.workflows.deep_research.phases.analysis import (
     AnalysisPhaseMixin,
 )
+from foundry_mcp.core.research.workflows.deep_research.phases.clarification import (
+    ClarificationPhaseMixin,
+)
 from foundry_mcp.core.research.workflows.deep_research.phases.gathering import (
     GatheringPhaseMixin,
 )
@@ -73,6 +76,9 @@ from foundry_mcp.core.research.workflows.deep_research.phases.refinement import 
 )
 from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
     SynthesisPhaseMixin,
+)
+from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+    TopicResearchMixin,
 )
 from foundry_mcp.core.research.workflows.deep_research.session_management import (
     SessionManagementMixin,
@@ -98,8 +104,10 @@ class DeepResearchWorkflow(
     ErrorHandlingMixin,
     ActionHandlersMixin,
     WorkflowExecutionMixin,
+    ClarificationPhaseMixin,
     PlanningPhaseMixin,
     GatheringPhaseMixin,
+    TopicResearchMixin,
     AnalysisPhaseMixin,
     SynthesisPhaseMixin,
     RefinementPhaseMixin,

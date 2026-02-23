@@ -19,6 +19,7 @@ import logging
 import os
 import secrets
 import stat
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -118,11 +119,13 @@ def load_or_create_secret() -> bytes:
     _ensure_data_dir()
     secret = generate_secret()
 
-    # Write with secure permissions
+    # Write with secure permissions atomically (no window where file has default perms)
     try:
-        # Create file with secure permissions (write first, then set mode)
-        secret_path.write_bytes(secret)
-        os.chmod(secret_path, SECRET_FILE_MODE)
+        fd = os.open(str(secret_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, SECRET_FILE_MODE)
+        try:
+            os.write(fd, secret)
+        finally:
+            os.close(fd)
         logger.info("Generated new server secret at %s", secret_path)
         return secret
     except OSError as e:
@@ -132,12 +135,14 @@ def load_or_create_secret() -> bytes:
 
 # Cached secret (lazy-loaded)
 _cached_secret: Optional[bytes] = None
+_secret_lock = threading.Lock()
 
 
 def get_server_secret() -> bytes:
     """Get the server secret, loading or creating if necessary.
 
     The secret is cached after first load for performance.
+    Thread-safe via _secret_lock.
 
     Returns:
         Server secret as bytes
@@ -149,18 +154,21 @@ def get_server_secret() -> bytes:
     if env_secret:
         return env_secret.encode()
 
-    if _cached_secret is None:
-        _cached_secret = load_or_create_secret()
-    return _cached_secret
+    with _secret_lock:
+        if _cached_secret is None:
+            _cached_secret = load_or_create_secret()
+        return _cached_secret
 
 
 def clear_secret_cache() -> None:
     """Clear the cached secret.
 
     Useful for testing or after secret rotation.
+    Thread-safe: acquires _secret_lock to prevent TOCTOU with get_server_secret.
     """
     global _cached_secret
-    _cached_secret = None
+    with _secret_lock:
+        _cached_secret = None
 
 
 def compute_integrity_checksum(
@@ -185,8 +193,9 @@ def compute_integrity_checksum(
     """
     secret = get_server_secret()
 
-    # Build payload to sign (deterministic serialization)
-    payload = f"{gate_attempt_id}:{step_id}:{phase_id}:{verdict}"
+    # Build versioned payload to sign (deterministic serialization)
+    # v1: prefix enables future algorithm rotation without breaking in-flight evidence
+    payload = f"v1:{gate_attempt_id}:{step_id}:{phase_id}:{verdict}"
 
     # Compute HMAC-SHA256
     checksum = hmac.new(secret, payload.encode(), hashlib.sha256).hexdigest()
@@ -220,8 +229,21 @@ def verify_integrity_checksum(
 
     computed = compute_integrity_checksum(gate_attempt_id, step_id, phase_id, verdict)
 
-    # Constant-time comparison
-    return hmac.compare_digest(computed, expected_checksum)
+    # Constant-time comparison against versioned (v1:) checksum
+    if hmac.compare_digest(computed, expected_checksum):
+        return True
+
+    # Legacy fallback: accept unversioned checksums generated before v1: migration.
+    # DEPRECATION: Remove after 2026-06-01, by which time all in-flight gate
+    # evidence from pre-v1 sessions will have expired. Set the environment
+    # variable FOUNDRY_REJECT_LEGACY_CHECKSUMS=1 to disable this fallback
+    # early for testing or hardened deployments.
+    if os.environ.get("FOUNDRY_REJECT_LEGACY_CHECKSUMS") == "1":
+        return False
+    secret = get_server_secret()
+    legacy_payload = f"{gate_attempt_id}:{step_id}:{phase_id}:{verdict}"
+    legacy_checksum = hmac.new(secret, legacy_payload.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(legacy_checksum, expected_checksum)
 
 
 # =============================================================================

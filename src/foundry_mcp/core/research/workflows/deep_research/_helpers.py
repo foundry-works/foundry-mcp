@@ -7,7 +7,10 @@ module-level functions (not via ``self``).
 from __future__ import annotations
 
 import re
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from foundry_mcp.config.research import ResearchConfig
 
 
 def extract_json(content: str) -> Optional[str]:
@@ -95,3 +98,25 @@ def truncate_at_boundary(content: str, target_length: int) -> str:
             truncated = truncated[: sentence_break + 1]
 
     return truncated.strip() + "\n\n[... content truncated for context limits]"
+
+
+def resolve_phase_provider(config: "ResearchConfig", *phase_names: str) -> str:
+    """Resolve LLM provider ID by trying phase-specific config attrs in order.
+
+    Walks *phase_names* and checks
+    ``config.deep_research_{name}_provider`` for each.  Returns the
+    first non-None value found, falling back to ``config.default_provider``.
+
+    Args:
+        config: ResearchConfig instance
+        *phase_names: Config attribute suffixes to check in order
+            (e.g. ``"topic_reflection"``, ``"reflection"``).
+
+    Returns:
+        Provider ID string (never None).
+    """
+    for name in phase_names:
+        value = getattr(config, f"deep_research_{name}_provider", None)
+        if value is not None:
+            return value
+    return config.default_provider

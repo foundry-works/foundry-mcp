@@ -261,7 +261,7 @@ while preserving key information.
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `deep_research_digest_policy` | string | `"auto"` | When to digest: `"off"`, `"auto"`, `"always"` |
+| `deep_research_digest_policy` | string | `"auto"` | When to digest: `"off"`, `"auto"`, `"always"`, `"proactive"` |
 | `deep_research_digest_min_chars` | int | `500` | Minimum content length to trigger digest |
 | `deep_research_digest_max_sources` | int | `50` | Maximum sources to digest per iteration |
 | `deep_research_digest_timeout` | float | `120.0` | Timeout per digest operation (seconds) |
@@ -280,6 +280,7 @@ while preserving key information.
 | `off` | Never digest - all sources pass through unchanged |
 | `auto` | Digest HIGH/MEDIUM quality sources above size threshold |
 | `always` | Always digest sources with content |
+| `proactive` | Digest every source immediately at retrieval time in the gathering phase, ensuring uniform content for downstream analysis |
 
 #### Content Archival
 
@@ -315,6 +316,107 @@ deep_research_digest_fetch_pdfs = true
 deep_research_archive_content = true
 deep_research_archive_retention_days = 60
 ```
+
+### Query Clarification
+
+Before research begins, an optional clarification phase analyzes the query
+for completeness and infers scope, timeframe, or domain constraints. Since
+the workflow runs non-interactively, the LLM infers reasonable constraints
+rather than blocking on user input. Inferred constraints are fed into the
+planning phase for more focused sub-query generation.
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `deep_research_allow_clarification` | bool | `true` | Enable the clarification phase before planning |
+| `deep_research_clarification_provider` | string | `null` | LLM provider for clarification (uses `default_provider` if not set) |
+
+When enabled, the clarification step sends the query to a fast model that returns
+structured JSON indicating whether the query needs clarification and what
+constraints can be inferred. Constraints are fed into the planning phase for
+more focused sub-query generation.
+
+```toml
+[research]
+deep_research_allow_clarification = true
+# Use a fast/cheap model for the single clarification call
+deep_research_clarification_provider = "[cli]gemini:flash"
+```
+
+### LLM-Driven Supervisor Reflection
+
+After each phase completes, an optional LLM reflection step evaluates phase
+results and decides whether quality is sufficient to proceed. This coexists
+with (does not replace) the existing heuristic quality gates.
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `deep_research_enable_reflection` | bool | `true` | Enable LLM reflection at phase boundaries |
+| `deep_research_reflection_provider` | string | `null` | LLM provider for reflection (uses `default_provider` if not set) |
+| `deep_research_reflection_timeout` | float | `60.0` | Timeout per reflection call in seconds |
+
+The reflection LLM returns a structured assessment: quality rating, whether to
+proceed, suggested adjustments, and rationale. Reflection decisions are recorded
+in the audit trail.
+
+```toml
+[research]
+deep_research_enable_reflection = true
+deep_research_reflection_provider = "[cli]gemini:flash"
+deep_research_reflection_timeout = 60.0
+```
+
+### Parallel Topic Researcher Agents
+
+When enabled, each sub-query in the gathering phase runs its own mini ReAct
+loop instead of a single flat search. Each topic researcher independently
+searches, reflects on coverage gaps, refines its query, and searches again
+until it has sufficient information or reaches the iteration limit. Topic
+researchers run in parallel, bounded by `deep_research_max_concurrent`.
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `deep_research_enable_topic_agents` | bool | `true` | Enable per-topic ReAct loops in the gathering phase |
+| `deep_research_topic_max_searches` | int | `3` | Maximum search iterations per topic |
+| `deep_research_topic_reflection_provider` | string | `null` | LLM provider for per-topic reflection (uses `default_provider` if not set) |
+
+Per-topic summaries are compiled and fed into the analysis phase, providing
+more coherent per-topic coverage than flat parallel search. Sources are
+deduplicated across topic researchers.
+
+```toml
+[research]
+deep_research_enable_topic_agents = true
+deep_research_topic_max_searches = 3
+deep_research_topic_reflection_provider = "[cli]gemini:flash"
+```
+
+### Contradiction Detection
+
+After the analysis phase extracts findings, a contradiction detection step
+identifies conflicting claims between sources. Detected contradictions are
+stored in research state and surfaced in the synthesis prompt so the final
+report can address them explicitly.
+
+Contradiction detection runs automatically when findings are extracted —
+there is no separate config toggle. Each contradiction includes the conflicting
+finding IDs, a description, a resolution suggestion, the preferred source,
+and a severity rating (major/minor).
+
+### Citation Tracking
+
+Deep research assigns each source a stable citation number (1-indexed) when
+it enters the research state. The synthesis phase presents findings with
+`[N]` citation markers, and the LLM is instructed to use inline citations
+in the report. A `## Sources` section is auto-generated from the state
+(not from LLM output) and appended to the report.
+
+Post-processing verifies citation consistency:
+- All referenced `[N]` numbers exist in sources
+- Dangling citations (referencing non-existent sources) are removed
+- Unreferenced sources are logged as warnings
+
+Citation numbers survive refinement iterations — re-synthesis preserves
+the same numbering scheme.
 
 ### Audit Verbosity
 

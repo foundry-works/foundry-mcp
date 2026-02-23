@@ -86,6 +86,23 @@ class ResearchConfig:
     thinkdeep_max_depth: int = 5
     ideate_perspectives: List[str] = field(default_factory=lambda: ["technical", "creative", "practical", "visionary"])
     default_timeout: float = 360.0  # 360 seconds default for AI CLI providers
+    # Deep research clarification phase configuration
+    deep_research_allow_clarification: bool = True
+    deep_research_clarification_provider: Optional[str] = None  # Uses default_provider if not set
+
+    # Deep research LLM-driven supervisor reflection
+    deep_research_enable_reflection: bool = True  # Master switch for LLM reflection at phase boundaries
+    deep_research_reflection_provider: Optional[str] = None  # Uses default_provider if not set
+    deep_research_reflection_timeout: float = 60.0  # Timeout per reflection call (seconds)
+
+    # Deep research contradiction detection in analysis phase
+    deep_research_enable_contradiction_detection: bool = True  # LLM-based contradiction detection between findings
+
+    # Deep research parallel topic researcher agents
+    deep_research_enable_topic_agents: bool = True  # Master switch for per-topic ReAct loops in gathering
+    deep_research_topic_max_searches: int = 3  # Max search iterations per topic (ReAct loop limit)
+    deep_research_topic_reflection_provider: Optional[str] = None  # Uses default_provider if not set
+
     # Deep research configuration
     deep_research_max_iterations: int = 3
     deep_research_max_sub_queries: int = 5
@@ -181,6 +198,9 @@ class ResearchConfig:
     semantic_scholar_sort_order: str = "desc"  # Sort direction: asc or desc
     semantic_scholar_use_extended_fields: bool = True  # Include TLDR and extended metadata
 
+    # Stale task detection threshold for deep research background tasks
+    deep_research_stale_task_seconds: float = 300.0  # Seconds of inactivity before a task is considered stale
+
     # Status persistence throttling (reduces disk I/O during deep research)
     status_persistence_throttle_seconds: int = 5  # Minimum seconds between status saves (0 = always persist)
 
@@ -188,7 +208,7 @@ class ResearchConfig:
     audit_verbosity: str = "full"  # "full" or "minimal" - controls JSONL audit payload size
 
     # Document digest configuration (for large content compression in deep research)
-    deep_research_digest_policy: str = "auto"  # "off", "auto", "always"
+    deep_research_digest_policy: str = "auto"  # "off", "auto", "always", "proactive"
     deep_research_digest_min_chars: int = 10000  # Minimum chars before digest is applied
     deep_research_digest_max_sources: int = 8  # Max sources to digest per batch
     deep_research_digest_timeout: float = 120.0  # Timeout per digest operation (seconds)
@@ -263,6 +283,21 @@ class ResearchConfig:
             thinkdeep_max_depth=int(data.get("thinkdeep_max_depth", 5)),
             ideate_perspectives=ideate_perspectives,
             default_timeout=float(data.get("default_timeout", 360.0)),
+            # Deep research clarification phase
+            deep_research_allow_clarification=_parse_bool(data.get("deep_research_allow_clarification", True)),
+            deep_research_clarification_provider=data.get("deep_research_clarification_provider"),
+            # Deep research LLM-driven reflection
+            deep_research_enable_reflection=_parse_bool(data.get("deep_research_enable_reflection", True)),
+            deep_research_reflection_provider=data.get("deep_research_reflection_provider"),
+            deep_research_reflection_timeout=float(data.get("deep_research_reflection_timeout", 60.0)),
+            # Deep research contradiction detection
+            deep_research_enable_contradiction_detection=_parse_bool(
+                data.get("deep_research_enable_contradiction_detection", True)
+            ),
+            # Deep research parallel topic researcher agents
+            deep_research_enable_topic_agents=_parse_bool(data.get("deep_research_enable_topic_agents", True)),
+            deep_research_topic_max_searches=int(data.get("deep_research_topic_max_searches", 3)),
+            deep_research_topic_reflection_provider=data.get("deep_research_topic_reflection_provider"),
             # Deep research configuration
             deep_research_max_iterations=int(data.get("deep_research_max_iterations", 3)),
             deep_research_max_sub_queries=int(data.get("deep_research_max_sub_queries", 5)),
@@ -342,6 +377,8 @@ class ResearchConfig:
             content_archive_enabled=_parse_bool(data.get("content_archive_enabled", False)),
             content_archive_ttl_hours=int(data.get("content_archive_ttl_hours", 168)),
             research_archive_dir=data.get("research_archive_dir"),
+            # Stale task detection
+            deep_research_stale_task_seconds=float(data.get("deep_research_stale_task_seconds", 300.0)),
             # Status persistence throttling
             status_persistence_throttle_seconds=int(data.get("status_persistence_throttle_seconds", 5)),
             # Audit verbosity
@@ -350,7 +387,7 @@ class ResearchConfig:
             deep_research_digest_policy=str(data.get("deep_research_digest_policy", "auto")),
             deep_research_digest_min_chars=int(data.get("deep_research_digest_min_chars", 10000)),
             deep_research_digest_max_sources=int(data.get("deep_research_digest_max_sources", 8)),
-            deep_research_digest_timeout=float(data.get("deep_research_digest_timeout", 60.0)),
+            deep_research_digest_timeout=float(data.get("deep_research_digest_timeout", 120.0)),
             deep_research_digest_max_concurrent=int(data.get("deep_research_digest_max_concurrent", 3)),
             deep_research_digest_include_evidence=_parse_bool(data.get("deep_research_digest_include_evidence", True)),
             deep_research_digest_evidence_max_chars=int(data.get("deep_research_digest_evidence_max_chars", 400)),
@@ -564,7 +601,7 @@ class ResearchConfig:
             ValueError: If any digest config field has an invalid value.
         """
         # Validate digest_policy
-        valid_policies = {"off", "auto", "always"}
+        valid_policies = {"off", "auto", "always", "proactive"}
         if self.deep_research_digest_policy not in valid_policies:
             raise ValueError(
                 f"Invalid deep_research_digest_policy: {self.deep_research_digest_policy!r}. "
@@ -644,6 +681,7 @@ class ResearchConfig:
             Timeout in seconds for the phase
         """
         phase_timeouts = {
+            "clarification": self.deep_research_planning_timeout,  # Reuse planning timeout
             "planning": self.deep_research_planning_timeout,
             "analysis": self.deep_research_analysis_timeout,
             "synthesis": self.deep_research_synthesis_timeout,
@@ -709,6 +747,21 @@ class ResearchConfig:
             "refinement": self.deep_research_refinement_providers,
         }
         return phase_fallbacks.get(phase.lower(), [])
+
+    def get_reflection_provider(self) -> str:
+        """Get LLM provider ID for supervisor reflection calls.
+
+        Returns the reflection-specific provider if configured, otherwise
+        falls back to default_provider.
+
+        Returns:
+            Provider ID for reflection calls
+        """
+        if self.deep_research_reflection_provider:
+            provider_id, _ = _parse_provider_spec(self.deep_research_reflection_provider)
+            return provider_id
+        provider_id, _ = _parse_provider_spec(self.default_provider)
+        return provider_id
 
     def get_digest_provider(self, analysis_provider: Optional[str] = None) -> str:
         """Get LLM provider ID for document digest operations.
