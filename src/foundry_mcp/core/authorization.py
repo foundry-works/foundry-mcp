@@ -70,18 +70,29 @@ AUTONOMY_RUNNER_ALLOWLIST: FrozenSet[str] = frozenset(
         "spec-find",
         # Runtime capability preflight
         "server-capabilities",
-        # Session lifecycle
+        # Session lifecycle (both bare and task-prefixed forms, since session
+        # actions dispatched via the task tool normalize to "task-session-*")
         "session-start",
         "session-resume",
         "session-heartbeat",
         "session-rebase",
         "session-list",
         "session-status",
-        # Session-step actions
+        "task-session-start",
+        "task-session-resume",
+        "task-session-heartbeat",
+        "task-session-rebase",
+        "task-session-list",
+        "task-session-status",
+        # Session-step actions (bare and task-prefixed)
         "session-step-next",
         "session-step-report",
         "session-step-replay",
         "session-step-heartbeat",
+        "task-session-step-next",
+        "task-session-step-report",
+        "task-session-step-replay",
+        "task-session-step-heartbeat",
         # Fidelity gate
         "review-fidelity-gate",
         # Verification execution (required for proof-carrying receipts)
@@ -117,10 +128,13 @@ OBSERVER_ALLOWLIST: FrozenSet[str] = frozenset(
         "task-info",
         "task-query",
         "task-prepare",
-        # Read-only session actions
+        # Read-only session actions (bare and task-prefixed forms)
         "session-status",
         "session-events",
         "session-list",
+        "task-session-status",
+        "task-session-events",
+        "task-session-list",
         # Read-only spec actions
         "spec-list",
         "spec-info",
