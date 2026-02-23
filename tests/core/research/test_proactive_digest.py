@@ -24,7 +24,6 @@ from foundry_mcp.core.research.models.digest import DigestPayload, EvidenceSnipp
 from foundry_mcp.core.research.models.sources import ResearchSource, SourceQuality
 from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
 
-
 # =============================================================================
 # Helpers
 # =============================================================================

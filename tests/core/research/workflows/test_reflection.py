@@ -34,7 +34,6 @@ from foundry_mcp.core.research.workflows.deep_research.orchestration import (
     SupervisorOrchestrator,
 )
 
-
 # =============================================================================
 # Helpers
 # =============================================================================

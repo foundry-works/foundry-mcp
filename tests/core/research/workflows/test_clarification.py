@@ -19,13 +19,12 @@ from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
 )
 from foundry_mcp.core.research.workflows.base import WorkflowResult
-from foundry_mcp.core.research.workflows.deep_research.phases.clarification import (
-    ClarificationPhaseMixin,
-)
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
     LLMCallResult,
 )
-
+from foundry_mcp.core.research.workflows.deep_research.phases.clarification import (
+    ClarificationPhaseMixin,
+)
 
 # =============================================================================
 # Helpers

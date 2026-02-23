@@ -34,7 +34,6 @@ from foundry_mcp.core.research.workflows.deep_research.phases.topic_research imp
     TopicResearchMixin,
 )
 
-
 # =============================================================================
 # Helpers
 # =============================================================================

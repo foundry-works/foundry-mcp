@@ -16,7 +16,6 @@ import pytest
 from scripts.guard_autonomous_bash import check_command
 from scripts.guard_autonomous_write import check_path
 
-
 # =============================================================================
 # Bash Guard: Read-Only Git Commands
 # =============================================================================

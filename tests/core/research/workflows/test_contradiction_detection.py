@@ -33,7 +33,6 @@ from foundry_mcp.core.research.workflows.deep_research.phases.analysis import (
     AnalysisPhaseMixin,
 )
 
-
 # =============================================================================
 # Helpers
 # =============================================================================

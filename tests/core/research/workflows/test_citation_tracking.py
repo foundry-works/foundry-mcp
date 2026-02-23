@@ -26,7 +26,6 @@ from foundry_mcp.core.research.workflows.deep_research.phases._citation_postproc
     strip_llm_sources_section,
 )
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -278,7 +277,7 @@ class TestBuildSourcesSection:
 
     def test_sorted_by_citation_number(self, state_with_sources: DeepResearchState):
         section = build_sources_section(state_with_sources)
-        lines = [l for l in section.strip().split("\n") if l.startswith("[")]
+        lines = [line for line in section.strip().split("\n") if line.startswith("[")]
         assert len(lines) == 3
         # Verify order
         assert lines[0].startswith("[1]")
