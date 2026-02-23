@@ -164,9 +164,11 @@ def clear_secret_cache() -> None:
     """Clear the cached secret.
 
     Useful for testing or after secret rotation.
+    Thread-safe: acquires _secret_lock to prevent TOCTOU with get_server_secret.
     """
     global _cached_secret
-    _cached_secret = None
+    with _secret_lock:
+        _cached_secret = None
 
 
 def compute_integrity_checksum(

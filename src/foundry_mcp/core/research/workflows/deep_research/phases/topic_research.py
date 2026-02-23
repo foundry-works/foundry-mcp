@@ -100,6 +100,9 @@ class TopicResearchMixin:
         """
         result = TopicResearchResult(sub_query_id=sub_query.id)
         current_query = sub_query.query
+        # Accumulate tokens locally and merge under lock after the loop
+        # to avoid a race on state.total_tokens_used from concurrent topics.
+        local_tokens_used = 0
         async with state_lock:
             sub_query.status = "executing"
 
@@ -140,6 +143,7 @@ class TopicResearchMixin:
                     max_iterations=max_searches,
                     state=state,
                 )
+                local_tokens_used += zero_reflection.get("tokens_used", 0)
                 refined_query = zero_reflection.get("refined_query")
                 if refined_query and refined_query != current_query:
                     current_query = refined_query
@@ -161,6 +165,7 @@ class TopicResearchMixin:
                 max_iterations=max_searches,
                 state=state,
             )
+            local_tokens_used += reflection.get("tokens_used", 0)
 
             result.reflection_notes.append(reflection.get("assessment", ""))
 
@@ -178,8 +183,9 @@ class TopicResearchMixin:
                 break
 
         # --- Compile per-topic summary ---
-        # Collect source IDs added by this topic researcher
+        # Merge accumulated tokens under lock (avoids race on state.total_tokens_used)
         async with state_lock:
+            state.total_tokens_used += local_tokens_used
             result.source_ids = list(sub_query.source_ids)
 
         if result.sources_found > 0:
@@ -396,22 +402,31 @@ class TopicResearchMixin:
             )
 
             if not result.success:
-                return {"sufficient": True, "assessment": "Reflection call failed, proceeding"}
+                return {"sufficient": True, "assessment": "Reflection call failed, proceeding",
+                        "tokens_used": 0}
 
-            # Track tokens
-            if result.tokens_used:
-                state.total_tokens_used += result.tokens_used
+            tokens_used = result.tokens_used or 0
 
             json_str = extract_json(result.content)
             if json_str:
-                data = json.loads(json_str)
+                try:
+                    data = json.loads(json_str)
+                except json.JSONDecodeError as exc:
+                    logger.warning("Topic reflection JSON parse failed: %s", exc)
+                    return {"sufficient": True, "assessment": "Reflection JSON invalid",
+                            "tokens_used": tokens_used}
                 return {
                     "sufficient": bool(data.get("sufficient", True)),
                     "assessment": str(data.get("assessment", "")),
                     "refined_query": data.get("refined_query"),
+                    "tokens_used": tokens_used,
                 }
 
-        except Exception as exc:
+            return {"sufficient": True, "assessment": "No JSON in reflection response",
+                    "tokens_used": tokens_used}
+
+        except (asyncio.TimeoutError, OSError, ValueError, RuntimeError) as exc:
             logger.warning("Topic reflection failed: %s. Treating as sufficient.", exc)
 
-        return {"sufficient": True, "assessment": "Reflection unavailable"}
+        return {"sufficient": True, "assessment": "Reflection unavailable",
+                "tokens_used": 0}

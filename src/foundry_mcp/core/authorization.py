@@ -88,6 +88,7 @@ AUTONOMY_RUNNER_ALLOWLIST: FrozenSet[str] = frozenset(
         "verification-execute",
         # Read-only task context (used by step handlers for scope understanding)
         "prepare",
+        "task-prepare",
     }
 )
 
@@ -97,7 +98,7 @@ MAINTAINER_ALLOWLIST: FrozenSet[str] = frozenset({"*"})
 # Actions allowed for observer role - read-only operations
 OBSERVER_ALLOWLIST: FrozenSet[str] = frozenset(
     {
-        # Read-only task actions
+        # Read-only task actions (both normalized and bare forms)
         "list",
         "get",
         "view",
@@ -107,6 +108,15 @@ OBSERVER_ALLOWLIST: FrozenSet[str] = frozenset(
         "info",
         "query",
         "prepare",
+        "task-list",
+        "task-get",
+        "task-view",
+        "task-status",
+        "task-search",
+        "task-progress",
+        "task-info",
+        "task-query",
+        "task-prepare",
         # Read-only session actions
         "session-status",
         "session-events",
@@ -114,9 +124,16 @@ OBSERVER_ALLOWLIST: FrozenSet[str] = frozenset(
         # Read-only spec actions
         "spec-list",
         "spec-info",
+        "spec-find",
         # Read-only journal actions
         "journal-list",
         "journal-get",
+        # Read-only server actions
+        "server-capabilities",
+        "server-status",
+        "server-info",
+        # Read-only review actions
+        "review-status",
     }
 )
 
@@ -295,13 +312,16 @@ def check_action_allowed(
             configured_role=role,
         )
 
-    # Check raw action name as fallback
-    raw_action = (action or "").lower()
-    if raw_action in allowlist:
-        return AuthzResult(
-            allowed=True,
-            configured_role=role,
-        )
+    # Check raw action name as fallback, but ONLY when no tool_name is provided.
+    # When tool_name is present, only the normalized "tool-action" form is checked
+    # to prevent generic action names like "list" or "get" from matching any tool.
+    if not tool_name:
+        raw_action = (action or "").lower()
+        if raw_action in allowlist:
+            return AuthzResult(
+                allowed=True,
+                configured_role=role,
+            )
 
     # Action not allowed
     _log_authorization_denial(
@@ -711,9 +731,12 @@ def get_runner_isolation_config() -> RunnerIsolationConfig:
             workspace_root = os.environ.get("FOUNDRY_MCP_WORKSPACE_ROOT", "")
             restricted_path = os.environ.get("FOUNDRY_MCP_RUNNER_PATH", "")
 
+            raw_timeout = int(os.environ.get("FOUNDRY_MCP_STDIN_TIMEOUT", "30"))
+            # Clamp to [0, 3600] to prevent negative or excessively large values
+            clamped_timeout = max(0, min(raw_timeout, 3600))
             _runner_isolation_config = RunnerIsolationConfig(
                 workspace_root=workspace_root or None,
-                stdin_timeout_seconds=int(os.environ.get("FOUNDRY_MCP_STDIN_TIMEOUT", "30")),
+                stdin_timeout_seconds=clamped_timeout,
                 restricted_path=restricted_path or None,
                 allow_path_traversal=False,  # Always False for security
             )

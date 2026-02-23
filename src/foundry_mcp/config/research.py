@@ -385,7 +385,7 @@ class ResearchConfig:
             deep_research_digest_policy=str(data.get("deep_research_digest_policy", "auto")),
             deep_research_digest_min_chars=int(data.get("deep_research_digest_min_chars", 10000)),
             deep_research_digest_max_sources=int(data.get("deep_research_digest_max_sources", 8)),
-            deep_research_digest_timeout=float(data.get("deep_research_digest_timeout", 60.0)),
+            deep_research_digest_timeout=float(data.get("deep_research_digest_timeout", 120.0)),
             deep_research_digest_max_concurrent=int(data.get("deep_research_digest_max_concurrent", 3)),
             deep_research_digest_include_evidence=_parse_bool(data.get("deep_research_digest_include_evidence", True)),
             deep_research_digest_evidence_max_chars=int(data.get("deep_research_digest_evidence_max_chars", 400)),

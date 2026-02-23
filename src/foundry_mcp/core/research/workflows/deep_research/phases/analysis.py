@@ -12,6 +12,8 @@ Sub-modules:
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import time
 from typing import TYPE_CHECKING, Any, Optional
@@ -366,8 +368,6 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
         Returns:
             List of detected Contradiction objects (may be empty)
         """
-        import json
-
         from foundry_mcp.core.research.workflows.deep_research._helpers import extract_json
 
         findings_text = []
@@ -461,6 +461,6 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
             logger.info("Contradiction detection found %d contradiction(s)", len(contradictions))
             return contradictions
 
-        except Exception as exc:
+        except (json.JSONDecodeError, asyncio.TimeoutError, OSError, ValueError, KeyError, RuntimeError) as exc:
             logger.warning("Contradiction detection failed: %s. Continuing without.", exc)
             return []

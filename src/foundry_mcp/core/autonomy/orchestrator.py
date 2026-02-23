@@ -158,13 +158,22 @@ class StepOrchestrator(StepEmitterMixin):
                 self._spec_cache = None
 
     def _get_ledger(self, spec_id: str) -> AuditLedger:
-        """Get or create an audit ledger for the given spec."""
-        if spec_id not in self._audit_ledgers:
-            self._audit_ledgers[spec_id] = AuditLedger(
+        """Get or create an audit ledger for the given spec.
+
+        Uses dict.setdefault for atomic get-or-create under the GIL,
+        ensuring a single ledger instance per spec_id even under
+        concurrent access from multiple threads.
+        """
+        ledger = self._audit_ledgers.get(spec_id)
+        if ledger is None:
+            new_ledger = AuditLedger(
                 spec_id=spec_id,
                 workspace_path=self.workspace_path,
             )
-        return self._audit_ledgers[spec_id]
+            # setdefault is atomic under the GIL — if another thread
+            # raced us, we get the existing ledger back.
+            ledger = self._audit_ledgers.setdefault(spec_id, new_ledger)
+        return ledger
 
     def _emit_audit_event(
         self,

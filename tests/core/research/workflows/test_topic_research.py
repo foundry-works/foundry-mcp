@@ -324,7 +324,7 @@ class TestTopicReflect:
 
     @pytest.mark.asyncio
     async def test_tokens_tracked_in_state(self) -> None:
-        """Reflection tokens are added to state.total_tokens_used."""
+        """Reflection tokens are returned in the result dict (callers aggregate under lock)."""
         mixin = StubTopicResearch()
         state = _make_state()
         state.total_tokens_used = 100
@@ -338,7 +338,7 @@ class TestTopicReflect:
 
         mixin._provider_async_fn = mock_provider
 
-        await mixin._topic_reflect(
+        reflection = await mixin._topic_reflect(
             original_query="test",
             current_query="test",
             sources_found=3,
@@ -347,7 +347,11 @@ class TestTopicReflect:
             state=state,
         )
 
-        assert state.total_tokens_used == 175
+        # Tokens are returned in the dict, NOT directly mutated on state
+        # (callers aggregate under state_lock to avoid concurrent races)
+        assert reflection["tokens_used"] == 75
+        # State should remain unchanged by _topic_reflect itself
+        assert state.total_tokens_used == 100
 
 
 # =============================================================================

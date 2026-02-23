@@ -10,13 +10,16 @@ Exit codes:
 
 Blocked commands:
     - git commit, git push, git reset, git rebase, git checkout (write ops)
+    - git pull, git add, git rm, git mv, git restore, git switch (write ops)
     - git clean, git stash drop (destructive ops)
+    - git bisect start/good/bad/reset (modifies refs/working tree)
+    - Shell wrappers: bash -c, sh -c, eval, exec (can execute arbitrary commands)
     - Direct writes to protected config/spec/audit files via shell
 
 Allowed commands:
     - git status, git diff, git log, git show, git branch (read-only git)
+    - git fetch (downloads objects, read-only from working tree perspective)
     - pytest, python -m pytest, make test, npm test (testing)
-    - python, node, bash -c (general execution for verification)
     - cat, head, tail, grep, find, ls, wc (read-only inspection)
 
 Environment variables:
@@ -30,7 +33,7 @@ import sys
 
 # Git subcommands that are always write operations (blocked by default).
 # Subcommands whose read/write classification depends on arguments
-# (branch, remote, stash, config) are handled by _COMPOUND_* tables instead.
+# (branch, remote, stash, config, bisect) are handled by _COMPOUND_* tables instead.
 _GIT_WRITE_SUBCOMMANDS = {
     "commit",
     "push",
@@ -42,6 +45,17 @@ _GIT_WRITE_SUBCOMMANDS = {
     "cherry-pick",
     "revert",
     "tag",
+    "pull",
+    "add",
+    "rm",
+    "mv",
+    "restore",
+    "switch",
+    "am",
+    "apply",
+    "notes",
+    "submodule",
+    "worktree",
 }
 
 # Git subcommands that are always read-only (always allowed).
@@ -59,9 +73,26 @@ _GIT_READ_SUBCOMMANDS = {
     "reflog",
     "shortlog",
     "blame",
-    "bisect",
     "grep",
+    "fetch",
 }
+
+# Shell wrapper commands that can execute arbitrary sub-commands.
+# When these appear with a command-execution flag, the guard must
+# inspect the embedded command. If the embedded payload cannot be
+# reliably parsed, the command is blocked.
+_SHELL_WRAPPER_PATTERNS = [
+    # bash/sh/zsh -c "..."
+    re.compile(r"\b(?:bash|sh|zsh|dash|ksh)\s+-c\b"),
+    # eval '...'
+    re.compile(r"\beval\s+"),
+    # exec '...'
+    re.compile(r"\bexec\s+"),
+    # xargs (when piped to git)
+    re.compile(r"\bxargs\s+.*\bgit\b"),
+    # python/python3/perl/ruby -c "..." containing git
+    re.compile(r"\b(?:python3?|perl|ruby)\s+-c\s+.*\bgit\b"),
+]
 
 # Patterns for config/spec file writes via shell commands
 _SHELL_WRITE_PATTERNS = [
@@ -85,12 +116,25 @@ _SHELL_WRITE_PATTERNS = [
 def _sanitize_command(command: str) -> str:
     """Sanitize a command string before processing.
 
-    Strips null bytes, ANSI escape sequences, and collapses whitespace.
+    Strips null bytes, ANSI/OSC/DCS escape sequences, C1 control codes,
+    and collapses whitespace.
     """
     # Strip null bytes
     command = command.replace("\x00", "")
-    # Strip ANSI escape sequences
-    command = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", command)
+    # Strip CSI escape sequences (e.g. \x1b[31m, \x1b[?25h)
+    command = re.sub(r"\x1b\[[\x20-\x3f]*[0-9;]*[\x40-\x7e]", "", command)
+    # Strip OSC sequences (e.g. \x1b]8;;url\x1b\\ or BEL-terminated)
+    command = re.sub(r"\x1b\].*?(?:\x1b\\|\x07)", "", command)
+    # Strip DCS/PM/APC sequences
+    command = re.sub(r"\x1b[P^_].*?(?:\x1b\\|\x07)", "", command)
+    # Strip two-character escape sequences (e.g. \x1bM, \x1b7)
+    command = re.sub(r"\x1b[\x20-\x7e]", "", command)
+    # Strip 8-bit CSI sequences (\x9b is the 8-bit equivalent of \x1b[)
+    command = re.sub(r"\x9b[\x20-\x3f]*[0-9;]*[\x40-\x7e]", "", command)
+    # Strip remaining 8-bit C1 control codes (\x80-\x9f)
+    command = re.sub(r"[\x80-\x9f]", "", command)
+    # Strip remaining non-printable control chars (except \n \t)
+    command = re.sub(r"[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]", "", command)
     # Collapse whitespace (but preserve newlines for splitting)
     command = re.sub(r"[^\S\n]+", " ", command)
     return command.strip()
@@ -176,21 +220,36 @@ def _split_commands(command: str) -> list[str]:
     return segments
 
 
+def _is_git_token(token: str) -> bool:
+    """Check if a token refers to the git binary.
+
+    Matches 'git' exactly and full-path variants like '/usr/bin/git'.
+    """
+    return token == "git" or token.endswith("/git")
+
+
+# Flags that take a separate value argument after git and before the subcommand.
+_GIT_FLAGS_WITH_VALUE = frozenset(
+    {"-c", "-C", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
+)
+
+
 def _extract_git_subcommand(command: str) -> str | None:
     """Extract the git subcommand from a command string.
 
     Handles flags with values like -c key=val and -C /path by skipping
     them properly. Returns the base subcommand (e.g. "branch", "commit").
+    Also matches full-path git binaries like /usr/bin/git.
     """
     # Tokenize the command to properly skip flags with values
     tokens = command.split()
     if not tokens:
         return None
 
-    # Find the 'git' token
+    # Find the git token (supports full paths like /usr/bin/git)
     git_idx = None
     for idx, token in enumerate(tokens):
-        if token == "git":
+        if _is_git_token(token):
             git_idx = idx
             break
 
@@ -204,7 +263,7 @@ def _extract_git_subcommand(command: str) -> str | None:
         # Skip flags
         if token.startswith("-"):
             # Flags that take a separate value argument: -c, -C, --git-dir, etc.
-            if token in ("-c", "-C", "--git-dir", "--work-tree", "--namespace"):
+            if token in _GIT_FLAGS_WITH_VALUE:
                 i += 2  # skip flag and its value
                 continue
             # Flags with embedded value (-c key=val already handled above)
@@ -219,12 +278,37 @@ def _extract_git_subcommand(command: str) -> str | None:
 def _extract_git_args_after_subcommand(command: str, subcommand: str) -> str:
     """Extract the arguments following 'git <subcommand>' for compound checking.
 
-    Returns the remainder of the command after the subcommand, stripped.
+    Uses token-based parsing (same flag-skipping logic as _extract_git_subcommand)
+    to reliably find the subcommand position, then returns everything after it.
     """
-    pattern = re.compile(rf"\bgit\s+(?:-\w+\s+)*{re.escape(subcommand)}\b\s*(.*)", re.DOTALL)
-    match = pattern.search(command)
-    if match:
-        return match.group(1).strip()
+    tokens = command.split()
+    if not tokens:
+        return ""
+
+    # Find the git token
+    git_idx = None
+    for idx, token in enumerate(tokens):
+        if _is_git_token(token):
+            git_idx = idx
+            break
+
+    if git_idx is None:
+        return ""
+
+    # Walk tokens after git, skipping flags, to find the subcommand
+    i = git_idx + 1
+    while i < len(tokens):
+        token = tokens[i]
+        if token.startswith("-"):
+            if token in _GIT_FLAGS_WITH_VALUE:
+                i += 2
+                continue
+            i += 1
+            continue
+        if token == subcommand:
+            # Everything after the subcommand is the args
+            return " ".join(tokens[i + 1 :])
+        break  # unexpected non-flag, non-subcommand token
     return ""
 
 
@@ -249,6 +333,7 @@ _COMPOUND_SUBCOMMANDS: dict[str, dict] = {
         "default": "read",  # bare 'git remote' lists remotes
     },
     "stash": {
+        # apply is classified as write because it mutates the working tree.
         "write_prefixes": ["drop", "pop", "clear", "apply", "push", "save"],
         "read_prefixes": ["list", "show"],
         "default": "write",  # bare 'git stash' = stash push (write)
@@ -258,6 +343,12 @@ _COMPOUND_SUBCOMMANDS: dict[str, dict] = {
         "write_prefixes": ["--unset", "--replace-all", "--add"],
         "read_prefixes": ["--get", "--list", "-l", "--get-all", "--get-regexp"],
         "default": "read",  # bare 'git config' shows help; 'git config key' is a read
+    },
+    "bisect": {
+        # bisect start/reset/good/bad/new/old/skip/run all modify refs and check out commits.
+        "write_prefixes": ["start", "reset", "good", "bad", "new", "old", "skip", "run"],
+        "read_prefixes": ["log", "view", "visualize", "replay"],
+        "default": "write",  # bare 'git bisect' without subcommand → block
     },
 }
 
@@ -276,14 +367,17 @@ def _classify_compound(subcommand: str, args: str) -> tuple[str | None, str]:
     if subcommand == "config":
         return _classify_config(args, entry)
 
-    # Check writes first (more specific)
+    # Check writes first (more specific).
+    # Use word-boundary matching: args must equal prefix or start with
+    # prefix followed by whitespace, to avoid false-matching branch names
+    # that happen to start with a flag character (e.g. "-dark" vs "-d").
     for prefix in entry["write_prefixes"]:
-        if args.startswith(prefix):
+        if args == prefix or args.startswith(prefix + " ") or args.startswith(prefix + "\t"):
             return f"{subcommand} {prefix}", "write"
 
     # Check reads
     for prefix in entry["read_prefixes"]:
-        if args.startswith(prefix):
+        if args == prefix or args.startswith(prefix + " ") or args.startswith(prefix + "\t"):
             return f"{subcommand} {prefix}", "read"
 
     # No args or unrecognised args → use default
@@ -353,8 +447,18 @@ def _check_single_command(command: str) -> tuple[bool, str]:
     if os.environ.get("FOUNDRY_GUARD_DISABLED") == "1":
         return True, "guard disabled via FOUNDRY_GUARD_DISABLED=1"
 
-    # Check for git commands
-    if re.search(r"\bgit\b", command):
+    # Block shell wrapper commands that can execute arbitrary sub-commands,
+    # bypassing the git guard below. Must be checked before the git guard
+    # because wrappers like `bash -c "git push"` would otherwise evade detection.
+    for pattern in _SHELL_WRAPPER_PATTERNS:
+        if pattern.search(command):
+            return False, (
+                f"blocked: shell wrapper command (matched: {pattern.pattern}) "
+                "is not allowed during autonomous execution"
+            )
+
+    # Check for git commands (matches both 'git' and full-path like '/usr/bin/git')
+    if re.search(r"(?:^|\s|/)git(?:\s|$)", command):
         subcommand = _extract_git_subcommand(command)
 
         if subcommand is None:

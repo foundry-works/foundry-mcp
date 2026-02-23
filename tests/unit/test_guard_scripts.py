@@ -242,7 +242,187 @@ class TestBashGuardEdgeCases:
         allowed, _ = check_command("cp bad.json specs/real.json")
         assert allowed is False
 
+    def test_git_fetch_allowed(self):
+        """git fetch is read-only from working tree perspective."""
+        allowed, _ = check_command("git fetch origin")
+        assert allowed is True
+        allowed, _ = check_command("git fetch --all")
+        assert allowed is True
 
+    def test_git_pull_blocked(self):
+        """git pull modifies working tree and is blocked."""
+        allowed, _ = check_command("git pull origin main")
+        assert allowed is False
+
+    def test_git_add_blocked(self):
+        """git add stages files and is blocked."""
+        allowed, _ = check_command("git add .")
+        assert allowed is False
+        allowed, _ = check_command("git add -A")
+        assert allowed is False
+
+    def test_git_rm_mv_blocked(self):
+        """git rm and git mv are write operations."""
+        allowed, _ = check_command("git rm src/old.py")
+        assert allowed is False
+        allowed, _ = check_command("git mv src/old.py src/new.py")
+        assert allowed is False
+
+    def test_git_restore_switch_blocked(self):
+        """git restore and git switch modify working tree."""
+        allowed, _ = check_command("git restore --staged .")
+        assert allowed is False
+        allowed, _ = check_command("git switch main")
+        assert allowed is False
+
+    def test_empty_command(self):
+        """Empty and whitespace-only commands are allowed."""
+        allowed, _ = check_command("")
+        assert allowed is True
+        allowed, _ = check_command("   ")
+        assert allowed is True
+
+    def test_multiple_spaces_between_git_args(self):
+        """Multiple spaces between git args should not affect detection."""
+        allowed, _ = check_command("git    push   origin   main")
+        assert allowed is False
+
+
+# =============================================================================
+# Bash Guard: Shell Wrapper Bypass Prevention
+# =============================================================================
+
+
+class TestBashGuardShellWrappers:
+    """Shell wrapper commands that could bypass the git guard must be blocked."""
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            'bash -c "git push origin main"',
+            "sh -c 'git push origin main'",
+            "zsh -c 'git reset --hard HEAD'",
+            "eval 'git push'",
+            "eval git push",
+            "exec git push",
+        ],
+    )
+    def test_shell_wrapper_git_blocked(self, command):
+        """Shell wrappers executing git write commands are blocked."""
+        allowed, reason = check_command(command)
+        assert allowed is False, f"Expected blocked for '{command}', got allowed: {reason}"
+        assert "blocked" in reason.lower()
+
+    def test_bash_without_c_flag_allowed(self):
+        """Plain bash without -c flag is not a wrapper pattern."""
+        allowed, _ = check_command("bash script.sh")
+        assert allowed is True
+
+    def test_python_c_with_git_blocked(self):
+        """python -c with git reference is blocked."""
+        allowed, _ = check_command('python3 -c "import subprocess; subprocess.run([\'git\', \'push\'])"')
+        assert allowed is False
+
+
+# =============================================================================
+# Bash Guard: Full-Path Git Binary
+# =============================================================================
+
+
+class TestBashGuardFullPathGit:
+    """Full-path git binaries like /usr/bin/git must be detected."""
+
+    def test_full_path_git_push_blocked(self):
+        allowed, _ = check_command("/usr/bin/git push origin main")
+        assert allowed is False
+
+    def test_full_path_git_status_allowed(self):
+        allowed, _ = check_command("/usr/bin/git status")
+        assert allowed is True
+
+    def test_full_path_git_commit_blocked(self):
+        allowed, _ = check_command("/usr/local/bin/git commit -m 'msg'")
+        assert allowed is False
+
+
+# =============================================================================
+# Bash Guard: Compound Subcommand Arg Extraction
+# =============================================================================
+
+
+class TestBashGuardCompoundArgExtraction:
+    """Git flags before subcommands (e.g. -C /path) must not break classification."""
+
+    def test_git_C_flag_branch_delete_blocked(self):
+        """git -C /tmp branch -D main should be blocked."""
+        allowed, _ = check_command("git -C /tmp branch -D main")
+        assert allowed is False
+
+    def test_git_c_config_before_push_blocked(self):
+        """git -c core.pager=cat push should be blocked."""
+        allowed, _ = check_command("git -c core.pager=cat push origin main")
+        assert allowed is False
+
+    def test_git_git_dir_flag_before_status_allowed(self):
+        """git --git-dir /foo status should be allowed."""
+        allowed, _ = check_command("git --git-dir /foo status")
+        assert allowed is True
+
+
+# =============================================================================
+# Bash Guard: Bisect Classification
+# =============================================================================
+
+
+class TestBashGuardBisect:
+    """git bisect subcommand classification (compound)."""
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "git bisect start",
+            "git bisect good",
+            "git bisect bad",
+            "git bisect reset",
+            "git bisect skip",
+            "git bisect run make test",
+        ],
+    )
+    def test_bisect_write_operations_blocked(self, command):
+        allowed, reason = check_command(command)
+        assert allowed is False, f"Expected blocked for '{command}', got allowed: {reason}"
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "git bisect log",
+            "git bisect visualize",
+        ],
+    )
+    def test_bisect_read_operations_allowed(self, command):
+        allowed, reason = check_command(command)
+        assert allowed is True, f"Expected allowed for '{command}', got blocked: {reason}"
+
+
+# =============================================================================
+# Bash Guard: Extended Sanitization
+# =============================================================================
+
+
+class TestBashGuardExtendedSanitization:
+    """Extended sanitization: OSC, DCS, C1 codes."""
+
+    def test_osc_hyperlink_stripped(self):
+        """OSC hyperlink sequences should be stripped."""
+        cmd = "\x1b]8;;http://example.com\x1b\\git status\x1b]8;;\x1b\\"
+        allowed, _ = check_command(cmd)
+        assert allowed is True
+
+    def test_c1_control_codes_stripped(self):
+        """8-bit C1 control codes should be stripped."""
+        cmd = "\x9bgit status\x9b0m"
+        allowed, _ = check_command(cmd)
+        assert allowed is True
 
 
 # =============================================================================

@@ -715,7 +715,7 @@ deep_research_digest_min_chars = 10000
 deep_research_digest_max_sources = 8
 
 # Timeout per digest operation in seconds
-deep_research_digest_timeout = 180.0
+deep_research_digest_timeout = 120.0
 
 # Maximum concurrent digest operations
 deep_research_digest_max_concurrent = 3
@@ -724,7 +724,7 @@ deep_research_digest_max_concurrent = 3
 deep_research_digest_include_evidence = true
 
 # Maximum characters per evidence snippet
-deep_research_digest_evidence_max_chars = 600
+deep_research_digest_evidence_max_chars = 400
 
 # Maximum evidence snippets per digest
 deep_research_digest_max_evidence_snippets = 5

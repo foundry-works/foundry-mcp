@@ -1,7 +1,7 @@
 """Source and finding models for deep research workflows."""
 
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 from uuid import uuid4
@@ -223,7 +223,7 @@ class SubQuery(BaseModel):
         default=None,
         description="Brief summary of what was found from this sub-query",
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: Optional[datetime] = Field(default=None)
     error: Optional[str] = Field(
         default=None,
@@ -238,7 +238,7 @@ class SubQuery(BaseModel):
             findings: Optional summary of findings from this sub-query
         """
         self.status = "completed"
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         if findings:
             self.findings_summary = findings
 
@@ -249,7 +249,7 @@ class SubQuery(BaseModel):
             error: Description of why the sub-query failed
         """
         self.status = "failed"
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         self.error = error
 
 
@@ -299,7 +299,7 @@ class ResearchSource(BaseModel):
         default=None,
         description="Stable 1-indexed citation number assigned when the source enters state",
     )
-    discovered_at: datetime = Field(default_factory=datetime.utcnow)
+    discovered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @property
@@ -451,7 +451,7 @@ class ResearchFinding(BaseModel):
         default=None,
         description="Theme or category for organizing findings",
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -489,4 +489,4 @@ class ResearchGap(BaseModel):
         default=None,
         description="Notes on how the gap was resolved",
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
