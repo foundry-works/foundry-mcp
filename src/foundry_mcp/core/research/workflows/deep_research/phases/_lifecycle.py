@@ -24,6 +24,37 @@ from foundry_mcp.core.research.workflows.base import WorkflowResult
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# LLM model context-window sizes (tokens)
+# ---------------------------------------------------------------------------
+#: Flat mapping of model name substrings to context window sizes (in tokens).
+#: Used by ``execute_llm_call()`` for progressive token-limit recovery when
+#: ``ContextWindowError.max_tokens`` is not provided by the provider.
+MODEL_TOKEN_LIMITS: dict[str, int] = {
+    # Anthropic Claude
+    "claude-opus": 200_000,
+    "claude-sonnet": 200_000,
+    "claude-haiku": 200_000,
+    "claude-3": 200_000,
+    "claude-3.5": 200_000,
+    "claude-4": 200_000,
+    # OpenAI / Codex
+    "gpt-4o": 128_000,
+    "gpt-4-turbo": 128_000,
+    "gpt-4.1": 128_000,
+    "gpt-4": 8_192,
+    "gpt-3.5-turbo": 16_385,
+    "o3": 200_000,
+    "o4-mini": 128_000,
+    # Google Gemini
+    "gemini-2": 1_000_000,
+    "gemini-1.5-pro": 2_000_000,
+    "gemini-1.5-flash": 1_000_000,
+    "gemini-pro": 32_000,
+    "gemini-flash": 1_000_000,
+}
+
+
+# ---------------------------------------------------------------------------
 # Provider-specific context-window error detection
 # ---------------------------------------------------------------------------
 
@@ -171,7 +202,6 @@ async def execute_llm_call(
         or WorkflowResult directly on error (ContextWindowError, timeout, failure).
         Callers use ``isinstance(ret, WorkflowResult)`` to branch on error.
     """
-    from foundry_mcp.core.research.providers.base import SearchProvider
     from foundry_mcp.core.research.workflows.deep_research._helpers import (
         estimate_token_limit_for_model,
         truncate_to_token_estimate,
@@ -239,7 +269,7 @@ async def execute_llm_call(
             current_user_prompt = _truncate_for_retry(
                 current_user_prompt, e.max_tokens, model, token_limit_retries,
                 truncate_to_token_estimate, estimate_token_limit_for_model,
-                SearchProvider.TOKEN_LIMITS,
+                MODEL_TOKEN_LIMITS,
             )
 
             logger.warning(
@@ -261,7 +291,7 @@ async def execute_llm_call(
                 current_user_prompt = _truncate_for_retry(
                     current_user_prompt, None, model, token_limit_retries,
                     truncate_to_token_estimate, estimate_token_limit_for_model,
-                    SearchProvider.TOKEN_LIMITS,
+                    MODEL_TOKEN_LIMITS,
                 )
 
                 logger.warning(

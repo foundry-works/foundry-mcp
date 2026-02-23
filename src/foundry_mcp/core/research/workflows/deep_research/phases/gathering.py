@@ -60,6 +60,9 @@ class GatheringPhaseMixin:
     # Per-topic compression
     # ------------------------------------------------------------------
 
+    #: Maximum characters per source included in the compression prompt.
+    _COMPRESSION_SOURCE_CHAR_LIMIT: int = 2000
+
     async def _compress_topic_findings_async(
         self,
         state: DeepResearchState,
@@ -92,12 +95,12 @@ class GatheringPhaseMixin:
             topics_failed, total_compression_tokens).
         """
         from foundry_mcp.core.errors.provider import ContextWindowError
-        from foundry_mcp.core.research.providers.base import SearchProvider
         from foundry_mcp.core.research.workflows.deep_research._helpers import (
             estimate_token_limit_for_model,
             truncate_to_token_estimate,
         )
         from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            MODEL_TOKEN_LIMITS,
             _TRUNCATION_FACTOR,
             _is_context_window_error,
         )
@@ -111,6 +114,10 @@ class GatheringPhaseMixin:
             return {"topics_compressed": 0, "topics_failed": 0, "total_compression_tokens": 0}
 
         # Resolve compression provider/model via role-based hierarchy (Phase 6).
+        # Uses try/except for the unpacking — hasattr alone is not safe with
+        # mock objects that auto-create attributes.
+        compression_provider: str = self.config.default_provider
+        compression_model: str | None = None
         try:
             compression_provider, compression_model = self.config.resolve_model_for_role("compression")
         except (AttributeError, TypeError, ValueError):
@@ -125,7 +132,6 @@ class GatheringPhaseMixin:
         total_compression_tokens = 0
         topics_compressed = 0
         topics_failed = 0
-        compression_lock = asyncio.Lock()
 
         async def compress_one(topic_result: TopicResearchResult) -> None:
             nonlocal total_compression_tokens, topics_compressed, topics_failed
@@ -150,9 +156,8 @@ class GatheringPhaseMixin:
                         source_lines.append(f"    URL: {src.url}")
                     content = src.content or src.snippet or ""
                     if content:
-                        # Limit each source to ~2000 chars for the compression prompt
-                        if len(content) > 2000:
-                            content = content[:2000] + "..."
+                        if len(content) > self._COMPRESSION_SOURCE_CHAR_LIMIT:
+                            content = content[:self._COMPRESSION_SOURCE_CHAR_LIMIT] + "..."
                         source_lines.append(f"    Content: {content}")
                     source_lines.append("")
 
@@ -218,7 +223,7 @@ class GatheringPhaseMixin:
                             break
                         # Truncate user prompt by 10% and retry
                         max_tokens = e.max_tokens or estimate_token_limit_for_model(
-                            compression_model, SearchProvider.TOKEN_LIMITS
+                            compression_model, MODEL_TOKEN_LIMITS
                         ) or 128_000
                         reduced = int(max_tokens * (_TRUNCATION_FACTOR ** (attempt + 1)))
                         current_prompt = truncate_to_token_estimate(current_prompt, reduced)
@@ -232,7 +237,7 @@ class GatheringPhaseMixin:
                     except Exception as e:
                         if _is_context_window_error(e) and attempt < max_retries:
                             max_tokens = estimate_token_limit_for_model(
-                                compression_model, SearchProvider.TOKEN_LIMITS
+                                compression_model, MODEL_TOKEN_LIMITS
                             ) or 128_000
                             reduced = int(max_tokens * (_TRUNCATION_FACTOR ** (attempt + 1)))
                             current_prompt = truncate_to_token_estimate(current_prompt, reduced)
@@ -251,17 +256,18 @@ class GatheringPhaseMixin:
                             )
                             break
 
-                async with compression_lock:
-                    if compressed:
-                        topic_result.compressed_findings = compressed
-                        total_compression_tokens += tokens_used
-                        topics_compressed += 1
-                    else:
-                        topics_failed += 1
+                if compressed:
+                    topic_result.compressed_findings = compressed
+                    total_compression_tokens += tokens_used
+                    topics_compressed += 1
+                else:
+                    topics_failed += 1
 
         # Run compression tasks in parallel
+        compression_start = time.perf_counter()
         tasks = [compress_one(tr) for tr in results_to_compress]
         await asyncio.gather(*tasks, return_exceptions=True)
+        compression_duration_ms = (time.perf_counter() - compression_start) * 1000
 
         # Record compression phase metrics
         if total_compression_tokens > 0:
@@ -269,7 +275,7 @@ class GatheringPhaseMixin:
             state.phase_metrics.append(
                 PhaseMetrics(
                     phase="compression",
-                    duration_ms=0.0,  # Tracked at the gathering level
+                    duration_ms=compression_duration_ms,
                     input_tokens=total_compression_tokens,
                     output_tokens=0,
                     cached_tokens=0,
@@ -508,6 +514,8 @@ class GatheringPhaseMixin:
         from foundry_mcp.core.research.providers.shared import SourceSummarizer
 
         # Resolve summarization provider/model via role-based hierarchy (Phase 6).
+        summarization_provider: str = self.config.default_provider
+        summarization_model: str | None = None
         try:
             summarization_provider, summarization_model = self.config.resolve_model_for_role("summarization")
         except (AttributeError, TypeError, ValueError):

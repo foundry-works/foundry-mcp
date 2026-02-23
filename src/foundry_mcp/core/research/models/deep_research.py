@@ -537,7 +537,7 @@ class DeepResearchState(BaseModel):
         return [g for g in self.gaps if not g.resolved]
 
     # =========================================================================
-    # Phase Management
+    # Cost Tracking
     # =========================================================================
 
     def get_model_role_costs(self) -> dict[str, dict[str, Any]]:

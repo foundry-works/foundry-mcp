@@ -760,10 +760,12 @@ class SourceSummarizer:
 
         prompt = _SOURCE_SUMMARIZATION_PROMPT.format(content=content)
 
+        # Note: no timeout here — the caller (summarize_sources) wraps this
+        # in asyncio.wait_for() for cancellation.  Duplicating the timeout
+        # would cause confusing race conditions between the two layers.
         request = ProviderRequest(
             prompt=prompt,
             max_tokens=2000,
-            timeout=self._timeout,
             model=self._model,
         )
 
@@ -857,10 +859,13 @@ class SourceSummarizer:
         excerpts_markers = ["## Key Excerpts", "## Key excerpts", "**Key Excerpts**"]
         summary_markers = ["## Executive Summary", "## Executive summary", "**Executive Summary**"]
 
+        # Find the position where the excerpts section starts (header included)
+        excerpts_header_start = -1
         excerpts_start = -1
         for marker in excerpts_markers:
             idx = response.find(marker)
             if idx != -1:
+                excerpts_header_start = idx
                 excerpts_start = idx + len(marker)
                 break
 
@@ -872,22 +877,12 @@ class SourceSummarizer:
                 break
 
         if summary_start != -1:
-            # Extract executive summary
-            summary_end = excerpts_start - len(marker) if excerpts_start != -1 else len(response)
-            # Find the actual start of excerpts marker for correct end
-            for m in excerpts_markers:
-                idx = response.find(m)
-                if idx != -1:
-                    summary_end = idx
-                    break
+            # Extract executive summary — ends at the excerpts header (or EOF)
+            summary_end = excerpts_header_start if excerpts_header_start != -1 else len(response)
             executive_summary = response[summary_start:summary_end].strip()
-        elif excerpts_start != -1:
+        elif excerpts_header_start != -1:
             # No summary header but excerpts header exists — everything before is summary
-            for m in excerpts_markers:
-                idx = response.find(m)
-                if idx != -1:
-                    executive_summary = response[:idx].strip()
-                    break
+            executive_summary = response[:excerpts_header_start].strip()
 
         if excerpts_start != -1:
             excerpts_text = response[excerpts_start:]

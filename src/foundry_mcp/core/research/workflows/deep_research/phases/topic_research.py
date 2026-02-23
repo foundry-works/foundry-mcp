@@ -375,6 +375,10 @@ class TopicResearchMixin:
         """
         # Resolve provider and model via role-based hierarchy (Phase 6).
         # Falls back to phase-specific config, then global default.
+        # Uses try/except for unpacking — hasattr alone is not safe with
+        # mock objects that auto-create attributes.
+        provider_id: str | None = None
+        reflection_model: str | None = None
         try:
             provider_id, reflection_model = self.config.resolve_model_for_role("topic_reflection")
         except (AttributeError, TypeError, ValueError):
