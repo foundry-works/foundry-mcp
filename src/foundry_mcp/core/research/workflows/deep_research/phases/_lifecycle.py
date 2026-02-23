@@ -377,6 +377,148 @@ async def execute_llm_call(
     return LLMCallResult(result=result, llm_call_duration_ms=llm_call_duration_ms)
 
 
+# Maximum parse-validation retries for structured LLM calls.
+_MAX_STRUCTURED_PARSE_RETRIES: int = 3
+
+
+@dataclass
+class StructuredLLMCallResult:
+    """Result of a structured LLM call with parsed data.
+
+    Attributes:
+        result: The underlying WorkflowResult from the LLM call.
+        llm_call_duration_ms: Total time spent across all LLM call attempts.
+        parsed: The parsed structured data (output of ``parse_fn``), or
+            ``None`` if parsing failed on all attempts.
+        parse_retries: Number of parse-validation retries that were needed.
+    """
+
+    result: WorkflowResult
+    llm_call_duration_ms: float
+    parsed: Any
+    parse_retries: int = 0
+
+
+async def execute_structured_llm_call(
+    workflow: Any,
+    state: DeepResearchState,
+    phase_name: str,
+    system_prompt: str,
+    user_prompt: str,
+    provider_id: Optional[str],
+    model: Optional[str],
+    temperature: float,
+    timeout: float,
+    parse_fn: Any,
+    error_metadata: Optional[dict[str, Any]] = None,
+) -> StructuredLLMCallResult | WorkflowResult:
+    """Execute an LLM call expecting structured JSON output.
+
+    Wraps :func:`execute_llm_call` with parse-validation and retry logic.
+    On each attempt the LLM response content is passed through *parse_fn*.
+    If *parse_fn* raises (``ValueError``, ``json.JSONDecodeError``, etc.),
+    the call is retried with a reinforced JSON instruction appended to the
+    user prompt, up to ``_MAX_STRUCTURED_PARSE_RETRIES`` times.
+
+    If all parse attempts fail, returns a :class:`StructuredLLMCallResult`
+    with ``parsed=None`` and the last successful LLM result — letting the
+    caller fall back to unstructured handling.
+
+    Args:
+        workflow: The DeepResearchWorkflow instance
+        state: Current research state
+        phase_name: Phase identifier
+        system_prompt: System prompt (should already request JSON output)
+        user_prompt: User prompt for the LLM call
+        provider_id: Explicit provider ID
+        model: Model override
+        temperature: Sampling temperature
+        timeout: Request timeout in seconds
+        parse_fn: Callable ``(content: str) -> T`` that parses the LLM
+            response content.  Should raise on validation failure.
+        error_metadata: Extra fields for error response metadata
+
+    Returns:
+        StructuredLLMCallResult on success or parse-exhaustion (check
+        ``.parsed`` for ``None``), or WorkflowResult on LLM-level error.
+    """
+    import json as _json
+
+    total_duration_ms = 0.0
+    last_llm_result: Optional[LLMCallResult] = None
+    parse_retries = 0
+
+    current_user_prompt = user_prompt
+
+    for attempt in range(_MAX_STRUCTURED_PARSE_RETRIES + 1):  # 0 = initial, 1-3 = retries
+        call_result = await execute_llm_call(
+            workflow=workflow,
+            state=state,
+            phase_name=phase_name,
+            system_prompt=system_prompt,
+            user_prompt=current_user_prompt,
+            provider_id=provider_id,
+            model=model,
+            temperature=temperature,
+            timeout=timeout,
+            error_metadata=error_metadata,
+        )
+
+        # LLM-level error — propagate immediately
+        if isinstance(call_result, WorkflowResult):
+            return call_result
+
+        last_llm_result = call_result
+        total_duration_ms += call_result.llm_call_duration_ms
+
+        # Try parsing the structured output
+        content = call_result.result.content or ""
+        try:
+            parsed = parse_fn(content)
+            return StructuredLLMCallResult(
+                result=call_result.result,
+                llm_call_duration_ms=total_duration_ms,
+                parsed=parsed,
+                parse_retries=parse_retries,
+            )
+        except (ValueError, _json.JSONDecodeError, TypeError, KeyError) as exc:
+            logger.warning(
+                "%s phase structured parse failed (attempt %d/%d): %s",
+                phase_name.capitalize(),
+                attempt + 1,
+                _MAX_STRUCTURED_PARSE_RETRIES + 1,
+                exc,
+            )
+
+            if attempt >= _MAX_STRUCTURED_PARSE_RETRIES:
+                break  # All retries exhausted
+
+            parse_retries += 1
+
+            # Reinforce JSON instruction for next attempt
+            current_user_prompt = (
+                user_prompt
+                + "\n\nIMPORTANT: Your previous response could not be parsed as valid JSON. "
+                "You MUST respond with ONLY a valid JSON object, no markdown formatting, "
+                "no extra text before or after the JSON."
+            )
+
+    # Parse exhausted — return with parsed=None so caller can fall back
+    assert last_llm_result is not None
+    logger.warning(
+        "%s phase structured output parsing failed after %d retries, "
+        "falling back to unstructured handling",
+        phase_name.capitalize(),
+        parse_retries,
+    )
+    return StructuredLLMCallResult(
+        result=last_llm_result.result,
+        llm_call_duration_ms=total_duration_ms,
+        parsed=None,
+        parse_retries=parse_retries,
+    )
+
+
 def finalize_phase(
     workflow: Any,
     state: DeepResearchState,

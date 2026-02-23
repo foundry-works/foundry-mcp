@@ -19,8 +19,11 @@ from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
 )
 from foundry_mcp.core.research.workflows.base import WorkflowResult
+from foundry_mcp.core.research.workflows.deep_research._helpers import (
+    ClarificationDecision,
+)
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
-    LLMCallResult,
+    StructuredLLMCallResult,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases.clarification import (
     ClarificationPhaseMixin,
@@ -384,17 +387,17 @@ class TestClarificationPromptBuilding:
         """System prompt describes the expected JSON output format."""
         prompt = self.mixin._build_clarification_system_prompt()
 
-        assert "needs_clarification" in prompt
-        assert "questions" in prompt
-        assert "inferred_constraints" in prompt
+        assert "need_clarification" in prompt
+        assert "question" in prompt
+        assert "verification" in prompt
         assert "JSON" in prompt
 
-    def test_system_prompt_lists_constraint_keys(self) -> None:
-        """System prompt documents supported constraint keys."""
+    def test_system_prompt_describes_binary_decision(self) -> None:
+        """System prompt frames the decision as a binary choice."""
         prompt = self.mixin._build_clarification_system_prompt()
 
-        for key in ["scope", "timeframe", "domain", "depth", "geographic_focus"]:
-            assert key in prompt
+        assert "true" in prompt.lower()
+        assert "false" in prompt.lower()
 
     def test_user_prompt_contains_query(self) -> None:
         """User prompt includes the original research query."""
@@ -455,17 +458,27 @@ class TestClarificationToPlanningFlow:
         mock_config: MagicMock,
         mock_memory: MagicMock,
     ) -> None:
-        """Clarification phase stores inferred constraints in state."""
+        """Clarification phase stores inferred constraints in state when need_clarification=True."""
         state = _make_state(query="How does AI work?")
 
         mixin = StubClarificationMixin()
         mixin.config = mock_config
         mixin.memory = mock_memory
 
+        # The structured decision parsed from the LLM response
+        decision = ClarificationDecision(
+            need_clarification=True,
+            question="What aspect of AI?",
+            verification="User asking broadly about AI.",
+        )
+
+        # The raw LLM response content (used by legacy parser for backward-compat
+        # to extract inferred_constraints)
         llm_response = json.dumps(
             {
-                "needs_clarification": True,
-                "questions": ["What aspect of AI?"],
+                "need_clarification": True,
+                "question": "What aspect of AI?",
+                "verification": "User asking broadly about AI.",
                 "inferred_constraints": {
                     "scope": "machine learning fundamentals",
                     "depth": "overview",
@@ -484,10 +497,74 @@ class TestClarificationToPlanningFlow:
         mock_result.cached_tokens = 0
         mock_result.success = True
 
+        structured_result = StructuredLLMCallResult(
+            result=mock_result,
+            llm_call_duration_ms=500.0,
+            parsed=decision,
+            parse_retries=0,
+        )
+
         with (
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.clarification.execute_llm_call",
-                return_value=LLMCallResult(result=mock_result, llm_call_duration_ms=500.0),
+                "foundry_mcp.core.research.workflows.deep_research.phases.clarification.execute_structured_llm_call",
+                return_value=structured_result,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.clarification.finalize_phase",
+            ),
+        ):
+            result = await mixin._execute_clarification_async(
+                state=state,
+                provider_id="test-provider",
+                timeout=60.0,
+            )
+
+        assert result.success is True
+        assert state.metadata["clarification_questions"] == ["What aspect of AI?"]
+
+    @pytest.mark.asyncio
+    async def test_specific_query_stores_verification(
+        self,
+        mock_config: MagicMock,
+        mock_memory: MagicMock,
+    ) -> None:
+        """Specific query gets need_clarification=false, verification stored in constraints."""
+        state = _make_state(query="Compare PostgreSQL vs MySQL for OLTP workloads in 2024")
+
+        mixin = StubClarificationMixin()
+        mixin.config = mock_config
+        mixin.memory = mock_memory
+
+        decision = ClarificationDecision(
+            need_clarification=False,
+            question="",
+            verification="User wants to compare PostgreSQL and MySQL for OLTP.",
+        )
+
+        llm_response = json.dumps(decision.to_dict())
+
+        mock_result = MagicMock()
+        mock_result.content = llm_response
+        mock_result.provider_id = "test-provider"
+        mock_result.model_used = "test-model"
+        mock_result.tokens_used = 80
+        mock_result.duration_ms = 300.0
+        mock_result.input_tokens = 40
+        mock_result.output_tokens = 40
+        mock_result.cached_tokens = 0
+        mock_result.success = True
+
+        structured_result = StructuredLLMCallResult(
+            result=mock_result,
+            llm_call_duration_ms=300.0,
+            parsed=decision,
+            parse_retries=0,
+        )
+
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.clarification.execute_structured_llm_call",
+                return_value=structured_result,
             ),
             patch(
                 "foundry_mcp.core.research.workflows.deep_research.phases.clarification.finalize_phase",
@@ -501,60 +578,8 @@ class TestClarificationToPlanningFlow:
 
         assert result.success is True
         assert state.clarification_constraints == {
-            "scope": "machine learning fundamentals",
-            "depth": "overview",
+            "verification": "User wants to compare PostgreSQL and MySQL for OLTP.",
         }
-        assert state.metadata["clarification_questions"] == ["What aspect of AI?"]
-
-    @pytest.mark.asyncio
-    async def test_specific_query_produces_no_constraints(
-        self,
-        mock_config: MagicMock,
-        mock_memory: MagicMock,
-    ) -> None:
-        """Specific query gets needs_clarification=false, no constraints stored."""
-        state = _make_state(query="Compare PostgreSQL vs MySQL for OLTP workloads in 2024")
-
-        mixin = StubClarificationMixin()
-        mixin.config = mock_config
-        mixin.memory = mock_memory
-
-        llm_response = json.dumps(
-            {
-                "needs_clarification": False,
-                "questions": [],
-                "inferred_constraints": {},
-            }
-        )
-
-        mock_result = MagicMock()
-        mock_result.content = llm_response
-        mock_result.provider_id = "test-provider"
-        mock_result.model_used = "test-model"
-        mock_result.tokens_used = 80
-        mock_result.duration_ms = 300.0
-        mock_result.input_tokens = 40
-        mock_result.output_tokens = 40
-        mock_result.cached_tokens = 0
-        mock_result.success = True
-
-        with (
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.clarification.execute_llm_call",
-                return_value=LLMCallResult(result=mock_result, llm_call_duration_ms=300.0),
-            ),
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.clarification.finalize_phase",
-            ),
-        ):
-            result = await mixin._execute_clarification_async(
-                state=state,
-                provider_id="test-provider",
-                timeout=60.0,
-            )
-
-        assert result.success is True
-        assert state.clarification_constraints == {}
         assert "clarification_questions" not in state.metadata
 
     @pytest.mark.asyncio
@@ -577,7 +602,7 @@ class TestClarificationToPlanningFlow:
         )
 
         with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.clarification.execute_llm_call",
+            "foundry_mcp.core.research.workflows.deep_research.phases.clarification.execute_structured_llm_call",
             return_value=error_result,
         ):
             result = await mixin._execute_clarification_async(

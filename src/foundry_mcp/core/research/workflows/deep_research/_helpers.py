@@ -231,6 +231,81 @@ def parse_reflection_decision(text: str) -> TopicReflectionDecision:
     return decision
 
 
+@dataclass
+class ClarificationDecision:
+    """Structured decision from the clarification phase.
+
+    Captures whether the query needs clarification (with a question)
+    or is understood (with a verification statement restating the LLM's
+    understanding of the query).
+    """
+
+    need_clarification: bool = False
+    question: str = ""
+    verification: str = ""
+
+    def to_dict(self) -> dict:
+        """Serialize to dict for audit/logging."""
+        return {
+            "need_clarification": self.need_clarification,
+            "question": self.question,
+            "verification": self.verification,
+        }
+
+
+def parse_clarification_decision(text: str) -> ClarificationDecision:
+    """Parse a clarification LLM response into a structured decision.
+
+    Attempts JSON extraction first, then falls back to regex-based
+    parsing for key fields if JSON extraction fails.
+
+    Args:
+        text: Raw LLM response text (may contain JSON or prose)
+
+    Returns:
+        ClarificationDecision with extracted fields.  On total parse
+        failure, returns a safe default (no clarification needed,
+        empty verification).
+    """
+    if not text:
+        return ClarificationDecision()
+
+    json_str = extract_json(text)
+    if json_str:
+        try:
+            data = json.loads(json_str)
+            return ClarificationDecision(
+                need_clarification=bool(data.get("need_clarification", False)),
+                question=str(data.get("question", "")),
+                verification=str(data.get("verification", "")),
+            )
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            logger.debug("Clarification decision JSON parse failed: %s", exc)
+
+    # Fallback: regex extraction
+    decision = ClarificationDecision()
+
+    # Look for need_clarification signal
+    nc_match = re.search(r'"?need_clarification"?\s*:\s*(true|false)', text, re.IGNORECASE)
+    if nc_match:
+        decision.need_clarification = nc_match.group(1).lower() == "true"
+
+    # Look for question
+    q_match = re.search(r'"?question"?\s*:\s*"([^"]*)"', text)
+    if q_match:
+        decision.question = q_match.group(1)
+
+    # Look for verification
+    v_match = re.search(r'"?verification"?\s*:\s*"([^"]*)"', text)
+    if v_match:
+        decision.verification = v_match.group(1)
+
+    if not decision.question and not decision.verification:
+        decision.verification = "Parsed via fallback regex extraction"
+
+    return decision
+
+
 def resolve_phase_provider(config: "ResearchConfig", *phase_names: str) -> str:
     """Resolve LLM provider ID by trying phase-specific config attrs in order.
 

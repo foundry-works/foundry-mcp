@@ -125,27 +125,27 @@ Mark items `[x]` as completed. Items within a phase are ordered by dependency.
 
 ## Phase 4: Structured Clarification Gate
 
-- [ ] **4.1** Define `ClarificationDecision` schema in `_helpers.py`:
-  - [ ] `{need_clarification: bool, question: str, verification: str}`
-  - [ ] Extraction via `extract_json()` with retry-on-parse-failure (3 attempts)
-- [ ] **4.2** Add `execute_structured_llm_call()` variant to `phases/_lifecycle.py`:
-  - [ ] Accepts expected JSON schema
-  - [ ] Requests JSON-mode output from provider
-  - [ ] Validates response against schema
-  - [ ] Retries up to 3 times on validation failure
-  - [ ] Falls back to unstructured call on exhaustion
-- [ ] **4.3** Update `phases/clarification.py`:
-  - [ ] Use `execute_structured_llm_call()` with `ClarificationDecision` schema
-  - [ ] On `need_clarification=True`: return question (existing flow)
-  - [ ] On `need_clarification=False`: store `verification` in `state.clarification_constraints`, log audit event, proceed to planning
-  - [ ] On parse failure fallback: treat as "no clarification needed" (existing behavior)
-- [ ] **4.4** Write `tests/research/test_clarification_structured.py`:
-  - [ ] Test structured output parsing for both `need_clarification` values
-  - [ ] Test `verification` stored in state
-  - [ ] Test retry on parse failure
-  - [ ] Test fallback to unstructured on exhaustion
-  - [ ] Test audit event logged on verification
-- [ ] **4.5** Verify existing deep research contract tests still pass
+- [x] **4.1** Define `ClarificationDecision` schema in `_helpers.py`:
+  - [x] `{need_clarification: bool, question: str, verification: str}`
+  - [x] Extraction via `extract_json()` with retry-on-parse-failure (3 attempts)
+- [x] **4.2** Add `execute_structured_llm_call()` variant to `phases/_lifecycle.py`:
+  - [x] Accepts expected JSON schema
+  - [x] Requests JSON-mode output from provider
+  - [x] Validates response against schema
+  - [x] Retries up to 3 times on validation failure
+  - [x] Falls back to unstructured call on exhaustion
+- [x] **4.3** Update `phases/clarification.py`:
+  - [x] Use `execute_structured_llm_call()` with `ClarificationDecision` schema
+  - [x] On `need_clarification=True`: return question (existing flow)
+  - [x] On `need_clarification=False`: store `verification` in `state.clarification_constraints`, log audit event, proceed to planning
+  - [x] On parse failure fallback: treat as "no clarification needed" (existing behavior)
+- [x] **4.4** Write `tests/research/test_clarification_structured.py`:
+  - [x] Test structured output parsing for both `need_clarification` values
+  - [x] Test `verification` stored in state
+  - [x] Test retry on parse failure
+  - [x] Test fallback to unstructured on exhaustion
+  - [x] Test audit event logged on verification
+- [x] **4.5** Verify existing deep research contract tests still pass
 
 ---
 
