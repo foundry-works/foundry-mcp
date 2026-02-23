@@ -1,82 +1,115 @@
-# PLAN-CHECKLIST: Align Compression with open_deep_research
+# PLAN-CHECKLIST: Deep Research Alignment with open_deep_research
 
 **Branch:** `tyler/foundry-mcp-20260223-0747`
 **Date:** 2026-02-23
 
 ---
 
-## Phase 1: Fix L2 Compression Input
+## Phase 1: Update Model Token Limits
 
-- [x] **1.1** Rewrite compression to use full topic research context
-  - [x] Include reflection notes, refined queries, completion rationale in prompt
-  - [x] Include search iteration history (which query found which sources)
-  - [x] Pass full source content instead of re-truncated snippets
-- [x] **1.2** Raise source content limit to 50,000 chars (match open_deep_research)
-  - [x] Add `deep_research_compression_max_content_length` to `ResearchConfig` (default 50000)
-  - [x] Replace `_COMPRESSION_SOURCE_CHAR_LIMIT = 2000` class constant
-- [x] **1.3** Align compression prompt with open_deep_research directives
-  - [x] "DO NOT summarize — preserve verbatim, clean up format"
-  - [x] "A later LLM will merge — don't lose sources"
-  - [x] Output format: Queries Made → Comprehensive Findings → Source List
-  - [x] Inline citations [1], [2] numbered sequentially
-- [x] **1.4** Refactor to use `execute_llm_call` instead of duplicated retry logic
-  - [x] Remove manual ContextWindowError retry loop from `compression.py`
-  - [x] Use shared progressive token-limit recovery
+- [x] **1.1** Update `model_token_limits.json` with accurate upstream values
+  - GPT-4.1 variants: 1,000,000 → 1,047,576
+  - Add gpt-4.1-nano (1,047,576), gpt-4o (128,000), gpt-4o-mini (128,000)
+  - Add gemini-2.5-pro (1,048,576), gemini-2.5-flash (1,048,576)
+  - Add gemini-1.5-pro (2,097,152)
+- [x] **1.2** Update `_lifecycle.py` inline `MODEL_TOKEN_LIMITS` fallback dict to match json
+- [x] **1.3** Verify `truncate_to_token_estimate` loads from json, not just hardcoded dict
+- [x] **1.4** Run existing token truncation tests — confirm no regressions (66/66 passed)
 
 ---
 
-## Phase 2: Fix L1 Summarization Input Limit
+## Phase 2: Research Brief Generation
 
-- [x] **2.1** Add `max_content_length` cap to `SourceSummarizer`
-  - [x] Truncate content before building summarization prompt
-  - [x] Default: 50,000 chars (matches open_deep_research)
-- [x] **2.2** Add `deep_research_max_content_length` config field
-  - [x] Wire through `_attach_source_summarizer` in `gathering.py`
-
----
-
-## Phase 3: Update Tests
-
-- [x] **3.1** Update `test_topic_compression.py` for new prompt structure
-  - [x] Verify full ReAct context appears in compression prompt (TestFullReActContext: 4 tests)
-  - [x] Verify raised char limit is used (configurable_content_limit + default_allows_long_content)
-  - [x] Verify prompt matches open_deep_research directives (system_prompt_aligned test)
-- [x] **3.2** Add input limit tests to `test_source_summarization.py`
-  - [x] Content exceeding max_content_length is truncated (3 async tests)
-  - [x] Configurable limit is respected (custom_limit_is_respected)
-  - [x] Config field tests: default, explicit, TOML parsing, TOML default (4 tests)
-- [x] **3.3** Verify analysis consumes new compression format
-  - [x] Compressed findings format (Queries Made / Findings / Source List) in analysis prompt
-  - [x] Inline citations preserved through analysis
-  - [x] Source ID mapping included per topic
-  - [x] Compressed findings flow through to synthesis (5 tests in TestCompressedFindingsCrossPhase)
+- [ ] **2.1** Add `_build_brief_refinement_prompt()` to `planning.py`
+  - Original prompt (not copied), modeled after upstream principles
+  - Maximize specificity, fill unstated dimensions as open-ended
+  - Prefer primary sources, preserve language preference
+- [ ] **2.2** Add brief-refinement LLM call at start of `_execute_planning_async()`
+  - Execute before sub-query decomposition
+  - Use cheap model role (summarization or new "brief" role)
+- [ ] **2.3** Store refined brief in `state.research_brief`
+- [ ] **2.4** Wire refined brief as input to `_build_planning_user_prompt()`
+- [ ] **2.5** Add "brief" to `_ROLE_RESOLUTION_CHAIN` in `research.py` if using new role
+- [ ] **2.6** Test: ambiguous query produces more specific brief
+- [ ] **2.7** Test: sub-queries are grounded in refined brief
+- [ ] **2.8** Test: existing planning tests pass (additive change)
 
 ---
 
-## Phase 4: Cleanup from Code Review
+## Phase 3: Synthesis Prompt Engineering
 
-- [x] **4.1** Fix `_load_model_token_limits()` — use `foundry_mcp.config.__file__` not `parents[5]`
-  - [x] Import `foundry_mcp.config` as `_config_pkg`, resolve path via `Path(_config_pkg.__file__).resolve().parent`
-  - [x] Updated fallback tests to mock `_config_pkg` instead of fragile `parents[5]` chain
-- [x] **4.2** Extract `safe_resolve_model_for_role()` helper — replace 4 try/except sites
-  - [x] Added `safe_resolve_model_for_role()` to `_helpers.py` — returns `(None, None)` on failure
-  - [x] Replaced try/except in `_lifecycle.py`, `gathering.py`, `compression.py`, `topic_research.py`
-- [x] **4.3** Remove unused `provider_hint` from `_CONTEXT_WINDOW_ERROR_PATTERNS`
-  - [x] Simplified from `list[tuple[str, str]]` to `list[str]` (comments document provider coverage)
-  - [x] Updated `_is_context_window_error()` loop and test assertions
-- [x] **4.4** Add test: `_FALLBACK_MODEL_TOKEN_LIMITS` matches `model_token_limits.json`
-  - [x] `test_fallback_matches_json` loads both sources and asserts equality with clear error message
-- [x] **4.5** Move per-call imports to module level in `_lifecycle.py`
-  - [x] Moved `estimate_token_limit_for_model`, `truncate_to_token_estimate`, `safe_resolve_model_for_role` to top-level imports
-  - [x] Replaced `import json as _json` with module-level `json` (already imported)
+- [ ] **3.1** Add language detection directive to `_build_synthesis_system_prompt()`
+  - Detect language from user query, instruct report in same language
+- [ ] **3.2** Add structure-adaptive directives
+  - Comparison → side-by-side structure
+  - Enumeration → single-section list
+  - Explanation → overview + concept sections + conclusion
+  - How-to → step-by-step with prerequisites
+- [ ] **3.3** Add anti-pattern guardrails
+  - No meta-commentary ("based on the research", "the findings show")
+  - No hedging openers ("it appears that", "it seems")
+  - No self-reference ("as an AI", "I found that")
+- [ ] **3.4** Enforce citation format: inline `[Title](URL)` + numbered source section
+- [ ] **3.5** Add query-type hint to `_build_synthesis_user_prompt()`
+- [ ] **3.6** Test: non-English query produces non-English report
+- [ ] **3.7** Test: comparison query produces comparison structure
+- [ ] **3.8** Test: output is free of anti-pattern phrases
+- [ ] **3.9** Test: citations are consistently formatted
+
+---
+
+## Phase 4: Message-Aware Token Recovery
+
+- [ ] **4.1** Add `_structured_truncation()` helper to `_helpers.py`
+  - Parse prompt into source/finding blocks
+  - Identify block boundaries (section headers, source markers)
+  - Truncate longest blocks first, preserving all block headers
+- [ ] **4.2** Add quality-aware source dropping
+  - If quality scores available, drop lowest-quality sources first
+  - Otherwise drop longest sources first (heuristic: length ≠ quality)
+- [ ] **4.3** Update retry loop in `execute_llm_call()` (lines 288-351)
+  - Retry 1: structured truncation (longest blocks first)
+  - Retry 2: source dropping (lowest quality or longest)
+  - Retry 3: current char-based truncation (fallback)
+- [ ] **4.4** Test: structured truncation preserves high-quality sources
+- [ ] **4.5** Test: char-based fallback still works when structured fails
+- [ ] **4.6** Test: no regression in existing token recovery tests
+
+---
+
+## Phase 5: Reflection Enforcement
+
+- [ ] **5.1** Update reflection system prompt in `_topic_reflect()` (lines 395-417)
+  - Hard stop: research_complete=true when 3+ sources from distinct domains
+  - Continue: only if <2 relevant sources found
+  - Rationale must articulate specific gap to be filled
+- [ ] **5.2** Add guard: force research_complete if iteration >= max_searches
+  - Regardless of reflection LLM decision
+- [ ] **5.3** Add logging of reflection rationale for observability
+- [ ] **5.4** Test: reflection returns research_complete after 3+ distinct-domain sources
+- [ ] **5.5** Test: reflection never recommends continuing past max_searches
+- [ ] **5.6** Test: rationale field is always non-empty
+
+---
+
+## Phase 6: Iterative Supervisor Architecture (Deferred)
+
+_Not for immediate implementation. Evaluate after Phases 1-5 land._
+
+- [ ] **6.1** Design supervision phase between gathering/compression and analysis
+- [ ] **6.2** Implement coverage gap assessment (topics with insufficient sources)
+- [ ] **6.3** Implement targeted sub-query generation for gaps
+- [ ] **6.4** Add iteration budget management (tokens, API calls)
+- [ ] **6.5** Integrate with phase lifecycle in `_lifecycle.py`
+- [ ] **6.6** Test: supervisor identifies and fills coverage gaps
+- [ ] **6.7** Test: iteration limit is respected
+- [ ] **6.8** Test: budget tracking prevents runaway costs
 
 ---
 
 ## Sign-off
 
-| Phase | Status | Date | Notes |
-|-------|--------|------|-------|
-| Phase 1 | **Done** | 2026-02-23 | Core fix — compression input alignment |
-| Phase 2 | **Done** | 2026-02-23 | L1 input cap |
-| Phase 3 | **Done** | 2026-02-23 | 12 new tests (7 summarization + 5 cross-phase) |
-| Phase 4 | **Done** | 2026-02-23 | Review cleanup — 5 items |
+- [ ] All phases reviewed and approved
+- [ ] Tests pass: `pytest tests/core/research/ -x`
+- [ ] No regressions in existing deep research tests
+- [ ] Code review completed

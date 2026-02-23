@@ -48,14 +48,20 @@ _FALLBACK_MODEL_TOKEN_LIMITS: dict[str, int] = {
     "gpt-5.3": 400_000,
     "gpt-5.1-codex-mini": 400_000,
     "gpt-5-mini": 400_000,
-    "gpt-4.1-mini": 1_000_000,
-    "gpt-4.1": 1_000_000,
+    "gpt-4.1-mini": 1_047_576,
+    "gpt-4.1-nano": 1_047_576,
+    "gpt-4.1": 1_047_576,
+    "gpt-4o-mini": 128_000,
+    "gpt-4o": 128_000,
     "gemini-3.1-pro": 1_000_000,
     "gemini-3.1-flash": 1_000_000,
     "gemini-3.1": 1_000_000,
     "gemini-3-pro": 1_000_000,
     "gemini-3-flash": 1_000_000,
     "gemini-3": 1_000_000,
+    "gemini-2.5-pro": 1_048_576,
+    "gemini-2.5-flash": 1_048_576,
+    "gemini-1.5-pro": 2_097_152,
 }
 
 

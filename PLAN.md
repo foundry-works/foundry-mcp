@@ -1,177 +1,248 @@
-# PLAN: Align Deep Research Compression with open_deep_research
+# PLAN: Deep Research Alignment with open_deep_research
 
 **Branch:** `tyler/foundry-mcp-20260223-0747`
 **Date:** 2026-02-23
 **Reference:** `~/GitHub/open_deep_research`
+**Status:** Draft
 
 ---
 
-## Problem Statement
+## Context
 
-The foundry-mcp compression implementation is architecturally misaligned with open_deep_research. The two systems have a similar two-level design but foundry-mcp's L2 (per-topic compression) feeds truncated raw sources instead of the full research context, defeating the purpose.
-
-### Current State
-
-```
-open_deep_research                       foundry-mcp
-──────────────────                       ───────────
-L1: summarize_webpage()                  SourceSummarizer.summarize_source()
-  input:  raw_content[:50,000 chars]       input:  source.content (no limit)
-  output: <summary> + <key_excerpts>       output: executive_summary + excerpts
-  model:  gpt-4.1-mini (cheap)            model:  configurable via role
-  when:   inside tavily_search()           when:   inside tavily search()
-  ✓ Reasonably aligned                    ✓ Reasonably aligned
-
-L2: compress_research()                  CompressionMixin._compress_topic_findings_async()
-  input:  FULL message history             input:  source title/url/content[:2000]
-          (all tool calls, reflections,    loses:  reflection notes, refined queries,
-           search results, reasoning)              reasoning, search iteration context
-  output: queries + findings + sources     output: queries + findings + sources
-  model:  gpt-4.1 (strong)                model:  configurable via role
-  when:   after researcher finishes        when:   after gathering finishes
-          all ReAct iterations                     (before analysis)
-  ✗ MISALIGNED — wrong input              ✗ MISALIGNED — wrong input
-```
-
-### Key Gaps
-
-1. **L2 input is wrong.** Compression receives re-truncated raw source content (2000 chars each) instead of the full research context accumulated by each topic researcher (search results, reflections, refined queries, rationale).
-
-2. **L2 throws away the ReAct context.** Each topic researcher runs search → reflect → refine cycles. The reflections, query refinements, and early-completion rationale are stored in `TopicResearchResult` but never fed into compression. The compression prompt only sees source title/url/content.
-
-3. **L1 has no input char limit.** open_deep_research caps `raw_content` at 50,000 chars before summarization. foundry-mcp's `SourceSummarizer` has no such cap — it passes `source.content` directly. For most Tavily results this is fine (snippets are small), but extracted full-page content could be unbounded.
+Comparative review of foundry-mcp deep research against open_deep_research identified six alignment gaps. Prior work on this branch already aligned L1 summarization, L2 compression semantics, token retry counts, truncation factors, and citation formatting. This plan targets the remaining gaps, ordered by effort-to-impact ratio.
 
 ---
 
-## Phase 1: Fix L2 Compression Input
+## Phase 1: Update Model Token Limits
 
-The core fix: compression should operate on the **full topic research context**, not re-truncated raw sources.
+**Effort:** Low | **Impact:** Medium
+**Files:** `src/foundry_mcp/config/model_token_limits.json`
 
-### 1.1 Build the full topic research context for compression
+### Problem
 
-Each `TopicResearchResult` already stores:
-- `sub_query_id` → the original query
-- `refined_queries` → all query refinements from ReAct loop
-- `reflection_notes` → assessments from each reflection step
-- `early_completion` / `completion_rationale` → why research stopped
-- `source_ids` → which sources were found
+foundry-mcp uses rounded-down token limits (1,000,000 for GPT-4.1, 1,000,000 for Gemini) while open_deep_research uses provider-accurate values. This causes foundry-mcp to trigger truncation ~5% earlier than necessary for GPT-4.1 and uses half the actual limit for Gemini models.
 
-The compression prompt should include ALL of this, not just source content. Rewrite `_compress_topic_findings_async` to build a prompt like:
+### Upstream Values (open_deep_research `utils.py:788-829`)
 
-```
-Research sub-query: {original_query}
+| Model | Current (foundry) | Upstream (open_deep_research) |
+|-------|-------------------|-------------------------------|
+| gpt-4.1 | 1,000,000 | 1,047,576 |
+| gpt-4.1-mini | 1,000,000 | 1,047,576 |
+| gpt-4.1-nano | 1,000,000 | 1,047,576 |
+| gpt-4o | — | 128,000 |
+| gpt-4o-mini | — | 128,000 |
+| claude-opus-4-6 | 200,000 | 200,000 (aligned) |
+| claude-sonnet-4-6 | 200,000 | 200,000 (aligned) |
+| gemini-2.5-pro | — | 1,048,576 |
+| gemini-2.5-flash | — | 1,048,576 |
+| gemini-1.5-pro | — | 2,097,152 |
 
-Search iterations:
-  1. Query: "{original_query}" → {n} sources found
-     Reflection: {reflection_notes[0]}
-  2. Query: "{refined_queries[0]}" → {n} sources found
-     Reflection: {reflection_notes[1]}
-  ...
-  Completion: {completion_rationale}
+### Changes
 
-Sources ({n} total):
-  [1] Title: ...
-      URL: ...
-      Content: {full content, not truncated to 2000 chars}
-  [2] ...
+1. Update `model_token_limits.json` with accurate values
+2. Add missing models (gpt-4o, gpt-4o-mini, gemini variants)
+3. Update `_lifecycle.py` inline `MODEL_TOKEN_LIMITS` fallback dict (line 95) to match
 
-Clean up these findings preserving all relevant information with inline citations.
-```
+### Validation
 
-**Files:** `compression.py`
-
-### 1.2 Raise source content limit to match open_deep_research
-
-Replace `_COMPRESSION_SOURCE_CHAR_LIMIT = 2000` with a configurable `deep_research_compression_max_content_length` defaulting to **50,000 chars** (matching open_deep_research's `max_content_length`).
-
-**Files:** `compression.py`, `research.py` (add config field)
-
-### 1.3 Align compression prompt with open_deep_research
-
-Rewrite the system prompt to match open_deep_research's compress_research directives:
-
-- "DO NOT summarize. Return raw information in a cleaner format."
-- "Preserve ALL relevant information verbatim."
-- "A later LLM will merge this with other topic reports — don't lose sources."
-- Output format: Queries Made → Comprehensive Findings → Source List
-- Inline citations [1], [2] numbered sequentially
-- "It is extremely important that any information even remotely relevant is preserved verbatim."
-
-The current prompt says "DO NOT summarize or remove information" but the 2000-char truncation contradicts this. With the raised limit and full context, the prompt becomes honest.
-
-**Files:** `compression.py`
-
-### 1.4 Use `execute_llm_call` instead of duplicated retry logic
-
-The compression mixin currently re-implements ContextWindowError → truncate → retry. Refactor to use the shared `execute_llm_call` from `_lifecycle.py` which already handles this.
-
-**Files:** `compression.py`
+- Existing token truncation tests should pass with updated values
+- Verify `_lifecycle.py:truncate_to_token_estimate` uses the json file, not just the hardcoded dict
 
 ---
 
-## Phase 2: Fix L1 Summarization Input Limit
+## Phase 2: Research Brief Generation
 
-### 2.1 Add max content length cap to SourceSummarizer
+**Effort:** Medium | **Impact:** High
+**Files:**
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/planning.py` (lines 49-309)
+- `src/foundry_mcp/core/research/models/deep_research.py` (state model)
 
-open_deep_research truncates `raw_content[:max_content_length]` (50,000 chars) before passing to summarization. foundry-mcp's `SourceSummarizer.summarize_source()` has no such cap.
+### Problem
 
-Add a `max_content_length` parameter to `SourceSummarizer.__init__()` defaulting to 50,000. Truncate in `summarize_source()` before building the prompt.
+open_deep_research has a dedicated `write_research_brief` phase (deep_researcher.py:118-175) that transforms raw user messages into a structured research question before any planning occurs. This step maximizes specificity, fills unstated dimensions, and biases toward primary sources. foundry-mcp generates `state.research_brief` inline during planning (planning.py:116) without a dedicated refinement step.
 
-**Files:** `shared.py` (SourceSummarizer), `gathering.py` (_attach_source_summarizer)
+### Design
 
-### 2.2 Add `deep_research_max_content_length` config field
+Add a brief-refinement step at the start of the planning phase. Not a new phase — extend the existing planning phase to first refine the query into a structured brief, then decompose it into sub-queries. This avoids adding orchestration complexity while capturing the upstream benefit.
 
-Add to `ResearchConfig` so the cap is configurable, matching open_deep_research's pattern. Wire it through `_attach_source_summarizer`.
+The brief-refinement prompt should be original (not copied from open_deep_research) but model after these principles from their `transform_messages_into_research_topic_prompt`:
+- Maximize specificity and detail from the user's query
+- Fill unstated dimensions as open-ended rather than assuming
+- Prefer primary/official sources over aggregators
+- Preserve the user's original language preference
+- Output a single focused research brief paragraph
 
-**Files:** `research.py`, `gathering.py`
+### Changes
 
----
+1. Add `_build_brief_refinement_prompt()` to `planning.py`
+2. Execute a brief-refinement LLM call before the existing sub-query decomposition call
+3. Store result in `state.research_brief` (already exists in the state model)
+4. Use the refined brief as input to `_build_planning_user_prompt()` instead of the raw query
+5. Use a cheap model role (e.g. `"summarization"` or add `"brief"` to `_ROLE_RESOLUTION_CHAIN`)
 
-## Phase 3: Update Tests
+### Validation
 
-### 3.1 Update compression tests for new prompt/input structure
-
-`test_topic_compression.py` tests need to verify:
-- Full ReAct context (reflections, refined queries, rationale) appears in compression prompt
-- Source content uses the raised char limit
-- Prompt matches the open_deep_research-aligned directives
-
-### 3.2 Add summarization input limit tests
-
-`test_source_summarization.py` needs tests for:
-- Content exceeding `max_content_length` is truncated before summarization
-- Configurable limit is respected
-
-### 3.3 Verify analysis prompt still works with richer compressed findings
-
-`test_cross_phase_integration.py` should verify that analysis correctly consumes the new compression output format (which now includes queries-made and research-iteration context).
-
----
-
-## Phase 4: Cleanup from Code Review
-
-Remaining review findings not related to compression alignment:
-
-### 4.1 Fix `_load_model_token_limits()` path resolution
-Use `foundry_mcp.config.__file__` instead of `parents[5]`.
-
-### 4.2 Extract `safe_resolve_model_for_role()` helper
-Replace 5+ try/except sites with a single helper in `_helpers.py`.
-
-### 4.3 Remove unused `provider_hint` from `_CONTEXT_WINDOW_ERROR_PATTERNS`
-The hint field is never used — remove it or use it.
-
-### 4.4 Add sync test for `_FALLBACK_MODEL_TOKEN_LIMITS` vs JSON
-Prevent the two sources of truth from diverging.
-
-### 4.5 Move per-call imports to module level in `_lifecycle.py`
-Avoid import overhead on every `execute_llm_call` invocation.
+- Test: refined brief is more specific than raw query for ambiguous inputs
+- Test: planning sub-queries are grounded in the refined brief, not raw query
+- Test: existing planning tests still pass (brief refinement is additive)
 
 ---
 
-## References
+## Phase 3: Synthesis Prompt Engineering
 
-- **open_deep_research L1:** `~/GitHub/open_deep_research/src/open_deep_research/utils.py` — `tavily_search()` (lines 44-136), `summarize_webpage()` (lines 175-213)
-- **open_deep_research L2:** `~/GitHub/open_deep_research/src/open_deep_research/deep_researcher.py` — `compress_research()` (lines 511-585)
-- **open_deep_research prompts:** `~/GitHub/open_deep_research/src/open_deep_research/prompts.py` — `summarize_webpage_prompt` (lines 311-368), `compress_research_system_prompt` (lines 186-222)
-- **open_deep_research config:** `~/GitHub/open_deep_research/src/open_deep_research/configuration.py` — `max_content_length=50000`, `summarization_model=gpt-4.1-mini`, `compression_model=gpt-4.1`
+**Effort:** Medium | **Impact:** High
+**Files:**
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py` (lines 263-456)
+
+### Problem
+
+open_deep_research's `final_report_generation_prompt` (prompts.py:228-308) includes several quality-improving directives that foundry-mcp's synthesis prompt lacks:
+- Multi-language detection and matching (write report in user's language)
+- Flexible report structure selection (comparison vs. list vs. summary)
+- Anti-patterns ("never start with 'based on the research'")
+- Progressive disclosure of information
+- Specific citation format rules (`[Title](URL)` inline + numbered source list)
+
+### Design
+
+Enhance `_build_synthesis_system_prompt()` with our own versions of these directives. The prompt should be original but address the same quality dimensions. Key additions:
+
+1. **Language matching** — detect language from user query, generate report in same language
+2. **Structure adaptation** — select report format based on query type (comparison, enumeration, explanation, how-to)
+3. **Anti-pattern guardrails** — avoid meta-commentary, self-reference, hedging openers
+4. **Citation consistency** — enforce inline `[Title](URL)` + numbered source section at end
+
+### Changes
+
+1. Extend `_build_synthesis_system_prompt()` with structure-adaptive and language-aware directives
+2. Add a query-type classifier to `_build_synthesis_user_prompt()` that hints at appropriate structure
+3. Update citation formatting rules to match the inline + numbered list pattern
+
+### Validation
+
+- Test: synthesis output matches user query language when non-English input provided
+- Test: comparison queries produce comparison-structured reports
+- Test: output does not contain meta-commentary anti-patterns
+- Test: citations are consistently formatted
+
+---
+
+## Phase 4: Message-Aware Token Recovery
+
+**Effort:** Medium | **Impact:** Medium
+**Files:**
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/_lifecycle.py` (lines 199-478)
+- `src/foundry_mcp/core/research/workflows/deep_research/_helpers.py`
+
+### Problem
+
+When token limits are hit, open_deep_research uses `remove_up_to_last_ai_message()` (utils.py:848-866) to progressively strip messages from conversation history, preserving the system prompt and earliest context. foundry-mcp uses `_truncate_for_retry()` which chops content from the end of a single user prompt string. The foundry-mcp approach risks cutting the most recently gathered (potentially most relevant) findings.
+
+### Design
+
+Add a structured content truncation strategy to `execute_llm_call()` that understands the prompt contains multiple sections (sources, findings, context). Instead of blind tail-chopping:
+
+1. On first retry: truncate individual source content blocks (longest first)
+2. On second retry: drop lowest-quality sources entirely (if quality scores available)
+3. On third retry: fall back to current char-based truncation
+
+This is better suited to foundry-mcp's architecture than open_deep_research's message-list approach, since foundry-mcp builds single prompts rather than multi-turn message histories.
+
+### Changes
+
+1. Add `_structured_truncation()` helper to `_helpers.py` that understands source/finding block boundaries
+2. Update retry loop in `execute_llm_call()` to try structured truncation before char truncation
+3. Keep current char-based truncation as final fallback
+
+### Validation
+
+- Test: structured truncation preserves high-quality sources while dropping verbose low-quality ones
+- Test: char-based fallback still works when structured truncation is insufficient
+- Test: no regression in existing token recovery tests
+
+---
+
+## Phase 5: Reflection Enforcement
+
+**Effort:** Low | **Impact:** Medium
+**Files:**
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py` (lines 355-483)
+
+### Problem
+
+open_deep_research enforces `think_tool` usage before every research action via explicit prompt directives ("ALWAYS use think_tool BEFORE each ConductResearch call"). foundry-mcp's `_topic_reflect()` runs after searches but the enforcement is softer — reflection is called but the decision rules could be tighter.
+
+### Design
+
+Strengthen the reflection prompt (topic_research.py:395-417) with clearer decision boundaries, modeled after open_deep_research's hard limits:
+
+1. **Hard stop rules**: research_complete=true when 3+ relevant sources from distinct domains
+2. **Continue rules**: continue_searching=true only if fewer than 2 relevant sources
+3. **Absolute ceiling**: never exceed `deep_research_topic_max_searches` regardless of reflection decision
+4. **Rationale requirement**: reflection must articulate what specific gap would be filled by continuing
+
+Also ensure the reflection call is sequenced strictly — never run reflection and search in parallel.
+
+### Changes
+
+1. Update reflection system prompt in `_topic_reflect()` with tighter decision rules
+2. Add guard: if iteration count >= max_searches, force research_complete regardless of reflection
+3. Add logging of reflection rationale for observability
+
+### Validation
+
+- Test: reflection returns research_complete=true after 3+ sources from distinct domains
+- Test: reflection never recommends continuing past max_searches
+- Test: rationale field is always non-empty
+
+---
+
+## Phase 6: Iterative Supervisor Architecture (Future)
+
+**Effort:** High | **Impact:** High
+**Files:** Multiple — requires new orchestration layer
+
+### Problem
+
+open_deep_research has a true supervisor agent (deep_researcher.py:178-349) that iteratively plans, delegates to parallel sub-researchers, assesses coverage gaps, and spawns additional research rounds (up to 6 iterations). foundry-mcp's architecture is "plan once, execute in parallel" — the planning phase generates sub-queries, topic agents execute them, and there's no meta-level loop that re-assesses and fills gaps.
+
+### Design (Sketch — not for immediate implementation)
+
+This is the largest architectural enhancement. The key insight from open_deep_research is the assess-delegate-assess loop:
+
+1. Supervisor reviews current findings after each batch of topic research completes
+2. Identifies coverage gaps (topics with insufficient sources, unanswered sub-questions)
+3. Generates new sub-queries targeting gaps
+4. Spawns additional topic agents for the new queries
+5. Repeats until satisfied or iteration limit reached
+
+This would require:
+- A new `supervision` phase between gathering/compression and analysis
+- State tracking for "coverage assessment" across iterations
+- Budget management (tokens, API calls) across iterations
+- Integration with the existing phase lifecycle in `_lifecycle.py`
+
+### Deferral Rationale
+
+Phases 1-5 improve every research run with moderate effort. Phase 6 is the biggest quality jump but also the biggest architectural change. Implement Phases 1-5 first, measure impact, then evaluate whether Phase 6 is warranted based on observed gap-coverage issues in production research runs.
+
+---
+
+## Reference: Alignment Status After Prior Work
+
+These areas were aligned in earlier commits on this branch and do NOT need further work:
+
+| Area | Status | Aligned In |
+|------|--------|-----------|
+| L1 summarization input cap (50K chars) | Aligned | `b684a7c` |
+| L2 compression prompt semantics | Aligned | `7d449bd` |
+| Compression verbatim preservation | Aligned | `7d449bd` |
+| Token retry count (3) | Aligned | prior work |
+| Truncation factor (0.9/retry) | Aligned | prior work |
+| Citation format (sequential numbering) | Aligned | `7d449bd` |
+| Summarization targets (25-30%, 5 excerpts) | Aligned | `b684a7c` |
+| Fetch-time summarization (L1) | Aligned | `0350c98` |
+| Per-topic compression (L2) | Aligned | `3981035` |
+| Forced reflection in topic research | Aligned | `9961686` |
+| Clarification gate | Aligned | `ebb8c76` |
+| Multi-model cost routing | Aligned | `c9e88ac` |
