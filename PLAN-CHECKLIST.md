@@ -27,11 +27,11 @@
 
 ## Phase 2: Fix L1 Summarization Input Limit
 
-- [ ] **2.1** Add `max_content_length` cap to `SourceSummarizer`
-  - [ ] Truncate content before building summarization prompt
-  - [ ] Default: 50,000 chars (matches open_deep_research)
-- [ ] **2.2** Add `deep_research_max_content_length` config field
-  - [ ] Wire through `_attach_source_summarizer` in `gathering.py`
+- [x] **2.1** Add `max_content_length` cap to `SourceSummarizer`
+  - [x] Truncate content before building summarization prompt
+  - [x] Default: 50,000 chars (matches open_deep_research)
+- [x] **2.2** Add `deep_research_max_content_length` config field
+  - [x] Wire through `_attach_source_summarizer` in `gathering.py`
 
 ---
 
@@ -64,6 +64,6 @@
 | Phase | Status | Date | Notes |
 |-------|--------|------|-------|
 | Phase 1 | **Done** | 2026-02-23 | Core fix — compression input alignment |
-| Phase 2 | Pending | — | L1 input cap |
+| Phase 2 | **Done** | 2026-02-23 | L1 input cap |
 | Phase 3 | Pending | — | Test updates |
 | Phase 4 | Pending | — | Review cleanup |

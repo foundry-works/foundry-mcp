@@ -264,12 +264,14 @@ class GatheringPhaseMixin(CompressionMixin):
         except (AttributeError, TypeError, ValueError):
             logger.debug("Role resolution unavailable for summarization, using defaults")
         max_concurrent = getattr(self.config, "deep_research_max_concurrent", 3)
+        max_content_length = getattr(self.config, "deep_research_max_content_length", 50000)
 
         provider._source_summarizer = SourceSummarizer(
             provider_id=summarization_provider,
             model=summarization_model,
             timeout=60.0,
             max_concurrent=max_concurrent,
+            max_content_length=max_content_length,
         )
 
     # ------------------------------------------------------------------

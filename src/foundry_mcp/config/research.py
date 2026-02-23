@@ -107,6 +107,7 @@ class ResearchConfig:
     deep_research_fetch_time_summarization: bool = True  # Summarize raw search results at fetch time
     deep_research_summarization_provider: Optional[str] = None  # LLM provider for fetch-time summarization (cheapest available)
     deep_research_summarization_model: Optional[str] = None  # Model override for fetch-time summarization
+    deep_research_max_content_length: int = 50000  # Max chars per source before L1 summarization (matches open_deep_research)
 
     # Per-topic compression before aggregation (Phase 3)
     deep_research_compression_provider: Optional[str] = None  # LLM provider for per-topic compression (defaults to research/default provider)
@@ -328,6 +329,7 @@ class ResearchConfig:
             ),
             deep_research_summarization_provider=data.get("deep_research_summarization_provider"),
             deep_research_summarization_model=data.get("deep_research_summarization_model"),
+            deep_research_max_content_length=int(data.get("deep_research_max_content_length", 50000)),
             # Per-topic compression (Phase 3)
             deep_research_compression_provider=data.get("deep_research_compression_provider"),
             deep_research_compression_model=data.get("deep_research_compression_model"),

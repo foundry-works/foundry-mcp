@@ -683,6 +683,7 @@ Content to summarize:
 {content}"""
 
 _SUMMARIZATION_TIMEOUT: float = 60.0  # seconds per source
+_DEFAULT_MAX_CONTENT_LENGTH: int = 50_000  # chars; matches open_deep_research
 
 
 @dataclass
@@ -717,6 +718,8 @@ class SourceSummarizer:
         model: Optional model override.
         timeout: Per-source summarization timeout in seconds (default: 60).
         max_concurrent: Maximum parallel summarization calls (default: 3).
+        max_content_length: Truncate source content to this many chars before
+            summarization (default: 50,000, matching open_deep_research).
     """
 
     def __init__(
@@ -725,11 +728,13 @@ class SourceSummarizer:
         model: Optional[str] = None,
         timeout: float = _SUMMARIZATION_TIMEOUT,
         max_concurrent: int = 3,
+        max_content_length: int = _DEFAULT_MAX_CONTENT_LENGTH,
     ):
         self._provider_id = provider_id
         self._model = model
         self._timeout = timeout
         self._max_concurrent = max_concurrent
+        self._max_content_length = max_content_length
 
     async def summarize_source(
         self,
@@ -757,6 +762,11 @@ class SourceSummarizer:
         provider = resolve_provider(self._provider_id, hooks=hooks)
         if provider is None:
             raise RuntimeError(f"Summarization provider not available: {self._provider_id}")
+
+        # Cap input length to avoid blowing the context window on
+        # full-page extracted content (matches open_deep_research).
+        if self._max_content_length and len(content) > self._max_content_length:
+            content = content[: self._max_content_length]
 
         prompt = _SOURCE_SUMMARIZATION_PROMPT.format(content=content)
 
