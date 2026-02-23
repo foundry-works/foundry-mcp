@@ -7,59 +7,59 @@ Mark items `[x]` as completed. Items within a phase are ordered by dependency.
 
 ## Phase 5: Progressive Token-Limit Recovery (independent — do first)
 
-- [ ] **5.1** Add `TOKEN_LIMITS` registry to `providers/base.py` mapping known model names → context window sizes
-- [ ] **5.2** Add `truncate_to_token_estimate(text, max_tokens) -> str` to `_helpers.py`
-- [ ] **5.3** Add provider-specific error detection patterns to `ContextWindowError` classification in `_lifecycle.py`
-  - [ ] OpenAI: `BadRequestError` + "token/context/length" keywords
-  - [ ] Anthropic: `BadRequestError` + "prompt is too long"
-  - [ ] Google: `ResourceExhausted` exception type
-- [ ] **5.4** Enhance `execute_llm_call()` in `_lifecycle.py` with retry loop:
-  - [ ] On `ContextWindowError`, estimate limit from `TOKEN_LIMITS`
-  - [ ] Truncate user prompt by 10% per attempt
-  - [ ] Retry up to 3 times
-  - [ ] Track retries in `PhaseMetrics.metadata["token_limit_retries"]`
-  - [ ] Fall back to existing hard-error if all retries fail
-- [ ] **5.5** Write `tests/research/test_token_limit_recovery.py`:
-  - [ ] Test progressive truncation with mock provider errors
-  - [ ] Test fallback to hard error after 3 retries
-  - [ ] Test provider-specific error detection (OpenAI, Anthropic, Google)
-  - [ ] Test that system prompt is never truncated
-- [ ] **5.6** Verify existing deep research contract tests still pass
+- [x] **5.1** Add `TOKEN_LIMITS` registry to `providers/base.py` mapping known model names → context window sizes
+- [x] **5.2** Add `truncate_to_token_estimate(text, max_tokens) -> str` to `_helpers.py`
+- [x] **5.3** Add provider-specific error detection patterns to `ContextWindowError` classification in `_lifecycle.py`
+  - [x] OpenAI: `BadRequestError` + "token/context/length" keywords
+  - [x] Anthropic: `BadRequestError` + "prompt is too long"
+  - [x] Google: `ResourceExhausted` exception type
+- [x] **5.4** Enhance `execute_llm_call()` in `_lifecycle.py` with retry loop:
+  - [x] On `ContextWindowError`, estimate limit from `TOKEN_LIMITS`
+  - [x] Truncate user prompt by 10% per attempt
+  - [x] Retry up to 3 times
+  - [x] Track retries in `PhaseMetrics.metadata["token_limit_retries"]`
+  - [x] Fall back to existing hard-error if all retries fail
+- [x] **5.5** Write `tests/research/test_token_limit_recovery.py` (39 tests passing):
+  - [x] Test progressive truncation with mock provider errors
+  - [x] Test fallback to hard error after 3 retries
+  - [x] Test provider-specific error detection (OpenAI, Anthropic, Google)
+  - [x] Test that system prompt is never truncated
+- [x] **5.6** Verify existing deep research contract tests still pass
 
 ---
 
 ## Phase 1: Fetch-Time Source Summarization
 
-- [ ] **1.1** Add `raw_content: Optional[str]` field to `ResearchSource` in `models/sources.py`
-  - [ ] Ensure Pydantic serialization backward-compat (default `None`, excluded from compact repr)
-- [ ] **1.2** Add `summarization_model` and `summarization_provider` to `config.py`
-  - [ ] Sensible defaults (cheapest available or same as research if unset)
-  - [ ] Document in config schema
-- [ ] **1.3** Create `SourceSummarizer` in `providers/shared.py`:
-  - [ ] Input: raw content string + model config
-  - [ ] Output: `SummarizationResult(executive_summary: str, key_excerpts: list[str])`
-  - [ ] Prompt: extract executive summary (25-30% of original) + up to 5 verbatim key excerpts
-  - [ ] 60-second timeout per source with fallback to original content
-  - [ ] Token tracking for summarization calls
-- [ ] **1.4** Add optional `summarizer` hook to `SearchProvider` base in `providers/base.py`
-  - [ ] Default: no-op (returns content unchanged)
-  - [ ] Providers opt in by setting summarizer during initialization
-- [ ] **1.5** Wire summarization into `TavilySearchProvider.search()`:
-  - [ ] After raw results returned, run `SourceSummarizer` on each source's content
-  - [ ] Parallel execution bounded by `max_concurrent`
-  - [ ] Store original in `raw_content`, summary in `content`
-  - [ ] Store excerpts in `metadata["excerpts"]`
-  - [ ] Gate behind `config.fetch_time_summarization` flag (default `True`)
-- [ ] **1.6** Add `fetch_time_summarization: bool = True` to `config.py`
-- [ ] **1.7** Track summarization tokens separately in `PhaseMetrics` (add `summarization_tokens` field or use metadata)
-- [ ] **1.8** Write `tests/research/test_source_summarization.py`:
-  - [ ] Test `SourceSummarizer` with mock LLM responses
-  - [ ] Test timeout fallback to original content
-  - [ ] Test parallel summarization with multiple sources
-  - [ ] Test opt-out via config flag
-  - [ ] Test `raw_content` preservation
-  - [ ] Test backward-compat: existing `ResearchSource` without `raw_content` deserializes
-- [ ] **1.9** Verify existing deep research contract tests still pass
+- [x] **1.1** Add `raw_content: Optional[str]` field to `ResearchSource` in `models/sources.py`
+  - [x] Ensure Pydantic serialization backward-compat (default `None`, excluded from compact repr)
+- [x] **1.2** Add `summarization_model` and `summarization_provider` to `config.py`
+  - [x] Sensible defaults (cheapest available or same as research if unset)
+  - [x] Document in config schema
+- [x] **1.3** Create `SourceSummarizer` in `providers/shared.py`:
+  - [x] Input: raw content string + model config
+  - [x] Output: `SummarizationResult(executive_summary: str, key_excerpts: list[str])`
+  - [x] Prompt: extract executive summary (25-30% of original) + up to 5 verbatim key excerpts
+  - [x] 60-second timeout per source with fallback to original content
+  - [x] Token tracking for summarization calls
+- [x] **1.4** Add optional `summarizer` hook to `SearchProvider` base in `providers/base.py`
+  - [x] Default: no-op (returns content unchanged)
+  - [x] Providers opt in by setting summarizer during initialization
+- [x] **1.5** Wire summarization into `TavilySearchProvider.search()`:
+  - [x] After raw results returned, run `SourceSummarizer` on each source's content
+  - [x] Parallel execution bounded by `max_concurrent`
+  - [x] Store original in `raw_content`, summary in `content`
+  - [x] Store excerpts in `metadata["excerpts"]`
+  - [x] Gate behind `config.fetch_time_summarization` flag (default `True`)
+- [x] **1.6** Add `fetch_time_summarization: bool = True` to `config.py`
+- [x] **1.7** Track summarization tokens separately in `PhaseMetrics` (tracked via source metadata `summarization_input_tokens`/`summarization_output_tokens`)
+- [x] **1.8** Write `tests/research/test_source_summarization.py`:
+  - [x] Test `SourceSummarizer` with mock LLM responses
+  - [x] Test timeout fallback to original content
+  - [x] Test parallel summarization with multiple sources
+  - [x] Test opt-out via config flag
+  - [x] Test `raw_content` preservation
+  - [x] Test backward-compat: existing `ResearchSource` without `raw_content` deserializes
+- [x] **1.9** Verify existing deep research contract tests still pass
 
 ---
 
@@ -93,33 +93,33 @@ Mark items `[x]` as completed. Items within a phase are ordered by dependency.
 
 ## Phase 3: Per-Topic Compression Before Aggregation
 
-- [ ] **3.1** Add `compressed_findings: Optional[str]` to `TopicResearchResult` in `models/deep_research.py`
-  - [ ] Ensure Pydantic serialization backward-compat
-- [ ] **3.2** Add `compression_model` and `compression_provider` to `config.py`
-  - [ ] Default: same as research model/provider
-- [ ] **3.3** Implement per-topic compression step in `phases/gathering.py`:
-  - [ ] After all topic researchers complete, iterate `TopicResearchResult` list
-  - [ ] For each topic: collect its sources from `state.sources` by `sub_query_id`
-  - [ ] Build compression prompt: "Reformat findings with inline citations [1], [2]. DO NOT summarize. Preserve all relevant information."
-  - [ ] Call LLM with compression provider/model
-  - [ ] Store result in `TopicResearchResult.compressed_findings`
-  - [ ] Progressive token-limit handling (3 retries, 10% truncation — reuse Phase 5 infra)
-  - [ ] Fallback: if compression fails, leave `compressed_findings=None` (analysis uses raw sources)
-- [ ] **3.4** Parallel compression across topics, bounded by `max_concurrent`
-- [ ] **3.5** Track compression tokens in `PhaseMetrics`
-- [ ] **3.6** Update `phases/analysis.py` to prefer `compressed_findings` when available:
-  - [ ] If all topics have `compressed_findings`, use those as primary analysis input
-  - [ ] Adjust budget allocation to account for pre-compressed content
-  - [ ] Fall through to existing raw-source analysis when `compressed_findings` is `None`
-- [ ] **3.7** Write `tests/research/test_topic_compression.py`:
-  - [ ] Test compression prompt includes correct sources per topic
-  - [ ] Test progressive truncation on token limit error
-  - [ ] Test fallback to raw sources when compression fails
-  - [ ] Test analysis phase uses compressed findings when available
-  - [ ] Test analysis phase falls back when compressed findings absent
-  - [ ] Test parallel compression across multiple topics
-  - [ ] Test citation numbering consistency between compression and analysis
-- [ ] **3.8** Verify existing deep research contract tests still pass
+- [x] **3.1** Add `compressed_findings: Optional[str]` to `TopicResearchResult` in `models/deep_research.py`
+  - [x] Ensure Pydantic serialization backward-compat
+- [x] **3.2** Add `compression_model` and `compression_provider` to `config.py`
+  - [x] Default: same as research model/provider
+- [x] **3.3** Implement per-topic compression step in `phases/gathering.py`:
+  - [x] After all topic researchers complete, iterate `TopicResearchResult` list
+  - [x] For each topic: collect its sources from `state.sources` by `sub_query_id`
+  - [x] Build compression prompt: "Reformat findings with inline citations [1], [2]. DO NOT summarize. Preserve all relevant information."
+  - [x] Call LLM with compression provider/model
+  - [x] Store result in `TopicResearchResult.compressed_findings`
+  - [x] Progressive token-limit handling (3 retries, 10% truncation — reuse Phase 5 infra)
+  - [x] Fallback: if compression fails, leave `compressed_findings=None` (analysis uses raw sources)
+- [x] **3.4** Parallel compression across topics, bounded by `max_concurrent`
+- [x] **3.5** Track compression tokens in `PhaseMetrics`
+- [x] **3.6** Update `phases/analysis.py` to prefer `compressed_findings` when available:
+  - [x] If all topics have `compressed_findings`, use those as primary analysis input
+  - [x] Adjust budget allocation to account for pre-compressed content
+  - [x] Fall through to existing raw-source analysis when `compressed_findings` is `None`
+- [x] **3.7** Write `tests/research/test_topic_compression.py` (33 tests passing):
+  - [x] Test compression prompt includes correct sources per topic
+  - [x] Test progressive truncation on token limit error
+  - [x] Test fallback to raw sources when compression fails
+  - [x] Test analysis phase uses compressed findings when available
+  - [x] Test analysis phase falls back when compressed findings absent
+  - [x] Test parallel compression across multiple topics
+  - [x] Test citation numbering consistency between compression and analysis
+- [x] **3.8** Verify existing deep research contract tests still pass
 
 ---
 
