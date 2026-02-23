@@ -163,11 +163,11 @@ def set_server_role(role: str) -> None:
         Role(role)
     except ValueError:
         logger.warning(
-            "Invalid role '%s', falling back to maintainer. Valid roles: %s",
+            "Invalid role '%s', falling back to observer (fail-closed). Valid roles: %s",
             role,
             ", ".join(r.value for r in Role),
         )
-        role = Role.MAINTAINER.value
+        role = Role.OBSERVER.value
 
     global _configured_server_role
 

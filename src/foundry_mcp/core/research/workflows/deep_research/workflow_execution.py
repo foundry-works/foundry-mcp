@@ -19,6 +19,9 @@ from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
 )
 from foundry_mcp.core.research.workflows.base import WorkflowResult
+from foundry_mcp.core.research.workflows.deep_research._helpers import (
+    resolve_phase_provider,
+)
 from foundry_mcp.core.research.workflows.deep_research.source_quality import (
     _extract_hostname,
 )
@@ -243,9 +246,8 @@ class WorkflowExecutionMixin:
                     DeepResearchPhase.CLARIFICATION,
                     self._execute_clarification_async(
                         state=state,
-                        provider_id=(
-                            getattr(self.config, "deep_research_clarification_provider", None)
-                            or self.config.default_provider
+                        provider_id=resolve_phase_provider(
+                            self.config, "clarification"
                         ),
                         timeout=self.config.get_phase_timeout("planning"),  # Reuse planning timeout
                     ),

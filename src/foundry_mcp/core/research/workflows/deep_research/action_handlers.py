@@ -335,8 +335,8 @@ class ActionHandlersMixin:
                 if bg_task.timeout_elapsed_seconds:
                     metadata["timeout_elapsed_seconds"] = bg_task.timeout_elapsed_seconds
             if hasattr(bg_task, "is_stale") and callable(bg_task.is_stale):
-                # Check staleness with default threshold (300s)
-                if bg_task.is_stale(300.0):
+                # Check staleness with configurable threshold
+                if bg_task.is_stale(self.config.deep_research_stale_task_seconds):
                     metadata["is_stale"] = True
                     metadata["last_activity"] = bg_task.last_activity
             # Include progress from persisted state if available

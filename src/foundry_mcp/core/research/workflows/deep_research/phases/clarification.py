@@ -246,7 +246,9 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         if isinstance(constraints, dict):
             # Only keep string-valued constraints, filter empty values
             result["inferred_constraints"] = {
-                k: str(v) for k, v in constraints.items() if v and isinstance(v, (str, int, float, bool))
+                k: (str(v).lower() if isinstance(v, bool) else str(v))
+                for k, v in constraints.items()
+                if v is not None and v != "" and isinstance(v, (str, int, float, bool))
             }
 
         return result

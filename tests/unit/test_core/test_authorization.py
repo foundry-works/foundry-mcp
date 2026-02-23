@@ -83,9 +83,10 @@ class TestServerRoleVar:
         # Reset
         set_server_role("maintainer")
 
-    def test_set_invalid_role_falls_back_to_maintainer(self):
+    def test_set_invalid_role_falls_back_to_observer(self):
+        """Invalid roles fall back to observer (fail-closed) instead of maintainer."""
         set_server_role("invalid_role")
-        assert get_server_role() == "maintainer"
+        assert get_server_role() == "observer"
 
     def test_role_propagates_to_new_thread_via_process_fallback(self):
         set_server_role("maintainer")

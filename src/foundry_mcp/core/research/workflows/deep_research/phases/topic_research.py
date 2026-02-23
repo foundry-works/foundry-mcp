@@ -224,7 +224,11 @@ class TopicResearchMixin:
         """
         from foundry_mcp.core.research.providers import SearchProviderError
 
-        effective_max_results = max_sources_per_provider or state.max_sources_per_query
+        effective_max_results = (
+            max_sources_per_provider
+            if max_sources_per_provider is not None
+            else state.max_sources_per_query
+        )
         added = 0
 
         async with semaphore:
@@ -337,10 +341,10 @@ class TopicResearchMixin:
             Dict with keys: sufficient (bool), assessment (str),
             refined_query (optional str)
         """
-        provider_id = (
-            getattr(self.config, "deep_research_topic_reflection_provider", None)
-            or getattr(self.config, "deep_research_reflection_provider", None)
-            or self.config.default_provider
+        from foundry_mcp.core.research.workflows.deep_research._helpers import resolve_phase_provider
+
+        provider_id = resolve_phase_provider(
+            self.config, "topic_reflection", "reflection"
         )
 
         system_prompt = (

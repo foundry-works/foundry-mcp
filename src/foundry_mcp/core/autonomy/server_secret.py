@@ -185,8 +185,9 @@ def compute_integrity_checksum(
     """
     secret = get_server_secret()
 
-    # Build payload to sign (deterministic serialization)
-    payload = f"{gate_attempt_id}:{step_id}:{phase_id}:{verdict}"
+    # Build versioned payload to sign (deterministic serialization)
+    # v1: prefix enables future algorithm rotation without breaking in-flight evidence
+    payload = f"v1:{gate_attempt_id}:{step_id}:{phase_id}:{verdict}"
 
     # Compute HMAC-SHA256
     checksum = hmac.new(secret, payload.encode(), hashlib.sha256).hexdigest()
@@ -220,8 +221,17 @@ def verify_integrity_checksum(
 
     computed = compute_integrity_checksum(gate_attempt_id, step_id, phase_id, verdict)
 
-    # Constant-time comparison
-    return hmac.compare_digest(computed, expected_checksum)
+    # Constant-time comparison against versioned (v1:) checksum
+    if hmac.compare_digest(computed, expected_checksum):
+        return True
+
+    # Legacy fallback: accept unversioned checksums generated before v1: migration.
+    # TODO: Remove this fallback after all in-flight gate evidence has expired
+    # (safe to remove once no sessions predate the v1: payload change).
+    secret = get_server_secret()
+    legacy_payload = f"{gate_attempt_id}:{step_id}:{phase_id}:{verdict}"
+    legacy_checksum = hmac.new(secret, legacy_payload.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(legacy_checksum, expected_checksum)
 
 
 # =============================================================================

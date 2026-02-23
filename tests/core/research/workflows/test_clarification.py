@@ -279,7 +279,7 @@ That concludes my analysis."""
 
         assert result["inferred_constraints"]["depth"] == "detailed"
         assert result["inferred_constraints"]["max_results"] == "10"
-        assert result["inferred_constraints"]["include_images"] == "True"
+        assert result["inferred_constraints"]["include_images"] == "true"
         assert result["inferred_constraints"]["score_threshold"] == "0.8"
 
     def test_non_list_questions_ignored(self) -> None:

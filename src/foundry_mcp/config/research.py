@@ -195,6 +195,9 @@ class ResearchConfig:
     semantic_scholar_sort_order: str = "desc"  # Sort direction: asc or desc
     semantic_scholar_use_extended_fields: bool = True  # Include TLDR and extended metadata
 
+    # Stale task detection threshold for deep research background tasks
+    deep_research_stale_task_seconds: float = 300.0  # Seconds of inactivity before a task is considered stale
+
     # Status persistence throttling (reduces disk I/O during deep research)
     status_persistence_throttle_seconds: int = 5  # Minimum seconds between status saves (0 = always persist)
 
@@ -367,6 +370,8 @@ class ResearchConfig:
             content_archive_enabled=_parse_bool(data.get("content_archive_enabled", False)),
             content_archive_ttl_hours=int(data.get("content_archive_ttl_hours", 168)),
             research_archive_dir=data.get("research_archive_dir"),
+            # Stale task detection
+            deep_research_stale_task_seconds=float(data.get("deep_research_stale_task_seconds", 300.0)),
             # Status persistence throttling
             status_persistence_throttle_seconds=int(data.get("status_persistence_throttle_seconds", 5)),
             # Audit verbosity

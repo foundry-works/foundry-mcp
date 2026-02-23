@@ -27,6 +27,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -136,6 +137,7 @@ class StepOrchestrator(StepEmitterMixin):
         self.workspace_path = workspace_path or Path.cwd()
         # Cache: (spec_id, mtime, file_size) -> spec_data
         self._spec_cache: Optional[Tuple[str, float, int, Dict[str, Any]]] = None
+        self._spec_cache_lock = threading.Lock()
         self._context_tracker = ContextTracker(self.workspace_path)
         # Audit ledger cache keyed by spec_id
         self._audit_ledgers: Dict[str, AuditLedger] = {}
@@ -149,10 +151,11 @@ class StepOrchestrator(StepEmitterMixin):
             spec_id: If provided, only invalidate if cached spec matches.
                      If None, unconditionally clear the cache.
         """
-        if spec_id is None:
-            self._spec_cache = None
-        elif self._spec_cache is not None and self._spec_cache[0] == spec_id:
-            self._spec_cache = None
+        with self._spec_cache_lock:
+            if spec_id is None:
+                self._spec_cache = None
+            elif self._spec_cache is not None and self._spec_cache[0] == spec_id:
+                self._spec_cache = None
 
     def _get_ledger(self, spec_id: str) -> AuditLedger:
         """Get or create an audit ledger for the given spec."""
@@ -840,7 +843,8 @@ class StepOrchestrator(StepEmitterMixin):
                 # which lacks the "hierarchy" key that validation requires.
                 save_spec(session.spec_id, spec_data, specs_dir, validate=False)
                 # Invalidate spec cache since we just wrote to the file
-                self._spec_cache = None
+                with self._spec_cache_lock:
+                    self._spec_cache = None
                 logger.info(
                     "Orchestrator persisted task completion to spec: session=%s task=%s",
                     session.id,
@@ -1126,33 +1130,36 @@ class StepOrchestrator(StepEmitterMixin):
                 session.spec_file_size = current_metadata.file_size
 
                 # Populate spec cache for subsequent calls
-                self._spec_cache = (
-                    session.spec_id,
-                    current_metadata.mtime,
-                    current_metadata.file_size,
-                    spec_data,
-                )
+                with self._spec_cache_lock:
+                    self._spec_cache = (
+                        session.spec_id,
+                        current_metadata.mtime,
+                        current_metadata.file_size,
+                        spec_data,
+                    )
 
                 return spec_data, None
 
             # Fast path: return cached spec_data if available for this mtime
-            if (
-                self._spec_cache is not None
-                and self._spec_cache[0] == session.spec_id
-                and self._spec_cache[1] == current_metadata.mtime
-                and self._spec_cache[2] == current_metadata.file_size
-            ):
-                return self._spec_cache[3], None
+            with self._spec_cache_lock:
+                if (
+                    self._spec_cache is not None
+                    and self._spec_cache[0] == session.spec_id
+                    and self._spec_cache[1] == current_metadata.mtime
+                    and self._spec_cache[2] == current_metadata.file_size
+                ):
+                    return self._spec_cache[3], None
 
             # Load spec without re-hashing
             spec_data = self._load_spec_file(spec_path)
             if spec_data is not None:
-                self._spec_cache = (
-                    session.spec_id,
-                    current_metadata.mtime,
-                    current_metadata.file_size,
-                    spec_data,
-                )
+                with self._spec_cache_lock:
+                    self._spec_cache = (
+                        session.spec_id,
+                        current_metadata.mtime,
+                        current_metadata.file_size,
+                        spec_data,
+                    )
             return spec_data, None
 
         except (OSError, json.JSONDecodeError, ValueError) as e:
