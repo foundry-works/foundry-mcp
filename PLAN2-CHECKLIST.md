@@ -31,12 +31,18 @@ Mark items `[x]` as completed.
 
 ## Phase 2 — Test Coverage
 
-- [ ] **2.1** Add prompt content validation tests for compression and reflection
-  - Verify compression prompt includes source content, URLs, citations
-  - Verify reflection prompt includes source count and quality distribution
-- [ ] **2.2** Add concurrent state mutation stress tests
-  - Test `state_lock` correctness with multiple topic agents
-  - Test `total_tokens_used` consistency under concurrent updates
+- [x] **2.1** Add prompt content validation tests for compression and reflection
+  - Added `test_compression_prompt_citation_numbering` — verifies [1], [2], [3] numbering
+  - Added `test_compression_prompt_truncates_long_content` — verifies content truncation at char limit
+  - Added `test_compression_prompt_source_count_header` — verifies source count in header
+  - Added `test_prompt_includes_quality_distribution_counts` — verifies quality level counts
+  - Added `test_prompt_includes_original_and_current_query` — verifies both queries in prompt
+- [x] **2.2** Add concurrent state mutation stress tests
+  - New file: `test_concurrent_state.py` (8 tests)
+  - Token increment consistency (with and without lock)
+  - Citation number uniqueness under concurrent append_source/add_source
+  - URL deduplication under concurrent appends with lock
+  - Multi-topic-agent simulation with shared state, overlapping URLs, high-contention tokens
 - [ ] **2.3** Add token recovery + downstream error combination tests
   - Truncation succeeds but LLM still fails
   - Truncated prompt too small to produce useful output

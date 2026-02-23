@@ -336,6 +336,127 @@ class TestCompressTopicFindings:
         assert "Sub-query 0" in prompt
 
     @pytest.mark.asyncio
+    async def test_compression_prompt_citation_numbering(self) -> None:
+        """Compression prompt numbers sources sequentially as [1], [2], etc."""
+        mixin = StubGatheringMixin()
+        state = _make_state(num_sub_queries=1)
+
+        topic_result = _add_sources_for_topic(state, "sq-0", num_sources=3)
+        state.topic_research_results.append(topic_result)
+
+        captured_prompts: list[str] = []
+
+        async def capture_prompt(**kwargs: Any) -> MagicMock:
+            captured_prompts.append(kwargs.get("prompt", ""))
+            result = MagicMock()
+            result.success = True
+            result.content = "## Findings\nCompressed [1] [2] [3]."
+            result.tokens_used = 100
+            result.input_tokens = 75
+            result.output_tokens = 25
+            return result
+
+        mixin._provider_async_fn = capture_prompt
+
+        await mixin._compress_topic_findings_async(
+            state=state,
+            max_concurrent=3,
+            timeout=60.0,
+        )
+
+        assert len(captured_prompts) == 1
+        prompt = captured_prompts[0]
+        # Should contain sequential citation numbers
+        assert "[1] Title:" in prompt
+        assert "[2] Title:" in prompt
+        assert "[3] Title:" in prompt
+
+    @pytest.mark.asyncio
+    async def test_compression_prompt_truncates_long_content(self) -> None:
+        """Source content exceeding _COMPRESSION_SOURCE_CHAR_LIMIT is truncated."""
+        mixin = StubGatheringMixin()
+        state = _make_state(num_sub_queries=1)
+
+        long_content = "A" * 3000  # Exceeds the 2000 char limit
+        src = _make_source(
+            source_id="src-long",
+            url="https://example.com/long",
+            title="Long Source",
+            content=long_content,
+            sub_query_id="sq-0",
+        )
+        state.append_source(src)
+
+        topic_result = TopicResearchResult(
+            sub_query_id="sq-0",
+            searches_performed=1,
+            sources_found=1,
+            source_ids=["src-long"],
+        )
+        state.topic_research_results.append(topic_result)
+
+        captured_prompts: list[str] = []
+
+        async def capture_prompt(**kwargs: Any) -> MagicMock:
+            captured_prompts.append(kwargs.get("prompt", ""))
+            result = MagicMock()
+            result.success = True
+            result.content = "Compressed."
+            result.tokens_used = 50
+            result.input_tokens = 35
+            result.output_tokens = 15
+            return result
+
+        mixin._provider_async_fn = capture_prompt
+
+        await mixin._compress_topic_findings_async(
+            state=state,
+            max_concurrent=3,
+            timeout=60.0,
+        )
+
+        assert len(captured_prompts) == 1
+        prompt = captured_prompts[0]
+        # Content should be truncated with ellipsis
+        assert "..." in prompt
+        # Should NOT contain the full 3000-char string
+        assert long_content not in prompt
+
+    @pytest.mark.asyncio
+    async def test_compression_prompt_source_count_header(self) -> None:
+        """Compression user prompt includes source count in header."""
+        mixin = StubGatheringMixin()
+        state = _make_state(num_sub_queries=1)
+
+        topic_result = _add_sources_for_topic(state, "sq-0", num_sources=4)
+        state.topic_research_results.append(topic_result)
+
+        captured_prompts: list[str] = []
+
+        async def capture_prompt(**kwargs: Any) -> MagicMock:
+            captured_prompts.append(kwargs.get("prompt", ""))
+            result = MagicMock()
+            result.success = True
+            result.content = "Compressed."
+            result.tokens_used = 80
+            result.input_tokens = 60
+            result.output_tokens = 20
+            return result
+
+        mixin._provider_async_fn = capture_prompt
+
+        await mixin._compress_topic_findings_async(
+            state=state,
+            max_concurrent=3,
+            timeout=60.0,
+        )
+
+        assert len(captured_prompts) == 1
+        prompt = captured_prompts[0]
+        # Should indicate the number of sources
+        assert "4 total" in prompt
+
+    @pytest.mark.asyncio
     async def test_compression_system_prompt_preserves_info(self) -> None:
         """System prompt instructs NOT to summarize, only reformat."""
         mixin = StubGatheringMixin()

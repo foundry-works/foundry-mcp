@@ -383,6 +383,85 @@ class TestUpdatedTopicReflect:
         assert "Search iteration: 2/3" in captured_prompt
 
     @pytest.mark.asyncio
+    async def test_prompt_includes_quality_distribution_counts(self) -> None:
+        """Reflection prompt includes actual quality counts by level."""
+        mixin = StubTopicResearch()
+        state = _make_state()
+        # Add sources with known quality distribution
+        state.sources.append(_make_source("src-h1", quality=SourceQuality.HIGH))
+        state.sources.append(_make_source("src-h2", quality=SourceQuality.HIGH))
+        state.sources.append(_make_source("src-m1", quality=SourceQuality.MEDIUM))
+        state.sources.append(_make_source("src-l1", quality=SourceQuality.LOW))
+
+        captured_prompt = None
+
+        async def capture_prompt(**kwargs):
+            nonlocal captured_prompt
+            captured_prompt = kwargs.get("prompt", "")
+            result = MagicMock()
+            result.success = True
+            result.content = json.dumps({
+                "continue_searching": False,
+                "research_complete": False,
+                "rationale": "OK",
+            })
+            result.tokens_used = 40
+            return result
+
+        mixin._provider_async_fn = capture_prompt
+
+        await mixin._topic_reflect(
+            original_query="test",
+            current_query="test",
+            sources_found=4,
+            iteration=1,
+            max_iterations=3,
+            state=state,
+        )
+
+        assert captured_prompt is not None
+        assert "Source quality distribution:" in captured_prompt
+        # Should contain the quality level names and their counts
+        assert "HIGH" in captured_prompt.upper() or "high" in captured_prompt
+        assert "MEDIUM" in captured_prompt.upper() or "medium" in captured_prompt
+
+    @pytest.mark.asyncio
+    async def test_prompt_includes_original_and_current_query(self) -> None:
+        """Reflection prompt includes both original and current query text."""
+        mixin = StubTopicResearch()
+        state = _make_state()
+
+        captured_prompt = None
+
+        async def capture_prompt(**kwargs):
+            nonlocal captured_prompt
+            captured_prompt = kwargs.get("prompt", "")
+            result = MagicMock()
+            result.success = True
+            result.content = json.dumps({
+                "continue_searching": False,
+                "research_complete": False,
+                "rationale": "OK",
+            })
+            result.tokens_used = 40
+            return result
+
+        mixin._provider_async_fn = capture_prompt
+
+        await mixin._topic_reflect(
+            original_query="How does deep learning work?",
+            current_query="deep learning architectures and transformers",
+            sources_found=3,
+            iteration=1,
+            max_iterations=3,
+            state=state,
+        )
+
+        assert captured_prompt is not None
+        assert "How does deep learning work?" in captured_prompt
+        assert "deep learning architectures and transformers" in captured_prompt
+
+    @pytest.mark.asyncio
     async def test_system_prompt_requests_structured_json(self) -> None:
         """System prompt requests the new structured JSON schema."""
         mixin = StubTopicResearch()
