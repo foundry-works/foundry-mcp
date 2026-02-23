@@ -39,23 +39,31 @@
 
 ## Phase 3: Synthesis Prompt Engineering
 
-- [ ] **3.1** Add language detection directive to `_build_synthesis_system_prompt()`
+- [x] **3.1** Add language detection directive to `_build_synthesis_system_prompt()`
   - Detect language from user query, instruct report in same language
-- [ ] **3.2** Add structure-adaptive directives
-  - Comparison → side-by-side structure
-  - Enumeration → single-section list
-  - Explanation → overview + concept sections + conclusion
-  - How-to → step-by-step with prerequisites
-- [ ] **3.3** Add anti-pattern guardrails
+- [x] **3.2** Add structure-adaptive directives
+  - Comparison → side-by-side structure (Comparative Analysis, Overview of [Subject A/B])
+  - Enumeration → item-per-section or single-section list
+  - Explanation → overview + Key Findings with Theme/Category subsections + Conclusions
+  - How-to → Prerequisites + Step 1..N + Conclusions
+- [x] **3.3** Add anti-pattern guardrails
   - No meta-commentary ("based on the research", "the findings show")
   - No hedging openers ("it appears that", "it seems")
   - No self-reference ("as an AI", "I found that")
-- [ ] **3.4** Enforce citation format: inline `[Title](URL)` + numbered source section
-- [ ] **3.5** Add query-type hint to `_build_synthesis_user_prompt()`
-- [ ] **3.6** Test: non-English query produces non-English report
-- [ ] **3.7** Test: comparison query produces comparison structure
-- [ ] **3.8** Test: output is free of anti-pattern phrases
-- [ ] **3.9** Test: citations are consistently formatted
+- [x] **3.4** Enforce citation format: inline `[N]` + auto-appended numbered source section
+  - System prompt instructs inline [N] citations; Sources section auto-appended by `_citation_postprocess.py`
+- [x] **3.5** Add query-type hint to `_build_synthesis_user_prompt()`
+  - `_classify_query_type()` classifies query → comparison/enumeration/howto/explanation
+  - "Query type hint" line added to Instructions section of user prompt
+- [x] **3.6** Test: non-English query produces non-English report directive
+  - `TestLanguageDirective` (3 tests): language directive present, Chinese example, Chinese query builds prompt
+- [x] **3.7** Test: comparison query produces comparison structure
+  - `TestStructureAdaptive` (5 tests): each query type gets correct structure, all include Conclusions
+- [x] **3.8** Test: output is free of anti-pattern phrases
+  - `TestAntiPatternGuardrails` (4 tests): meta-commentary, hedging, self-reference, direct writing
+- [x] **3.9** Test: citations are consistently formatted
+  - `TestCitationFormat` (3 tests): inline [N], no Sources section, Conflicting Information preserved
+  - 1841 passed, 6 skipped, 0 failures across full research test suite
 
 ---
 

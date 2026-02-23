@@ -33,6 +33,76 @@ from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import 
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Query-type classification and structure guidance
+# ---------------------------------------------------------------------------
+
+# Keywords/patterns for classifying the intent of a research query.
+_COMPARISON_PATTERNS = re.compile(
+    r"\b(compar\w*|vs\.?|versus|differ\w*|contrast|between .+ and )\b",
+    re.IGNORECASE,
+)
+_ENUMERATION_PATTERNS = re.compile(
+    r"\b(list\b|top \d|best \d|options|alternatives|examples of|types of)",
+    re.IGNORECASE,
+)
+_HOWTO_PATTERNS = re.compile(
+    r"\b(how to|how do|steps to|guide to|tutorial|setup|install\w*|implement\w*|build\w*)\b",
+    re.IGNORECASE,
+)
+
+
+def _classify_query_type(query: str) -> str:
+    """Classify a research query into a structural type.
+
+    Returns one of: ``"comparison"``, ``"enumeration"``, ``"howto"``,
+    or ``"explanation"`` (the default).
+    """
+    if _COMPARISON_PATTERNS.search(query):
+        return "comparison"
+    if _ENUMERATION_PATTERNS.search(query):
+        return "enumeration"
+    if _HOWTO_PATTERNS.search(query):
+        return "howto"
+    return "explanation"
+
+
+_STRUCTURE_GUIDANCE: dict[str, str] = {
+    "comparison": """\
+For **comparison** queries, use this structure:
+# Research Report: [Topic]
+## Executive Summary
+## Overview of [Subject A]
+## Overview of [Subject B]
+## Comparative Analysis
+## Conclusions""",
+    "enumeration": """\
+For **list/enumeration** queries, use this structure:
+# Research Report: [Topic]
+## Executive Summary
+## [Item 1]
+## [Item 2]
+## [Item N]
+Each item should be its own section when depth is needed. For short lists a single section with a table or bullet list is acceptable.""",
+    "howto": """\
+For **how-to** queries, use this structure:
+# Research Report: [Topic]
+## Executive Summary
+## Prerequisites
+## Step 1: [Action]
+## Step 2: [Action]
+## Step N: [Action]
+## Conclusions""",
+    "explanation": """\
+For **explanation/overview** queries, use this structure:
+# Research Report: [Topic]
+## Executive Summary
+## Key Findings
+### [Theme/Category 1]
+### [Theme/Category 2]
+## Conclusions""",
+}
+
 
 class SynthesisPhaseMixin:
     """Synthesis phase methods. Mixed into DeepResearchWorkflow.
@@ -252,60 +322,51 @@ class SynthesisPhaseMixin:
     def _build_synthesis_system_prompt(self, state: DeepResearchState) -> str:
         """Build system prompt for report synthesis.
 
+        The prompt is state-aware: it detects query language and adapts
+        structural guidance based on query type.
+
         Args:
-            state: Current research state (reserved for future state-aware prompts)
+            state: Current research state used for language and structure hints
 
         Returns:
             System prompt string
         """
-        # state is reserved for future state-aware prompt customization
-        _ = state
-        return """You are a research synthesizer. Your task is to create a comprehensive, well-structured research report from analyzed findings.
+        query_type = _classify_query_type(state.original_query)
+        structure_guidance = _STRUCTURE_GUIDANCE.get(query_type, _STRUCTURE_GUIDANCE["explanation"])
 
-Generate a markdown-formatted report with the following structure:
+        return f"""You are a research synthesizer. Your task is to create a comprehensive, well-structured research report from analyzed findings.
 
-# Research Report: [Topic]
+## Language
 
-## Executive Summary
-A 2-3 paragraph overview of the key insights and conclusions.
+Detect the language of the user's research query. Write the entire report in that same language. If the query is in English, write in English. If the query is in Chinese, write entirely in Chinese. Match the user's language exactly.
 
-## Key Findings
+## Report Structure
 
-### [Theme/Category 1]
-- Finding with supporting evidence and inline citations [1], [2]
-- Related findings grouped together
+Select a report structure suited to the query type. A structural hint is provided in the user prompt.
 
-### [Theme/Category 2]
-- Continue for each major theme...
+{structure_guidance}
 
-## Analysis
+Every report must include:
+- An **Analysis** section with subsections for **Supporting Evidence**, **Conflicting Information** (if contradictions exist), and **Limitations**
+- A **Conclusions** section with actionable insights
 
-### Supporting Evidence
-Discussion of well-supported findings with high confidence.
+## Writing Quality
 
-### Conflicting Information
-Note any contradictions or disagreements between sources (if present).
+- Write directly and authoritatively. Do not hedge with openers like "it appears that", "it seems", or "based on available information".
+- Never use meta-commentary about the report itself ("based on the research", "the findings show", "this report examines").
+- Never refer to yourself ("as an AI", "I found that", "in my analysis").
+- Use clear, professional language. Write in paragraph form by default; use bullet points only when listing discrete items.
+- Each section should be thorough — provide depth, not surface-level summaries. Readers expect comprehensive analysis.
+- Include all relevant findings. Do not omit information for brevity.
 
-### Limitations
-Acknowledge gaps in the research and areas needing further investigation.
+## Citations
 
-## Conclusions
-Actionable insights and recommendations based on the findings.
+- Use inline numbered citations [N] when referencing specific information (e.g. [1], [3]).
+- The citation numbers correspond to the numbered sources provided in the input.
+- Do NOT generate a Sources or References section — it will be appended automatically.
+- Distinguish between high-confidence findings (well-supported) and lower-confidence insights.
 
----
-
-Guidelines:
-- Organize findings thematically rather than listing them sequentially
-- Use inline numbered citations [N] when referencing specific information (e.g. [1], [3])
-- The citation numbers correspond to the numbered sources provided in the input
-- Do NOT generate a Sources section — it will be appended automatically
-- Distinguish between high-confidence findings (well-supported) and lower-confidence insights
-- Be specific and actionable in conclusions
-- Keep the report focused on the original research query
-- Use clear, professional language
-- Include all relevant findings - don't omit information
-
-IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary. Do NOT include a Sources or References section."""
+IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
 
     def _build_synthesis_user_prompt(
         self,
@@ -438,11 +499,22 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary. Do N
 
         prompt_parts.append("")
 
-        # Add synthesis instructions
+        # Add synthesis instructions with query-type structural hint
+        query_type = _classify_query_type(state.original_query)
+        query_type_labels = {
+            "comparison": "comparison (side-by-side analysis of alternatives)",
+            "enumeration": "list/enumeration (discrete items or options)",
+            "howto": "how-to (step-by-step procedural guide)",
+            "explanation": "explanation/overview (topical deep-dive)",
+        }
+        type_label = query_type_labels.get(query_type, query_type)
+
         prompt_parts.extend(
             [
                 "## Instructions",
                 f"Generate a comprehensive research report addressing the query: '{state.original_query}'",
+                "",
+                f"**Query type hint:** {type_label} — adapt the report structure accordingly.",
                 "",
                 f"This is iteration {state.iteration} of {state.max_iterations}.",
                 f"Total findings: {len(state.findings)}",
