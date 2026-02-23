@@ -1022,3 +1022,178 @@ class TestExecuteStructuredLLMCallRetry:
         # All calls should have the same system prompt
         for call_args in mock_execute.call_args_list:
             assert call_args.kwargs["system_prompt"] == original_system_prompt
+
+
+# =============================================================================
+# Legacy _parse_clarification_response() edge cases (consolidated from
+# test_clarification.py — PT.6).
+#
+# These test the backward-compat legacy parser that handles the old plural
+# "needs_clarification" schema with "questions" list and "inferred_constraints"
+# dict.  Kept as a safety net until Phase 3.3 removes the legacy parsing path.
+# =============================================================================
+
+
+class TestLegacyParseClarificationResponse:
+    """Edge-case tests for ClarificationPhaseMixin._parse_clarification_response().
+
+    The legacy parser is still used as a fallback to extract inferred_constraints
+    from LLM responses.  These tests cover sanitization and normalization logic
+    that the new structured parser (parse_clarification_decision) does not need
+    because the new schema uses a single ``question`` string instead of a list.
+    """
+
+    def setup_method(self) -> None:
+        self.mixin = StubClarificationMixin()
+
+    def test_questions_truncated_to_three(self) -> None:
+        """More than 3 questions are truncated to first 3."""
+        content = json.dumps({
+            "needs_clarification": True,
+            "questions": ["Q1?", "Q2?", "Q3?", "Q4?", "Q5?"],
+            "inferred_constraints": {},
+        })
+        result = self.mixin._parse_clarification_response(content)
+        assert len(result["questions"]) == 3
+        assert result["questions"] == ["Q1?", "Q2?", "Q3?"]
+
+    def test_empty_questions_filtered(self) -> None:
+        """Empty/falsy question strings are filtered out."""
+        content = json.dumps({
+            "needs_clarification": True,
+            "questions": ["Real question?", "", "Another?"],
+            "inferred_constraints": {},
+        })
+        result = self.mixin._parse_clarification_response(content)
+        assert result["questions"] == ["Real question?", "Another?"]
+
+    def test_empty_constraint_values_filtered(self) -> None:
+        """Constraint values that are empty/falsy are filtered out."""
+        content = json.dumps({
+            "needs_clarification": True,
+            "questions": [],
+            "inferred_constraints": {
+                "scope": "AI research",
+                "timeframe": "",
+                "domain": None,
+                "depth": "overview",
+            },
+        })
+        result = self.mixin._parse_clarification_response(content)
+        assert "scope" in result["inferred_constraints"]
+        assert "depth" in result["inferred_constraints"]
+        assert "timeframe" not in result["inferred_constraints"]
+        assert "domain" not in result["inferred_constraints"]
+
+    def test_non_string_constraint_values_converted(self) -> None:
+        """Non-string constraint values (int, float, bool) are converted to string."""
+        content = json.dumps({
+            "needs_clarification": True,
+            "questions": [],
+            "inferred_constraints": {
+                "depth": "detailed",
+                "max_results": 10,
+                "include_images": True,
+                "score_threshold": 0.8,
+            },
+        })
+        result = self.mixin._parse_clarification_response(content)
+        assert result["inferred_constraints"]["depth"] == "detailed"
+        assert result["inferred_constraints"]["max_results"] == "10"
+        assert result["inferred_constraints"]["include_images"] == "true"
+        assert result["inferred_constraints"]["score_threshold"] == "0.8"
+
+    def test_nested_dict_constraint_values_filtered(self) -> None:
+        """Constraint values that are dicts/lists are filtered (only scalars kept)."""
+        content = json.dumps({
+            "needs_clarification": True,
+            "questions": [],
+            "inferred_constraints": {
+                "scope": "narrow",
+                "nested_object": {"key": "value"},
+                "list_value": [1, 2, 3],
+            },
+        })
+        result = self.mixin._parse_clarification_response(content)
+        assert result["inferred_constraints"] == {"scope": "narrow"}
+
+    def test_non_list_questions_ignored(self) -> None:
+        """If questions is not a list, return empty list."""
+        content = json.dumps({
+            "needs_clarification": True,
+            "questions": "What is the scope?",
+            "inferred_constraints": {},
+        })
+        result = self.mixin._parse_clarification_response(content)
+        assert result["questions"] == []
+
+    def test_non_dict_constraints_ignored(self) -> None:
+        """If inferred_constraints is not a dict, return empty dict."""
+        content = json.dumps({
+            "needs_clarification": True,
+            "questions": [],
+            "inferred_constraints": ["scope=AI"],
+        })
+        result = self.mixin._parse_clarification_response(content)
+        assert result["inferred_constraints"] == {}
+
+    def test_needs_clarification_truthy_values(self) -> None:
+        """Various truthy values for needs_clarification are coerced to True."""
+        for truthy_val in [True, 1, "yes", "true"]:
+            content = json.dumps({
+                "needs_clarification": truthy_val,
+                "questions": [],
+                "inferred_constraints": {},
+            })
+            result = self.mixin._parse_clarification_response(content)
+            assert result["needs_clarification"] is True, f"Failed for {truthy_val!r}"
+
+    def test_needs_clarification_falsy_values(self) -> None:
+        """Falsy values for needs_clarification are coerced to False."""
+        for falsy_val in [False, 0, "", None]:
+            content = json.dumps({
+                "needs_clarification": falsy_val,
+                "questions": [],
+                "inferred_constraints": {},
+            })
+            result = self.mixin._parse_clarification_response(content)
+            assert result["needs_clarification"] is False, f"Failed for {falsy_val!r}"
+
+    def test_all_supported_constraint_keys(self) -> None:
+        """All documented constraint keys are preserved."""
+        constraints = {
+            "scope": "machine learning",
+            "timeframe": "2020-2024",
+            "domain": "computer science",
+            "depth": "comprehensive",
+            "geographic_focus": "global",
+        }
+        content = json.dumps({
+            "needs_clarification": True,
+            "questions": ["Any specifics?"],
+            "inferred_constraints": constraints,
+        })
+        result = self.mixin._parse_clarification_response(content)
+        assert result["inferred_constraints"] == constraints
+
+    def test_empty_content_returns_defaults(self) -> None:
+        """Empty string returns safe defaults."""
+        result = self.mixin._parse_clarification_response("")
+        assert result["needs_clarification"] is False
+        assert result["questions"] == []
+        assert result["inferred_constraints"] == {}
+
+    def test_malformed_json_returns_defaults(self) -> None:
+        """Malformed JSON string returns safe defaults."""
+        result = self.mixin._parse_clarification_response("{broken json!!}")
+        assert result["needs_clarification"] is False
+        assert result["questions"] == []
+        assert result["inferred_constraints"] == {}
+
+    def test_json_in_code_block(self) -> None:
+        """JSON wrapped in markdown code block is extracted correctly."""
+        content = '```json\n{"needs_clarification": true, "questions": ["What domain?"], "inferred_constraints": {"scope": "AI"}}\n```'
+        result = self.mixin._parse_clarification_response(content)
+        assert result["needs_clarification"] is True
+        assert result["questions"] == ["What domain?"]
+        assert result["inferred_constraints"]["scope"] == "AI"

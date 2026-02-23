@@ -43,19 +43,27 @@ Mark items `[x]` as completed.
   - Citation number uniqueness under concurrent append_source/add_source
   - URL deduplication under concurrent appends with lock
   - Multi-topic-agent simulation with shared state, overlapping URLs, high-contention tokens
-- [ ] **2.3** Add token recovery + downstream error combination tests
-  - Truncation succeeds but LLM still fails
-  - Truncated prompt too small to produce useful output
-- [ ] **2.4** Add `resolve_model_for_role()` edge case tests
-  - Empty config (no fields set)
-  - Role set but provider resolution returns None
-  - Malformed provider specs (`[]model`, `[provider]`, empty string)
-- [ ] **2.5** Add cross-phase integration test
-  - End-to-end: clarification → planning → gathering → compression → analysis → synthesis
-  - Verify state propagation and data consistency across phases
-- [ ] **2.6** Consolidate legacy `test_clarification.py`
-  - Merge relevant tests into `test_clarification_structured.py`
-  - Or rename to `test_clarification_legacy.py` with explanatory comment
+- [x] **2.3** Add token recovery + downstream error combination tests
+  - Added `test_truncation_succeeds_but_llm_returns_failure` — truncation fixes size but LLM returns success=False
+  - Added `test_truncation_succeeds_but_llm_times_out` — truncation fixes size but LLM times out
+  - Added `test_very_small_truncated_prompt_still_submitted` — tiny max_tokens budget, all retries exhausted
+  - Added `test_non_context_error_after_successful_truncation` — RuntimeError after truncation propagates immediately
+- [x] **2.4** Add `resolve_model_for_role()` edge case tests
+  - Added `TestResolveModelForRoleEdgeCases` class (8 tests)
+  - Empty config all defaults, empty string provider spec, malformed bracket specs
+  - Role resolution failure gracefully handled in execute_llm_call
+  - Model set without provider falls through to default
+- [x] **2.5** Add cross-phase integration test
+  - New file: `test_cross_phase_integration.py` (5 tests)
+  - Full pipeline: clarification → planning → (simulated gathering) → synthesis
+  - Constraint propagation from clarification to planning prompt
+  - Findings and sources visible in synthesis prompt
+  - Empty findings generates minimal report without LLM call
+- [x] **2.6** Consolidate legacy `test_clarification.py`
+  - Deleted `test_clarification.py`
+  - Merged 13 unique edge-case tests into `test_clarification_structured.py` as `TestLegacyParseClarificationResponse`
+  - Tests cover: question truncation, empty filtering, constraint value normalization, nested dict filtering, truthy/falsy coercion
+  - Legacy tests clearly marked as safety net until Phase 3.3 removes legacy parser
 
 ---
 

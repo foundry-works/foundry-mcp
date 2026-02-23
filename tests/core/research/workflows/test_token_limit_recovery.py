@@ -641,3 +641,169 @@ class TestConstants:
 
     def test_error_classes_cover_google(self):
         assert "ResourceExhausted" in _CONTEXT_WINDOW_ERROR_CLASSES
+
+
+# ---------------------------------------------------------------------------
+# Integration tests: truncation + downstream error combinations (PT.3)
+# ---------------------------------------------------------------------------
+
+
+class TestTokenRecoveryDownstreamErrors:
+    """Tests for truncation succeeding but subsequent errors occurring."""
+
+    @pytest.mark.asyncio
+    async def test_truncation_succeeds_but_llm_returns_failure(
+        self, mock_workflow, sample_state
+    ):
+        """After truncation fixes the context-window error, the LLM may still
+        return success=False (e.g. content filter, timeout, provider error).
+        The failure should propagate without further token retries."""
+        mock_workflow._execute_provider_async.side_effect = [
+            # First call: context-window error triggers truncation
+            ContextWindowError(
+                "Context window exceeded",
+                prompt_tokens=5000,
+                max_tokens=4096,
+                provider="test-provider",
+            ),
+            # Second call: truncation fixes size, but LLM still fails
+            _make_success_result(
+                success=False,
+                content="",
+                error="Content filtered by safety system",
+                metadata={"timeout": False},
+            ),
+        ]
+
+        ret = await execute_llm_call(
+            workflow=mock_workflow,
+            state=sample_state,
+            phase_name="analysis",
+            system_prompt="sys",
+            user_prompt="X" * 50000,
+            provider_id="test-provider",
+            model="claude-3.5-sonnet",
+            temperature=0.3,
+            timeout=60.0,
+        )
+
+        # The failed WorkflowResult is returned directly (not wrapped in LLMCallResult)
+        assert isinstance(ret, WorkflowResult)
+        assert ret.success is False
+        assert "Content filtered" in ret.error
+        # Only 2 calls: initial (context error) + retry (LLM failure), no further retries
+        assert mock_workflow._execute_provider_async.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_truncation_succeeds_but_llm_times_out(
+        self, mock_workflow, sample_state
+    ):
+        """After truncation fixes context-window, the LLM may time out.
+        Timeout metadata should be present in the returned result."""
+        mock_workflow._execute_provider_async.side_effect = [
+            ContextWindowError(
+                "too long",
+                prompt_tokens=5000,
+                max_tokens=4096,
+            ),
+            _make_success_result(
+                success=False,
+                content="",
+                error="Request timed out",
+                metadata={"timeout": True, "providers_tried": ["test-provider"]},
+            ),
+        ]
+
+        ret = await execute_llm_call(
+            workflow=mock_workflow,
+            state=sample_state,
+            phase_name="synthesis",
+            system_prompt="sys",
+            user_prompt="X" * 50000,
+            provider_id="p",
+            model="m",
+            temperature=0.3,
+            timeout=60.0,
+        )
+
+        assert isinstance(ret, WorkflowResult)
+        assert ret.success is False
+        assert ret.metadata["timeout"] is True
+
+    @pytest.mark.asyncio
+    async def test_very_small_truncated_prompt_still_submitted(
+        self, mock_workflow, sample_state
+    ):
+        """When progressive truncation produces a very short prompt (near the
+        truncation marker), the prompt is still submitted — there is no
+        minimum-size guard.  If it fails again, the hard-error path is taken."""
+        # Use a tiny max_tokens so the truncated prompt becomes very short
+        small_error = ContextWindowError(
+            "Context window exceeded",
+            prompt_tokens=500,
+            max_tokens=10,  # Very small budget → tiny truncated prompt
+            provider="test-provider",
+        )
+        mock_workflow._execute_provider_async.side_effect = [small_error] * (
+            _MAX_TOKEN_LIMIT_RETRIES + 1
+        )
+
+        ret = await execute_llm_call(
+            workflow=mock_workflow,
+            state=sample_state,
+            phase_name="analysis",
+            system_prompt="sys",
+            user_prompt="X" * 1000,
+            provider_id="p",
+            model="m",
+            temperature=0.3,
+            timeout=60.0,
+        )
+
+        # Hard error after all retries exhausted
+        assert isinstance(ret, WorkflowResult)
+        assert ret.success is False
+        assert ret.metadata["error_type"] == "context_window_exceeded"
+        assert ret.metadata["token_limit_retries"] == _MAX_TOKEN_LIMIT_RETRIES
+
+        # All attempts were made (initial + 3 retries)
+        assert mock_workflow._execute_provider_async.call_count == _MAX_TOKEN_LIMIT_RETRIES + 1
+
+        # Each retry prompt should be shorter due to progressive truncation
+        prompts = [
+            call.kwargs["prompt"]
+            for call in mock_workflow._execute_provider_async.call_args_list
+        ]
+        for i in range(1, len(prompts)):
+            assert len(prompts[i]) <= len(prompts[i - 1])
+
+    @pytest.mark.asyncio
+    async def test_non_context_error_after_successful_truncation(
+        self, mock_workflow, sample_state
+    ):
+        """A non-context-window exception after successful truncation is NOT
+        retried — it propagates immediately."""
+        mock_workflow._execute_provider_async.side_effect = [
+            ContextWindowError(
+                "too long",
+                prompt_tokens=5000,
+                max_tokens=4096,
+            ),
+            RuntimeError("Internal provider error"),
+        ]
+
+        with pytest.raises(RuntimeError, match="Internal provider error"):
+            await execute_llm_call(
+                workflow=mock_workflow,
+                state=sample_state,
+                phase_name="analysis",
+                system_prompt="sys",
+                user_prompt="X" * 50000,
+                provider_id="p",
+                model="m",
+                temperature=0.3,
+                timeout=60.0,
+            )
+
+        # Only 2 calls: initial (context error) + retry (runtime error)
+        assert mock_workflow._execute_provider_async.call_count == 2

@@ -576,3 +576,110 @@ class TestConfigFromToml:
         assert config.deep_research_reflection_model is None
         assert config.deep_research_topic_reflection_model is None
         assert config.deep_research_clarification_model is None
+
+
+# =============================================================================
+# Tests: resolve_model_for_role edge cases (PT.4)
+# =============================================================================
+
+
+class TestResolveModelForRoleEdgeCases:
+    """Edge-case tests for resolve_model_for_role()."""
+
+    def test_empty_config_all_defaults(self) -> None:
+        """Completely default config (no overrides) returns default_provider."""
+        config = ResearchConfig()
+        for role in ("research", "report", "reflection", "summarization", "compression", "clarification"):
+            provider, model = config.resolve_model_for_role(role)
+            assert provider == config.default_provider
+            assert model is None
+
+    def test_empty_string_provider_spec(self) -> None:
+        """Empty string as provider spec: _parse_provider_spec raises ValueError,
+        which resolve_model_for_role handles by falling through the chain."""
+        config = _make_config(
+            default_provider="gemini",
+            deep_research_research_provider="",  # Empty string
+        )
+        # Empty string is falsy so getattr check should skip it
+        provider, model = config.resolve_model_for_role("research")
+        # Should fall through to default since empty string is falsy
+        assert provider is not None
+        assert isinstance(provider, str)
+
+    def test_malformed_bracket_spec_raises_in_parse(self) -> None:
+        """[]model — invalid bracket spec raises ValueError during parse.
+        execute_llm_call catches it; direct call may propagate."""
+        from foundry_mcp.config.parsing import _parse_provider_spec
+
+        with pytest.raises(ValueError, match="Provider spec cannot be empty|Invalid provider spec"):
+            _parse_provider_spec("[]model")
+
+    def test_bare_bracket_spec_raises(self) -> None:
+        """[provider] without [cli] prefix is rejected by ProviderSpec.parse."""
+        from foundry_mcp.config.parsing import _parse_provider_spec
+
+        with pytest.raises(ValueError):
+            _parse_provider_spec("[provider]")
+
+    def test_empty_string_spec_returns_empty(self) -> None:
+        """Empty string provider spec is treated as a simple name (no brackets)."""
+        from foundry_mcp.config.parsing import _parse_provider_spec
+
+        # Empty string doesn't start with "[", so it's treated as a simple name
+        provider, model = _parse_provider_spec("")
+        assert provider == ""
+        assert model is None
+
+    @pytest.mark.asyncio
+    async def test_role_resolution_graceful_in_execute_llm_call(self) -> None:
+        """When resolve_model_for_role raises (e.g. due to malformed spec),
+        execute_llm_call catches it and falls back to explicit params."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            LLMCallResult,
+            execute_llm_call,
+        )
+
+        config = MagicMock()
+        config.resolve_model_for_role = MagicMock(side_effect=ValueError("bad spec"))
+        workflow = _make_workflow_mock(config)
+        state = _make_state()
+
+        result = await execute_llm_call(
+            workflow=workflow,
+            state=state,
+            phase_name="analysis",
+            system_prompt="sys",
+            user_prompt="test",
+            provider_id="fallback-provider",
+            model="fallback-model",
+            temperature=0.3,
+            timeout=60.0,
+            role="research",
+        )
+
+        # Explicit provider_id/model should have been used despite role resolution failure
+        assert isinstance(result, LLMCallResult)
+        call_kwargs = workflow._execute_provider_async.call_args
+        assert call_kwargs.kwargs["provider_id"] == "fallback-provider"
+        assert call_kwargs.kwargs["model"] == "fallback-model"
+
+    def test_all_role_attrs_none_falls_to_default(self) -> None:
+        """When all role-specific and phase-level attrs are None, default_provider is used."""
+        config = _make_config(default_provider="my-custom-provider")
+        # Don't set any deep_research_*_provider or deep_research_*_model
+        provider, model = config.resolve_model_for_role("topic_reflection")
+        assert provider == "my-custom-provider"
+        assert model is None
+
+    def test_model_set_but_no_provider_for_role(self) -> None:
+        """When only the model is set for a role (no provider), the provider
+        comes from the fallback chain or default."""
+        config = _make_config(
+            default_provider="gemini",
+            deep_research_research_model="opus",
+        )
+        provider, model = config.resolve_model_for_role("research")
+        # Provider should be from default (gemini), model from explicit config
+        assert provider == "gemini"
+        assert model == "opus"
