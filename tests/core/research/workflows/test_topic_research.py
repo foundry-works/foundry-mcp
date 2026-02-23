@@ -134,7 +134,11 @@ class StubTopicResearch(TopicResearchMixin):
             return await self._provider_async_fn(**kwargs)
         result = MagicMock()
         result.success = True
-        result.content = json.dumps({"sufficient": True, "assessment": "Enough sources found"})
+        result.content = json.dumps({
+            "continue_searching": False,
+            "research_complete": False,
+            "rationale": "Enough sources found",
+        })
         result.tokens_used = 50
         return result
 
@@ -198,11 +202,16 @@ class TestTopicResearchResult:
 
 
 class TestTopicReflect:
-    """Tests for TopicResearchMixin._topic_reflect()."""
+    """Tests for TopicResearchMixin._topic_reflect().
+
+    The updated _topic_reflect() returns ``{assessment, raw_response, tokens_used}``
+    instead of the old ``{sufficient, assessment, refined_query, tokens_used}``.
+    Callers now use ``parse_reflection_decision(raw_response)`` for structured decisions.
+    """
 
     @pytest.mark.asyncio
-    async def test_sufficient_result(self) -> None:
-        """Reflection returns sufficient=True when enough sources found."""
+    async def test_returns_raw_response_and_assessment(self) -> None:
+        """Reflection returns raw_response and assessment keys."""
         mixin = StubTopicResearch()
         state = _make_state()
 
@@ -215,12 +224,13 @@ class TestTopicReflect:
             state=state,
         )
 
-        assert reflection["sufficient"] is True
+        assert "raw_response" in reflection
         assert "assessment" in reflection
+        assert "tokens_used" in reflection
 
     @pytest.mark.asyncio
-    async def test_insufficient_with_refined_query(self) -> None:
-        """Reflection returns refined query when sources are insufficient."""
+    async def test_raw_response_contains_structured_decision(self) -> None:
+        """raw_response is parseable into a structured decision."""
         mixin = StubTopicResearch()
         state = _make_state()
 
@@ -229,9 +239,10 @@ class TestTopicReflect:
             result.success = True
             result.content = json.dumps(
                 {
-                    "sufficient": False,
-                    "assessment": "Only 1 source found",
+                    "continue_searching": True,
                     "refined_query": "deep learning architectures comparison",
+                    "research_complete": False,
+                    "rationale": "Only 1 source found",
                 }
             )
             result.tokens_used = 50
@@ -248,12 +259,15 @@ class TestTopicReflect:
             state=state,
         )
 
-        assert reflection["sufficient"] is False
-        assert reflection["refined_query"] == "deep learning architectures comparison"
+        from foundry_mcp.core.research.workflows.deep_research._helpers import parse_reflection_decision
+
+        decision = parse_reflection_decision(reflection["raw_response"])
+        assert decision.continue_searching is True
+        assert decision.refined_query == "deep learning architectures comparison"
 
     @pytest.mark.asyncio
-    async def test_provider_failure_returns_sufficient(self) -> None:
-        """Provider failure falls back to sufficient=True."""
+    async def test_provider_failure_returns_stop_decision(self) -> None:
+        """Provider failure returns a parseable stop-searching response."""
         mixin = StubTopicResearch()
         state = _make_state()
 
@@ -273,11 +287,14 @@ class TestTopicReflect:
             state=state,
         )
 
-        assert reflection["sufficient"] is True
+        from foundry_mcp.core.research.workflows.deep_research._helpers import parse_reflection_decision
+
+        decision = parse_reflection_decision(reflection["raw_response"])
+        assert decision.continue_searching is False
 
     @pytest.mark.asyncio
-    async def test_exception_returns_sufficient(self) -> None:
-        """Exception during reflection falls back to sufficient=True."""
+    async def test_exception_returns_stop_decision(self) -> None:
+        """Exception during reflection returns a parseable stop response."""
         mixin = StubTopicResearch()
         state = _make_state()
 
@@ -295,11 +312,14 @@ class TestTopicReflect:
             state=state,
         )
 
-        assert reflection["sufficient"] is True
+        from foundry_mcp.core.research.workflows.deep_research._helpers import parse_reflection_decision
+
+        decision = parse_reflection_decision(reflection["raw_response"])
+        assert decision.continue_searching is False
 
     @pytest.mark.asyncio
-    async def test_malformed_json_returns_sufficient(self) -> None:
-        """Malformed JSON in reflection response falls back to sufficient=True."""
+    async def test_malformed_json_returns_raw_response(self) -> None:
+        """Malformed JSON still returns a raw_response (caller handles parsing)."""
         mixin = StubTopicResearch()
         state = _make_state()
 
@@ -321,7 +341,9 @@ class TestTopicReflect:
             state=state,
         )
 
-        assert reflection["sufficient"] is True
+        assert "raw_response" in reflection
+        # Malformed content is still returned as raw_response
+        assert reflection["raw_response"] == "This is not JSON at all"
 
     @pytest.mark.asyncio
     async def test_tokens_tracked_in_state(self) -> None:
@@ -333,7 +355,11 @@ class TestTopicReflect:
         async def mock_provider(**kwargs):
             result = MagicMock()
             result.success = True
-            result.content = json.dumps({"sufficient": True, "assessment": "OK"})
+            result.content = json.dumps({
+                "continue_searching": False,
+                "research_complete": False,
+                "rationale": "OK",
+            })
             result.tokens_used = 75
             return result
 
@@ -706,15 +732,16 @@ class TestExecuteTopicResearchAsync:
                 return []
             return [_make_source("src-retry", f"https://retry.com/{search_count}")]
 
-        # LLM reflection returns a refined query
+        # LLM reflection returns a refined query (new structured schema)
         async def reflection_fn(**kwargs):
             result = MagicMock()
             result.success = True
             result.content = json.dumps(
                 {
-                    "sufficient": False,
-                    "assessment": "No results found, broadening query",
+                    "continue_searching": True,
                     "refined_query": "very specific phrase broader terms",
+                    "research_complete": False,
+                    "rationale": "No results found, broadening query",
                 }
             )
             result.tokens_used = 30
@@ -761,9 +788,10 @@ class TestExecuteTopicResearchAsync:
             result.success = True
             result.content = json.dumps(
                 {
-                    "sufficient": False,
-                    "assessment": "Need more",
+                    "continue_searching": True,
                     "refined_query": "better query",
+                    "research_complete": False,
+                    "rationale": "Need more",
                 }
             )
             result.tokens_used = 50
@@ -862,8 +890,8 @@ class TestExecuteTopicResearchAsync:
         provider.get_provider_name.return_value = "tavily"
         provider.search = dynamic_search
 
-        # First reflection: insufficient, suggests refined query
-        # Second reflection: sufficient
+        # First reflection: continue searching with refined query
+        # Second reflection: research complete
         reflect_call_count = 0
 
         async def dynamic_reflect(**kwargs):
@@ -875,16 +903,18 @@ class TestExecuteTopicResearchAsync:
             if reflect_call_count == 1:
                 result.content = json.dumps(
                     {
-                        "sufficient": False,
-                        "assessment": "Need more data",
+                        "continue_searching": True,
                         "refined_query": "refined deep learning query",
+                        "research_complete": False,
+                        "rationale": "Need more data",
                     }
                 )
             else:
                 result.content = json.dumps(
                     {
-                        "sufficient": True,
-                        "assessment": "Sufficient now",
+                        "continue_searching": False,
+                        "research_complete": True,
+                        "rationale": "Sufficient now",
                     }
                 )
             return result

@@ -65,29 +65,29 @@ Mark items `[x]` as completed. Items within a phase are ordered by dependency.
 
 ## Phase 2: Forced Reflection in Topic Research
 
-- [ ] **2.1** Add `parse_reflection_decision(text) -> ReflectionDecision` to `_helpers.py`:
-  - [ ] Structured extraction: `{continue_searching: bool, refined_query: str|null, research_complete: bool, rationale: str}`
-  - [ ] Fallback parsing if JSON extraction fails (regex for key fields)
-- [ ] **2.2** Update reflection prompt in `_topic_reflect()`:
-  - [ ] Include current source count and quality distribution
-  - [ ] Explicit sufficiency criteria ("3+ relevant sources from distinct domains = likely sufficient")
-  - [ ] Add `research_complete` option to signal early exit
-  - [ ] Request structured JSON output
-- [ ] **2.3** Restructure `_execute_topic_research_async` loop in `topic_research.py`:
-  - [ ] Make reflection mandatory after every search (not conditional on source count)
-  - [ ] Parse reflection response via `parse_reflection_decision()`
-  - [ ] Exit loop early if `research_complete=True`
-  - [ ] Exit loop if `continue_searching=False`
-  - [ ] Respect `max_searches` as hard cap regardless of reflection decision
-- [ ] **2.4** Update `TopicResearchResult` to include `early_completion: bool` and `completion_rationale: str`
-- [ ] **2.5** Write `tests/research/test_topic_reflection.py`:
-  - [ ] Test mandatory reflection after each search iteration
-  - [ ] Test early exit on `research_complete=True`
-  - [ ] Test `continue_searching=False` behavior
-  - [ ] Test hard cap `max_searches` override of reflection decision
-  - [ ] Test fallback parsing when JSON extraction fails
-  - [ ] Test reflection prompt includes source count and quality info
-- [ ] **2.6** Verify existing deep research contract tests still pass
+- [x] **2.1** Add `parse_reflection_decision(text) -> ReflectionDecision` to `_helpers.py`:
+  - [x] Structured extraction: `{continue_searching: bool, refined_query: str|null, research_complete: bool, rationale: str}`
+  - [x] Fallback parsing if JSON extraction fails (regex for key fields)
+- [x] **2.2** Update reflection prompt in `_topic_reflect()`:
+  - [x] Include current source count and quality distribution
+  - [x] Explicit sufficiency criteria ("3+ relevant sources from distinct domains = likely sufficient")
+  - [x] Add `research_complete` option to signal early exit
+  - [x] Request structured JSON output
+- [x] **2.3** Restructure `_execute_topic_research_async` loop in `topic_research.py`:
+  - [x] Make reflection mandatory after every search (not conditional on source count)
+  - [x] Parse reflection response via `parse_reflection_decision()`
+  - [x] Exit loop early if `research_complete=True`
+  - [x] Exit loop if `continue_searching=False`
+  - [x] Respect `max_searches` as hard cap regardless of reflection decision
+- [x] **2.4** Update `TopicResearchResult` to include `early_completion: bool` and `completion_rationale: str`
+- [x] **2.5** Write `tests/research/test_topic_reflection.py`:
+  - [x] Test mandatory reflection after each search iteration
+  - [x] Test early exit on `research_complete=True`
+  - [x] Test `continue_searching=False` behavior
+  - [x] Test hard cap `max_searches` override of reflection decision
+  - [x] Test fallback parsing when JSON extraction fails
+  - [x] Test reflection prompt includes source count and quality info
+- [x] **2.6** Verify existing deep research contract tests still pass
 
 ---
 

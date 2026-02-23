@@ -51,6 +51,14 @@ class TopicResearchResult(BaseModel):
         default_factory=list,
         description="IDs of sources discovered by this topic researcher",
     )
+    early_completion: bool = Field(
+        default=False,
+        description="Whether the topic researcher signalled early research completion",
+    )
+    completion_rationale: str = Field(
+        default="",
+        description="Rationale provided by the reflection step for early completion or exit",
+    )
 
 
 class Contradiction(BaseModel):

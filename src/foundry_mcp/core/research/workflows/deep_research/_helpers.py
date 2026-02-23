@@ -6,11 +6,16 @@ module-level functions (not via ``self``).
 
 from __future__ import annotations
 
+import json
+import logging
 import re
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from foundry_mcp.config.research import ResearchConfig
+
+logger = logging.getLogger(__name__)
 
 
 def extract_json(content: str) -> Optional[str]:
@@ -142,6 +147,88 @@ def estimate_token_limit_for_model(model: Optional[str], token_limits: dict[str,
         if pattern.lower() in model_lower:
             return limit
     return None
+
+
+@dataclass
+class TopicReflectionDecision:
+    """Structured decision from a topic research reflection step.
+
+    Captures whether the topic researcher should continue searching,
+    has completed research, or needs to refine its query.
+    """
+
+    continue_searching: bool = False
+    refined_query: Optional[str] = None
+    research_complete: bool = False
+    rationale: str = ""
+
+    def to_dict(self) -> dict:
+        """Serialize to dict for audit/logging."""
+        return {
+            "continue_searching": self.continue_searching,
+            "refined_query": self.refined_query,
+            "research_complete": self.research_complete,
+            "rationale": self.rationale,
+        }
+
+
+def parse_reflection_decision(text: str) -> TopicReflectionDecision:
+    """Parse a topic reflection LLM response into a structured decision.
+
+    Attempts JSON extraction first, then falls back to regex-based
+    parsing for key fields if JSON extraction fails.
+
+    Args:
+        text: Raw LLM response text (may contain JSON or prose)
+
+    Returns:
+        TopicReflectionDecision with extracted fields. On total
+        parse failure, returns a conservative default (stop searching,
+        not complete — lets the outer loop decide).
+    """
+    # Try JSON extraction first
+    json_str = extract_json(text)
+    if json_str:
+        try:
+            data = json.loads(json_str)
+            return TopicReflectionDecision(
+                continue_searching=bool(data.get("continue_searching", False)),
+                refined_query=data.get("refined_query"),
+                research_complete=bool(data.get("research_complete", False)),
+                rationale=str(data.get("rationale", "")),
+            )
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            logger.debug("Topic reflection JSON parse failed: %s", exc)
+
+    # Fallback: regex extraction for key fields
+    decision = TopicReflectionDecision()
+
+    # Look for research_complete signal
+    if re.search(r'"?research_complete"?\s*:\s*true', text, re.IGNORECASE):
+        decision.research_complete = True
+        decision.rationale = "Extracted research_complete=true via fallback parsing"
+        return decision
+
+    # Look for continue_searching signal
+    continue_match = re.search(r'"?continue_searching"?\s*:\s*(true|false)', text, re.IGNORECASE)
+    if continue_match:
+        decision.continue_searching = continue_match.group(1).lower() == "true"
+
+    # Look for refined_query
+    query_match = re.search(r'"?refined_query"?\s*:\s*"([^"]+)"', text)
+    if query_match:
+        decision.refined_query = query_match.group(1)
+        if decision.refined_query and not decision.research_complete:
+            decision.continue_searching = True
+
+    # Look for rationale
+    rationale_match = re.search(r'"?rationale"?\s*:\s*"([^"]*)"', text)
+    if rationale_match:
+        decision.rationale = rationale_match.group(1)
+    elif not decision.rationale:
+        decision.rationale = "Parsed via fallback regex extraction"
+
+    return decision
 
 
 def resolve_phase_provider(config: "ResearchConfig", *phase_names: str) -> str:

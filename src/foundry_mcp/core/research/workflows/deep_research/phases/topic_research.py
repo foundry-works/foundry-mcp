@@ -18,7 +18,10 @@ from foundry_mcp.core.research.models.deep_research import (
     TopicResearchResult,
 )
 from foundry_mcp.core.research.models.sources import SourceQuality, SubQuery
-from foundry_mcp.core.research.workflows.deep_research._helpers import extract_json
+from foundry_mcp.core.research.workflows.deep_research._helpers import (
+    extract_json,
+    parse_reflection_decision,
+)
 from foundry_mcp.core.research.workflows.deep_research.source_quality import (
     _normalize_title,
     get_domain_quality,
@@ -74,18 +77,19 @@ class TopicResearchMixin:
         state_lock: asyncio.Lock,
         semaphore: asyncio.Semaphore,
     ) -> TopicResearchResult:
-        """Execute a single-topic ReAct research loop.
+        """Execute a single-topic ReAct research loop with mandatory reflection.
 
-        The loop runs: search → reflect → (refine query → search)* →
-        compile summary. Each iteration searches, then reflects on whether
-        enough information was found. If gaps remain and budget allows,
-        the query is refined and another search is performed.
+        The loop runs: search → mandatory reflect → (refine query → search)*
+        → compile summary. Reflection is always performed after each search
+        iteration (not conditional on source count). The reflection step
+        produces a structured decision that can signal early completion,
+        request continued searching with a refined query, or stop.
 
         Args:
             sub_query: The sub-query to research
             state: Current research state (for config access and source storage)
             available_providers: List of initialized search providers
-            max_searches: Maximum search iterations for this topic
+            max_searches: Maximum search iterations for this topic (hard cap)
             max_sources_per_provider: Max results to request from each provider
                 per search call. When None, falls back to state.max_sources_per_query.
                 Used for budget splitting across parallel topic researchers.
@@ -126,37 +130,12 @@ class TopicResearchMixin:
             result.sources_found += sources_added
 
             # If this is the last allowed iteration, skip reflection
+            # (max_searches is the hard cap regardless of reflection)
             if iteration >= max_searches - 1:
                 break
 
-            # If no sources found at all, try a refined query via reflection
-            if sources_added == 0 and iteration == 0:
-                result.reflection_notes.append(
-                    f"No sources found for query: {current_query!r}. Requesting LLM refinement."
-                )
-                # Use the reflect step to get a properly refined query
-                zero_reflection = await self._topic_reflect(
-                    original_query=sub_query.query,
-                    current_query=current_query,
-                    sources_found=0,
-                    iteration=1,
-                    max_iterations=max_searches,
-                    state=state,
-                )
-                local_tokens_used += zero_reflection.get("tokens_used", 0)
-                refined_query = zero_reflection.get("refined_query")
-                if refined_query and refined_query != current_query:
-                    current_query = refined_query
-                    result.refined_queries.append(refined_query)
-                else:
-                    # Fallback: strip quotes if present, otherwise broaden
-                    broadened = sub_query.query.replace('"', "").strip()
-                    if broadened != current_query:
-                        current_query = broadened
-                        result.refined_queries.append(broadened)
-                continue
-
-            # --- Reflect step ---
+            # --- Mandatory reflection step ---
+            # Always reflect after every search, not just when sources > 0
             reflection = await self._topic_reflect(
                 original_query=sub_query.query,
                 current_query=current_query,
@@ -167,17 +146,46 @@ class TopicResearchMixin:
             )
             local_tokens_used += reflection.get("tokens_used", 0)
 
-            result.reflection_notes.append(reflection.get("assessment", ""))
+            # Parse structured reflection decision
+            decision = parse_reflection_decision(
+                reflection.get("raw_response", "")
+            )
+            result.reflection_notes.append(
+                decision.rationale or reflection.get("assessment", "")
+            )
 
-            if reflection.get("sufficient", True):
-                # Enough information gathered for this topic
+            # Check for explicit research completion signal
+            if decision.research_complete:
+                result.early_completion = True
+                result.completion_rationale = decision.rationale
+                logger.info(
+                    "Topic %r signalled research complete: %s",
+                    sub_query.id,
+                    decision.rationale[:100],
+                )
+                break
+
+            # Check if reflection says to stop searching
+            if not decision.continue_searching:
+                result.completion_rationale = (
+                    decision.rationale or "Reflection decided to stop searching"
+                )
                 break
 
             # --- Refine step ---
-            refined_query = reflection.get("refined_query")
+            refined_query = decision.refined_query
             if refined_query and refined_query != current_query:
                 current_query = refined_query
                 result.refined_queries.append(refined_query)
+            elif sources_added == 0 and iteration == 0:
+                # Fallback: strip quotes if present, otherwise broaden
+                broadened = sub_query.query.replace('"', "").strip()
+                if broadened != current_query:
+                    current_query = broadened
+                    result.refined_queries.append(broadened)
+                else:
+                    # No refinement possible and no sources — stop
+                    break
             else:
                 # No meaningful refinement possible, stop
                 break
@@ -210,6 +218,8 @@ class TopicResearchMixin:
                 "sources_found": result.sources_found,
                 "refined_queries": result.refined_queries,
                 "reflection_notes": result.reflection_notes,
+                "early_completion": result.early_completion,
+                "completion_rationale": result.completion_rationale,
             },
         )
 
@@ -351,40 +361,61 @@ class TopicResearchMixin:
         max_iterations: int,
         state: DeepResearchState,
     ) -> dict[str, Any]:
-        """Fast LLM reflection on topic search results.
+        """Mandatory LLM reflection on topic search results.
 
-        Evaluates whether enough information has been gathered for this
-        topic and optionally suggests a refined query.
+        Called after every search iteration to evaluate research progress
+        and produce a structured decision about next steps. The response
+        includes the raw LLM text (``raw_response``) for structured
+        parsing via ``parse_reflection_decision()``.
 
         Returns:
-            Dict with keys: sufficient (bool), assessment (str),
-            refined_query (optional str)
+            Dict with keys: assessment (str), raw_response (str),
+            tokens_used (int). The caller uses ``parse_reflection_decision``
+            on ``raw_response`` to get the structured decision.
         """
         from foundry_mcp.core.research.workflows.deep_research._helpers import resolve_phase_provider
 
         provider_id = resolve_phase_provider(self.config, "topic_reflection", "reflection")
 
+        # Collect source quality distribution for context
+        source_qualities: dict[str, int] = {}
+        for src in state.sources:
+            if hasattr(src, "quality") and src.quality:
+                quality_name = str(src.quality.value) if hasattr(src.quality, "value") else str(src.quality)
+                source_qualities[quality_name] = source_qualities.get(quality_name, 0) + 1
+        quality_summary = ", ".join(f"{k}={v}" for k, v in sorted(source_qualities.items())) or "none yet"
+
         system_prompt = (
             "You are a research assistant evaluating search results for a specific sub-topic. "
-            "Determine if enough information has been gathered or if the search query should be refined.\n\n"
-            "Respond with valid JSON:\n"
-            '{"sufficient": true/false, "assessment": "brief assessment", '
-            '"refined_query": "optional refined search query if not sufficient"}\n\n'
-            "Rules:\n"
-            "- Set sufficient=true if at least 2-3 relevant sources were found\n"
-            "- Set sufficient=true if this is already a refined query and sources were found\n"
-            "- If insufficient, suggest a refined_query that is more specific or uses different terms\n"
-            "- Keep refined queries focused on the original topic\n"
-            "- Return ONLY valid JSON"
+            "After each search iteration, you MUST assess whether the research is sufficient "
+            "and decide the next action.\n\n"
+            "Respond with valid JSON using this exact schema:\n"
+            "{\n"
+            '  "continue_searching": true/false,\n'
+            '  "refined_query": "new search query if continuing" or null,\n'
+            '  "research_complete": true/false,\n'
+            '  "rationale": "brief explanation of your assessment"\n'
+            "}\n\n"
+            "Decision rules:\n"
+            "- Set research_complete=true if you have 3+ relevant sources from distinct "
+            "domains — this signals the topic is well-covered and exits the loop early\n"
+            "- Set continue_searching=true with a refined_query if sources are insufficient "
+            "or too narrow — the query will be retried with your refinement\n"
+            "- Set continue_searching=false (without research_complete) if sources are "
+            "adequate but not exceptional — this stops the loop for this topic\n"
+            "- If no sources were found at all, set continue_searching=true and suggest "
+            "a broader or alternative refined_query\n"
+            "- Keep refined queries focused on the original research topic\n"
+            "- Return ONLY valid JSON, no additional text"
         )
 
         user_prompt = (
             f"Original research sub-topic: {original_query}\n"
             f"Current search query: {current_query}\n"
             f"Sources found so far: {sources_found}\n"
+            f"Source quality distribution: {quality_summary}\n"
             f"Search iteration: {iteration}/{max_iterations}\n\n"
-            "Is the information gathered sufficient for this sub-topic, "
-            "or should the search query be refined?"
+            "Assess the research progress for this sub-topic and decide the next action."
         )
 
         try:
@@ -402,27 +433,44 @@ class TopicResearchMixin:
             )
 
             if not result.success:
-                return {"sufficient": True, "assessment": "Reflection call failed, proceeding", "tokens_used": 0}
+                return {
+                    "assessment": "Reflection call failed, proceeding",
+                    "raw_response": json.dumps({
+                        "continue_searching": False,
+                        "research_complete": False,
+                        "rationale": "Reflection call failed",
+                    }),
+                    "tokens_used": 0,
+                }
 
             tokens_used = result.tokens_used or 0
+            raw_content = result.content or ""
 
-            json_str = extract_json(result.content)
+            # Extract assessment from the raw response for backward compat
+            assessment = ""
+            json_str = extract_json(raw_content)
             if json_str:
                 try:
                     data = json.loads(json_str)
-                except json.JSONDecodeError as exc:
-                    logger.warning("Topic reflection JSON parse failed: %s", exc)
-                    return {"sufficient": True, "assessment": "Reflection JSON invalid", "tokens_used": tokens_used}
-                return {
-                    "sufficient": bool(data.get("sufficient", True)),
-                    "assessment": str(data.get("assessment", "")),
-                    "refined_query": data.get("refined_query"),
-                    "tokens_used": tokens_used,
-                }
+                    assessment = str(data.get("rationale", ""))
+                except (json.JSONDecodeError, TypeError):
+                    assessment = "Reflection JSON parse warning"
 
-            return {"sufficient": True, "assessment": "No JSON in reflection response", "tokens_used": tokens_used}
+            return {
+                "assessment": assessment,
+                "raw_response": raw_content,
+                "tokens_used": tokens_used,
+            }
 
         except (asyncio.TimeoutError, OSError, ValueError, RuntimeError) as exc:
-            logger.warning("Topic reflection failed: %s. Treating as sufficient.", exc)
+            logger.warning("Topic reflection failed: %s. Treating as stop.", exc)
 
-        return {"sufficient": True, "assessment": "Reflection unavailable", "tokens_used": 0}
+        return {
+            "assessment": "Reflection unavailable",
+            "raw_response": json.dumps({
+                "continue_searching": False,
+                "research_complete": False,
+                "rationale": "Reflection unavailable due to error",
+            }),
+            "tokens_used": 0,
+        }
