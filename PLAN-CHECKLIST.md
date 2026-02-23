@@ -20,19 +20,20 @@
 
 ## Phase 2: Research Brief Generation
 
-- [ ] **2.1** Add `_build_brief_refinement_prompt()` to `planning.py`
+- [x] **2.1** Add `_build_brief_refinement_prompt()` to `planning.py`
   - Original prompt (not copied), modeled after upstream principles
   - Maximize specificity, fill unstated dimensions as open-ended
   - Prefer primary sources, preserve language preference
-- [ ] **2.2** Add brief-refinement LLM call at start of `_execute_planning_async()`
+- [x] **2.2** Add brief-refinement LLM call at start of `_execute_planning_async()`
   - Execute before sub-query decomposition
   - Use cheap model role (summarization or new "brief" role)
-- [ ] **2.3** Store refined brief in `state.research_brief`
-- [ ] **2.4** Wire refined brief as input to `_build_planning_user_prompt()`
-- [ ] **2.5** Add "brief" to `_ROLE_RESOLUTION_CHAIN` in `research.py` if using new role
-- [ ] **2.6** Test: ambiguous query produces more specific brief
-- [ ] **2.7** Test: sub-queries are grounded in refined brief
-- [ ] **2.8** Test: existing planning tests pass (additive change)
+- [x] **2.3** Store refined brief in `state.research_brief`
+- [x] **2.4** Wire refined brief as input to `_build_planning_user_prompt()`
+- [x] **2.5** Add "brief" to `_ROLE_RESOLUTION_CHAIN` in `research.py` if using new role
+  - N/A: used existing "summarization" role instead of a new "brief" role
+- [x] **2.6** Test: ambiguous query produces more specific brief
+- [x] **2.7** Test: sub-queries are grounded in refined brief
+- [x] **2.8** Test: existing planning tests pass (additive change) — 2015 passed, 0 failed
 
 ---
 

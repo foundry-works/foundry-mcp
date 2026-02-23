@@ -35,6 +35,7 @@ from foundry_mcp.core.research.workflows.deep_research._helpers import (
 from foundry_mcp.core.research.workflows.deep_research.phases._analysis_prompts import (
     AnalysisPromptsMixin,
 )
+from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
     LLMCallResult,
     StructuredLLMCallResult,
@@ -797,3 +798,232 @@ class TestCompressedFindingsCrossPhase:
         # Research brief should be included
         assert state.research_brief is not None
         assert state.research_brief in synthesis_prompt
+
+
+# =============================================================================
+# Test: brief refinement (Phase 2 alignment — steps 2.6 & 2.7)
+# =============================================================================
+
+
+class TestBriefRefinement:
+    """Tests for the brief-refinement step added to the planning phase.
+
+    Verifies that an ambiguous query is refined into a more specific brief
+    and that sub-query decomposition operates on the refined brief.
+    """
+
+    @pytest.fixture
+    def workflow(self) -> StubWorkflow:
+        return StubWorkflow()
+
+    @pytest.mark.asyncio
+    async def test_ambiguous_query_produces_specific_brief(
+        self,
+        workflow: StubWorkflow,
+    ) -> None:
+        """Brief refinement should store a more specific brief than the raw query."""
+        state = DeepResearchState(
+            id="deepres-brief-specificity",
+            original_query="tell me about databases",  # Deliberately vague
+            phase=DeepResearchPhase.PLANNING,
+            iteration=1,
+            max_iterations=3,
+        )
+
+        # Mock: the brief-refinement LLM returns a specific brief
+        refined_brief = (
+            "An investigation into the major categories of modern database "
+            "systems — relational (PostgreSQL, MySQL), document-oriented "
+            "(MongoDB), graph (Neo4j), and time-series (TimescaleDB) — "
+            "examining their architectural trade-offs, typical use cases, "
+            "and current market adoption."
+        )
+        # Mock: the planning LLM returns sub-queries
+        planning_response = json.dumps({
+            "research_brief": "Databases overview",  # Should be ignored
+            "sub_queries": [
+                {
+                    "query": "relational vs document database trade-offs",
+                    "rationale": "Core architectural comparison",
+                    "priority": 1,
+                },
+            ],
+        })
+
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.planning.execute_llm_call",
+                side_effect=[
+                    LLMCallResult(
+                        result=_make_llm_result(refined_brief),
+                        llm_call_duration_ms=200.0,
+                    ),
+                    LLMCallResult(
+                        result=_make_llm_result(planning_response),
+                        llm_call_duration_ms=500.0,
+                    ),
+                ],
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.planning.finalize_phase",
+            ),
+        ):
+            result = await workflow._execute_planning_async(
+                state=state,
+                provider_id="test-provider",
+                timeout=60.0,
+            )
+
+        assert result.success is True
+
+        # The refined brief — not the raw query — should be stored
+        assert state.research_brief == refined_brief
+        assert len(state.research_brief) > len(state.original_query)
+
+        # The brief should contain specifics absent from the vague query
+        assert "PostgreSQL" in state.research_brief
+        assert "MongoDB" in state.research_brief
+
+        # The planning response's research_brief should NOT have overwritten it
+        assert state.research_brief != "Databases overview"
+
+    @pytest.mark.asyncio
+    async def test_sub_queries_grounded_in_refined_brief(
+        self,
+        workflow: StubWorkflow,
+    ) -> None:
+        """Sub-query decomposition prompt should use the refined brief, not the raw query."""
+        state = DeepResearchState(
+            id="deepres-brief-wiring",
+            original_query="tell me about caching",  # Vague
+            phase=DeepResearchPhase.PLANNING,
+            iteration=1,
+            max_iterations=3,
+        )
+
+        refined_brief = (
+            "An investigation into web application caching strategies "
+            "including HTTP cache headers, CDN edge caching, and "
+            "in-memory stores such as Redis and Memcached."
+        )
+        planning_response = json.dumps({
+            "research_brief": "Caching overview",
+            "sub_queries": [
+                {
+                    "query": "HTTP caching headers best practices",
+                    "rationale": "Core mechanism",
+                    "priority": 1,
+                },
+                {
+                    "query": "Redis vs Memcached comparison 2024",
+                    "rationale": "In-memory store trade-offs",
+                    "priority": 2,
+                },
+            ],
+        })
+
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.planning.execute_llm_call",
+                side_effect=[
+                    LLMCallResult(
+                        result=_make_llm_result(refined_brief),
+                        llm_call_duration_ms=200.0,
+                    ),
+                    LLMCallResult(
+                        result=_make_llm_result(planning_response),
+                        llm_call_duration_ms=500.0,
+                    ),
+                ],
+            ) as mock_llm,
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.planning.finalize_phase",
+            ),
+        ):
+            result = await workflow._execute_planning_async(
+                state=state,
+                provider_id="test-provider",
+                timeout=60.0,
+            )
+
+        assert result.success is True
+
+        # Two LLM calls: brief refinement, then planning decomposition
+        assert mock_llm.call_count == 2
+
+        # The brief-refinement call (first) should use the "summarization" role
+        brief_call = mock_llm.call_args_list[0]
+        assert brief_call.kwargs["role"] == "summarization"
+
+        # The planning call (second) should contain the refined brief
+        planning_call = mock_llm.call_args_list[1]
+        planning_user_prompt = planning_call.kwargs["user_prompt"]
+
+        # Refined brief content should appear in the planning prompt
+        assert "web application caching strategies" in planning_user_prompt
+        assert "Redis" in planning_user_prompt
+
+        # The raw vague query should NOT be the research query input
+        assert not planning_user_prompt.startswith("Research Query: tell me about caching")
+
+    @pytest.mark.asyncio
+    async def test_brief_refinement_failure_falls_back_to_raw_query(
+        self,
+        workflow: StubWorkflow,
+    ) -> None:
+        """When brief refinement fails, planning should proceed with the raw query."""
+        state = DeepResearchState(
+            id="deepres-brief-fallback",
+            original_query="Compare React and Vue",
+            phase=DeepResearchPhase.PLANNING,
+            iteration=1,
+            max_iterations=3,
+        )
+
+        planning_response = json.dumps({
+            "research_brief": "React vs Vue comparison",
+            "sub_queries": [
+                {
+                    "query": "React vs Vue performance 2024",
+                    "rationale": "Performance comparison",
+                    "priority": 1,
+                },
+            ],
+        })
+
+        # Brief refinement returns a WorkflowResult (error), planning succeeds
+        brief_error = WorkflowResult(
+            success=False,
+            content="",
+            error="Provider timeout",
+        )
+
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.planning.execute_llm_call",
+                side_effect=[
+                    brief_error,
+                    LLMCallResult(
+                        result=_make_llm_result(planning_response),
+                        llm_call_duration_ms=500.0,
+                    ),
+                ],
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.planning.finalize_phase",
+            ),
+        ):
+            result = await workflow._execute_planning_async(
+                state=state,
+                provider_id="test-provider",
+                timeout=60.0,
+            )
+
+        assert result.success is True
+
+        # Falls back to original query as the brief
+        assert state.research_brief == state.original_query
+
+        # Sub-queries should still be extracted from the planning response
+        assert len(state.sub_queries) == 1
+        assert "React vs Vue" in state.sub_queries[0].query

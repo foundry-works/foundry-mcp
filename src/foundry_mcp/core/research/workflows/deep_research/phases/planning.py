@@ -76,14 +76,50 @@ class PlanningPhaseMixin:
             },
         )
 
-        # Build the planning prompt
+        # ---------------------------------------------------------------
+        # Step 1: Refine the raw query into a structured research brief
+        # ---------------------------------------------------------------
+        brief_prompt = self._build_brief_refinement_prompt(state)
+        self._check_cancellation(state)
+
+        brief_call_result = await execute_llm_call(
+            workflow=self,
+            state=state,
+            phase_name="planning",
+            system_prompt=(
+                "You are a research brief writer. Rewrite the user's research "
+                "request into a single, precise research brief paragraph."
+            ),
+            user_prompt=brief_prompt,
+            provider_id=provider_id or state.planning_provider,
+            model=state.planning_model,
+            temperature=0.3,  # Low creativity — faithful rewrite
+            timeout=timeout,
+            role="summarization",  # Cheap model for lightweight rewrite
+        )
+
+        if isinstance(brief_call_result, WorkflowResult):
+            # Brief refinement failed — fall back to using the raw query
+            logger.warning(
+                "Brief refinement LLM call failed, using raw query as brief"
+            )
+            state.research_brief = state.original_query
+        else:
+            refined_brief = (brief_call_result.result.content or "").strip()
+            state.research_brief = refined_brief or state.original_query
+            logger.info(
+                "Brief refinement complete (%d chars)",
+                len(state.research_brief),
+            )
+
+        # ---------------------------------------------------------------
+        # Step 2: Decompose the (refined) brief into sub-queries
+        # ---------------------------------------------------------------
         system_prompt = self._build_planning_system_prompt(state)
         user_prompt = self._build_planning_user_prompt(state)
 
-        # Check for cancellation before making provider call
         self._check_cancellation(state)
 
-        # Execute LLM call with lifecycle instrumentation
         call_result = await execute_llm_call(
             workflow=self,
             state=state,
@@ -105,15 +141,21 @@ class PlanningPhaseMixin:
 
         if not parsed["success"]:
             logger.warning("Failed to parse planning response, using fallback")
-            # Fallback: treat entire query as single sub-query
-            state.research_brief = f"Direct research on: {state.original_query}"
+            # Fallback: treat entire query as single sub-query.
+            # Only overwrite research_brief if it wasn't already set by
+            # the brief-refinement step.
+            if not state.research_brief:
+                state.research_brief = f"Direct research on: {state.original_query}"
             state.add_sub_query(
                 query=state.original_query,
                 rationale="Original query used directly due to parsing failure",
                 priority=1,
             )
         else:
-            state.research_brief = parsed["research_brief"]
+            # Keep the refined brief from step 1; only fall back to the
+            # planning response's brief if refinement didn't produce one.
+            if not state.research_brief:
+                state.research_brief = parsed["research_brief"]
             for sq in parsed["sub_queries"]:
                 state.add_sub_query(
                     query=sq["query"],
@@ -204,8 +246,56 @@ Guidelines:
 
 IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
+    def _build_brief_refinement_prompt(self, state: DeepResearchState) -> str:
+        """Build a prompt that refines a raw user query into a focused research brief.
+
+        The brief-refinement step transforms potentially vague or underspecified
+        user queries into a single, focused research paragraph that maximizes
+        specificity, leaves genuinely unstated dimensions open-ended (rather than
+        assuming), and biases toward primary/official sources.
+
+        This runs *before* sub-query decomposition so the planner operates on a
+        well-structured brief rather than the raw user input.
+
+        Args:
+            state: Current research state containing original_query and optional
+                   system_prompt / clarification_constraints.
+
+        Returns:
+            A user prompt string for the brief-refinement LLM call.
+        """
+        parts: list[str] = [
+            "Transform the following user research request into a single, focused "
+            "research brief paragraph.\n",
+            "Rules:",
+            "1. Maximize specificity: extract every concrete detail the user provided "
+            "(names, dates, versions, quantities) and foreground them.",
+            "2. Do NOT assume values for dimensions the user left unspecified. Instead, "
+            "note them as open questions the research should address.",
+            "3. Bias toward primary and official sources (specifications, documentation, "
+            "peer-reviewed work, government datasets) over aggregators or secondary commentary.",
+            "4. Preserve the user's language — write the brief in the same language "
+            "as the query below.",
+            "5. Output ONLY the research brief paragraph, nothing else.\n",
+            f"User query:\n{state.original_query}",
+        ]
+
+        if state.system_prompt:
+            parts.append(f"\nAdditional context provided by the user:\n{state.system_prompt}")
+
+        if state.clarification_constraints:
+            parts.append("\nClarification constraints (already confirmed with the user):")
+            for key, value in state.clarification_constraints.items():
+                parts.append(f"- {key}: {value}")
+
+        return "\n".join(parts)
+
     def _build_planning_user_prompt(self, state: DeepResearchState) -> str:
         """Build user prompt for query decomposition.
+
+        Uses the refined research brief (``state.research_brief``) when
+        available so sub-query decomposition operates on a more specific,
+        structured input rather than the raw user query.
 
         Args:
             state: Current research state
@@ -213,7 +303,10 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         Returns:
             User prompt string
         """
-        prompt = f"""Research Query: {state.original_query}
+        # Prefer the refined brief; fall back to original query if unset.
+        query_input = state.research_brief or state.original_query
+
+        prompt = f"""Research Query: {query_input}
 
 Please decompose this research query into {state.max_sub_queries} or fewer focused sub-queries.
 
