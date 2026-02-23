@@ -37,15 +37,19 @@
 
 ## Phase 3: Update Tests
 
-- [ ] **3.1** Update `test_topic_compression.py` for new prompt structure
-  - [ ] Verify full ReAct context appears in compression prompt
-  - [ ] Verify raised char limit is used
-  - [ ] Verify prompt matches open_deep_research directives
-- [ ] **3.2** Add input limit tests to `test_source_summarization.py`
-  - [ ] Content exceeding max_content_length is truncated
-  - [ ] Configurable limit is respected
-- [ ] **3.3** Verify analysis consumes new compression format
-  - [ ] Update `test_cross_phase_integration.py` if needed
+- [x] **3.1** Update `test_topic_compression.py` for new prompt structure
+  - [x] Verify full ReAct context appears in compression prompt (TestFullReActContext: 4 tests)
+  - [x] Verify raised char limit is used (configurable_content_limit + default_allows_long_content)
+  - [x] Verify prompt matches open_deep_research directives (system_prompt_aligned test)
+- [x] **3.2** Add input limit tests to `test_source_summarization.py`
+  - [x] Content exceeding max_content_length is truncated (3 async tests)
+  - [x] Configurable limit is respected (custom_limit_is_respected)
+  - [x] Config field tests: default, explicit, TOML parsing, TOML default (4 tests)
+- [x] **3.3** Verify analysis consumes new compression format
+  - [x] Compressed findings format (Queries Made / Findings / Source List) in analysis prompt
+  - [x] Inline citations preserved through analysis
+  - [x] Source ID mapping included per topic
+  - [x] Compressed findings flow through to synthesis (5 tests in TestCompressedFindingsCrossPhase)
 
 ---
 
@@ -65,5 +69,5 @@
 |-------|--------|------|-------|
 | Phase 1 | **Done** | 2026-02-23 | Core fix — compression input alignment |
 | Phase 2 | **Done** | 2026-02-23 | L1 input cap |
-| Phase 3 | Pending | — | Test updates |
+| Phase 3 | **Done** | 2026-02-23 | 12 new tests (7 summarization + 5 cross-phase) |
 | Phase 4 | Pending | — | Review cleanup |

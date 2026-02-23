@@ -8,6 +8,7 @@ Tests cover:
 - raw_content preservation on ResearchSource
 - Backward-compat: existing ResearchSource without raw_content deserializes
 - SourceSummarizationResult parsing
+- max_content_length truncation before summarization (Phase 2 alignment)
 """
 
 import asyncio
@@ -422,6 +423,175 @@ class TestFetchTimeSummarizationConfig:
         config = ResearchConfig(default_provider="claude")
         assert config.get_summarization_provider() == "claude"
         assert config.get_summarization_model() is None
+
+
+# ---------------------------------------------------------------------------
+# max_content_length truncation tests (Phase 2 alignment)
+# ---------------------------------------------------------------------------
+
+
+class TestMaxContentLengthTruncation:
+    """Tests for SourceSummarizer max_content_length input truncation.
+
+    Verifies that content exceeding max_content_length is truncated before
+    being sent to the LLM, matching open_deep_research's pattern of capping
+    raw_content at max_content_length before summarization.
+    """
+
+    @pytest.mark.asyncio
+    async def test_content_exceeding_limit_is_truncated(self):
+        """Content longer than max_content_length is truncated before the LLM call."""
+        small_limit = 100
+        summarizer = SourceSummarizer(
+            provider_id="test-provider",
+            model="test-model",
+            max_content_length=small_limit,
+        )
+
+        long_content = "A" * 200  # Twice the limit
+
+        captured_prompts: list[str] = []
+        mock_result = MagicMock()
+        mock_result.status = MagicMock()
+        mock_result.status.name = "SUCCESS"
+        mock_result.content = "## Executive Summary\nSummary.\n\n## Key Excerpts\n- \"Quote\""
+        mock_result.tokens = MagicMock(input_tokens=50, output_tokens=25)
+        mock_result.stderr = None
+
+        mock_provider = MagicMock()
+
+        def capture_generate(request):
+            captured_prompts.append(request.prompt)
+            return mock_result
+
+        mock_provider.generate = capture_generate
+
+        with patch(
+            "foundry_mcp.core.providers.registry.resolve_provider",
+            return_value=mock_provider,
+        ), patch(
+            "foundry_mcp.core.providers.ProviderStatus"
+        ) as mock_status:
+            mock_status.SUCCESS = mock_result.status
+            await summarizer.summarize_source(long_content)
+
+        assert len(captured_prompts) == 1
+        # The full 200-char string should NOT appear in the prompt
+        assert long_content not in captured_prompts[0]
+        # The truncated 100-char string SHOULD appear
+        assert "A" * small_limit in captured_prompts[0]
+
+    @pytest.mark.asyncio
+    async def test_content_under_limit_is_not_truncated(self):
+        """Content shorter than max_content_length passes through unchanged."""
+        summarizer = SourceSummarizer(
+            provider_id="test-provider",
+            model="test-model",
+            max_content_length=50_000,
+        )
+
+        short_content = "B" * 3000  # Well under default limit
+
+        captured_prompts: list[str] = []
+        mock_result = MagicMock()
+        mock_result.status = MagicMock()
+        mock_result.status.name = "SUCCESS"
+        mock_result.content = "## Executive Summary\nSummary."
+        mock_result.tokens = MagicMock(input_tokens=50, output_tokens=25)
+        mock_result.stderr = None
+
+        mock_provider = MagicMock()
+
+        def capture_generate(request):
+            captured_prompts.append(request.prompt)
+            return mock_result
+
+        mock_provider.generate = capture_generate
+
+        with patch(
+            "foundry_mcp.core.providers.registry.resolve_provider",
+            return_value=mock_provider,
+        ), patch(
+            "foundry_mcp.core.providers.ProviderStatus"
+        ) as mock_status:
+            mock_status.SUCCESS = mock_result.status
+            await summarizer.summarize_source(short_content)
+
+        assert len(captured_prompts) == 1
+        # Full content should appear in the prompt
+        assert short_content in captured_prompts[0]
+
+    @pytest.mark.asyncio
+    async def test_custom_limit_is_respected(self):
+        """Different max_content_length values produce different truncation points."""
+        for limit in (50, 500, 5000):
+            summarizer = SourceSummarizer(
+                provider_id="test-provider",
+                model="test-model",
+                max_content_length=limit,
+            )
+
+            content = "C" * (limit + 100)  # Always exceeds the limit
+
+            captured_prompts: list[str] = []
+            mock_result = MagicMock()
+            mock_result.status = MagicMock()
+            mock_result.status.name = "SUCCESS"
+            mock_result.content = "## Executive Summary\nSummary."
+            mock_result.tokens = MagicMock(input_tokens=50, output_tokens=25)
+            mock_result.stderr = None
+
+            mock_provider = MagicMock()
+
+            def capture_generate(request, _prompts=captured_prompts):
+                _prompts.append(request.prompt)
+                return mock_result
+
+            mock_provider.generate = capture_generate
+
+            with patch(
+                "foundry_mcp.core.providers.registry.resolve_provider",
+                return_value=mock_provider,
+            ), patch(
+                "foundry_mcp.core.providers.ProviderStatus"
+            ) as mock_status:
+                mock_status.SUCCESS = mock_result.status
+                await summarizer.summarize_source(content)
+
+            prompt = captured_prompts[0]
+            # Should contain exactly `limit` C's, not the full content
+            assert "C" * limit in prompt
+            assert "C" * (limit + 100) not in prompt
+
+    def test_default_max_content_length_config_field(self):
+        """deep_research_max_content_length defaults to 50,000."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        config = ResearchConfig()
+        assert config.deep_research_max_content_length == 50_000
+
+    def test_explicit_max_content_length_config_field(self):
+        """deep_research_max_content_length can be set explicitly."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        config = ResearchConfig(deep_research_max_content_length=25_000)
+        assert config.deep_research_max_content_length == 25_000
+
+    def test_max_content_length_from_toml(self):
+        """deep_research_max_content_length is parsed from TOML config."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        config = ResearchConfig.from_toml_dict(
+            {"deep_research_max_content_length": 75000}
+        )
+        assert config.deep_research_max_content_length == 75_000
+
+    def test_max_content_length_toml_default(self):
+        """deep_research_max_content_length uses default when absent from TOML."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        config = ResearchConfig.from_toml_dict({})
+        assert config.deep_research_max_content_length == 50_000
 
 
 # ---------------------------------------------------------------------------

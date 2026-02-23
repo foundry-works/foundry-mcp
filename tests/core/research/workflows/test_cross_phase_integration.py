@@ -8,6 +8,7 @@ Uses mocked LLM providers but exercises real phase logic:
 - Real response parsing
 - Real state mutation
 - Real constraint/data propagation between phases
+- Compressed findings flow from gathering → analysis → synthesis
 
 Gathering is simulated (populated manually) because it uses search
 providers rather than LLM calls.
@@ -24,11 +25,15 @@ import pytest
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
     DeepResearchState,
+    TopicResearchResult,
 )
 from foundry_mcp.core.research.models.enums import ConfidenceLevel
-from foundry_mcp.core.research.models.sources import SourceType
+from foundry_mcp.core.research.models.sources import SourceType, SubQuery
 from foundry_mcp.core.research.workflows.deep_research._helpers import (
     ClarificationDecision,
+)
+from foundry_mcp.core.research.workflows.deep_research.phases._analysis_prompts import (
+    AnalysisPromptsMixin,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
     LLMCallResult,
@@ -544,3 +549,251 @@ For write-intensive OLTP applications, PostgreSQL offers superior performance at
         assert state.report is not None
         assert "no extractable findings" in state.report.lower() or "did not yield" in state.report.lower()
         assert result.metadata.get("empty_report") is True
+
+
+# =============================================================================
+# Test: compressed findings flow through analysis/synthesis
+# =============================================================================
+
+
+class StubAnalysisWorkflow(AnalysisPromptsMixin, SynthesisPhaseMixin):
+    """Minimal composite for testing compressed findings in analysis/synthesis."""
+
+    def __init__(self) -> None:
+        self.config = MagicMock()
+        self.config.audit_verbosity = "minimal"
+        self.memory = MagicMock()
+        self.memory.save_deep_research = MagicMock()
+        self._audit_events: list[tuple[str, dict]] = []
+
+    def _write_audit_event(self, _state: Any, event: str, **kwargs: Any) -> None:
+        self._audit_events.append((event, kwargs))
+
+    def _check_cancellation(self, _state: Any) -> None:
+        pass
+
+
+class TestCompressedFindingsCrossPhase:
+    """Verify compressed findings (new format) flow correctly through analysis/synthesis."""
+
+    @pytest.fixture
+    def workflow(self) -> StubAnalysisWorkflow:
+        return StubAnalysisWorkflow()
+
+    @pytest.fixture
+    def state_with_compressed_findings(self) -> DeepResearchState:
+        """Build state simulating gathering + compression output."""
+        state = DeepResearchState(
+            id="deepres-compressed-flow",
+            original_query="Compare cloud storage providers for enterprise backup",
+            phase=DeepResearchPhase.ANALYSIS,
+            iteration=1,
+            max_iterations=3,
+            research_brief="Research cloud storage providers focusing on enterprise backup pricing, reliability, and compliance.",
+        )
+
+        # Sub-queries from planning
+        sq0 = SubQuery(
+            id="sq-pricing",
+            query="Enterprise cloud storage backup pricing comparison 2024",
+            rationale="Cost analysis across providers",
+            priority=1,
+        )
+        sq1 = SubQuery(
+            id="sq-reliability",
+            query="Cloud storage reliability SLA comparison enterprise",
+            rationale="Uptime and durability guarantees",
+            priority=1,
+        )
+        state.sub_queries.extend([sq0, sq1])
+
+        # Sources from gathering
+        src_aws = state.add_source(
+            title="AWS S3 Glacier Enterprise Pricing Guide",
+            url="https://example.com/aws-pricing",
+            source_type=SourceType.WEB,
+            snippet="AWS S3 Glacier offers $0.004/GB/month for archive storage.",
+            sub_query_id="sq-pricing",
+        )
+        src_azure = state.add_source(
+            title="Azure Blob Storage Enterprise Tier",
+            url="https://example.com/azure-pricing",
+            source_type=SourceType.WEB,
+            snippet="Azure Archive Storage costs $0.002/GB/month with cool tier at $0.01/GB/month.",
+            sub_query_id="sq-pricing",
+        )
+        src_aws_sla = state.add_source(
+            title="AWS S3 SLA and Durability Guarantees",
+            url="https://example.com/aws-sla",
+            source_type=SourceType.WEB,
+            snippet="AWS S3 offers 99.999999999% durability and 99.99% availability SLA.",
+            sub_query_id="sq-reliability",
+        )
+        src_azure_sla = state.add_source(
+            title="Azure Storage Reliability Whitepaper",
+            url="https://example.com/azure-sla",
+            source_type=SourceType.WEB,
+            snippet="Azure LRS provides 99.999999999% durability; ZRS adds zone redundancy.",
+            sub_query_id="sq-reliability",
+        )
+
+        # Topic results WITH compressed findings (new format from Phase 1 compression)
+        tr_pricing = TopicResearchResult(
+            sub_query_id="sq-pricing",
+            searches_performed=2,
+            sources_found=2,
+            source_ids=[src_aws.id, src_azure.id],
+            reflection_notes=[
+                "Found general pricing data; need tier-specific comparisons.",
+                "Refined search yielded archive-tier pricing details.",
+            ],
+            refined_queries=["enterprise archive storage pricing per GB 2024"],
+            compressed_findings=(
+                "## Queries Made\n"
+                "- Enterprise cloud storage backup pricing comparison 2024\n"
+                "- Enterprise archive storage pricing per GB 2024\n\n"
+                "## Comprehensive Findings\n"
+                "AWS S3 Glacier offers archive storage at $0.004/GB/month [1]. "
+                "Azure Archive Storage is cheaper at $0.002/GB/month, with "
+                "cool tier at $0.01/GB/month [2]. Both providers offer volume "
+                "discounts for enterprise contracts exceeding 500TB [1][2].\n\n"
+                "## Source List\n"
+                "- [1] AWS S3 Glacier Enterprise Pricing Guide — https://example.com/aws-pricing\n"
+                "- [2] Azure Blob Storage Enterprise Tier — https://example.com/azure-pricing\n"
+            ),
+        )
+
+        tr_reliability = TopicResearchResult(
+            sub_query_id="sq-reliability",
+            searches_performed=1,
+            sources_found=2,
+            source_ids=[src_aws_sla.id, src_azure_sla.id],
+            reflection_notes=["Both providers have similar durability guarantees."],
+            early_completion=True,
+            completion_rationale="Sufficient SLA data collected from both providers.",
+            compressed_findings=(
+                "## Queries Made\n"
+                "- Cloud storage reliability SLA comparison enterprise\n\n"
+                "## Comprehensive Findings\n"
+                "AWS S3 provides 99.999999999% (11 nines) durability and "
+                "99.99% availability SLA [1]. Azure LRS provides equivalent "
+                "11-nines durability, and ZRS adds zone redundancy for "
+                "higher availability [2]. Both providers meet SOC 2 and "
+                "HIPAA compliance requirements [1][2].\n\n"
+                "## Source List\n"
+                "- [1] AWS S3 SLA and Durability Guarantees — https://example.com/aws-sla\n"
+                "- [2] Azure Storage Reliability Whitepaper — https://example.com/azure-sla\n"
+            ),
+        )
+
+        state.topic_research_results.extend([tr_pricing, tr_reliability])
+        return state
+
+    def test_analysis_prompt_includes_compressed_findings_format(
+        self,
+        workflow: StubAnalysisWorkflow,
+        state_with_compressed_findings: DeepResearchState,
+    ) -> None:
+        """Analysis prompt uses compressed findings with new format sections."""
+        prompt = workflow._build_analysis_user_prompt(state_with_compressed_findings)
+
+        # Should use compressed findings path
+        assert "Per-Topic Research Summaries" in prompt
+        assert "Sources to Analyze:" not in prompt
+
+        # Should contain topic headers
+        assert "Topic 1:" in prompt
+        assert "Topic 2:" in prompt
+
+        # Should contain compressed findings content (from both topics)
+        assert "## Queries Made" in prompt
+        assert "## Comprehensive Findings" in prompt
+        assert "## Source List" in prompt
+
+        # Pricing topic content
+        assert "$0.004/GB/month" in prompt
+        assert "$0.002/GB/month" in prompt
+
+        # Reliability topic content
+        assert "99.999999999%" in prompt
+        assert "SOC 2" in prompt
+
+    def test_analysis_prompt_preserves_inline_citations(
+        self,
+        workflow: StubAnalysisWorkflow,
+        state_with_compressed_findings: DeepResearchState,
+    ) -> None:
+        """Compressed findings' inline citations [1], [2] are preserved in analysis prompt."""
+        prompt = workflow._build_analysis_user_prompt(state_with_compressed_findings)
+
+        # Citation references from compressed findings should be preserved
+        assert "[1]" in prompt
+        assert "[2]" in prompt
+        assert "[1][2]" in prompt
+
+    def test_analysis_prompt_includes_source_id_mapping(
+        self,
+        workflow: StubAnalysisWorkflow,
+        state_with_compressed_findings: DeepResearchState,
+    ) -> None:
+        """Analysis prompt includes source ID → citation mapping for each topic."""
+        prompt = workflow._build_analysis_user_prompt(state_with_compressed_findings)
+
+        # Source ID mapping section should exist
+        assert "Source ID mapping" in prompt
+
+        # All source IDs should be referenced
+        for src in state_with_compressed_findings.sources:
+            assert src.id in prompt
+
+    def test_analysis_prompt_contains_research_query_and_brief(
+        self,
+        workflow: StubAnalysisWorkflow,
+        state_with_compressed_findings: DeepResearchState,
+    ) -> None:
+        """Analysis prompt includes the original query and research brief."""
+        prompt = workflow._build_analysis_user_prompt(state_with_compressed_findings)
+
+        assert "Compare cloud storage providers for enterprise backup" in prompt
+        assert "enterprise backup pricing, reliability, and compliance" in prompt
+
+    @pytest.mark.asyncio
+    async def test_synthesis_sees_findings_from_compressed_analysis(
+        self,
+        workflow: StubAnalysisWorkflow,
+        state_with_compressed_findings: DeepResearchState,
+    ) -> None:
+        """Synthesis prompt includes findings that were extracted from compressed input."""
+        state = state_with_compressed_findings
+        state.phase = DeepResearchPhase.SYNTHESIS
+
+        # Simulate analysis having extracted findings from compressed input
+        state.add_finding(
+            content="Azure Archive Storage is 50% cheaper than AWS S3 Glacier at $0.002/GB/month vs $0.004/GB/month.",
+            confidence=ConfidenceLevel.HIGH,
+            category="Pricing",
+            source_ids=[state.sources[0].id, state.sources[1].id],
+        )
+        state.add_finding(
+            content="Both AWS and Azure provide 11-nines durability and meet SOC 2 / HIPAA compliance.",
+            confidence=ConfidenceLevel.HIGH,
+            category="Reliability",
+            source_ids=[state.sources[2].id, state.sources[3].id],
+        )
+
+        # Build synthesis prompt
+        synthesis_prompt = workflow._build_synthesis_user_prompt(state)
+
+        # Findings should appear in synthesis
+        assert "$0.002/GB/month" in synthesis_prompt
+        assert "11-nines durability" in synthesis_prompt
+        assert "Pricing" in synthesis_prompt
+        assert "Reliability" in synthesis_prompt
+
+        # Sources should be referenced
+        assert "[1]" in synthesis_prompt
+        assert "[2]" in synthesis_prompt
+
+        # Research brief should be included
+        assert state.research_brief is not None
+        assert state.research_brief in synthesis_prompt
