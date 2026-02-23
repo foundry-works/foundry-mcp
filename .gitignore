@@ -1,3 +1,6 @@
+# Claude Code temp files
+.claude-tmp/
+
 # Python
 __pycache__/
 *.py[cod]
