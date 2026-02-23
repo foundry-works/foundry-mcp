@@ -61,6 +61,10 @@ class GatheringPhaseMixin:
     # ------------------------------------------------------------------
 
     #: Maximum characters per source included in the compression prompt.
+    #: ~500 tokens at ~4 chars/token — enough for the LLM to produce a
+    #: meaningful citation-rich summary per source while keeping the total
+    #: compression prompt within context-window limits when many sources
+    #: are processed together.
     _COMPRESSION_SOURCE_CHAR_LIMIT: int = 2000
 
     async def _compress_topic_findings_async(
@@ -125,21 +129,22 @@ class GatheringPhaseMixin:
             logger.debug("Role resolution unavailable for compression, using defaults")
 
         semaphore = asyncio.Semaphore(max_concurrent)
-        total_input_tokens = 0
-        total_output_tokens = 0
-        topics_compressed = 0
-        topics_failed = 0
 
-        async def compress_one(topic_result: TopicResearchResult) -> None:
-            nonlocal total_input_tokens, total_output_tokens, topics_compressed, topics_failed
+        async def compress_one(
+            topic_result: TopicResearchResult,
+        ) -> tuple[int, int, bool]:
+            """Compress a single topic's findings.
 
+            Returns:
+                (input_tokens, output_tokens, success) tuple.
+            """
             async with semaphore:
                 # Collect sources belonging to this topic
                 topic_sources = [
                     s for s in state.sources if s.id in topic_result.source_ids
                 ]
                 if not topic_sources:
-                    return
+                    return (0, 0, True)
 
                 # Look up the sub-query text for context
                 sub_query = state.get_sub_query(topic_result.sub_query_id)
@@ -257,16 +262,19 @@ class GatheringPhaseMixin:
 
                 if compressed:
                     topic_result.compressed_findings = compressed
-                    total_input_tokens += input_tokens
-                    total_output_tokens += output_tokens
-                    topics_compressed += 1
-                else:
-                    topics_failed += 1
+                    return (input_tokens, output_tokens, True)
+                return (0, 0, False)
 
         # Run compression tasks in parallel
         compression_start = time.perf_counter()
         tasks = [compress_one(tr) for tr in results_to_compress]
         gather_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Aggregate results after gather completes (no nonlocal mutation)
+        total_input_tokens = 0
+        total_output_tokens = 0
+        topics_compressed = 0
+        topics_failed = 0
         for i, gather_result in enumerate(gather_results):
             if isinstance(gather_result, BaseException):
                 topics_failed += 1
@@ -275,6 +283,14 @@ class GatheringPhaseMixin:
                     results_to_compress[i].sub_query_id,
                     gather_result,
                 )
+            else:
+                inp, out, success = gather_result
+                total_input_tokens += inp
+                total_output_tokens += out
+                if success:
+                    topics_compressed += 1
+                else:
+                    topics_failed += 1
         compression_duration_ms = (time.perf_counter() - compression_start) * 1000
 
         # Record compression phase metrics

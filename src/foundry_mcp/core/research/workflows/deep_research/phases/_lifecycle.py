@@ -118,13 +118,20 @@ class LLMCallResult:
 
 
 # Maximum number of progressive truncation retries on context-window errors.
+# 3 retries at 10% reduction each leaves ~72.9% of the original prompt —
+# enough to preserve useful context while meaningfully reducing size.
+# Going beyond 3 risks degrading prompt quality without fixing the overflow.
 _MAX_TOKEN_LIMIT_RETRIES: int = 3
 
 # Each retry truncates the user prompt to this fraction of the previous size.
+# 10% per retry is conservative: aggressive truncation (e.g., 50%) loses too
+# much context, while smaller steps (e.g., 5%) waste retries on negligible cuts.
 _TRUNCATION_FACTOR: float = 0.9  # keep 90%, remove 10%
 
 # Fallback context-window size when neither the error nor the model registry
-# provides a concrete limit.  128K tokens is a conservative default.
+# provides a concrete limit.  128K tokens matches the smallest common context
+# window among popular models (e.g., GPT-4o-class).  Conservative enough to
+# avoid overflows on smaller models, large enough for real research prompts.
 _FALLBACK_CONTEXT_WINDOW: int = 128_000
 
 

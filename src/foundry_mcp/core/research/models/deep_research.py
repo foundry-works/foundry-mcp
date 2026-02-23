@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Any, Literal, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from foundry_mcp.core.research.models.digest import make_fragment_id, parse_fragment_id
 from foundry_mcp.core.research.models.enums import ConfidenceLevel
@@ -337,6 +337,26 @@ class DeepResearchState(BaseModel):
     system_prompt: Optional[str] = Field(default=None)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+    # Citation counter — maintained by add_source()/append_source().
+    # Avoids O(n) scan of all sources on every add.
+    next_citation_number: int = Field(
+        default=1,
+        description="Next citation number to assign (auto-maintained).",
+    )
+
+    @model_validator(mode="after")
+    def _sync_citation_counter(self) -> "DeepResearchState":
+        """Ensure citation counter is consistent with existing sources.
+
+        Handles backward compatibility when deserializing sessions saved
+        before this field existed (default=1 is bumped up to match sources).
+        """
+        if self.sources:
+            max_existing = max((s.citation_number or 0 for s in self.sources), default=0)
+            if max_existing >= self.next_citation_number:
+                self.next_citation_number = max_existing + 1
+        return self
+
     # =========================================================================
     # Collection Management Methods
     # =========================================================================
@@ -423,10 +443,11 @@ class DeepResearchState(BaseModel):
         Returns:
             The created ResearchSource instance
         """
-        # Assign the next citation number based on the highest existing number.
-        # This is the SINGLE source of truth for citation numbering — callers
-        # must NOT assign citation_number manually.
-        next_citation = max((s.citation_number or 0 for s in self.sources), default=0) + 1
+        # Citation numbering uses a running counter (O(1) per add).
+        # This is the SINGLE source of truth — callers must NOT assign
+        # citation_number manually.
+        next_citation = self.next_citation_number
+        self.next_citation_number += 1
         source = ResearchSource(
             title=title,
             url=url,
@@ -453,8 +474,8 @@ class DeepResearchState(BaseModel):
         Returns:
             The same source instance, with citation_number set
         """
-        next_citation = max((s.citation_number or 0 for s in self.sources), default=0) + 1
-        source.citation_number = next_citation
+        source.citation_number = self.next_citation_number
+        self.next_citation_number += 1
         self.sources.append(source)
         self.total_sources_examined += 1
         self.updated_at = datetime.now(timezone.utc)

@@ -7,25 +7,25 @@ Mark items `[x]` as completed.
 
 ## Phase 1 — Code Quality & Quick Fixes
 
-- [ ] **1.1** Standardize log levels for parsing/recovery events
+- [x] **1.1** Standardize log levels for parsing/recovery events
   - Parsing fallbacks: DEBUG
   - Compression/recovery retries: WARNING
   - Hard failures: ERROR
   - Files: `gathering.py`, `_lifecycle.py`, `topic_research.py`, `clarification.py`
-- [ ] **1.2** Document magic number rationale
+  - Only `clarification.py` needed changes: legacy parser fallbacks downgraded from WARNING/ERROR → DEBUG
+- [x] **1.2** Document magic number rationale
   - `_MAX_TOKEN_LIMIT_RETRIES = 3`
   - `_TRUNCATION_FACTOR = 0.9`
   - `_COMPRESSION_SOURCE_CHAR_LIMIT = 2000`
   - `_FALLBACK_CONTEXT_WINDOW = 128_000`
-- [ ] **1.3** Add context-window error patterns for Mistral and Cohere
-  - Research their error message formats
-  - Add regex entries to `_CONTEXT_WINDOW_ERROR_PATTERNS` in `_lifecycle.py`
-- [ ] **1.4** Clean up compression token tracking in `gathering.py`
+- [x] **1.3** ~~Add context-window error patterns for Mistral and Cohere~~ **SKIPPED** — these providers are not used as LLM providers in deep research; patterns would be dead code
+- [x] **1.4** Clean up compression token tracking in `gathering.py`
   - Replace `nonlocal` counter mutation with per-task result accumulation
-  - Sum results after `asyncio.gather()` completes
-- [ ] **1.5** Replace O(n) citation scan with running counter in `DeepResearchState`
-  - Add `_next_citation_number: int` field
-  - Increment on each `add_source()` call
+  - `compress_one()` now returns `(input_tokens, output_tokens, success)` tuple
+  - Aggregation happens after `asyncio.gather()` completes
+- [x] **1.5** Replace O(n) citation scan with running counter in `DeepResearchState`
+  - Added `next_citation_number: int` field with `model_validator` for backward compat
+  - `add_source()` and `append_source()` now use O(1) counter increment
 
 ---
 

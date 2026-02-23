@@ -289,13 +289,13 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
         json_str = extract_json(content)
         if not json_str:
-            logger.warning("No JSON found in clarification response")
+            logger.debug("No JSON found in clarification response (legacy parser fallback)")
             return result
 
         try:
             data = json.loads(json_str)
         except json.JSONDecodeError as e:
-            logger.error("Failed to parse JSON from clarification response: %s", e)
+            logger.debug("Failed to parse JSON from clarification response (legacy parser fallback): %s", e)
             return result
 
         result["needs_clarification"] = bool(
