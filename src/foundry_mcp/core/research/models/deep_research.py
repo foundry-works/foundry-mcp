@@ -527,8 +527,10 @@ class DeepResearchState(BaseModel):
     def advance_phase(self) -> DeepResearchPhase:
         """Advance to the next research phase.
 
-        Phases advance in order: PLANNING -> GATHERING -> ANALYSIS ->
-        SYNTHESIS -> REFINEMENT. Does nothing if already at REFINEMENT.
+        Phases advance in order: CLARIFICATION -> PLANNING -> GATHERING ->
+        ANALYSIS -> SYNTHESIS -> REFINEMENT. Does nothing if already at
+        REFINEMENT. The phase order is derived from the DeepResearchPhase
+        enum definition order.
 
         Returns:
             The new phase after advancement
@@ -561,6 +563,12 @@ class DeepResearchState(BaseModel):
 
         Increments iteration counter and resets phase to GATHERING
         to begin collecting sources for the new sub-queries.
+
+        Note: We intentionally skip CLARIFICATION and PLANNING here.
+        Clarification is a one-time pre-planning step (query refinement
+        is not needed once research is underway), and planning has
+        already decomposed the query into sub-queries. Refinement
+        iterations only need to re-gather, re-analyze, and re-synthesize.
 
         Returns:
             The new iteration number

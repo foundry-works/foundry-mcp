@@ -188,6 +188,10 @@ class TopicResearchMixin:
             state.total_tokens_used += local_tokens_used
             result.source_ids = list(sub_query.source_ids)
 
+        # mark_completed/mark_failed are called outside the lock. This is safe
+        # because each sub_query is owned by exactly one topic coroutine — no
+        # other coroutine reads or writes to this sub_query instance. The lock
+        # above only protects shared state (total_tokens_used, source_ids list).
         if result.sources_found > 0:
             sub_query.mark_completed(
                 findings=f"Topic research found {result.sources_found} sources "

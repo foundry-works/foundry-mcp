@@ -212,6 +212,29 @@ class TestVerifyIntegrityChecksum:
                 "gate-1", "step-1", "phase-1", "pass", legacy_checksum
             ) is True
 
+    def test_legacy_checksum_rejected_when_env_set(self):
+        """Legacy checksums are rejected when FOUNDRY_REJECT_LEGACY_CHECKSUMS=1."""
+        test_secret = "test-secret"
+        with patch.dict(os.environ, {ENV_GATE_SECRET: test_secret, "FOUNDRY_REJECT_LEGACY_CHECKSUMS": "1"}):
+            # Compute a legacy checksum (no v1: prefix)
+            legacy_payload = "gate-1:step-1:phase-1:pass"
+            legacy_checksum = hmac_mod.new(
+                test_secret.encode(),
+                legacy_payload.encode(),
+                hashlib.sha256,
+            ).hexdigest()
+
+            # Should be rejected when env var is set
+            assert verify_integrity_checksum(
+                "gate-1", "step-1", "phase-1", "pass", legacy_checksum
+            ) is False
+
+            # But v1: checksums should still be accepted
+            v1_checksum = compute_integrity_checksum("gate-1", "step-1", "phase-1", "pass")
+            assert verify_integrity_checksum(
+                "gate-1", "step-1", "phase-1", "pass", v1_checksum
+            ) is True
+
     def test_delimiter_collision_known_limitation(self):
         """Colon-delimited payloads can collide when fields contain colons.
 

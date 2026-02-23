@@ -234,8 +234,12 @@ def verify_integrity_checksum(
         return True
 
     # Legacy fallback: accept unversioned checksums generated before v1: migration.
-    # TODO: Remove this fallback after all in-flight gate evidence has expired
-    # (safe to remove once no sessions predate the v1: payload change).
+    # DEPRECATION: Remove after 2026-06-01, by which time all in-flight gate
+    # evidence from pre-v1 sessions will have expired. Set the environment
+    # variable FOUNDRY_REJECT_LEGACY_CHECKSUMS=1 to disable this fallback
+    # early for testing or hardened deployments.
+    if os.environ.get("FOUNDRY_REJECT_LEGACY_CHECKSUMS") == "1":
+        return False
     secret = get_server_secret()
     legacy_payload = f"{gate_attempt_id}:{step_id}:{phase_id}:{verdict}"
     legacy_checksum = hmac.new(secret, legacy_payload.encode(), hashlib.sha256).hexdigest()

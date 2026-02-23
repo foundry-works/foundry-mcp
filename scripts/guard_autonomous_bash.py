@@ -13,14 +13,28 @@ Blocked commands:
     - git pull, git add, git rm, git mv, git restore, git switch (write ops)
     - git clean, git stash drop (destructive ops)
     - git bisect start/good/bad/reset (modifies refs/working tree)
-    - Shell wrappers: bash -c, sh -c, eval, exec (can execute arbitrary commands)
+    - Shell wrappers: bash -c, sh -c, eval, exec (blocked entirely — these can
+      execute arbitrary sub-commands that bypass the git guard. Unlike python -c
+      which is only blocked when "git" appears in the payload, shell wrappers are
+      blocked unconditionally because their payloads cannot be reliably parsed.)
     - Direct writes to protected config/spec/audit files via shell
+    - Unknown git subcommands (fail-closed: anything not in the read-only or
+      compound-classified lists is blocked)
 
 Allowed commands:
     - git status, git diff, git log, git show, git branch (read-only git)
     - git fetch (downloads objects, read-only from working tree perspective)
     - pytest, python -m pytest, make test, npm test (testing)
     - cat, head, tail, grep, find, ls, wc (read-only inspection)
+
+Known limitations:
+    - Command splitting does not handle $() or backtick command substitution
+      within quoted strings. A command like `git status "$(git push)"` would
+      treat the entire argument as a single quoted segment, so the nested
+      `git push` would not be detected. The fail-closed default for unknown
+      git subcommands mitigates most abuse vectors, but this is a known gap.
+    - Heredocs (<<EOF...EOF) are not parsed; the content is treated as part
+      of the same segment.
 
 Environment variables:
     FOUNDRY_GUARD_DISABLED=1        — bypass all checks (emergency escape hatch)
@@ -145,6 +159,10 @@ def _split_commands(command: str) -> list[str]:
 
     Respects quoted strings — does not split inside '...' or "...".
     Returns a list of individual command segments.
+
+    Limitation: Does not descend into $(...) or backtick command substitution
+    within quoted strings, nor does it parse heredocs. These constructs are
+    treated as opaque text within their containing segment.
     """
     segments: list[str] = []
     current: list[str] = []
@@ -390,8 +408,15 @@ def _classify_config(args: str, entry: dict) -> tuple[str | None, str]:
     Writes: --unset, --replace-all, --add, or positional 'key value' pair.
     Reads: --get, --list, -l, --get-all, --get-regexp, bare, or single key.
     Scope modifiers (--global, --system, --local) are ignored for classification.
+
+    Note: Uses exact-token matching (``prefix in args.split()``) rather than
+    the starts-with prefix matching used by ``_classify_compound`` for other
+    subcommands. This is intentional — config write flags (``--unset``,
+    ``--add``) are standalone tokens, not positional prefixes, so exact
+    token matching is more appropriate and avoids partial-match false
+    positives.
     """
-    # Check explicit write flags
+    # Check explicit write flags (exact token match)
     for prefix in entry["write_prefixes"]:
         if prefix in args.split():
             return f"config {prefix}", "write"
