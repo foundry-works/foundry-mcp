@@ -361,7 +361,13 @@ class TavilySearchProvider(SearchProvider):
         response_data = await self._execute_with_retry(payload)
 
         # Parse results
-        return self._parse_response(response_data, sub_query_id)
+        sources = self._parse_response(response_data, sub_query_id)
+
+        # Apply fetch-time summarization if configured
+        if self._source_summarizer is not None and sources:
+            sources = await self._apply_source_summarization(sources)
+
+        return sources
 
     async def _execute_with_retry(
         self,
@@ -461,6 +467,47 @@ class TavilySearchProvider(SearchProvider):
                 sub_query_id=sub_query_id,
             )
             sources.append(research_source)
+
+        return sources
+
+    async def _apply_source_summarization(
+        self,
+        sources: list[ResearchSource],
+    ) -> list[ResearchSource]:
+        """Apply fetch-time summarization to search results.
+
+        For each source with content, runs the configured SourceSummarizer.
+        Stores original content in ``raw_content``, replaces ``content``
+        with the formatted summary, and stores excerpts in metadata.
+
+        On failure for any individual source, the original content is kept.
+
+        Args:
+            sources: List of ResearchSource objects from search.
+
+        Returns:
+            The same list of sources with summarized content where successful.
+        """
+        from foundry_mcp.core.research.providers.shared import SourceSummarizer
+
+        summarizer: SourceSummarizer = self._source_summarizer
+        results = await summarizer.summarize_sources(sources)
+
+        for source in sources:
+            if source.id in results:
+                summary_result = results[source.id]
+                # Preserve original content
+                source.raw_content = source.content
+                # Replace with formatted summary
+                source.content = SourceSummarizer.format_summarized_content(
+                    summary_result.executive_summary,
+                    summary_result.key_excerpts,
+                )
+                # Store excerpts in metadata for downstream citation use
+                source.metadata["excerpts"] = summary_result.key_excerpts
+                source.metadata["summarized"] = True
+                source.metadata["summarization_input_tokens"] = summary_result.input_tokens
+                source.metadata["summarization_output_tokens"] = summary_result.output_tokens
 
         return sources
 

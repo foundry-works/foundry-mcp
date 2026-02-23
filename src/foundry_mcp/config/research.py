@@ -103,6 +103,11 @@ class ResearchConfig:
     deep_research_topic_max_searches: int = 3  # Max search iterations per topic (ReAct loop limit)
     deep_research_topic_reflection_provider: Optional[str] = None  # Uses default_provider if not set
 
+    # Fetch-time source summarization (Phase 1)
+    deep_research_fetch_time_summarization: bool = True  # Summarize raw search results at fetch time
+    deep_research_summarization_provider: Optional[str] = None  # LLM provider for fetch-time summarization (cheapest available)
+    deep_research_summarization_model: Optional[str] = None  # Model override for fetch-time summarization
+
     # Deep research configuration
     deep_research_max_iterations: int = 3
     deep_research_max_sub_queries: int = 5
@@ -298,6 +303,12 @@ class ResearchConfig:
             deep_research_enable_topic_agents=_parse_bool(data.get("deep_research_enable_topic_agents", True)),
             deep_research_topic_max_searches=int(data.get("deep_research_topic_max_searches", 3)),
             deep_research_topic_reflection_provider=data.get("deep_research_topic_reflection_provider"),
+            # Fetch-time source summarization
+            deep_research_fetch_time_summarization=_parse_bool(
+                data.get("deep_research_fetch_time_summarization", True)
+            ),
+            deep_research_summarization_provider=data.get("deep_research_summarization_provider"),
+            deep_research_summarization_model=data.get("deep_research_summarization_model"),
             # Deep research configuration
             deep_research_max_iterations=int(data.get("deep_research_max_iterations", 3)),
             deep_research_max_sub_queries=int(data.get("deep_research_max_sub_queries", 5)),
@@ -793,6 +804,40 @@ class ResearchConfig:
             List of fallback provider IDs to try on failure
         """
         return self.deep_research_digest_providers
+
+    def get_summarization_provider(self) -> str:
+        """Get LLM provider ID for fetch-time source summarization.
+
+        Returns the summarization-specific provider if configured, otherwise
+        falls back to summarization_provider (existing), then default_provider.
+
+        Returns:
+            Provider ID for fetch-time summarization
+        """
+        if self.deep_research_summarization_provider:
+            provider_id, _ = _parse_provider_spec(self.deep_research_summarization_provider)
+            return provider_id
+        if self.summarization_provider:
+            provider_id, _ = _parse_provider_spec(self.summarization_provider)
+            return provider_id
+        provider_id, _ = _parse_provider_spec(self.default_provider)
+        return provider_id
+
+    def get_summarization_model(self) -> Optional[str]:
+        """Get model override for fetch-time source summarization.
+
+        Returns the summarization-specific model if configured, otherwise None
+        (provider default will be used).
+
+        Returns:
+            Model name or None
+        """
+        if self.deep_research_summarization_model:
+            return self.deep_research_summarization_model
+        if self.deep_research_summarization_provider:
+            _, model = _parse_provider_spec(self.deep_research_summarization_provider)
+            return model
+        return None
 
     def get_search_provider_api_key(
         self,

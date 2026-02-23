@@ -160,6 +160,13 @@ class SearchProvider(ABC):
     #:         }
     ERROR_CLASSIFIERS: ClassVar[dict[int, "ErrorType"]] = {}
 
+    #: Optional fetch-time source summarizer.  When set, providers that
+    #: support it will run summarization on each result's content after
+    #: search, storing the original in ``raw_content`` and replacing
+    #: ``content`` with the summary.  Set via the gathering phase when
+    #: ``deep_research_fetch_time_summarization`` is enabled.
+    _source_summarizer: Any = None
+
     #: Flat mapping of model name substrings to context window sizes (in tokens).
     #: Used by ``execute_llm_call()`` for progressive token-limit recovery when
     #: ``ContextWindowError.max_tokens`` is not provided by the provider.

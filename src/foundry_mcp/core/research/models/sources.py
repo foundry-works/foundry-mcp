@@ -287,6 +287,11 @@ class ResearchSource(BaseModel):
         default=None,
         description="Full extracted content (if follow_links enabled)",
     )
+    raw_content: Optional[str] = Field(
+        default=None,
+        description="Original unprocessed content before fetch-time summarization. "
+        "Preserved for fallback and audit when summarization is active.",
+    )
     content_type: str = Field(
         default="text/plain",
         description="Content type identifier (e.g., 'text/plain', 'digest/v1')",
@@ -410,6 +415,7 @@ class ResearchSource(BaseModel):
         Filters out:
         - Internal metadata keys (underscore-prefixed, e.g., _raw_content,
           _token_cache, _digest_archive_hash)
+        - raw_content (large, internal — use model_dump() for full serialization)
 
         For full serialization including internal fields, use model_dump().
 
@@ -419,6 +425,8 @@ class ResearchSource(BaseModel):
         data = self.model_dump()
         # Replace metadata with filtered version
         data["metadata"] = self.public_metadata()
+        # Exclude raw_content from API responses (large, internal)
+        data.pop("raw_content", None)
         return data
 
 

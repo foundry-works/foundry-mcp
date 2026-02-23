@@ -52,6 +52,7 @@ class GatheringPhaseMixin:
         def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
         def _check_cancellation(self, *args: Any, **kwargs: Any) -> None: ...
         async def _execute_topic_research_async(self, *args: Any, **kwargs: Any) -> Any: ...
+        def _attach_source_summarizer(self, provider: Any) -> None: ...
 
     # ------------------------------------------------------------------
     # Search provider configuration
@@ -214,6 +215,9 @@ class GatheringPhaseMixin:
         try:
             if provider_name == "tavily":
                 provider = TavilySearchProvider()
+                # Wire fetch-time summarization if enabled
+                if getattr(self.config, "deep_research_fetch_time_summarization", False):
+                    self._attach_source_summarizer(provider)
                 self._search_providers[provider_name] = provider
                 return provider
             if provider_name == "perplexity":
@@ -238,6 +242,32 @@ class GatheringPhaseMixin:
         except Exception as e:
             logger.error("Error initializing %s provider: %s", provider_name, e)
             return None
+
+    def _attach_source_summarizer(self, provider: SearchProvider) -> None:
+        """Attach a SourceSummarizer to a search provider for fetch-time summarization.
+
+        Reads summarization provider/model config and creates a SourceSummarizer
+        instance, then sets it on the provider's ``_source_summarizer`` attribute.
+
+        Args:
+            provider: SearchProvider instance to configure.
+        """
+        from foundry_mcp.core.research.providers.shared import SourceSummarizer
+
+        summarization_provider = getattr(
+            self.config, "get_summarization_provider", lambda: self.config.default_provider
+        )()
+        summarization_model = getattr(
+            self.config, "get_summarization_model", lambda: None
+        )()
+        max_concurrent = getattr(self.config, "deep_research_max_concurrent", 3)
+
+        provider._source_summarizer = SourceSummarizer(
+            provider_id=summarization_provider,
+            model=summarization_model,
+            timeout=60.0,
+            max_concurrent=max_concurrent,
+        )
 
     # ------------------------------------------------------------------
     # Main gathering phase
