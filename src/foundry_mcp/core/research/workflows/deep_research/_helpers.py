@@ -100,6 +100,50 @@ def truncate_at_boundary(content: str, target_length: int) -> str:
     return truncated.strip() + "\n\n[... content truncated for context limits]"
 
 
+def truncate_to_token_estimate(text: str, max_tokens: int) -> str:
+    """Truncate text to fit within an estimated token budget.
+
+    Uses the 4 chars/token heuristic (same as open_deep_research) to
+    estimate the character budget, then truncates at a natural boundary
+    via ``truncate_at_boundary()``.
+
+    Args:
+        text: Text to truncate
+        max_tokens: Maximum token budget for the text
+
+    Returns:
+        Truncated text if it exceeds the budget, otherwise the original text
+    """
+    # 4 chars per token heuristic
+    max_chars = max_tokens * 4
+    if len(text) <= max_chars:
+        return text
+    return truncate_at_boundary(text, max_chars)
+
+
+def estimate_token_limit_for_model(model: Optional[str], token_limits: dict[str, int]) -> Optional[int]:
+    """Look up context window size for a model using substring matching.
+
+    Checks the *token_limits* registry for the first key that appears
+    as a substring in *model* (case-insensitive).  Returns ``None`` if
+    no match is found.
+
+    Args:
+        model: Model identifier string (e.g. ``"claude-3.5-sonnet-20240620"``)
+        token_limits: Mapping of model name substrings to context window sizes
+
+    Returns:
+        Context window size in tokens, or None if the model is unknown
+    """
+    if not model:
+        return None
+    model_lower = model.lower()
+    for pattern, limit in token_limits.items():
+        if pattern.lower() in model_lower:
+            return limit
+    return None
+
+
 def resolve_phase_provider(config: "ResearchConfig", *phase_names: str) -> str:
     """Resolve LLM provider ID by trying phase-specific config attrs in order.
 

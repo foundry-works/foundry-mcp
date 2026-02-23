@@ -9,6 +9,7 @@ duplicating ~88 lines of lifecycle code.
 from __future__ import annotations
 
 import logging
+import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -22,6 +23,55 @@ from foundry_mcp.core.research.workflows.base import WorkflowResult
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Provider-specific context-window error detection
+# ---------------------------------------------------------------------------
+
+#: Regex patterns matched against exception messages to detect context-window
+#: errors that providers raise as generic ``BadRequestError`` or similar.
+#: Each entry is ``(provider_hint, pattern)``.  When the exception class name
+#: **and** message match, the error is re-classified as a ContextWindowError.
+_CONTEXT_WINDOW_ERROR_PATTERNS: list[tuple[str, str]] = [
+    # OpenAI / Codex: BadRequestError with token/context/length keywords
+    ("openai", r"(?i)\b(?:token|context|length|maximum.*context)\b"),
+    # Anthropic: BadRequestError with "prompt is too long"
+    ("anthropic", r"(?i)prompt\s+is\s+too\s+long"),
+    # Google: ResourceExhausted exception type (matched by class name)
+    ("google", r"(?i)\b(?:resource\s*exhausted|context\s*length|token\s*limit)\b"),
+]
+
+#: Exception class names that are known context-window indicators for
+#: specific providers, regardless of message content.
+_CONTEXT_WINDOW_ERROR_CLASSES: set[str] = {
+    "ResourceExhausted",  # Google / gRPC
+}
+
+
+def _is_context_window_error(exc: Exception) -> bool:
+    """Detect if a generic exception is actually a context-window overflow.
+
+    Checks the exception's class name and message against known provider
+    patterns.  Returns ``True`` if the exception should be treated as a
+    ``ContextWindowError`` for progressive-truncation recovery.
+
+    This catches errors that the provider layer raises as generic
+    ``BadRequestError`` (OpenAI, Anthropic) or ``ResourceExhausted``
+    (Google) instead of the canonical ``ContextWindowError``.
+    """
+    cls_name = type(exc).__name__
+
+    # Fast path: known class names
+    if cls_name in _CONTEXT_WINDOW_ERROR_CLASSES:
+        return True
+
+    msg = str(exc)
+
+    for _provider_hint, pattern in _CONTEXT_WINDOW_ERROR_PATTERNS:
+        if re.search(pattern, msg):
+            return True
+
+    return False
+
 
 @dataclass
 class LLMCallResult:
@@ -29,6 +79,42 @@ class LLMCallResult:
 
     result: WorkflowResult
     llm_call_duration_ms: float
+
+
+# Maximum number of progressive truncation retries on context-window errors.
+_MAX_TOKEN_LIMIT_RETRIES: int = 3
+
+# Each retry truncates the user prompt to this fraction of the previous size.
+_TRUNCATION_FACTOR: float = 0.9  # keep 90%, remove 10%
+
+# Fallback context-window size when neither the error nor the model registry
+# provides a concrete limit.  128K tokens is a conservative default.
+_FALLBACK_CONTEXT_WINDOW: int = 128_000
+
+
+def _truncate_for_retry(
+    user_prompt: str,
+    error_max_tokens: Optional[int],
+    model: Optional[str],
+    retry_count: int,
+    truncate_fn: Any,
+    estimate_limit_fn: Any,
+    token_limits: dict[str, int],
+) -> str:
+    """Compute a truncated user prompt for a token-limit retry.
+
+    Determines the token budget from (in order): the error's max_tokens,
+    the model registry, or the fallback default. Then applies progressive
+    reduction (90% per retry) and truncates at a natural boundary.
+    """
+    max_tokens = error_max_tokens
+    if max_tokens is None:
+        max_tokens = estimate_limit_fn(model, token_limits)
+    if max_tokens is None:
+        max_tokens = _FALLBACK_CONTEXT_WINDOW
+
+    reduced_budget = int(max_tokens * (_TRUNCATION_FACTOR ** retry_count))
+    return truncate_fn(user_prompt, reduced_budget)
 
 
 async def execute_llm_call(
@@ -46,8 +132,16 @@ async def execute_llm_call(
     """Execute an LLM call with full lifecycle instrumentation.
 
     Handles: heartbeat update, state persistence, audit events (started/completed),
-    provider call with ContextWindowError handling, metrics emission, timeout/failure
-    check, token tracking, and PhaseMetrics recording.
+    provider call with ContextWindowError handling (including progressive
+    truncation recovery), metrics emission, timeout/failure check, token
+    tracking, and PhaseMetrics recording.
+
+    **Progressive token-limit recovery:** When a ``ContextWindowError`` (or a
+    provider-specific equivalent detected by ``_is_context_window_error``) is
+    raised, the user prompt is truncated by 10% and the call is retried, up to
+    3 times.  Only the user prompt is truncated — the system prompt is never
+    modified.  If all retries are exhausted the original hard-error path is
+    taken.
 
     Args:
         workflow: The DeepResearchWorkflow instance (provides config, memory, etc.)
@@ -66,6 +160,12 @@ async def execute_llm_call(
         or WorkflowResult directly on error (ContextWindowError, timeout, failure).
         Callers use ``isinstance(ret, WorkflowResult)`` to branch on error.
     """
+    from foundry_mcp.core.research.providers.base import SearchProvider
+    from foundry_mcp.core.research.workflows.deep_research._helpers import (
+        estimate_token_limit_for_model,
+        truncate_to_token_estimate,
+    )
+
     effective_provider = provider_id
 
     # Heartbeat + persist
@@ -84,24 +184,90 @@ async def execute_llm_call(
         },
     )
 
-    # Provider call with ContextWindowError handling
-    try:
-        result = await workflow._execute_provider_async(
-            prompt=user_prompt,
-            provider_id=effective_provider,
-            model=model,
-            system_prompt=system_prompt,
-            timeout=timeout,
-            temperature=temperature,
-            phase=phase_name,
-            fallback_providers=workflow.config.get_phase_fallback_providers(phase_name),
-            max_retries=workflow.config.deep_research_max_retries,
-            retry_delay=workflow.config.deep_research_retry_delay,
-        )
-    except ContextWindowError as e:
+    # ------------------------------------------------------------------
+    # Provider call with progressive token-limit recovery
+    # ------------------------------------------------------------------
+    current_user_prompt = user_prompt
+    token_limit_retries = 0
+    result: Optional[WorkflowResult] = None
+    last_context_error: ContextWindowError | Exception | None = None
+
+    for attempt in range(_MAX_TOKEN_LIMIT_RETRIES + 1):  # 0 = initial, 1-3 = retries
+        try:
+            result = await workflow._execute_provider_async(
+                prompt=current_user_prompt,
+                provider_id=effective_provider,
+                model=model,
+                system_prompt=system_prompt,
+                timeout=timeout,
+                temperature=temperature,
+                phase=phase_name,
+                fallback_providers=workflow.config.get_phase_fallback_providers(phase_name),
+                max_retries=workflow.config.deep_research_max_retries,
+                retry_delay=workflow.config.deep_research_retry_delay,
+            )
+            # Success — clear any prior context error and break
+            last_context_error = None
+            break
+
+        except ContextWindowError as e:
+            last_context_error = e
+            if attempt >= _MAX_TOKEN_LIMIT_RETRIES:
+                break  # All retries exhausted
+
+            token_limit_retries += 1
+            current_user_prompt = _truncate_for_retry(
+                current_user_prompt, e.max_tokens, model, token_limit_retries,
+                truncate_to_token_estimate, estimate_token_limit_for_model,
+                SearchProvider.TOKEN_LIMITS,
+            )
+
+            logger.warning(
+                "%s phase context window exceeded (attempt %d/%d), "
+                "truncating user prompt and retrying. "
+                "prompt_tokens=%s, max_tokens=%s, provider=%s",
+                phase_name.capitalize(),
+                token_limit_retries,
+                _MAX_TOKEN_LIMIT_RETRIES,
+                e.prompt_tokens,
+                e.max_tokens,
+                e.provider,
+            )
+
+        except Exception as e:
+            if _is_context_window_error(e) and attempt < _MAX_TOKEN_LIMIT_RETRIES:
+                last_context_error = e
+                token_limit_retries += 1
+                current_user_prompt = _truncate_for_retry(
+                    current_user_prompt, None, model, token_limit_retries,
+                    truncate_to_token_estimate, estimate_token_limit_for_model,
+                    SearchProvider.TOKEN_LIMITS,
+                )
+
+                logger.warning(
+                    "%s phase detected provider-specific context window error "
+                    "(attempt %d/%d), truncating user prompt. "
+                    "error_class=%s, message=%s",
+                    phase_name.capitalize(),
+                    token_limit_retries,
+                    _MAX_TOKEN_LIMIT_RETRIES,
+                    type(e).__name__,
+                    str(e)[:200],
+                )
+            else:
+                raise
+
+    # ------------------------------------------------------------------
+    # All retries exhausted — emit hard error
+    # ------------------------------------------------------------------
+    if last_context_error is not None:
         llm_call_duration_ms = (time.perf_counter() - llm_call_start_time) * 1000
 
-        # Audit + metrics for error
+        prompt_tokens = getattr(last_context_error, "prompt_tokens", None)
+        max_tokens_val = getattr(last_context_error, "max_tokens", None)
+        truncation_needed = getattr(last_context_error, "truncation_needed", None)
+        error_provider = getattr(last_context_error, "provider", None)
+
         workflow._write_audit_event(
             state,
             "llm.call.completed",
@@ -111,6 +277,7 @@ async def execute_llm_call(
                 "duration_ms": llm_call_duration_ms,
                 "status": "error",
                 "error_type": "context_window_exceeded",
+                "token_limit_retries": token_limit_retries,
             },
         )
         get_metrics().histogram(
@@ -120,21 +287,24 @@ async def execute_llm_call(
         )
 
         logger.error(
-            "%s phase context window exceeded: prompt_tokens=%s, max_tokens=%s, truncation_needed=%s, provider=%s",
+            "%s phase context window exceeded after %d retries: "
+            "prompt_tokens=%s, max_tokens=%s, truncation_needed=%s, provider=%s",
             phase_name.capitalize(),
-            e.prompt_tokens,
-            e.max_tokens,
-            e.truncation_needed,
-            e.provider,
+            token_limit_retries,
+            prompt_tokens,
+            max_tokens_val,
+            truncation_needed,
+            error_provider,
         )
 
         metadata: dict[str, Any] = {
             "research_id": state.id,
             "phase": phase_name,
             "error_type": "context_window_exceeded",
-            "prompt_tokens": e.prompt_tokens,
-            "max_tokens": e.max_tokens,
-            "truncation_needed": e.truncation_needed,
+            "prompt_tokens": prompt_tokens,
+            "max_tokens": max_tokens_val,
+            "truncation_needed": truncation_needed,
+            "token_limit_retries": token_limit_retries,
         }
         if error_metadata:
             metadata.update(error_metadata)
@@ -142,9 +312,12 @@ async def execute_llm_call(
         return WorkflowResult(
             success=False,
             content="",
-            error=str(e),
+            error=str(last_context_error),
             metadata=metadata,
         )
+
+    # Safety: result must be set at this point (break from loop with no error)
+    assert result is not None
 
     # Audit + metrics for completion
     llm_call_duration_ms = (time.perf_counter() - llm_call_start_time) * 1000
@@ -183,7 +356,11 @@ async def execute_llm_call(
     if result.tokens_used:
         state.total_tokens_used += result.tokens_used
 
-    # Phase metrics
+    # Phase metrics (include token_limit_retries if any occurred)
+    phase_metrics_metadata: dict[str, Any] = {}
+    if token_limit_retries > 0:
+        phase_metrics_metadata["token_limit_retries"] = token_limit_retries
+
     state.phase_metrics.append(
         PhaseMetrics(
             phase=phase_name,
@@ -193,6 +370,7 @@ async def execute_llm_call(
             cached_tokens=result.cached_tokens or 0,
             provider_id=result.provider_id,
             model_used=result.model_used,
+            metadata=phase_metrics_metadata,
         )
     )
 

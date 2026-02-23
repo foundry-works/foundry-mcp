@@ -258,3 +258,7 @@ class PhaseMetrics(BaseModel):
     cached_tokens: int = Field(default=0, description="Tokens served from cache")
     provider_id: Optional[str] = Field(default=None, description="Provider used for this phase")
     model_used: Optional[str] = Field(default=None, description="Model used for this phase")
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extensible metadata (e.g. token_limit_retries, model_roles)",
+    )

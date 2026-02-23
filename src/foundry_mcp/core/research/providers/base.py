@@ -160,6 +160,42 @@ class SearchProvider(ABC):
     #:         }
     ERROR_CLASSIFIERS: ClassVar[dict[int, "ErrorType"]] = {}
 
+    #: Flat mapping of model name substrings to context window sizes (in tokens).
+    #: Used by ``execute_llm_call()`` for progressive token-limit recovery when
+    #: ``ContextWindowError.max_tokens`` is not provided by the provider.
+    #: Override in subclasses for provider-specific model variants.
+    #:
+    #: Example::
+    #:
+    #:     class MyProvider(SearchProvider):
+    #:         TOKEN_LIMITS: ClassVar[dict[str, int]] = {
+    #:             "my-model-large": 128_000,
+    #:             "my-model-small": 32_000,
+    #:         }
+    TOKEN_LIMITS: ClassVar[dict[str, int]] = {
+        # Anthropic Claude
+        "claude-opus": 200_000,
+        "claude-sonnet": 200_000,
+        "claude-haiku": 200_000,
+        "claude-3": 200_000,
+        "claude-3.5": 200_000,
+        "claude-4": 200_000,
+        # OpenAI / Codex
+        "gpt-4o": 128_000,
+        "gpt-4-turbo": 128_000,
+        "gpt-4.1": 128_000,
+        "gpt-4": 8_192,
+        "gpt-3.5-turbo": 16_385,
+        "o3": 200_000,
+        "o4-mini": 128_000,
+        # Google Gemini
+        "gemini-2": 1_000_000,
+        "gemini-1.5-pro": 2_000_000,
+        "gemini-1.5-flash": 1_000_000,
+        "gemini-pro": 32_000,
+        "gemini-flash": 1_000_000,
+    }
+
     @abstractmethod
     def get_provider_name(self) -> str:
         """Return the unique identifier for this provider.
