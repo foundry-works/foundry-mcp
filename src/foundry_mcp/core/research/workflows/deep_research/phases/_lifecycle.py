@@ -31,30 +31,31 @@ logger = logging.getLogger(__name__)
 #: ``ContextWindowError.max_tokens`` is not provided by the provider.
 #:
 #: **Ordering matters:** more-specific substrings must precede less-specific
-#: ones (e.g. ``"claude-3.5"`` before ``"claude-3"``) because
+#: ones (e.g. ``"gpt-4.1-mini"`` before ``"gpt-4.1"``) because
 #: ``estimate_token_limit_for_model`` returns the first match.
 MODEL_TOKEN_LIMITS: dict[str, int] = {
-    # Anthropic Claude
+    # Anthropic Claude (all 200K context)
+    "claude-opus-4-6": 200_000,
+    "claude-sonnet-4-6": 200_000,
+    "claude-haiku-4-5": 200_000,
     "claude-opus": 200_000,
     "claude-sonnet": 200_000,
     "claude-haiku": 200_000,
-    "claude-3": 200_000,
-    "claude-3.5": 200_000,
-    "claude-4": 200_000,
-    # OpenAI / Codex
-    "gpt-4o": 128_000,
-    "gpt-4-turbo": 128_000,
-    "gpt-4.1": 128_000,
-    "gpt-4": 8_192,
-    "gpt-3.5-turbo": 16_385,
-    "o3": 200_000,
-    "o4-mini": 128_000,
-    # Google Gemini
-    "gemini-2": 1_000_000,
-    "gemini-1.5-pro": 2_000_000,
-    "gemini-1.5-flash": 1_000_000,
-    "gemini-pro": 32_000,
-    "gemini-flash": 1_000_000,
+    # OpenAI — specific before generic
+    "gpt-5.3-codex-spark": 128_000,
+    "gpt-5.3-codex": 400_000,
+    "gpt-5.3": 400_000,
+    "gpt-5.1-codex-mini": 400_000,
+    "gpt-5-mini": 400_000,
+    "gpt-4.1-mini": 1_000_000,
+    "gpt-4.1": 1_000_000,
+    # Google Gemini (all 1M context)
+    "gemini-3.1-pro": 1_000_000,
+    "gemini-3.1-flash": 1_000_000,
+    "gemini-3.1": 1_000_000,
+    "gemini-3-pro": 1_000_000,
+    "gemini-3-flash": 1_000_000,
+    "gemini-3": 1_000_000,
 }
 
 
@@ -101,7 +102,7 @@ def _is_context_window_error(exc: Exception) -> bool:
 
     msg = str(exc)
 
-    for _provider_hint, pattern in _CONTEXT_WINDOW_ERROR_PATTERNS:
+    for _, pattern in _CONTEXT_WINDOW_ERROR_PATTERNS:
         if re.search(pattern, msg):
             return True
 
@@ -223,7 +224,7 @@ async def execute_llm_call(
             if model is None:
                 model = role_model
         except (AttributeError, TypeError, ValueError):
-            pass  # No role-based resolution available; use explicit args
+            logger.debug("Role resolution unavailable for %s, using defaults", role)
 
     effective_provider = provider_id
 
@@ -376,7 +377,13 @@ async def execute_llm_call(
         )
 
     # Safety: result must be set at this point (break from loop with no error)
-    assert result is not None
+    if result is None:
+        return WorkflowResult(
+            success=False,
+            content="",
+            error="LLM call completed without producing a result",
+            metadata={"task_id": state.id, "provider": provider_id or "unknown"},
+        )
 
     # Audit + metrics for completion
     llm_call_duration_ms = (time.perf_counter() - llm_call_start_time) * 1000

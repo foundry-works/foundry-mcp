@@ -382,6 +382,7 @@ class TopicResearchMixin:
         try:
             provider_id, reflection_model = self.config.resolve_model_for_role("topic_reflection")
         except (AttributeError, TypeError, ValueError):
+            logger.debug("Role resolution unavailable for topic_reflection, using phase fallback")
             from foundry_mcp.core.research.workflows.deep_research._helpers import resolve_phase_provider
             provider_id = resolve_phase_provider(self.config, "topic_reflection", "reflection")
             reflection_model = None

@@ -195,12 +195,6 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             allocation_result: Optional budget allocation result.
             source_filter: If provided, only include sources whose ID is in this set.
         """
-        # Build source lookup for allocation info
-        allocated_map: dict[str, Any] = {}
-        if allocation_result:
-            for item in allocation_result.items:
-                allocated_map[item.id] = item
-
         # Add source summaries based on allocation
         sources_to_include: list[tuple[Any, Any]] = []
         if allocation_result:

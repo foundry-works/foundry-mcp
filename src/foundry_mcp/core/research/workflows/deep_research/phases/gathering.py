@@ -122,7 +122,7 @@ class GatheringPhaseMixin:
         try:
             compression_provider, compression_model = self.config.resolve_model_for_role("compression")
         except (AttributeError, TypeError, ValueError):
-            pass  # Defaults above are used
+            logger.debug("Role resolution unavailable for compression, using defaults")
 
         semaphore = asyncio.Semaphore(max_concurrent)
         total_input_tokens = 0
@@ -530,7 +530,7 @@ class GatheringPhaseMixin:
         try:
             summarization_provider, summarization_model = self.config.resolve_model_for_role("summarization")
         except (AttributeError, TypeError, ValueError):
-            pass  # Defaults above are used
+            logger.debug("Role resolution unavailable for summarization, using defaults")
         max_concurrent = getattr(self.config, "deep_research_max_concurrent", 3)
 
         provider._source_summarizer = SourceSummarizer(
