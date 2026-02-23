@@ -29,6 +29,10 @@ logger = logging.getLogger(__name__)
 #: Flat mapping of model name substrings to context window sizes (in tokens).
 #: Used by ``execute_llm_call()`` for progressive token-limit recovery when
 #: ``ContextWindowError.max_tokens`` is not provided by the provider.
+#:
+#: **Ordering matters:** more-specific substrings must precede less-specific
+#: ones (e.g. ``"claude-3.5"`` before ``"claude-3"``) because
+#: ``estimate_token_limit_for_model`` returns the first match.
 MODEL_TOKEN_LIMITS: dict[str, int] = {
     # Anthropic Claude
     "claude-opus": 200_000,
@@ -209,12 +213,17 @@ async def execute_llm_call(
 
     # Role-based model resolution (Phase 6): when role is provided and
     # provider_id / model are not explicitly set, resolve from config.
-    if role and hasattr(workflow, "config") and hasattr(workflow.config, "resolve_model_for_role"):
-        role_provider, role_model = workflow.config.resolve_model_for_role(role)
-        if provider_id is None:
-            provider_id = role_provider
-        if model is None:
-            model = role_model
+    # Uses try/except rather than hasattr — hasattr is not safe with mock
+    # objects that auto-create attributes on access.
+    if role:
+        try:
+            role_provider, role_model = workflow.config.resolve_model_for_role(role)
+            if provider_id is None:
+                provider_id = role_provider
+            if model is None:
+                model = role_model
+        except (AttributeError, TypeError, ValueError):
+            pass  # No role-based resolution available; use explicit args
 
     effective_provider = provider_id
 

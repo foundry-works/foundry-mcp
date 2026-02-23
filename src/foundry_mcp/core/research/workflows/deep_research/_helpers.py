@@ -44,9 +44,23 @@ def extract_json(content: str) -> Optional[str]:
     if brace_start == -1:
         return None
 
-    # Find matching closing brace
+    # Find matching closing brace, skipping braces inside JSON strings.
     depth = 0
+    in_string = False
+    escape = False
     for i, char in enumerate(content[brace_start:], brace_start):
+        if escape:
+            escape = False
+            continue
+        if char == "\\":
+            if in_string:
+                escape = True
+            continue
+        if char == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
         if char == "{":
             depth += 1
         elif char == "}":

@@ -159,6 +159,8 @@ class StubGatheringMixin(GatheringPhaseMixin):
             "- [3] Source 2 — https://example.com/sq-0/2\n"
         )
         result.tokens_used = 200
+        result.input_tokens = 150
+        result.output_tokens = 50
         result.provider_id = "test-provider"
         result.model_used = "test-model"
         return result
@@ -308,6 +310,8 @@ class TestCompressTopicFindings:
             result.success = True
             result.content = "## Findings\nCompressed [1]."
             result.tokens_used = 100
+            result.input_tokens = 75
+            result.output_tokens = 25
             return result
 
         mixin._provider_async_fn = capture_prompt
@@ -348,6 +352,8 @@ class TestCompressTopicFindings:
             result.success = True
             result.content = "Compressed."
             result.tokens_used = 50
+            result.input_tokens = 35
+            result.output_tokens = 15
             return result
 
         mixin._provider_async_fn = capture_system
@@ -442,6 +448,8 @@ class TestCompressTopicFindings:
             result.success = True
             result.content = "## Compressed after retry\nFindings [1]."
             result.tokens_used = 150
+            result.input_tokens = 110
+            result.output_tokens = 40
             return result
 
         mixin._provider_async_fn = retry_then_succeed
@@ -519,6 +527,8 @@ class TestParallelCompression:
             result.success = True
             result.content = f"## Findings for topic\nCompressed [1] [2]."
             result.tokens_used = 100
+            result.input_tokens = 75
+            result.output_tokens = 25
             return result
 
         mixin._provider_async_fn = track_topics
@@ -557,10 +567,14 @@ class TestParallelCompression:
                 result.success = False
                 result.content = ""
                 result.tokens_used = 0
+                result.input_tokens = 0
+                result.output_tokens = 0
             else:
                 result.success = True
                 result.content = "## Findings\nCompressed [1]."
                 result.tokens_used = 100
+                result.input_tokens = 75
+                result.output_tokens = 25
             return result
 
         mixin._provider_async_fn = mixed_results
@@ -601,6 +615,8 @@ class TestParallelCompression:
             result.success = True
             result.content = "Compressed."
             result.tokens_used = 50
+            result.input_tokens = 35
+            result.output_tokens = 15
             return result
 
         mixin._provider_async_fn = track_concurrency
@@ -662,7 +678,8 @@ class TestCompressionTokenTracking:
         assert len(state.phase_metrics) == initial_metrics_count + 1
         compression_metric = state.phase_metrics[-1]
         assert compression_metric.phase == "compression"
-        assert compression_metric.input_tokens == 200
+        assert compression_metric.input_tokens == 150
+        assert compression_metric.output_tokens == 50
         assert compression_metric.metadata["topics_compressed"] == 1
 
     @pytest.mark.asyncio
