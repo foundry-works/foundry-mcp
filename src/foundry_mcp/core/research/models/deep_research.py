@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -78,7 +78,7 @@ class Contradiction(BaseModel):
         default=None,
         description="ID of the more authoritative source, if determinable",
     )
-    severity: str = Field(
+    severity: Literal["major", "minor"] = Field(
         default="minor",
         description="Severity of the contradiction: 'major' or 'minor'",
     )
@@ -302,8 +302,8 @@ class DeepResearchState(BaseModel):
     )
 
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: Optional[datetime] = Field(default=None)
 
     # Provider tracking (per-phase LLM provider configuration)
@@ -343,7 +343,7 @@ class DeepResearchState(BaseModel):
         """
         sub_query = SubQuery(query=query, rationale=rationale, priority=priority)
         self.sub_queries.append(sub_query)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         return sub_query
 
     def get_sub_query(self, sub_query_id: str) -> Optional[SubQuery]:
@@ -472,7 +472,7 @@ class DeepResearchState(BaseModel):
             category=category,
         )
         self.findings.append(finding)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         return finding
 
     def add_gap(
@@ -497,7 +497,7 @@ class DeepResearchState(BaseModel):
             priority=priority,
         )
         self.gaps.append(gap)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         return gap
 
     # =========================================================================
@@ -537,7 +537,7 @@ class DeepResearchState(BaseModel):
         current_index = phase_order.index(self.phase)
         if current_index < len(phase_order) - 1:
             self.phase = phase_order[current_index + 1]
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         return self.phase
 
     def should_continue_refinement(self) -> bool:
@@ -567,7 +567,7 @@ class DeepResearchState(BaseModel):
         """
         self.iteration += 1
         self.phase = DeepResearchPhase.GATHERING
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         return self.iteration
 
     def mark_completed(self, report: Optional[str] = None) -> None:
@@ -577,8 +577,8 @@ class DeepResearchState(BaseModel):
             report: Optional final report content
         """
         self.phase = DeepResearchPhase.SYNTHESIS
-        self.completed_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
         if report:
             self.report = report
 
@@ -591,8 +591,8 @@ class DeepResearchState(BaseModel):
         Args:
             error: Description of why the research failed
         """
-        self.completed_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
         self.metadata["failed"] = True
         self.metadata["failure_error"] = error
 
@@ -605,8 +605,8 @@ class DeepResearchState(BaseModel):
         Args:
             phase_state: Optional description of phase state at cancellation time
         """
-        self.completed_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
         self.metadata["cancelled"] = True
         self.metadata["terminal_status"] = "cancelled"
         if phase_state:
@@ -621,8 +621,8 @@ class DeepResearchState(BaseModel):
         Args:
             reason: Reason for interruption (default: "SIGTERM")
         """
-        self.completed_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
         self.metadata["interrupted"] = True
         self.metadata["terminal_status"] = "interrupted"
         self.metadata["interrupt_reason"] = reason
@@ -683,7 +683,7 @@ class DeepResearchState(BaseModel):
         if level == FidelityLevel.DROPPED and item_id not in self.dropped_content_ids:
             self.dropped_content_ids.append(item_id)
 
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         return record
 
     def get_item_fidelity(self, item_id: str) -> Optional[ContentFidelityRecord]:
@@ -847,7 +847,7 @@ class DeepResearchState(BaseModel):
         if record.current_level == FidelityLevel.DROPPED and item_id not in self.dropped_content_ids:
             self.dropped_content_ids.append(item_id)
 
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         return record
 
     def get_aggregate_chunk_fidelity(self, base_id: str) -> Optional[FidelityLevel]:

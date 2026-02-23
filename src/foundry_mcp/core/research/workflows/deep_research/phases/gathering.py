@@ -328,8 +328,9 @@ class GatheringPhaseMixin:
 
         if circuit_breaker_filtered:
             logger.warning(
-                f"Filtered {len(circuit_breaker_filtered)} provider(s) due to open "
-                f"circuit breaker: {circuit_breaker_filtered}"
+                "Filtered %d provider(s) due to open circuit breaker: %s",
+                len(circuit_breaker_filtered),
+                circuit_breaker_filtered,
             )
 
         available_providers = filtered_providers
@@ -348,7 +349,7 @@ class GatheringPhaseMixin:
                     configured_providers=configured_provider_names,
                     unavailable_providers=unavailable_providers,
                 )
-                logger.error(f"All providers have open circuit breakers: {breaker_states}")
+                logger.error("All providers have open circuit breakers: %s", breaker_states)
                 return WorkflowResult(
                     success=False,
                     content="",
@@ -542,8 +543,9 @@ class GatheringPhaseMixin:
                         # Check if circuit breaker opened mid-gathering (graceful degradation)
                         if not resilience_manager.is_provider_available(provider_name):
                             logger.warning(
-                                f"Provider {provider_name} circuit breaker opened mid-gathering, "
-                                "skipping for remaining sub-queries"
+                                "Provider %s circuit breaker opened mid-gathering, "
+                                "skipping for remaining sub-queries",
+                                provider_name,
                             )
                             provider_errors.append(f"{provider_name}: circuit breaker open")
                             continue

@@ -202,21 +202,27 @@ class SynthesisPhaseMixin:
 
         # Save state
         self.memory.save_deep_research(state)
+        synthesis_audit_data: dict[str, Any] = {
+            "provider_id": result.provider_id,
+            "model_used": result.model_used,
+            "tokens_used": result.tokens_used,
+            "duration_ms": result.duration_ms,
+            "report_length": len(state.report),
+            "citation_postprocess": citation_metadata,
+        }
+        if self.config.audit_verbosity == "full":
+            synthesis_audit_data["system_prompt"] = system_prompt
+            synthesis_audit_data["user_prompt"] = user_prompt
+            synthesis_audit_data["raw_response"] = result.content
+            synthesis_audit_data["report"] = state.report
+        else:
+            synthesis_audit_data["system_prompt_length"] = len(system_prompt)
+            synthesis_audit_data["user_prompt_length"] = len(user_prompt)
+            synthesis_audit_data["raw_response_length"] = len(result.content)
         self._write_audit_event(
             state,
             "synthesis_result",
-            data={
-                "provider_id": result.provider_id,
-                "model_used": result.model_used,
-                "tokens_used": result.tokens_used,
-                "duration_ms": result.duration_ms,
-                "system_prompt": system_prompt,
-                "user_prompt": user_prompt,
-                "raw_response": result.content,
-                "report": state.report,
-                "report_length": len(state.report),
-                "citation_postprocess": citation_metadata,
-            },
+            data=synthesis_audit_data,
         )
 
         logger.info(

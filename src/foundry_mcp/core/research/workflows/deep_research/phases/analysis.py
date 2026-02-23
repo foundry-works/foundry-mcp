@@ -209,22 +209,28 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
 
         if not parsed["success"]:
             logger.warning("Failed to parse analysis response")
+            audit_data_fail: dict[str, Any] = {
+                "provider_id": result.provider_id,
+                "model_used": result.model_used,
+                "tokens_used": result.tokens_used,
+                "duration_ms": result.duration_ms,
+                "parse_success": False,
+                "findings": [],
+                "gaps": [],
+                "quality_updates": [],
+            }
+            if self.config.audit_verbosity == "full":
+                audit_data_fail["system_prompt"] = system_prompt
+                audit_data_fail["user_prompt"] = user_prompt
+                audit_data_fail["raw_response"] = result.content
+            else:
+                audit_data_fail["system_prompt_length"] = len(system_prompt)
+                audit_data_fail["user_prompt_length"] = len(user_prompt)
+                audit_data_fail["raw_response_length"] = len(result.content)
             self._write_audit_event(
                 state,
                 "analysis_result",
-                data={
-                    "provider_id": result.provider_id,
-                    "model_used": result.model_used,
-                    "tokens_used": result.tokens_used,
-                    "duration_ms": result.duration_ms,
-                    "system_prompt": system_prompt,
-                    "user_prompt": user_prompt,
-                    "raw_response": result.content,
-                    "parse_success": False,
-                    "findings": [],
-                    "gaps": [],
-                    "quality_updates": [],
-                },
+                data=audit_data_fail,
                 level="warning",
             )
             # Still mark as success but with no findings
@@ -265,7 +271,7 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
                     pass  # Invalid quality value, skip
 
         # Contradiction detection: identify conflicting claims between findings
-        if len(state.findings) >= 2 and getattr(self.config, "deep_research_enable_contradiction_detection", True):
+        if len(state.findings) >= 2 and self.config.deep_research_enable_contradiction_detection:
             contradictions = await self._detect_contradictions(
                 state=state,
                 provider_id=provider_id or state.analysis_provider,
@@ -292,22 +298,28 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
 
         # Save state
         self.memory.save_deep_research(state)
+        audit_data_ok: dict[str, Any] = {
+            "provider_id": result.provider_id,
+            "model_used": result.model_used,
+            "tokens_used": result.tokens_used,
+            "duration_ms": result.duration_ms,
+            "parse_success": True,
+            "findings": parsed["findings"],
+            "gaps": parsed["gaps"],
+            "quality_updates": parsed.get("quality_updates", []),
+        }
+        if self.config.audit_verbosity == "full":
+            audit_data_ok["system_prompt"] = system_prompt
+            audit_data_ok["user_prompt"] = user_prompt
+            audit_data_ok["raw_response"] = result.content
+        else:
+            audit_data_ok["system_prompt_length"] = len(system_prompt)
+            audit_data_ok["user_prompt_length"] = len(user_prompt)
+            audit_data_ok["raw_response_length"] = len(result.content)
         self._write_audit_event(
             state,
             "analysis_result",
-            data={
-                "provider_id": result.provider_id,
-                "model_used": result.model_used,
-                "tokens_used": result.tokens_used,
-                "duration_ms": result.duration_ms,
-                "system_prompt": system_prompt,
-                "user_prompt": user_prompt,
-                "raw_response": result.content,
-                "parse_success": True,
-                "findings": parsed["findings"],
-                "gaps": parsed["gaps"],
-                "quality_updates": parsed.get("quality_updates", []),
-            },
+            data=audit_data_ok,
         )
 
         logger.info(

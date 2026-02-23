@@ -161,10 +161,10 @@ class TestBashGuardEdgeCases:
         allowed, _ = check_command("git --version")
         assert allowed is True
 
-    def test_unknown_git_subcommand_allowed(self):
-        """Unknown git subcommands are allowed (fail-open for reads)."""
+    def test_unknown_git_subcommand_blocked(self):
+        """Unknown git subcommands are blocked (fail-closed)."""
         allowed, _ = check_command("git some-unknown-command")
-        assert allowed is True
+        assert allowed is False
 
     def test_non_git_commands_allowed(self):
         """Non-git commands should be allowed."""
@@ -225,23 +225,146 @@ class TestBashGuardEdgeCases:
     def test_git_with_flags_before_subcommand(self):
         """Git commands with flags before the subcommand.
 
-        The regex ``(?:-\\w+\\s+)*`` only matches bare short flags (e.g. -v, -n).
-        Flags with values (e.g. -C /path, -c key=val) cause the regex to
-        capture the value argument as the subcommand instead.
+        The token-based parser correctly skips -c key=val flags
+        and finds the real subcommand.
         """
         # Bare short flags are handled correctly
         allowed, _ = check_command("git commit -m 'msg'")
         assert allowed is False
 
-        # Flags with values (-c key=val) cause subcommand misdetection:
-        # the value "core.pager=cat" is extracted as the subcommand
+        # Flags with values (-c key=val) are correctly skipped;
+        # the real subcommand "commit" is detected and blocked
         allowed, _ = check_command("git -c core.pager=cat commit -m 'msg'")
-        # This is allowed because "core.pager=cat commit" is unknown → allowed
-        assert allowed is True
+        assert allowed is False
 
     def test_cp_to_protected_path_blocked(self):
         """Copying files to protected paths should be blocked."""
         allowed, _ = check_command("cp bad.json specs/real.json")
+        assert allowed is False
+
+
+
+
+# =============================================================================
+# Bash Guard: Command Chaining
+# =============================================================================
+
+
+class TestBashGuardCommandChaining:
+    """Command chaining should check each segment independently."""
+
+    def test_safe_and_blocked_via_double_ampersand(self):
+        """git status && git push → blocked (push is write)."""
+        allowed, reason = check_command("git status && git push")
+        assert allowed is False
+        assert "blocked" in reason.lower()
+
+    def test_safe_and_safe_allowed(self):
+        """git status && git log → allowed."""
+        allowed, _ = check_command("git status && git log --oneline")
+        assert allowed is True
+
+    def test_blocked_via_or(self):
+        """git status || git push → blocked."""
+        allowed, _ = check_command("git status || git push")
+        assert allowed is False
+
+    def test_blocked_via_semicolon(self):
+        """git log; git push → blocked."""
+        allowed, _ = check_command("git log; git push origin main")
+        assert allowed is False
+
+    def test_pipe_read_only_allowed(self):
+        """git log | head → allowed (both are read-only)."""
+        allowed, _ = check_command("git log | head -20")
+        assert allowed is True
+
+    def test_newline_splitting(self):
+        """Commands separated by newlines are checked independently."""
+        allowed, _ = check_command("git status\ngit push")
+        assert allowed is False
+
+    def test_quoted_semicolons_not_split(self):
+        """Semicolons inside quotes should NOT cause splitting."""
+        allowed, _ = check_command("git log --format='%H;%s'")
+        assert allowed is True
+
+
+# =============================================================================
+# Bash Guard: Sanitization
+# =============================================================================
+
+
+class TestBashGuardSanitization:
+    """Input sanitization: null bytes, ANSI escapes."""
+
+    def test_null_bytes_stripped(self):
+        """Null bytes in command are stripped before processing."""
+        allowed, _ = check_command("git\x00 status")
+        assert allowed is True
+
+    def test_ansi_escapes_stripped(self):
+        """ANSI escape sequences are stripped."""
+        allowed, _ = check_command("\x1b[31mgit status\x1b[0m")
+        assert allowed is True
+
+
+# =============================================================================
+# Bash Guard: Git Config Classification
+# =============================================================================
+
+
+class TestBashGuardGitConfig:
+    """Git config read/write classification."""
+
+    def test_config_get_allowed(self):
+        allowed, _ = check_command("git config --get user.name")
+        assert allowed is True
+
+    def test_config_list_allowed(self):
+        allowed, _ = check_command("git config --list")
+        assert allowed is True
+
+    def test_config_global_read_allowed(self):
+        """git config --global user.name (single key = read) → allowed."""
+        allowed, _ = check_command("git config --global user.name")
+        assert allowed is True
+
+    def test_config_global_write_blocked(self):
+        """git config user.name 'Tyler' (key + value = write) → blocked."""
+        allowed, reason = check_command('git config user.name "Tyler"')
+        assert allowed is False
+        assert "blocked" in reason.lower()
+
+    def test_config_global_key_value_blocked(self):
+        """git config --global user.name 'Tyler' → blocked (write)."""
+        allowed, _ = check_command("git config --global user.name Tyler")
+        assert allowed is False
+
+    def test_config_unset_blocked(self):
+        """git config --unset key → blocked."""
+        allowed, _ = check_command("git config --unset user.name")
+        assert allowed is False
+
+
+# =============================================================================
+# Bash Guard: Fail-Closed for Unknown Subcommands
+# =============================================================================
+
+
+class TestBashGuardFailClosed:
+    """Unknown git subcommands are blocked (fail-closed)."""
+
+    def test_filter_branch_blocked(self):
+        allowed, _ = check_command("git filter-branch")
+        assert allowed is False
+
+    def test_update_ref_blocked(self):
+        allowed, _ = check_command("git update-ref")
+        assert allowed is False
+
+    def test_replace_blocked(self):
+        allowed, _ = check_command("git replace")
         assert allowed is False
 
 

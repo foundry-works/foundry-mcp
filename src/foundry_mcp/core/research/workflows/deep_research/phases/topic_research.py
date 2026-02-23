@@ -100,7 +100,8 @@ class TopicResearchMixin:
         """
         result = TopicResearchResult(sub_query_id=sub_query.id)
         current_query = sub_query.query
-        sub_query.status = "executing"
+        async with state_lock:
+            sub_query.status = "executing"
 
         for iteration in range(max_searches):
             self._check_cancellation(state)
@@ -386,7 +387,7 @@ class TopicResearchMixin:
                 provider_id=provider_id,
                 model=None,
                 system_prompt=system_prompt,
-                timeout=getattr(self.config, "deep_research_reflection_timeout", 60.0),
+                timeout=self.config.deep_research_reflection_timeout,
                 temperature=0.2,
                 phase="topic_reflection",
                 fallback_providers=[],

@@ -19,6 +19,7 @@ import logging
 import os
 import secrets
 import stat
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -118,11 +119,13 @@ def load_or_create_secret() -> bytes:
     _ensure_data_dir()
     secret = generate_secret()
 
-    # Write with secure permissions
+    # Write with secure permissions atomically (no window where file has default perms)
     try:
-        # Create file with secure permissions (write first, then set mode)
-        secret_path.write_bytes(secret)
-        os.chmod(secret_path, SECRET_FILE_MODE)
+        fd = os.open(str(secret_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, SECRET_FILE_MODE)
+        try:
+            os.write(fd, secret)
+        finally:
+            os.close(fd)
         logger.info("Generated new server secret at %s", secret_path)
         return secret
     except OSError as e:
@@ -132,12 +135,14 @@ def load_or_create_secret() -> bytes:
 
 # Cached secret (lazy-loaded)
 _cached_secret: Optional[bytes] = None
+_secret_lock = threading.Lock()
 
 
 def get_server_secret() -> bytes:
     """Get the server secret, loading or creating if necessary.
 
     The secret is cached after first load for performance.
+    Thread-safe via _secret_lock.
 
     Returns:
         Server secret as bytes
@@ -149,9 +154,10 @@ def get_server_secret() -> bytes:
     if env_secret:
         return env_secret.encode()
 
-    if _cached_secret is None:
-        _cached_secret = load_or_create_secret()
-    return _cached_secret
+    with _secret_lock:
+        if _cached_secret is None:
+            _cached_secret = load_or_create_secret()
+        return _cached_secret
 
 
 def clear_secret_cache() -> None:

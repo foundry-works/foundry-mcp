@@ -59,7 +59,7 @@ def build_sources_section(
 
     lines = ["", "## Sources", ""]
     for cn in sorted(citation_map):
-        if cited_only and cited_numbers is not None and cn not in cited_numbers:
+        if cited_only and (cited_numbers is None or cn not in cited_numbers):
             continue
         source = citation_map[cn]
         title = source.title or "Untitled"

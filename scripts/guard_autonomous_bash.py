@@ -82,14 +82,137 @@ _SHELL_WRITE_PATTERNS = [
 ]
 
 
+def _sanitize_command(command: str) -> str:
+    """Sanitize a command string before processing.
+
+    Strips null bytes, ANSI escape sequences, and collapses whitespace.
+    """
+    # Strip null bytes
+    command = command.replace("\x00", "")
+    # Strip ANSI escape sequences
+    command = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", command)
+    # Collapse whitespace (but preserve newlines for splitting)
+    command = re.sub(r"[^\S\n]+", " ", command)
+    return command.strip()
+
+
+def _split_commands(command: str) -> list[str]:
+    """Split a command string on shell operators (&&, ||, ;, |, newlines).
+
+    Respects quoted strings — does not split inside '...' or "...".
+    Returns a list of individual command segments.
+    """
+    segments: list[str] = []
+    current: list[str] = []
+    i = 0
+    n = len(command)
+
+    while i < n:
+        ch = command[i]
+
+        # Handle single-quoted strings
+        if ch == "'":
+            current.append(ch)
+            i += 1
+            while i < n and command[i] != "'":
+                current.append(command[i])
+                i += 1
+            if i < n:
+                current.append(command[i])  # closing quote
+                i += 1
+            continue
+
+        # Handle double-quoted strings
+        if ch == '"':
+            current.append(ch)
+            i += 1
+            while i < n and command[i] != '"':
+                if command[i] == "\\" and i + 1 < n:
+                    current.append(command[i])
+                    current.append(command[i + 1])
+                    i += 2
+                    continue
+                current.append(command[i])
+                i += 1
+            if i < n:
+                current.append(command[i])  # closing quote
+                i += 1
+            continue
+
+        # Check for && or ||
+        if ch in ("&", "|") and i + 1 < n and command[i + 1] == ch:
+            segment = "".join(current).strip()
+            if segment:
+                segments.append(segment)
+            current = []
+            i += 2
+            continue
+
+        # Check for ; or | (single pipe) or newline
+        if ch in (";", "\n"):
+            segment = "".join(current).strip()
+            if segment:
+                segments.append(segment)
+            current = []
+            i += 1
+            continue
+
+        if ch == "|":
+            segment = "".join(current).strip()
+            if segment:
+                segments.append(segment)
+            current = []
+            i += 1
+            continue
+
+        current.append(ch)
+        i += 1
+
+    # Don't forget the last segment
+    segment = "".join(current).strip()
+    if segment:
+        segments.append(segment)
+
+    return segments
+
+
 def _extract_git_subcommand(command: str) -> str | None:
     """Extract the git subcommand from a command string.
 
-    Returns the base subcommand (e.g. "branch", "remote", "commit").
+    Handles flags with values like -c key=val and -C /path by skipping
+    them properly. Returns the base subcommand (e.g. "branch", "commit").
     """
-    match = re.search(r"\bgit\s+(?:-\w+\s+)*(\S+)", command)
-    if match:
-        return match.group(1).strip()
+    # Tokenize the command to properly skip flags with values
+    tokens = command.split()
+    if not tokens:
+        return None
+
+    # Find the 'git' token
+    git_idx = None
+    for idx, token in enumerate(tokens):
+        if token == "git":
+            git_idx = idx
+            break
+
+    if git_idx is None:
+        return None
+
+    # Walk tokens after 'git' to find the subcommand
+    i = git_idx + 1
+    while i < len(tokens):
+        token = tokens[i]
+        # Skip flags
+        if token.startswith("-"):
+            # Flags that take a separate value argument: -c, -C, --git-dir, etc.
+            if token in ("-c", "-C", "--git-dir", "--work-tree", "--namespace"):
+                i += 2  # skip flag and its value
+                continue
+            # Flags with embedded value (-c key=val already handled above)
+            # Short flags without value (-v, -n, etc.)
+            i += 1
+            continue
+        # First non-flag token is the subcommand
+        return token
     return None
 
 
@@ -131,9 +254,10 @@ _COMPOUND_SUBCOMMANDS: dict[str, dict] = {
         "default": "write",  # bare 'git stash' = stash push (write)
     },
     "config": {
-        "write_prefixes": ["--global", "--system", "--unset", "--replace-all", "--add"],
+        # Explicit write flags only — --global and --system are scope modifiers, not writes
+        "write_prefixes": ["--unset", "--replace-all", "--add"],
         "read_prefixes": ["--get", "--list", "-l", "--get-all", "--get-regexp"],
-        "default": "read",  # bare 'git config' shows help
+        "default": "read",  # bare 'git config' shows help; 'git config key' is a read
     },
 }
 
@@ -147,6 +271,10 @@ def _classify_compound(subcommand: str, args: str) -> tuple[str | None, str]:
     entry = _COMPOUND_SUBCOMMANDS.get(subcommand)
     if entry is None:
         return None, "unknown"
+
+    # Special handling for 'config': detect key-value writes via positional args
+    if subcommand == "config":
+        return _classify_config(args, entry)
 
     # Check writes first (more specific)
     for prefix in entry["write_prefixes"]:
@@ -162,24 +290,62 @@ def _classify_compound(subcommand: str, args: str) -> tuple[str | None, str]:
     return None, entry["default"]
 
 
+def _classify_config(args: str, entry: dict) -> tuple[str | None, str]:
+    """Classify 'git config' as read or write based on arguments.
+
+    Writes: --unset, --replace-all, --add, or positional 'key value' pair.
+    Reads: --get, --list, -l, --get-all, --get-regexp, bare, or single key.
+    Scope modifiers (--global, --system, --local) are ignored for classification.
+    """
+    # Check explicit write flags
+    for prefix in entry["write_prefixes"]:
+        if prefix in args.split():
+            return f"config {prefix}", "write"
+
+    # Check explicit read flags
+    for prefix in entry["read_prefixes"]:
+        if prefix in args.split():
+            return f"config {prefix}", "read"
+
+    # Strip scope modifiers and flags to find positional args
+    tokens = args.split()
+    positional = []
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        if token in ("--global", "--system", "--local", "--worktree", "--file", "-f"):
+            # --file and -f take a value
+            if token in ("--file", "-f"):
+                i += 2
+            else:
+                i += 1
+            continue
+        if token.startswith("-"):
+            i += 1
+            continue
+        positional.append(token)
+        i += 1
+
+    # Two or more positional args = 'key value' write
+    if len(positional) >= 2:
+        return "config key=value", "write"
+
+    # Single positional arg or no args = read (show value or help)
+    return None, entry["default"]
+
+
 def _is_git_read_only(subcommand: str) -> bool:
-    """Check if a git subcommand is read-only."""
-    for read_cmd in _GIT_READ_SUBCOMMANDS:
-        if subcommand.startswith(read_cmd):
-            return True
-    return False
+    """Check if a git subcommand is read-only (exact match)."""
+    return subcommand in _GIT_READ_SUBCOMMANDS
 
 
 def _is_git_write(subcommand: str) -> bool:
     """Check if a git subcommand is a write operation."""
-    for write_cmd in _GIT_WRITE_SUBCOMMANDS:
-        if subcommand == write_cmd:
-            return True
-    return False
+    return subcommand in _GIT_WRITE_SUBCOMMANDS
 
 
-def check_command(command: str) -> tuple[bool, str]:
-    """Check whether a bash command is allowed.
+def _check_single_command(command: str) -> tuple[bool, str]:
+    """Check whether a single bash command (no chaining) is allowed.
 
     Returns:
         (allowed, reason) — allowed=True means command is permitted.
@@ -219,8 +385,8 @@ def check_command(command: str) -> tuple[bool, str]:
 
             return False, f"blocked: git write operation '{subcommand}' is not allowed during autonomous execution"
 
-        # Unknown git subcommand — allow with caution (fail-open for unknown read ops)
-        return True, f"unknown git subcommand '{subcommand}' — allowed (not in block list)"
+        # Unknown git subcommand — fail-closed (block unknown operations)
+        return False, f"blocked: unknown git subcommand '{subcommand}' is not allowed during autonomous execution"
 
     # Check for shell write patterns targeting protected files
     for pattern in _SHELL_WRITE_PATTERNS:
@@ -229,6 +395,40 @@ def check_command(command: str) -> tuple[bool, str]:
 
     # Everything else is allowed (tests, linting, general shell commands)
     return True, "allowed"
+
+
+def check_command(command: str) -> tuple[bool, str]:
+    """Check whether a bash command is allowed.
+
+    Handles command chaining (&&, ||, ;, |, newlines) by checking
+    each segment independently. If ANY segment is blocked, the
+    entire command is blocked.
+
+    Returns:
+        (allowed, reason) — allowed=True means command is permitted.
+    """
+    # Sanitize first
+    command = _sanitize_command(command)
+
+    if os.environ.get("FOUNDRY_GUARD_DISABLED") == "1":
+        return True, "guard disabled via FOUNDRY_GUARD_DISABLED=1"
+
+    # Split on command chaining operators
+    segments = _split_commands(command)
+
+    if not segments:
+        return True, "empty command allowed"
+
+    # Check each segment — block if ANY segment is blocked
+    last_reason = "allowed"
+    for segment in segments:
+        allowed, reason = _check_single_command(segment)
+        if not allowed:
+            return False, reason
+        last_reason = reason
+
+    # All segments passed — return the last segment's reason for specificity
+    return True, last_reason
 
 
 def main() -> int:

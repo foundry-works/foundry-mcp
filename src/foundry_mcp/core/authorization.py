@@ -847,7 +847,7 @@ def validate_runner_path(
         # normalized path that was validated against workspace_root.
         return full_path
 
-    return path_obj.resolve() if path_obj.exists() else path_obj
+    return path_obj.resolve()
 
 
 def get_restricted_environment(env: Optional[Dict[str, str]] = None) -> Dict[str, str]:

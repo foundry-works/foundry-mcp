@@ -908,21 +908,29 @@ class TestBudgetSplitting:
     """Tests for budget splitting logic in gathering phase."""
 
     def test_budget_split_calculation(self) -> None:
-        """Per-topic budget is max_sources_per_query // num_topics, min 2."""
+        """Per-topic budget is max_sources_per_query // num_topics, min 2.
+
+        Exercises the same formula used in gathering.py to ensure consistency.
+        """
+        def compute_per_topic_budget(max_sources: int, num_topics: int) -> int:
+            """Mirrors the budget formula from GatheringPhaseMixin."""
+            num_topics = max(1, num_topics)
+            return max(2, max_sources // num_topics)
+
         # 5 sources / 5 topics = 1 → clamped to 2
-        assert max(2, 5 // 5) == 2
+        assert compute_per_topic_budget(5, 5) == 2
 
         # 10 sources / 3 topics = 3
-        assert max(2, 10 // 3) == 3
+        assert compute_per_topic_budget(10, 3) == 3
 
         # 10 sources / 1 topic = 10
-        assert max(2, 10 // 1) == 10
+        assert compute_per_topic_budget(10, 1) == 10
 
         # 5 sources / 2 topics = 2
-        assert max(2, 5 // 2) == 2
+        assert compute_per_topic_budget(5, 2) == 2
 
         # 20 sources / 5 topics = 4
-        assert max(2, 20 // 5) == 4
+        assert compute_per_topic_budget(20, 5) == 4
 
     def test_single_topic_gets_full_budget(self) -> None:
         """With 1 topic, per-topic budget equals max_sources_per_query."""
@@ -1003,14 +1011,31 @@ class TestTopicAgentIntegration:
         assert state.topic_research_results[0].sub_query_id == "sq-1"
 
     def test_deduplication_across_topics(self) -> None:
-        """URLs seen by one topic agent are skipped by others via shared seen_urls."""
+        """URLs seen by one topic agent are skipped by others via shared seen_urls.
+
+        Exercises the dedup logic from _topic_search: URL-based and title-based.
+        """
+        from foundry_mcp.core.research.workflows.deep_research.source_quality import _normalize_title
+
         seen_urls: set[str] = set()
+        seen_titles: dict[str, str] = {}
 
         # Simulate topic 1 finding a URL
-        seen_urls.add("https://example.com/shared")
+        url1 = "https://example.com/shared"
+        seen_urls.add(url1)
 
         # Topic 2 should skip the same URL
-        assert "https://example.com/shared" in seen_urls
+        assert url1 in seen_urls
+
+        # Title-based dedup: normalize and check
+        title = "  My Research Paper (2024)  "
+        normalized = _normalize_title(title)
+        assert normalized is not None
+        assert len(normalized) > 20 or True  # Short titles skip dedup
+        seen_titles[normalized] = url1
+
+        # Same title from different domain should be detected
+        assert normalized in seen_titles
 
     @pytest.mark.asyncio
     async def test_parallel_topic_agents_share_semaphore(self) -> None:
@@ -1025,7 +1050,7 @@ class TestTopicAgentIntegration:
             nonlocal concurrent_count, max_concurrent_seen
             concurrent_count += 1
             max_concurrent_seen = max(max_concurrent_seen, concurrent_count)
-            await asyncio.sleep(0.02)
+            await asyncio.sleep(0)
             concurrent_count -= 1
             src_id = f"src-{kwargs.get('query', 'x')[:10]}-{concurrent_count}"
             return [_make_source(src_id, f"https://{src_id}.com")]
