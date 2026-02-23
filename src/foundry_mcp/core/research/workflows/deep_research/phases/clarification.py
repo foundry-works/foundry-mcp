@@ -31,6 +31,48 @@ from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import 
 logger = logging.getLogger(__name__)
 
 
+def _extract_inferred_constraints(content: str) -> dict[str, str]:
+    """Extract inferred_constraints from a clarification response.
+
+    Looks for an ``inferred_constraints`` dict in the JSON response and
+    normalises all values to strings (booleans become ``"true"``/``"false"``).
+    Returns an empty dict when the field is absent, the JSON is unparsable,
+    or the value is not a dict.
+
+    This replaces the legacy ``_parse_clarification_response()`` method,
+    keeping only the constraint-extraction logic that the planning phase
+    still consumes.
+
+    Args:
+        content: Raw LLM response content
+
+    Returns:
+        Dict of string key-value constraints (may be empty)
+    """
+    if not content:
+        return {}
+
+    json_str = extract_json(content)
+    if not json_str:
+        return {}
+
+    try:
+        data = json.loads(json_str)
+    except json.JSONDecodeError:
+        return {}
+
+    constraints = data.get("inferred_constraints", {})
+    if not isinstance(constraints, dict):
+        return {}
+
+    # Only keep string-valued constraints, filter empty values
+    return {
+        k: (str(v).lower() if isinstance(v, bool) else str(v))
+        for k, v in constraints.items()
+        if v is not None and v != "" and isinstance(v, (str, int, float, bool))
+    }
+
+
 def _strict_parse_clarification(content: str) -> ClarificationDecision:
     """Parse clarification response with strict validation.
 
@@ -155,10 +197,8 @@ class ClarificationPhaseMixin:
             state.metadata["clarification_questions"] = (
                 [decision.question] if decision.question else []
             )
-            # Attempt to extract inferred_constraints from the raw response
-            # for backward compatibility with planning phase
-            legacy_parsed = self._parse_clarification_response(result.content)
-            state.clarification_constraints = legacy_parsed.get("inferred_constraints", {})
+            # Extract inferred_constraints (if present) for the planning phase
+            state.clarification_constraints = _extract_inferred_constraints(result.content)
             logger.info(
                 "Clarification phase: query needs refinement, question=%s",
                 decision.question[:100] if decision.question else "(none)",
@@ -266,53 +306,3 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
         return prompt
 
-    def _parse_clarification_response(self, content: str) -> dict[str, Any]:
-        """Parse LLM response into structured clarification data (legacy).
-
-        Retained for backward compatibility — extracts inferred_constraints
-        from responses that may use the old schema format.
-
-        Args:
-            content: Raw LLM response content
-
-        Returns:
-            Dict with 'needs_clarification', 'questions', and 'inferred_constraints'
-        """
-        result: dict[str, Any] = {
-            "needs_clarification": False,
-            "questions": [],
-            "inferred_constraints": {},
-        }
-
-        if not content:
-            return result
-
-        json_str = extract_json(content)
-        if not json_str:
-            logger.debug("No JSON found in clarification response (legacy parser fallback)")
-            return result
-
-        try:
-            data = json.loads(json_str)
-        except json.JSONDecodeError as e:
-            logger.debug("Failed to parse JSON from clarification response (legacy parser fallback): %s", e)
-            return result
-
-        result["needs_clarification"] = bool(
-            data.get("needs_clarification", data.get("need_clarification", False))
-        )
-
-        questions = data.get("questions", [])
-        if isinstance(questions, list):
-            result["questions"] = [str(q) for q in questions[:3] if q]
-
-        constraints = data.get("inferred_constraints", {})
-        if isinstance(constraints, dict):
-            # Only keep string-valued constraints, filter empty values
-            result["inferred_constraints"] = {
-                k: (str(v).lower() if isinstance(v, bool) else str(v))
-                for k, v in constraints.items()
-                if v is not None and v != "" and isinstance(v, (str, int, float, bool))
-            }
-
-        return result

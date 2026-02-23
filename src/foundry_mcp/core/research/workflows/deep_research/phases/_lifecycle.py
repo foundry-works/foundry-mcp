@@ -8,11 +8,13 @@ duplicating ~88 lines of lifecycle code.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Optional
 
 from foundry_mcp.core.errors.provider import ContextWindowError
@@ -26,22 +28,15 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # LLM model context-window sizes (tokens)
 # ---------------------------------------------------------------------------
-#: Flat mapping of model name substrings to context window sizes (in tokens).
-#: Used by ``execute_llm_call()`` for progressive token-limit recovery when
-#: ``ContextWindowError.max_tokens`` is not provided by the provider.
-#:
-#: **Ordering matters:** more-specific substrings must precede less-specific
-#: ones (e.g. ``"gpt-4.1-mini"`` before ``"gpt-4.1"``) because
-#: ``estimate_token_limit_for_model`` returns the first match.
-MODEL_TOKEN_LIMITS: dict[str, int] = {
-    # Anthropic Claude (all 200K context)
+
+# Hardcoded fallback used when the JSON config file is missing or unreadable.
+_FALLBACK_MODEL_TOKEN_LIMITS: dict[str, int] = {
     "claude-opus-4-6": 200_000,
     "claude-sonnet-4-6": 200_000,
     "claude-haiku-4-5": 200_000,
     "claude-opus": 200_000,
     "claude-sonnet": 200_000,
     "claude-haiku": 200_000,
-    # OpenAI — specific before generic
     "gpt-5.3-codex-spark": 128_000,
     "gpt-5.3-codex": 400_000,
     "gpt-5.3": 400_000,
@@ -49,7 +44,6 @@ MODEL_TOKEN_LIMITS: dict[str, int] = {
     "gpt-5-mini": 400_000,
     "gpt-4.1-mini": 1_000_000,
     "gpt-4.1": 1_000_000,
-    # Google Gemini (all 1M context)
     "gemini-3.1-pro": 1_000_000,
     "gemini-3.1-flash": 1_000_000,
     "gemini-3.1": 1_000_000,
@@ -57,6 +51,42 @@ MODEL_TOKEN_LIMITS: dict[str, int] = {
     "gemini-3-flash": 1_000_000,
     "gemini-3": 1_000_000,
 }
+
+
+def _load_model_token_limits() -> dict[str, int]:
+    """Load model token limits from the external JSON config file.
+
+    Falls back to the hardcoded ``_FALLBACK_MODEL_TOKEN_LIMITS`` if the
+    config file is missing, unreadable, or malformed.
+
+    The config file is located at ``foundry_mcp/config/model_token_limits.json``.
+    **Ordering matters:** more-specific substrings must precede less-specific
+    ones (e.g. ``"gpt-4.1-mini"`` before ``"gpt-4.1"``) because
+    ``estimate_token_limit_for_model`` returns the first match.
+    """
+    config_path = Path(__file__).resolve().parents[5] / "config" / "model_token_limits.json"
+    try:
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+        limits = data.get("limits", {})
+        if not isinstance(limits, dict) or not limits:
+            logger.warning("model_token_limits.json has empty/invalid 'limits', using fallback")
+            return dict(_FALLBACK_MODEL_TOKEN_LIMITS)
+        return {str(k): int(v) for k, v in limits.items()}
+    except FileNotFoundError:
+        logger.debug("model_token_limits.json not found at %s, using fallback", config_path)
+        return dict(_FALLBACK_MODEL_TOKEN_LIMITS)
+    except (json.JSONDecodeError, ValueError, TypeError) as exc:
+        logger.warning("Failed to load model_token_limits.json: %s, using fallback", exc)
+        return dict(_FALLBACK_MODEL_TOKEN_LIMITS)
+
+
+#: Flat mapping of model name substrings to context window sizes (in tokens).
+#: Loaded from ``foundry_mcp/config/model_token_limits.json`` at import time,
+#: with a hardcoded fallback for resilience.
+#:
+#: Used by ``execute_llm_call()`` for progressive token-limit recovery when
+#: ``ContextWindowError.max_tokens`` is not provided by the provider.
+MODEL_TOKEN_LIMITS: dict[str, int] = _load_model_token_limits()
 
 
 # ---------------------------------------------------------------------------

@@ -1177,3 +1177,132 @@ class ResearchConfig:
         # Fall back to default: research_dir/.archive
         base_research = research_dir or Path("specs/.research")
         return base_research / ".archive"
+
+    # ------------------------------------------------------------------
+    # Nested sub-config accessors (Phase 3 PA.1)
+    #
+    # These provide typed, grouped views over the flat fields above.
+    # The flat fields remain the source of truth and are fully backward
+    # compatible.  New code may prefer these for clarity.
+    # ------------------------------------------------------------------
+
+    @property
+    def tavily_config(self) -> "TavilyConfig":
+        """Grouped Tavily search/extract configuration."""
+        from foundry_mcp.config.research_sub_configs import TavilyConfig
+
+        return TavilyConfig(
+            api_key=self.tavily_api_key,
+            search_depth=self.tavily_search_depth,
+            topic=self.tavily_topic,
+            news_days=self.tavily_news_days,
+            include_images=self.tavily_include_images,
+            country=self.tavily_country,
+            chunks_per_source=self.tavily_chunks_per_source,
+            auto_parameters=self.tavily_auto_parameters,
+            extract_depth=self.tavily_extract_depth,
+            extract_include_images=self.tavily_extract_include_images,
+            extract_in_deep_research=self.tavily_extract_in_deep_research,
+            extract_max_urls=self.tavily_extract_max_urls,
+        )
+
+    @property
+    def perplexity_config(self) -> "PerplexityConfig":
+        """Grouped Perplexity search configuration."""
+        from foundry_mcp.config.research_sub_configs import PerplexityConfig
+
+        return PerplexityConfig(
+            api_key=self.perplexity_api_key,
+            search_context_size=self.perplexity_search_context_size,
+            max_tokens=self.perplexity_max_tokens,
+            max_tokens_per_page=self.perplexity_max_tokens_per_page,
+            recency_filter=self.perplexity_recency_filter,
+            country=self.perplexity_country,
+        )
+
+    @property
+    def semantic_scholar_config(self) -> "SemanticScholarConfig":
+        """Grouped Semantic Scholar configuration."""
+        from foundry_mcp.config.research_sub_configs import SemanticScholarConfig
+
+        return SemanticScholarConfig(
+            api_key=self.semantic_scholar_api_key,
+            publication_types=self.semantic_scholar_publication_types,
+            sort_by=self.semantic_scholar_sort_by,
+            sort_order=self.semantic_scholar_sort_order,
+            use_extended_fields=self.semantic_scholar_use_extended_fields,
+        )
+
+    @property
+    def model_role_config(self) -> "ModelRoleConfig":
+        """Grouped role-based model routing configuration."""
+        from foundry_mcp.config.research_sub_configs import ModelRoleConfig
+
+        return ModelRoleConfig(
+            research_provider=self.deep_research_research_provider,
+            research_model=self.deep_research_research_model,
+            report_provider=self.deep_research_report_provider,
+            report_model=self.deep_research_report_model,
+            reflection_provider=self.deep_research_reflection_provider,
+            reflection_model=self.deep_research_reflection_model,
+            topic_reflection_provider=self.deep_research_topic_reflection_provider,
+            topic_reflection_model=self.deep_research_topic_reflection_model,
+            clarification_provider=self.deep_research_clarification_provider,
+            clarification_model=self.deep_research_clarification_model,
+            compression_provider=self.deep_research_compression_provider,
+            compression_model=self.deep_research_compression_model,
+            summarization_provider=self.deep_research_summarization_provider,
+            summarization_model=self.deep_research_summarization_model,
+            digest_provider=self.deep_research_digest_provider,
+            digest_providers=list(self.deep_research_digest_providers),
+        )
+
+    @property
+    def deep_research_config(self) -> "DeepResearchConfig":
+        """Grouped deep research workflow configuration."""
+        from foundry_mcp.config.research_sub_configs import DeepResearchConfig
+
+        return DeepResearchConfig(
+            allow_clarification=self.deep_research_allow_clarification,
+            enable_reflection=self.deep_research_enable_reflection,
+            enable_contradiction_detection=self.deep_research_enable_contradiction_detection,
+            enable_topic_agents=self.deep_research_enable_topic_agents,
+            fetch_time_summarization=self.deep_research_fetch_time_summarization,
+            max_iterations=self.deep_research_max_iterations,
+            max_sub_queries=self.deep_research_max_sub_queries,
+            max_sources=self.deep_research_max_sources,
+            follow_links=self.deep_research_follow_links,
+            timeout=self.deep_research_timeout,
+            max_concurrent=self.deep_research_max_concurrent,
+            mode=self.deep_research_mode,
+            audit_artifacts=self.deep_research_audit_artifacts,
+            topic_max_searches=self.deep_research_topic_max_searches,
+            reflection_timeout=self.deep_research_reflection_timeout,
+            planning_timeout=self.deep_research_planning_timeout,
+            analysis_timeout=self.deep_research_analysis_timeout,
+            synthesis_timeout=self.deep_research_synthesis_timeout,
+            refinement_timeout=self.deep_research_refinement_timeout,
+            planning_provider=self.deep_research_planning_provider,
+            analysis_provider=self.deep_research_analysis_provider,
+            synthesis_provider=self.deep_research_synthesis_provider,
+            refinement_provider=self.deep_research_refinement_provider,
+            planning_providers=list(self.deep_research_planning_providers),
+            analysis_providers=list(self.deep_research_analysis_providers),
+            synthesis_providers=list(self.deep_research_synthesis_providers),
+            refinement_providers=list(self.deep_research_refinement_providers),
+            max_retries=self.deep_research_max_retries,
+            retry_delay=self.deep_research_retry_delay,
+            providers=list(self.deep_research_providers),
+            stale_task_seconds=self.deep_research_stale_task_seconds,
+            digest_policy=self.deep_research_digest_policy,
+            digest_min_chars=self.deep_research_digest_min_chars,
+            digest_max_sources=self.deep_research_digest_max_sources,
+            digest_timeout=self.deep_research_digest_timeout,
+            digest_max_concurrent=self.deep_research_digest_max_concurrent,
+            digest_include_evidence=self.deep_research_digest_include_evidence,
+            digest_evidence_max_chars=self.deep_research_digest_evidence_max_chars,
+            digest_max_evidence_snippets=self.deep_research_digest_max_evidence_snippets,
+            digest_fetch_pdfs=self.deep_research_digest_fetch_pdfs,
+            archive_content=self.deep_research_archive_content,
+            archive_retention_days=self.deep_research_archive_retention_days,
+        )

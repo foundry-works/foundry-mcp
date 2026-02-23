@@ -529,3 +529,76 @@ class TestEdgeCases:
         # Should have base metadata but no extra keys
         assert "finding_count" not in ret.metadata
         assert "research_id" in ret.metadata
+
+
+# ---------------------------------------------------------------------------
+# MODEL_TOKEN_LIMITS external config loading
+# ---------------------------------------------------------------------------
+
+
+class TestModelTokenLimitsConfig:
+    """Tests for externalized MODEL_TOKEN_LIMITS config loading."""
+
+    def test_loaded_from_json_config(self):
+        """MODEL_TOKEN_LIMITS should load from the external JSON config file."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            MODEL_TOKEN_LIMITS,
+        )
+
+        assert isinstance(MODEL_TOKEN_LIMITS, dict)
+        assert len(MODEL_TOKEN_LIMITS) > 0
+        # Spot-check known entries
+        assert MODEL_TOKEN_LIMITS["claude-opus-4-6"] == 200_000
+        assert MODEL_TOKEN_LIMITS["gemini-3"] == 1_000_000
+
+    def test_fallback_on_missing_file(self):
+        """Should fall back to hardcoded limits when JSON file is missing."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _FALLBACK_MODEL_TOKEN_LIMITS,
+            _load_model_token_limits,
+        )
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases._lifecycle.Path"
+        ) as mock_path_cls:
+            mock_path = MagicMock()
+            mock_path.__truediv__ = MagicMock(return_value=mock_path)
+            mock_path.read_text.side_effect = FileNotFoundError("not found")
+            # Make resolve().parents[5] return our mock
+            mock_path_cls.return_value.resolve.return_value.parents.__getitem__ = MagicMock(
+                return_value=mock_path
+            )
+            result = _load_model_token_limits()
+
+        assert result == _FALLBACK_MODEL_TOKEN_LIMITS
+
+    def test_fallback_on_malformed_json(self):
+        """Should fall back to hardcoded limits when JSON is malformed."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _FALLBACK_MODEL_TOKEN_LIMITS,
+            _load_model_token_limits,
+        )
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases._lifecycle.Path"
+        ) as mock_path_cls:
+            mock_path = MagicMock()
+            mock_path.__truediv__ = MagicMock(return_value=mock_path)
+            mock_path.read_text.return_value = "not valid json"
+            mock_path_cls.return_value.resolve.return_value.parents.__getitem__ = MagicMock(
+                return_value=mock_path
+            )
+            result = _load_model_token_limits()
+
+        assert result == _FALLBACK_MODEL_TOKEN_LIMITS
+
+    def test_ordering_preserved(self):
+        """More-specific substrings should precede less-specific ones."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            MODEL_TOKEN_LIMITS,
+        )
+
+        keys = list(MODEL_TOKEN_LIMITS.keys())
+        # gpt-4.1-mini must come before gpt-4.1
+        if "gpt-4.1-mini" in keys and "gpt-4.1" in keys:
+            assert keys.index("gpt-4.1-mini") < keys.index("gpt-4.1")

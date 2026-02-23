@@ -69,19 +69,28 @@ Mark items `[x]` as completed.
 
 ## Phase 3 — Architecture Refactors
 
-- [ ] **3.1** Refactor `ResearchConfig` into nested sub-configs
-  - Extract `TavilyConfig`, `PerplexityConfig`, `DeepResearchConfig`, `ModelRoleConfig`
-  - Maintain backward compat via property accessors
-  - Existing tests must pass without modification
-- [ ] **3.2** Extract `_compress_topic_findings_async` from `GatheringPhaseMixin`
-  - Move to dedicated `CompressionMixin` or utility module
-  - 270-line method → standalone, independently testable unit
-- [ ] **3.3** Consolidate clarification parsing into single coherent path
-  - Remove legacy `_parse_clarification_response()` after verifying `inferred_constraints` works with new schema
-  - Depends on: 2.6 (legacy test consolidation)
-- [ ] **3.4** Externalize `MODEL_TOKEN_LIMITS` to config
-  - Load from TOML/JSON config file or query provider capabilities
-  - Remove hardcoded dict from `_lifecycle.py`
+- [x] **3.1** Refactor `ResearchConfig` into nested sub-configs
+  - Created `research_sub_configs.py` with `TavilyConfig`, `PerplexityConfig`, `SemanticScholarConfig`, `DeepResearchConfig`, `ModelRoleConfig` frozen dataclasses
+  - Added `@property` accessors on `ResearchConfig`: `tavily_config`, `perplexity_config`, `semantic_scholar_config`, `deep_research_config`, `model_role_config`
+  - Flat fields remain as source of truth — full backward compat, zero test changes
+  - All 5898 tests pass
+- [x] **3.2** Extract `_compress_topic_findings_async` from `GatheringPhaseMixin`
+  - New file: `phases/compression.py` with `CompressionMixin` class
+  - `GatheringPhaseMixin` now inherits from `CompressionMixin`
+  - Exported from `phases/__init__.py`
+  - All 49 compression tests + 432 gathering/integration tests pass
+- [x] **3.3** Consolidate clarification parsing into single coherent path
+  - Removed legacy `_parse_clarification_response()` method from `clarification.py`
+  - Replaced with module-level `_extract_inferred_constraints()` pure function
+  - Updated `TestLegacyParseClarificationResponse` → `TestExtractInferredConstraints` (10 tests)
+  - Added 2 new edge-case tests (no constraints field, no JSON in content)
+  - All 50 clarification tests pass
+- [x] **3.4** Externalize `MODEL_TOKEN_LIMITS` to config
+  - New file: `config/model_token_limits.json` with 19 model entries
+  - `_lifecycle.py` loads from JSON at import time via `_load_model_token_limits()`
+  - Hardcoded `_FALLBACK_MODEL_TOKEN_LIMITS` dict retained for resilience
+  - Added 4 tests: loaded from JSON, fallback on missing file, fallback on malformed JSON, ordering preserved
+  - All 22 lifecycle tests pass
 
 ---
 
