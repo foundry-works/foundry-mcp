@@ -1,19 +1,23 @@
 """Per-topic compression mixin for DeepResearchWorkflow.
 
 Compresses each topic's raw sources into citation-rich summaries before
-analysis.  Extracted from GatheringPhaseMixin (Phase 3 PA.2) to isolate
-the compression logic as an independently testable unit.
+analysis.  Aligned with open_deep_research's ``compress_research()``
+approach: the compression prompt receives the full topic research context
+(reflections, refined queries, completion rationale) — not re-truncated
+raw source snippets — and the system prompt instructs verbatim
+preservation with structured output.
+
+Extracted from GatheringPhaseMixin (Phase 3 PA.2) to isolate the
+compression logic as an independently testable unit.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from typing import TYPE_CHECKING, Any
 
 from foundry_mcp.core.research.models.deep_research import DeepResearchState, TopicResearchResult
-from foundry_mcp.core.research.models.fidelity import PhaseMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -40,13 +44,6 @@ class CompressionMixin:
     # Per-topic compression
     # ------------------------------------------------------------------
 
-    #: Maximum characters per source included in the compression prompt.
-    #: ~500 tokens at ~4 chars/token — enough for the LLM to produce a
-    #: meaningful citation-rich summary per source while keeping the total
-    #: compression prompt within context-window limits when many sources
-    #: are processed together.
-    _COMPRESSION_SOURCE_CHAR_LIMIT: int = 2000
-
     async def _compress_topic_findings_async(
         self,
         state: DeepResearchState,
@@ -57,14 +54,22 @@ class CompressionMixin:
 
         Runs after all topic researchers complete.  For each
         ``TopicResearchResult`` that has sources, builds a compression
-        prompt asking the LLM to reformat the raw findings with inline
-        citations — preserving all relevant information without
-        summarising.  Results are stored in
-        ``TopicResearchResult.compressed_findings``.
+        prompt using the **full topic research context** — including
+        reflection notes, refined queries, and completion rationale from
+        the ReAct loop — and asks the LLM to reformat the raw findings
+        with inline citations, preserving all relevant information.
+
+        Aligned with open_deep_research's ``compress_research()`` approach:
+        the compression prompt receives the full research context (not
+        re-truncated snippets), and the system prompt instructs verbatim
+        preservation with structured output.
 
         Features:
+        - Full ReAct context in prompt (reflections, refined queries, rationale).
+        - Configurable source content limit (default 50,000 chars, matching
+          open_deep_research's ``max_content_length``).
+        - Progressive token-limit handling via ``execute_llm_call``.
         - Parallel compression across topics, bounded by *max_concurrent*.
-        - Progressive token-limit handling (3 retries, 10 % truncation each).
         - Graceful fallback: if compression fails for a topic,
           ``compressed_findings`` stays ``None`` and the analysis phase
           falls through to raw sources.
@@ -76,18 +81,11 @@ class CompressionMixin:
 
         Returns:
             Dict with compression statistics (topics_compressed,
-            topics_failed, total_compression_tokens, input_tokens,
-            output_tokens).
+            topics_failed, total_compression_tokens).
         """
-        from foundry_mcp.core.errors.provider import ContextWindowError
-        from foundry_mcp.core.research.workflows.deep_research._helpers import (
-            estimate_token_limit_for_model,
-            truncate_to_token_estimate,
-        )
+        from foundry_mcp.core.research.workflows.base import WorkflowResult
         from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
-            MODEL_TOKEN_LIMITS,
-            _TRUNCATION_FACTOR,
-            _is_context_window_error,
+            execute_llm_call,
         )
 
         results_to_compress = [
@@ -98,7 +96,7 @@ class CompressionMixin:
         if not results_to_compress:
             return {"topics_compressed": 0, "topics_failed": 0, "total_compression_tokens": 0}
 
-        # Resolve compression provider/model via role-based hierarchy (Phase 6).
+        # Resolve compression provider/model via role-based hierarchy.
         # Uses try/except — hasattr is not safe with mock objects that
         # auto-create attributes on access.
         compression_provider: str = self.config.default_provider
@@ -107,6 +105,12 @@ class CompressionMixin:
             compression_provider, compression_model = self.config.resolve_model_for_role("compression")
         except (AttributeError, TypeError, ValueError):
             logger.debug("Role resolution unavailable for compression, using defaults")
+
+        # Source content char limit — configurable, defaults to 50,000
+        # (matching open_deep_research's max_content_length).
+        max_content_length: int = getattr(
+            self.config, "deep_research_compression_max_content_length", 50_000
+        )
 
         semaphore = asyncio.Semaphore(max_concurrent)
 
@@ -119,6 +123,8 @@ class CompressionMixin:
                 (input_tokens, output_tokens, success) tuple.
             """
             async with semaphore:
+                self._check_cancellation(state)
+
                 # Collect sources belonging to this topic
                 topic_sources = [
                     s for s in state.sources if s.id in topic_result.source_ids
@@ -130,7 +136,46 @@ class CompressionMixin:
                 sub_query = state.get_sub_query(topic_result.sub_query_id)
                 query_text = sub_query.query if sub_query else "Unknown query"
 
-                # Build source block for the prompt
+                # ---------------------------------------------------------
+                # Build full research context (aligned with open_deep_research)
+                # ---------------------------------------------------------
+
+                # Search iteration history
+                iteration_lines: list[str] = []
+
+                # First iteration: original query
+                iteration_lines.append(
+                    f'  1. Query: "{query_text}" '
+                    f"-> {topic_result.sources_found} sources found"
+                )
+                if topic_result.reflection_notes:
+                    iteration_lines.append(
+                        f"     Reflection: {topic_result.reflection_notes[0]}"
+                    )
+
+                # Subsequent iterations: refined queries
+                for i, refined_q in enumerate(topic_result.refined_queries):
+                    iter_num = i + 2
+                    reflection = (
+                        topic_result.reflection_notes[i + 1]
+                        if i + 1 < len(topic_result.reflection_notes)
+                        else ""
+                    )
+                    iteration_lines.append(f'  {iter_num}. Query: "{refined_q}"')
+                    if reflection:
+                        iteration_lines.append(
+                            f"     Reflection: {reflection}"
+                        )
+
+                # Completion info
+                if topic_result.early_completion and topic_result.completion_rationale:
+                    iteration_lines.append(
+                        f"  Completion: {topic_result.completion_rationale}"
+                    )
+
+                iterations_block = "\n".join(iteration_lines)
+
+                # Source block with full content (capped at max_content_length)
                 source_lines: list[str] = []
                 for idx, src in enumerate(topic_sources, 1):
                     source_lines.append(f"[{idx}] Title: {src.title}")
@@ -138,119 +183,113 @@ class CompressionMixin:
                         source_lines.append(f"    URL: {src.url}")
                     content = src.content or src.snippet or ""
                     if content:
-                        if len(content) > self._COMPRESSION_SOURCE_CHAR_LIMIT:
-                            content = content[:self._COMPRESSION_SOURCE_CHAR_LIMIT] + "..."
+                        if len(content) > max_content_length:
+                            content = content[:max_content_length] + "..."
                         source_lines.append(f"    Content: {content}")
                     source_lines.append("")
 
                 sources_block = "\n".join(source_lines)
 
+                # System prompt — aligned with open_deep_research directives
                 system_prompt = (
-                    "You are a research assistant. Your task is to reformat research "
-                    "findings into a structured, citation-rich summary.\n\n"
-                    "IMPORTANT RULES:\n"
-                    "- DO NOT summarize or remove information. Preserve ALL relevant details.\n"
-                    "- Add inline citations using [1], [2], etc. matching the source numbers.\n"
-                    "- Organize findings into a coherent narrative grouped by theme.\n"
-                    "- Include a source list at the end.\n\n"
-                    "OUTPUT FORMAT:\n"
+                    "You are a research assistant that has conducted research on "
+                    "a topic by searching the web and gathering sources. Your job "
+                    "is now to clean up the findings, but preserve all of the "
+                    "relevant statements and information gathered.\n\n"
+                    "<Task>\n"
+                    "Clean up information gathered from web searches in the "
+                    "context below. All relevant information should be repeated "
+                    "and rewritten verbatim, but in a cleaner format. The purpose "
+                    "of this step is just to remove any obviously irrelevant or "
+                    "duplicative information. For example, if three sources all "
+                    "say the same thing, you could consolidate them with "
+                    "appropriate citations.\n"
+                    "Only these fully comprehensive cleaned findings are going to "
+                    "be returned, so it's crucial that you don't lose any "
+                    "information.\n"
+                    "</Task>\n\n"
+                    "<Guidelines>\n"
+                    "1. Your output should be fully comprehensive and include ALL "
+                    "of the information and sources gathered. Repeat key "
+                    "information verbatim.\n"
+                    "2. The output can be as long as necessary to return ALL "
+                    "information.\n"
+                    "3. Include inline citations [1], [2], etc. for each source.\n"
+                    "4. Include a Source List at the end with all sources and "
+                    "corresponding citations.\n"
+                    "5. Make sure to include ALL sources and how they were used.\n"
+                    "6. A later LLM will merge this with other topic reports "
+                    "- don't lose any sources or information.\n"
+                    "</Guidelines>\n\n"
+                    "<Output Format>\n"
                     "## Queries Made\n"
-                    "- List the search queries used\n\n"
+                    "List of all search queries and iterations\n\n"
                     "## Comprehensive Findings\n"
-                    "- All findings with inline citations [1], [2], etc.\n"
-                    "- Group by theme when applicable\n\n"
+                    "All findings with inline citations [1], [2], etc.\n"
+                    "Group by theme when applicable.\n\n"
                     "## Source List\n"
-                    "- [1] Title — URL\n"
-                    "- [2] Title — URL\n"
+                    "[1] Title - URL\n"
+                    "[2] Title - URL\n"
+                    "</Output Format>\n\n"
+                    "<Citation Rules>\n"
+                    "- Assign each unique URL a single citation number\n"
+                    "- Number sources sequentially without gaps (1, 2, 3, ...)\n"
+                    "- Format: [N] Source Title - URL\n"
+                    "</Citation Rules>\n\n"
+                    "CRITICAL: It is extremely important that any information "
+                    "even remotely relevant is preserved verbatim. DO NOT "
+                    "summarize, paraphrase, or rewrite findings - only clean up "
+                    "the format."
                 )
 
+                # User prompt — includes full research context
                 user_prompt = (
                     f"Research sub-query: {query_text}\n\n"
+                    f"Search iterations:\n{iterations_block}\n\n"
                     f"Sources ({len(topic_sources)} total):\n\n"
                     f"{sources_block}\n"
-                    "Reformat these findings with inline citations. "
-                    "Preserve all relevant information."
+                    "Clean up these findings preserving all relevant "
+                    "information with inline citations."
                 )
 
-                # Progressive token-limit recovery (up to 3 retries)
-                max_retries = 3
-                current_prompt = user_prompt
-                compressed: str | None = None
-                input_tokens = 0
-                output_tokens = 0
+                # Use execute_llm_call for progressive token-limit recovery
+                # (replaces duplicated ContextWindowError retry logic).
+                call_result = await execute_llm_call(
+                    workflow=self,
+                    state=state,
+                    phase_name="compression",
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    provider_id=compression_provider,
+                    model=compression_model,
+                    temperature=0.2,
+                    timeout=timeout,
+                    role="compression",
+                )
 
-                for attempt in range(max_retries + 1):
-                    try:
-                        self._check_cancellation(state)
+                if isinstance(call_result, WorkflowResult):
+                    # Error path (context window exhausted, timeout, etc.)
+                    logger.error(
+                        "Compression failed for topic %s: %s",
+                        topic_result.sub_query_id,
+                        call_result.error,
+                    )
+                    return (0, 0, False)
 
-                        result = await self._execute_provider_async(
-                            prompt=current_prompt,
-                            provider_id=compression_provider,
-                            model=compression_model,
-                            system_prompt=system_prompt,
-                            timeout=timeout,
-                            temperature=0.2,
-                            phase="compression",
-                            fallback_providers=self.config.get_phase_fallback_providers("analysis"),
-                            max_retries=1,
-                            retry_delay=2.0,
-                        )
-
-                        if result.success and result.content:
-                            compressed = result.content
-                            input_tokens = result.input_tokens or 0
-                            output_tokens = result.output_tokens or 0
-                        break
-
-                    except ContextWindowError as e:
-                        if attempt >= max_retries:
-                            break
-                        # Truncate user prompt by 10% and retry
-                        max_tokens = e.max_tokens or estimate_token_limit_for_model(
-                            compression_model, MODEL_TOKEN_LIMITS
-                        ) or 128_000
-                        reduced = int(max_tokens * (_TRUNCATION_FACTOR ** (attempt + 1)))
-                        current_prompt = truncate_to_token_estimate(current_prompt, reduced)
-                        logger.warning(
-                            "Compression context window exceeded for topic %s "
-                            "(attempt %d/%d), truncating and retrying",
-                            topic_result.sub_query_id,
-                            attempt + 1,
-                            max_retries,
-                        )
-                    except Exception as e:
-                        if _is_context_window_error(e) and attempt < max_retries:
-                            max_tokens = estimate_token_limit_for_model(
-                                compression_model, MODEL_TOKEN_LIMITS
-                            ) or 128_000
-                            reduced = int(max_tokens * (_TRUNCATION_FACTOR ** (attempt + 1)))
-                            current_prompt = truncate_to_token_estimate(current_prompt, reduced)
-                            logger.warning(
-                                "Compression detected provider-specific context error "
-                                "for topic %s (attempt %d/%d)",
-                                topic_result.sub_query_id,
-                                attempt + 1,
-                                max_retries,
-                            )
-                        else:
-                            logger.error(
-                                "Compression failed for topic %s: %s",
-                                topic_result.sub_query_id,
-                                e,
-                            )
-                            break
-
-                if compressed:
-                    topic_result.compressed_findings = compressed
-                    return (input_tokens, output_tokens, True)
+                result = call_result.result
+                if result.success and result.content:
+                    topic_result.compressed_findings = result.content
+                    return (result.input_tokens or 0, result.output_tokens or 0, True)
                 return (0, 0, False)
 
         # Run compression tasks in parallel
-        compression_start = time.perf_counter()
         tasks = [compress_one(tr) for tr in results_to_compress]
         gather_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Aggregate results after gather completes (no nonlocal mutation)
+        # Aggregate results after gather completes (no nonlocal mutation).
+        # Note: per-topic PhaseMetrics and token tracking are handled by
+        # execute_llm_call.  We aggregate here only for the audit event
+        # and return statistics.
         total_input_tokens = 0
         total_output_tokens = 0
         topics_compressed = 0
@@ -271,27 +310,8 @@ class CompressionMixin:
                     topics_compressed += 1
                 else:
                     topics_failed += 1
-        compression_duration_ms = (time.perf_counter() - compression_start) * 1000
 
-        # Record compression phase metrics
         total_compression_tokens = total_input_tokens + total_output_tokens
-        if total_compression_tokens > 0:
-            state.total_tokens_used += total_compression_tokens
-            state.phase_metrics.append(
-                PhaseMetrics(
-                    phase="compression",
-                    duration_ms=compression_duration_ms,
-                    input_tokens=total_input_tokens,
-                    output_tokens=total_output_tokens,
-                    cached_tokens=0,
-                    provider_id=compression_provider,
-                    model_used=compression_model,
-                    metadata={
-                        "topics_compressed": topics_compressed,
-                        "topics_failed": topics_failed,
-                    },
-                )
-            )
 
         self._write_audit_event(
             state,

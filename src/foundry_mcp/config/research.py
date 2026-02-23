@@ -111,6 +111,7 @@ class ResearchConfig:
     # Per-topic compression before aggregation (Phase 3)
     deep_research_compression_provider: Optional[str] = None  # LLM provider for per-topic compression (defaults to research/default provider)
     deep_research_compression_model: Optional[str] = None  # Model override for per-topic compression
+    deep_research_compression_max_content_length: int = 50000  # Max chars per source in compression prompt (matches open_deep_research)
 
     # Multi-model cost optimization — role-based model hierarchy (Phase 6)
     # "research" role: main reasoning for analysis, planning, clarification (strongest available)
@@ -330,6 +331,9 @@ class ResearchConfig:
             # Per-topic compression (Phase 3)
             deep_research_compression_provider=data.get("deep_research_compression_provider"),
             deep_research_compression_model=data.get("deep_research_compression_model"),
+            deep_research_compression_max_content_length=int(
+                data.get("deep_research_compression_max_content_length", 50000)
+            ),
             # Multi-model cost optimization — role-based hierarchy (Phase 6)
             deep_research_research_provider=data.get("deep_research_research_provider"),
             deep_research_research_model=data.get("deep_research_research_model"),

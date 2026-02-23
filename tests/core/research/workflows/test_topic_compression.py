@@ -3,21 +3,23 @@
 Tests cover:
 1. TopicResearchResult.compressed_findings field — default, set/get, backward compat
 2. Compression prompt construction — correct sources per topic, citation formatting
-3. Progressive truncation on token limit error (reuses Phase 5 infra)
-4. Fallback to raw sources when compression fails
-5. Analysis phase uses compressed findings when available
-6. Analysis phase falls back when compressed findings absent
-7. Parallel compression across multiple topics
-8. Citation numbering consistency between compression and analysis
-9. Config fields — compression_provider, compression_model
+3. Full ReAct context in prompt — reflections, refined queries, completion rationale
+4. Source content limit — configurable (default 50,000 chars matching open_deep_research)
+5. Aligned system prompt — open_deep_research-style directives
+6. Progressive truncation via execute_llm_call (reuses Phase 5 infra)
+7. Fallback to raw sources when compression fails
+8. Analysis phase uses compressed findings when available
+9. Analysis phase falls back when compressed findings absent
+10. Parallel compression across multiple topics
+11. Citation numbering consistency between compression and analysis
+12. Config fields — compression_provider, compression_model, max_content_length
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -32,6 +34,7 @@ from foundry_mcp.core.research.models.sources import (
     SourceType,
     SubQuery,
 )
+from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research.phases.gathering import (
     GatheringPhaseMixin,
 )
@@ -116,7 +119,15 @@ def _add_sources_for_topic(
 
 
 class StubGatheringMixin(GatheringPhaseMixin):
-    """Concrete class inheriting GatheringPhaseMixin for compression testing."""
+    """Concrete class inheriting GatheringPhaseMixin for compression testing.
+
+    Configured to work with execute_llm_call which needs:
+    - config.resolve_model_for_role()
+    - config.get_phase_fallback_providers()
+    - config.deep_research_max_retries / deep_research_retry_delay
+    - config.deep_research_compression_max_content_length
+    - memory.save_deep_research()
+    """
 
     def __init__(self) -> None:
         self.config = MagicMock()
@@ -126,6 +137,11 @@ class StubGatheringMixin(GatheringPhaseMixin):
         self.config.get_phase_fallback_providers = MagicMock(return_value=[])
         self.config.deep_research_max_retries = 1
         self.config.deep_research_retry_delay = 0.1
+        self.config.deep_research_compression_max_content_length = 50_000
+        # resolve_model_for_role must return a proper tuple
+        self.config.resolve_model_for_role = MagicMock(
+            return_value=("test-provider", None)
+        )
         self.memory = MagicMock()
         self._search_providers: dict[str, Any] = {}
         self._audit_events: list[tuple[str, dict]] = []
@@ -161,6 +177,8 @@ class StubGatheringMixin(GatheringPhaseMixin):
         result.tokens_used = 200
         result.input_tokens = 150
         result.output_tokens = 50
+        result.cached_tokens = 0
+        result.duration_ms = 100.0
         result.provider_id = "test-provider"
         result.model_used = "test-model"
         return result
@@ -312,6 +330,10 @@ class TestCompressTopicFindings:
             result.tokens_used = 100
             result.input_tokens = 75
             result.output_tokens = 25
+            result.cached_tokens = 0
+            result.duration_ms = 50.0
+            result.provider_id = "test-provider"
+            result.model_used = "test-model"
             return result
 
         mixin._provider_async_fn = capture_prompt
@@ -354,6 +376,10 @@ class TestCompressTopicFindings:
             result.tokens_used = 100
             result.input_tokens = 75
             result.output_tokens = 25
+            result.cached_tokens = 0
+            result.duration_ms = 50.0
+            result.provider_id = "test-provider"
+            result.model_used = "test-model"
             return result
 
         mixin._provider_async_fn = capture_prompt
@@ -372,12 +398,14 @@ class TestCompressTopicFindings:
         assert "[3] Title:" in prompt
 
     @pytest.mark.asyncio
-    async def test_compression_prompt_truncates_long_content(self) -> None:
-        """Source content exceeding _COMPRESSION_SOURCE_CHAR_LIMIT is truncated."""
+    async def test_compression_prompt_uses_configurable_content_limit(self) -> None:
+        """Source content exceeding max_content_length is truncated (default 50,000)."""
         mixin = StubGatheringMixin()
+        # Set a small limit for testing
+        mixin.config.deep_research_compression_max_content_length = 100
         state = _make_state(num_sub_queries=1)
 
-        long_content = "A" * 3000  # Exceeds the 2000 char limit
+        long_content = "A" * 200  # Exceeds the 100 char limit
         src = _make_source(
             source_id="src-long",
             url="https://example.com/long",
@@ -405,6 +433,10 @@ class TestCompressTopicFindings:
             result.tokens_used = 50
             result.input_tokens = 35
             result.output_tokens = 15
+            result.cached_tokens = 0
+            result.duration_ms = 30.0
+            result.provider_id = "test-provider"
+            result.model_used = "test-model"
             return result
 
         mixin._provider_async_fn = capture_prompt
@@ -419,8 +451,66 @@ class TestCompressTopicFindings:
         prompt = captured_prompts[0]
         # Content should be truncated with ellipsis
         assert "..." in prompt
-        # Should NOT contain the full 3000-char string
+        # Should NOT contain the full 200-char string
         assert long_content not in prompt
+        # Should contain the truncated version (100 chars + "...")
+        assert "A" * 100 + "..." in prompt
+
+    @pytest.mark.asyncio
+    async def test_default_content_limit_allows_long_content(self) -> None:
+        """Default 50,000 char limit allows content under that threshold through."""
+        mixin = StubGatheringMixin()
+        state = _make_state(num_sub_queries=1)
+
+        # Content under default limit (50,000)
+        content_3000 = "B" * 3000
+        src = _make_source(
+            source_id="src-medium",
+            url="https://example.com/medium",
+            title="Medium Source",
+            content=content_3000,
+            sub_query_id="sq-0",
+        )
+        state.append_source(src)
+
+        topic_result = TopicResearchResult(
+            sub_query_id="sq-0",
+            searches_performed=1,
+            sources_found=1,
+            source_ids=["src-medium"],
+        )
+        state.topic_research_results.append(topic_result)
+
+        captured_prompts: list[str] = []
+
+        async def capture_prompt(**kwargs: Any) -> MagicMock:
+            captured_prompts.append(kwargs.get("prompt", ""))
+            result = MagicMock()
+            result.success = True
+            result.content = "Compressed."
+            result.tokens_used = 50
+            result.input_tokens = 35
+            result.output_tokens = 15
+            result.cached_tokens = 0
+            result.duration_ms = 30.0
+            result.provider_id = "test-provider"
+            result.model_used = "test-model"
+            return result
+
+        mixin._provider_async_fn = capture_prompt
+
+        await mixin._compress_topic_findings_async(
+            state=state,
+            max_concurrent=3,
+            timeout=60.0,
+        )
+
+        assert len(captured_prompts) == 1
+        prompt = captured_prompts[0]
+        # Full 3000-char content should appear (under 50,000 limit)
+        assert content_3000 in prompt
+        # No truncation
+        assert "..." not in prompt
 
     @pytest.mark.asyncio
     async def test_compression_prompt_source_count_header(self) -> None:
@@ -441,6 +531,10 @@ class TestCompressTopicFindings:
             result.tokens_used = 80
             result.input_tokens = 60
             result.output_tokens = 20
+            result.cached_tokens = 0
+            result.duration_ms = 40.0
+            result.provider_id = "test-provider"
+            result.model_used = "test-model"
             return result
 
         mixin._provider_async_fn = capture_prompt
@@ -457,8 +551,8 @@ class TestCompressTopicFindings:
         assert "4 total" in prompt
 
     @pytest.mark.asyncio
-    async def test_compression_system_prompt_preserves_info(self) -> None:
-        """System prompt instructs NOT to summarize, only reformat."""
+    async def test_compression_system_prompt_aligned_with_open_deep_research(self) -> None:
+        """System prompt matches open_deep_research directives."""
         mixin = StubGatheringMixin()
         state = _make_state(num_sub_queries=1)
 
@@ -475,6 +569,10 @@ class TestCompressTopicFindings:
             result.tokens_used = 50
             result.input_tokens = 35
             result.output_tokens = 15
+            result.cached_tokens = 0
+            result.duration_ms = 30.0
+            result.provider_id = "test-provider"
+            result.model_used = "test-model"
             return result
 
         mixin._provider_async_fn = capture_system
@@ -487,9 +585,15 @@ class TestCompressTopicFindings:
 
         assert len(captured_system) == 1
         sys_prompt = captured_system[0]
-        assert "DO NOT summarize" in sys_prompt
-        assert "inline citations" in sys_prompt.lower() or "inline citations" in sys_prompt
-        assert "[1]" in sys_prompt
+        # Key open_deep_research-aligned directives
+        assert "preserved verbatim" in sys_prompt
+        assert "don't lose" in sys_prompt.lower()
+        assert "later LLM will merge" in sys_prompt
+        assert "inline citations" in sys_prompt.lower() or "[1]" in sys_prompt
+        assert "Queries Made" in sys_prompt
+        assert "Comprehensive Findings" in sys_prompt
+        assert "Source List" in sys_prompt
+        assert "DO NOT" in sys_prompt
 
     @pytest.mark.asyncio
     async def test_fallback_on_provider_failure(self) -> None:
@@ -500,12 +604,15 @@ class TestCompressTopicFindings:
         topic_result = _add_sources_for_topic(state, "sq-0", num_sources=2)
         state.topic_research_results.append(topic_result)
 
-        async def failing_provider(**kwargs: Any) -> MagicMock:
-            result = MagicMock()
-            result.success = False
-            result.content = ""
-            result.tokens_used = 0
-            return result
+        async def failing_provider(**kwargs: Any) -> WorkflowResult:
+            return WorkflowResult(
+                success=False,
+                content="",
+                error="Provider call failed",
+                provider_id="test-provider",
+                model_used="test-model",
+                metadata={"timeout": False},
+            )
 
         mixin._provider_async_fn = failing_provider
 
@@ -571,6 +678,10 @@ class TestCompressTopicFindings:
             result.tokens_used = 150
             result.input_tokens = 110
             result.output_tokens = 40
+            result.cached_tokens = 0
+            result.duration_ms = 80.0
+            result.provider_id = "test-provider"
+            result.model_used = "test-model"
             return result
 
         mixin._provider_async_fn = retry_then_succeed
@@ -618,6 +729,199 @@ class TestCompressTopicFindings:
 
 
 # =============================================================================
+# Unit tests: Full ReAct context in prompt (item 1.1)
+# =============================================================================
+
+
+class TestFullReActContext:
+    """Tests verifying that compression prompt includes full research context."""
+
+    @pytest.mark.asyncio
+    async def test_prompt_includes_reflection_notes(self) -> None:
+        """Compression prompt includes topic researcher's reflection notes."""
+        mixin = StubGatheringMixin()
+        state = _make_state(num_sub_queries=1)
+
+        topic_result = _add_sources_for_topic(state, "sq-0", num_sources=2)
+        topic_result.reflection_notes = [
+            "Initial search found relevant sources on solar energy costs.",
+            "Refined search needed for wind energy comparisons.",
+        ]
+        # Reflections after the first are paired with refined queries
+        topic_result.refined_queries = [
+            "wind energy cost comparison with fossil fuels",
+        ]
+        state.topic_research_results.append(topic_result)
+
+        captured_prompts: list[str] = []
+
+        async def capture_prompt(**kwargs: Any) -> MagicMock:
+            captured_prompts.append(kwargs.get("prompt", ""))
+            result = MagicMock()
+            result.success = True
+            result.content = "Compressed with reflections."
+            result.tokens_used = 100
+            result.input_tokens = 75
+            result.output_tokens = 25
+            result.cached_tokens = 0
+            result.duration_ms = 50.0
+            result.provider_id = "test-provider"
+            result.model_used = "test-model"
+            return result
+
+        mixin._provider_async_fn = capture_prompt
+
+        await mixin._compress_topic_findings_async(
+            state=state,
+            max_concurrent=3,
+            timeout=60.0,
+        )
+
+        assert len(captured_prompts) == 1
+        prompt = captured_prompts[0]
+        assert "Initial search found relevant sources on solar energy costs" in prompt
+        assert "Refined search needed for wind energy comparisons" in prompt
+        assert "Reflection:" in prompt
+
+    @pytest.mark.asyncio
+    async def test_prompt_includes_refined_queries(self) -> None:
+        """Compression prompt includes refined queries from ReAct loop."""
+        mixin = StubGatheringMixin()
+        state = _make_state(num_sub_queries=1)
+
+        topic_result = _add_sources_for_topic(state, "sq-0", num_sources=2)
+        topic_result.refined_queries = [
+            "solar energy cost reduction trends 2020-2025",
+            "wind vs solar cost per megawatt hour",
+        ]
+        state.topic_research_results.append(topic_result)
+
+        captured_prompts: list[str] = []
+
+        async def capture_prompt(**kwargs: Any) -> MagicMock:
+            captured_prompts.append(kwargs.get("prompt", ""))
+            result = MagicMock()
+            result.success = True
+            result.content = "Compressed with refined queries."
+            result.tokens_used = 100
+            result.input_tokens = 75
+            result.output_tokens = 25
+            result.cached_tokens = 0
+            result.duration_ms = 50.0
+            result.provider_id = "test-provider"
+            result.model_used = "test-model"
+            return result
+
+        mixin._provider_async_fn = capture_prompt
+
+        await mixin._compress_topic_findings_async(
+            state=state,
+            max_concurrent=3,
+            timeout=60.0,
+        )
+
+        assert len(captured_prompts) == 1
+        prompt = captured_prompts[0]
+        assert "solar energy cost reduction trends 2020-2025" in prompt
+        assert "wind vs solar cost per megawatt hour" in prompt
+        assert "Search iterations:" in prompt
+
+    @pytest.mark.asyncio
+    async def test_prompt_includes_completion_rationale(self) -> None:
+        """Compression prompt includes early completion rationale."""
+        mixin = StubGatheringMixin()
+        state = _make_state(num_sub_queries=1)
+
+        topic_result = _add_sources_for_topic(state, "sq-0", num_sources=2)
+        topic_result.early_completion = True
+        topic_result.completion_rationale = (
+            "Sufficient evidence gathered — all major renewable energy types covered."
+        )
+        state.topic_research_results.append(topic_result)
+
+        captured_prompts: list[str] = []
+
+        async def capture_prompt(**kwargs: Any) -> MagicMock:
+            captured_prompts.append(kwargs.get("prompt", ""))
+            result = MagicMock()
+            result.success = True
+            result.content = "Compressed with completion info."
+            result.tokens_used = 100
+            result.input_tokens = 75
+            result.output_tokens = 25
+            result.cached_tokens = 0
+            result.duration_ms = 50.0
+            result.provider_id = "test-provider"
+            result.model_used = "test-model"
+            return result
+
+        mixin._provider_async_fn = capture_prompt
+
+        await mixin._compress_topic_findings_async(
+            state=state,
+            max_concurrent=3,
+            timeout=60.0,
+        )
+
+        assert len(captured_prompts) == 1
+        prompt = captured_prompts[0]
+        assert "Sufficient evidence gathered" in prompt
+        assert "Completion:" in prompt
+
+    @pytest.mark.asyncio
+    async def test_prompt_includes_search_iteration_history(self) -> None:
+        """Compression prompt includes full search iteration history."""
+        mixin = StubGatheringMixin()
+        state = _make_state(num_sub_queries=1)
+
+        topic_result = _add_sources_for_topic(state, "sq-0", num_sources=3)
+        topic_result.reflection_notes = [
+            "Found general info but need specifics.",
+            "Better results after refinement.",
+        ]
+        topic_result.refined_queries = [
+            "specific renewable energy cost data 2024",
+        ]
+        state.topic_research_results.append(topic_result)
+
+        captured_prompts: list[str] = []
+
+        async def capture_prompt(**kwargs: Any) -> MagicMock:
+            captured_prompts.append(kwargs.get("prompt", ""))
+            result = MagicMock()
+            result.success = True
+            result.content = "Compressed."
+            result.tokens_used = 100
+            result.input_tokens = 75
+            result.output_tokens = 25
+            result.cached_tokens = 0
+            result.duration_ms = 50.0
+            result.provider_id = "test-provider"
+            result.model_used = "test-model"
+            return result
+
+        mixin._provider_async_fn = capture_prompt
+
+        await mixin._compress_topic_findings_async(
+            state=state,
+            max_concurrent=3,
+            timeout=60.0,
+        )
+
+        assert len(captured_prompts) == 1
+        prompt = captured_prompts[0]
+        # Should show iteration 1 (original query)
+        assert "1." in prompt
+        assert "Sub-query 0" in prompt
+        # Should show iteration 2 (refined query)
+        assert "2." in prompt
+        assert "specific renewable energy cost data 2024" in prompt
+        # Should show reflections
+        assert "Found general info but need specifics" in prompt
+        assert "Better results after refinement" in prompt
+
+
+# =============================================================================
 # Unit tests: Parallel compression across multiple topics
 # =============================================================================
 
@@ -650,6 +954,10 @@ class TestParallelCompression:
             result.tokens_used = 100
             result.input_tokens = 75
             result.output_tokens = 25
+            result.cached_tokens = 0
+            result.duration_ms = 50.0
+            result.provider_id = "test-provider"
+            result.model_used = "test-model"
             return result
 
         mixin._provider_async_fn = track_topics
@@ -679,23 +987,29 @@ class TestParallelCompression:
 
         call_idx = 0
 
-        async def mixed_results(**kwargs: Any) -> MagicMock:
+        async def mixed_results(**kwargs: Any) -> WorkflowResult:
             nonlocal call_idx
             call_idx += 1
-            result = MagicMock()
             if call_idx == 2:
                 # Second topic fails
-                result.success = False
-                result.content = ""
-                result.tokens_used = 0
-                result.input_tokens = 0
-                result.output_tokens = 0
-            else:
-                result.success = True
-                result.content = "## Findings\nCompressed [1]."
-                result.tokens_used = 100
-                result.input_tokens = 75
-                result.output_tokens = 25
+                return WorkflowResult(
+                    success=False,
+                    content="",
+                    error="Provider call failed",
+                    provider_id="test-provider",
+                    model_used="test-model",
+                    metadata={"timeout": False},
+                )
+            result = MagicMock()
+            result.success = True
+            result.content = "## Findings\nCompressed [1]."
+            result.tokens_used = 100
+            result.input_tokens = 75
+            result.output_tokens = 25
+            result.cached_tokens = 0
+            result.duration_ms = 50.0
+            result.provider_id = "test-provider"
+            result.model_used = "test-model"
             return result
 
         mixin._provider_async_fn = mixed_results
@@ -738,6 +1052,10 @@ class TestParallelCompression:
             result.tokens_used = 50
             result.input_tokens = 35
             result.output_tokens = 15
+            result.cached_tokens = 0
+            result.duration_ms = 30.0
+            result.provider_id = "test-provider"
+            result.model_used = "test-model"
             return result
 
         mixin._provider_async_fn = track_concurrency
@@ -759,11 +1077,11 @@ class TestParallelCompression:
 
 
 class TestCompressionTokenTracking:
-    """Tests for compression token tracking in PhaseMetrics."""
+    """Tests for compression token tracking."""
 
     @pytest.mark.asyncio
     async def test_compression_tokens_tracked_in_state(self) -> None:
-        """Compression tokens are added to state.total_tokens_used."""
+        """Compression tokens are added to state.total_tokens_used via execute_llm_call."""
         mixin = StubGatheringMixin()
         state = _make_state(num_sub_queries=1)
         initial_tokens = state.total_tokens_used
@@ -777,11 +1095,12 @@ class TestCompressionTokenTracking:
             timeout=60.0,
         )
 
-        assert state.total_tokens_used == initial_tokens + stats["total_compression_tokens"]
+        # execute_llm_call tracks tokens per-topic
+        assert state.total_tokens_used > initial_tokens
 
     @pytest.mark.asyncio
     async def test_compression_phase_metrics_recorded(self) -> None:
-        """A PhaseMetrics entry is recorded for compression."""
+        """PhaseMetrics entries are recorded for compression (per-topic via execute_llm_call)."""
         mixin = StubGatheringMixin()
         state = _make_state(num_sub_queries=1)
 
@@ -796,12 +1115,14 @@ class TestCompressionTokenTracking:
             timeout=60.0,
         )
 
-        assert len(state.phase_metrics) == initial_metrics_count + 1
-        compression_metric = state.phase_metrics[-1]
-        assert compression_metric.phase == "compression"
-        assert compression_metric.input_tokens == 150
-        assert compression_metric.output_tokens == 50
-        assert compression_metric.metadata["topics_compressed"] == 1
+        # execute_llm_call records per-topic PhaseMetrics
+        assert len(state.phase_metrics) > initial_metrics_count
+        compression_metrics = [
+            m for m in state.phase_metrics if m.phase == "compression"
+        ]
+        assert len(compression_metrics) >= 1
+        assert compression_metrics[0].input_tokens == 150
+        assert compression_metrics[0].output_tokens == 50
 
     @pytest.mark.asyncio
     async def test_no_metrics_when_no_tokens(self) -> None:
@@ -1041,3 +1362,32 @@ class TestCompressionConfig:
         config = ResearchConfig.from_toml_dict({})
         assert config.deep_research_compression_provider is None
         assert config.deep_research_compression_model is None
+
+    def test_default_compression_max_content_length(self) -> None:
+        """Default compression max content length is 50,000."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        config = ResearchConfig()
+        assert config.deep_research_compression_max_content_length == 50_000
+
+    def test_explicit_compression_max_content_length(self) -> None:
+        """Explicit compression max content length is used when set."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        config = ResearchConfig(deep_research_compression_max_content_length=100_000)
+        assert config.deep_research_compression_max_content_length == 100_000
+
+    def test_from_toml_dict_parses_max_content_length(self) -> None:
+        """from_toml_dict correctly parses compression max content length."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        data = {"deep_research_compression_max_content_length": 75000}
+        config = ResearchConfig.from_toml_dict(data)
+        assert config.deep_research_compression_max_content_length == 75_000
+
+    def test_from_toml_dict_defaults_max_content_length(self) -> None:
+        """from_toml_dict uses 50,000 default for max content length."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        config = ResearchConfig.from_toml_dict({})
+        assert config.deep_research_compression_max_content_length == 50_000
