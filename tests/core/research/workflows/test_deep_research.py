@@ -2495,3 +2495,165 @@ class TestRunPhaseHelper:
         assert "phase_error" in event_types
         # phase_complete should NOT be present on failure
         assert "phase_complete" not in event_types
+
+
+# =============================================================================
+# Backward-Compatibility Deserialization Tests (V.5)
+# =============================================================================
+
+
+class TestBackwardCompatDeserialization:
+    """Verify that sessions saved before recent schema changes can still be loaded.
+
+    Covers:
+    - Sessions without ``next_citation_number`` (added in Phase 1.5)
+    - Sessions without ``topic_research_results`` (added in Phase 4)
+    - Sessions without ``content_fidelity`` / ``dropped_content_ids`` (added in Phase 5)
+    - Sessions without provider tracking fields (added in Phase 6)
+    """
+
+    def _make_legacy_session_dict(
+        self,
+        *,
+        include_sources: bool = True,
+        include_citation_counter: bool = False,
+    ) -> dict:
+        """Build a session dict mimicking pre-Phase-1.5 serialization."""
+        sources = []
+        if include_sources:
+            sources = [
+                {
+                    "id": "src-aaa",
+                    "title": "Source Alpha",
+                    "url": "https://example.com/alpha",
+                    "source_type": "web",
+                    "quality": "unknown",
+                    "snippet": "Alpha snippet",
+                    "citation_number": 1,
+                },
+                {
+                    "id": "src-bbb",
+                    "title": "Source Beta",
+                    "url": "https://example.com/beta",
+                    "source_type": "web",
+                    "quality": "unknown",
+                    "snippet": "Beta snippet",
+                    "citation_number": 2,
+                },
+                {
+                    "id": "src-ccc",
+                    "title": "Source Gamma",
+                    "url": "https://example.com/gamma",
+                    "source_type": "academic",
+                    "quality": "high",
+                    "snippet": "Gamma snippet",
+                    "citation_number": 5,
+                },
+            ]
+
+        payload: dict = {
+            "id": "deepres-legacy-001",
+            "original_query": "Legacy test query",
+            "phase": "planning",
+            "iteration": 1,
+            "max_iterations": 3,
+            "sources": sources,
+            "findings": [],
+            "sub_queries": [],
+            "gaps": [],
+            "total_tokens_used": 500,
+        }
+        if include_citation_counter:
+            payload["next_citation_number"] = 10
+        return payload
+
+    def test_session_without_citation_counter_syncs_to_max(self):
+        """Sessions saved before next_citation_number auto-correct on load."""
+        data = self._make_legacy_session_dict(include_citation_counter=False)
+        state = DeepResearchState.model_validate(data)
+
+        # Validator should set counter to max(citation_number) + 1 = 6
+        assert state.next_citation_number == 6
+        assert len(state.sources) == 3
+
+    def test_session_with_citation_counter_preserves_value(self):
+        """Sessions saved with next_citation_number keep the stored value."""
+        data = self._make_legacy_session_dict(include_citation_counter=True)
+        state = DeepResearchState.model_validate(data)
+
+        # Stored value (10) > max(citation_number) (5), so it's preserved
+        assert state.next_citation_number == 10
+
+    def test_session_without_sources_defaults_counter_to_1(self):
+        """Empty-source sessions start with counter=1."""
+        data = self._make_legacy_session_dict(
+            include_sources=False,
+            include_citation_counter=False,
+        )
+        state = DeepResearchState.model_validate(data)
+
+        assert state.next_citation_number == 1
+        assert len(state.sources) == 0
+
+    def test_new_source_after_legacy_load_gets_correct_number(self):
+        """After loading a legacy session, add_source() assigns the right citation."""
+        data = self._make_legacy_session_dict(include_citation_counter=False)
+        state = DeepResearchState.model_validate(data)
+
+        new_src = state.add_source(
+            title="New Source Delta",
+            url="https://example.com/delta",
+            source_type=SourceType.WEB,
+            snippet="Delta snippet",
+        )
+
+        assert new_src.citation_number == 6
+        assert state.next_citation_number == 7
+
+    def test_missing_optional_collections_default_to_empty(self):
+        """Fields added in later phases default gracefully when absent."""
+        minimal = {
+            "id": "deepres-minimal",
+            "original_query": "Minimal session",
+        }
+        state = DeepResearchState.model_validate(minimal)
+
+        # Collections default to empty
+        assert state.topic_research_results == []
+        assert state.contradictions == []
+        assert state.content_fidelity == {}
+        assert state.dropped_content_ids == []
+        assert state.content_allocation_metadata == {}
+        assert state.phase_metrics == []
+        assert state.search_provider_stats == {}
+
+        # Provider tracking defaults to None
+        assert state.planning_provider is None
+        assert state.analysis_provider is None
+        assert state.synthesis_provider is None
+        assert state.refinement_provider is None
+        assert state.planning_model is None
+
+    def test_roundtrip_serialization_preserves_all_fields(self):
+        """model_dump → model_validate roundtrip preserves all state."""
+        data = self._make_legacy_session_dict(include_citation_counter=False)
+        state = DeepResearchState.model_validate(data)
+
+        # Add a finding to exercise more fields
+        state.add_finding(
+            content="Test finding",
+            confidence=ConfidenceLevel.HIGH,
+            category="Test",
+            source_ids=["src-aaa"],
+        )
+
+        # Roundtrip
+        dumped = state.model_dump(mode="json")
+        restored = DeepResearchState.model_validate(dumped)
+
+        assert restored.id == state.id
+        assert restored.next_citation_number == state.next_citation_number
+        assert len(restored.sources) == len(state.sources)
+        assert len(restored.findings) == len(state.findings)
+        assert restored.findings[0].content == "Test finding"
+        assert restored.total_tokens_used == 500
