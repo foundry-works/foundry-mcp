@@ -812,3 +812,449 @@ class TestTokenRecoveryDownstreamErrors:
 
         # Only 2 calls: initial (context error) + retry (runtime error)
         assert mock_workflow._execute_provider_async.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: structured truncation helpers (Phase 4)
+# ---------------------------------------------------------------------------
+
+
+from foundry_mcp.core.research.workflows.deep_research._helpers import (
+    _split_prompt_sections,
+    structured_drop_sources,
+    structured_truncate_blocks,
+)
+from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+    _apply_truncation_strategy,
+    _TRUNCATION_STRATEGY_NAMES,
+)
+
+
+def _build_synthesis_style_prompt(
+    num_sources: int = 5,
+    source_content_len: int = 500,
+    qualities: list[str] | None = None,
+) -> str:
+    """Build a realistic synthesis-style structured prompt for testing."""
+    if qualities is None:
+        qualities = ["high", "medium", "low", "medium", "high"]
+
+    parts = [
+        "# Research Query\nWhat are the best Python web frameworks?",
+        "",
+        "## Research Brief\nComprehensive analysis of Python web frameworks.",
+        "",
+        "## Findings to Synthesize",
+        "",
+        "### Web Frameworks",
+        "- [HIGH] Django is a full-featured web framework.",
+        "  Sources: [1], [2]",
+        "- [MEDIUM] Flask is lightweight and flexible.",
+        "  Sources: [3]",
+        "",
+        "## Source Reference (use these citation numbers in your report)",
+    ]
+
+    for i in range(num_sources):
+        q = qualities[i % len(qualities)]
+        content = f"Content about source {i + 1}. " * (source_content_len // 30)
+        parts.append(f"- **[{i + 1}]**: Source {i + 1} Title [{q}]")
+        parts.append(f"  URL: https://example.com/source-{i + 1}")
+        parts.append(f"  Snippet: {content}")
+
+    parts.extend(
+        [
+            "",
+            "## Instructions",
+            "Generate a comprehensive research report.",
+            "Total findings: 2",
+            "Total sources: " + str(num_sources),
+        ]
+    )
+
+    return "\n".join(parts)
+
+
+def _build_analysis_style_prompt(
+    num_sources: int = 5,
+    source_content_len: int = 500,
+) -> str:
+    """Build a realistic analysis-style prompt for testing."""
+    parts = [
+        "Original Research Query: What are the best Python web frameworks?",
+        "",
+        "Research Brief:",
+        "Analysis of Python web frameworks.",
+        "",
+        "Sources to Analyze:",
+        "",
+    ]
+
+    for i in range(num_sources):
+        content = f"Detailed content for source {i + 1}. " * (source_content_len // 40)
+        parts.append(f"Source {i + 1} (ID: src-{i + 1:03d}):")
+        parts.append(f"  Title: Source {i + 1} Title")
+        parts.append(f"  URL: https://example.com/source-{i + 1}")
+        parts.append(f"  Snippet: Short snippet for source {i + 1}")
+        parts.append(f"  Content: {content}")
+
+    parts.extend(
+        [
+            "",
+            "Please analyze these sources and:",
+            "1. Extract 2-5 key findings",
+            "2. Assess confidence levels",
+        ]
+    )
+
+    return "\n".join(parts)
+
+
+class TestSplitPromptSections:
+    """Tests for _split_prompt_sections()."""
+
+    def test_splits_at_markdown_headers(self):
+        prompt = "# Header 1\ncontent 1\n## Header 2\ncontent 2\n### Header 3\ncontent 3"
+        sections = _split_prompt_sections(prompt)
+        assert len(sections) == 3
+        assert sections[0][0] == "# Header 1"
+        assert "content 1" in sections[0][1]
+        assert sections[1][0] == "## Header 2"
+        assert sections[2][0] == "### Header 3"
+
+    def test_preserves_pre_header_content(self):
+        prompt = "preamble text\n# Header\ncontent"
+        sections = _split_prompt_sections(prompt)
+        assert len(sections) == 2
+        assert sections[0][0] == ""
+        assert "preamble" in sections[0][1]
+
+    def test_no_headers_single_section(self):
+        prompt = "just plain text\nno headers here"
+        sections = _split_prompt_sections(prompt)
+        assert len(sections) == 1
+        assert sections[0][0] == ""
+
+    def test_empty_prompt(self):
+        sections = _split_prompt_sections("")
+        assert len(sections) == 1
+
+
+class TestStructuredTruncateBlocks:
+    """Tests for structured_truncate_blocks() — checklist 4.1."""
+
+    def test_short_prompt_unchanged(self):
+        """Prompt within budget is returned unchanged."""
+        prompt = "# Header\nshort content"
+        result = structured_truncate_blocks(prompt, max_tokens=1000)
+        assert result == prompt
+
+    def test_truncates_longest_section_first(self):
+        """Longest truncatable section should be reduced first."""
+        short = "short " * 10
+        long_content = "verbose " * 500
+        prompt = f"# Research Query\nmy query\n\n## Findings\n{long_content}\n\n## Small Section\n{short}"
+
+        # Budget that fits the prompt minus roughly half the long section
+        budget = len(prompt) // 8  # tokens (chars / 4)
+        result = structured_truncate_blocks(prompt, max_tokens=budget)
+
+        assert len(result) < len(prompt)
+        assert "# Research Query" in result
+        assert "my query" in result
+        assert "## Findings" in result
+        assert "## Small Section" in result
+
+    def test_protects_instructions_section(self):
+        """Instructions section should not be truncated."""
+        instructions = "important instructions " * 200
+        findings = "findings content " * 200
+        prompt = f"## Findings\n{findings}\n\n## Instructions\n{instructions}"
+
+        budget = len(prompt) // 8
+        result = structured_truncate_blocks(prompt, max_tokens=budget)
+
+        # Instructions content should be intact
+        assert instructions in result
+        # Findings should be truncated
+        assert len(result) < len(prompt)
+
+    def test_protects_research_query_section(self):
+        """Research Query section should not be truncated."""
+        query = "detailed research query " * 100
+        sources = "source content " * 500
+        prompt = f"# Research Query\n{query}\n\n## Source Reference\n{sources}"
+
+        budget = len(prompt) // 8
+        result = structured_truncate_blocks(prompt, max_tokens=budget)
+
+        assert query in result
+
+    def test_fallback_for_unstructured_prompt(self):
+        """Unstructured prompt should fall back to char-based truncation."""
+        prompt = "X" * 10000
+        result = structured_truncate_blocks(prompt, max_tokens=500)
+        assert len(result) < 10000
+        assert "[... content truncated for context limits]" in result
+
+    def test_preserves_high_quality_sources(self):
+        """Structured truncation should preserve source headers while truncating content."""
+        prompt = _build_synthesis_style_prompt(num_sources=5, source_content_len=2000)
+        budget = len(prompt) // 8  # Force significant truncation
+
+        result = structured_truncate_blocks(prompt, max_tokens=budget)
+
+        assert len(result) < len(prompt)
+        # Source reference header should be preserved
+        assert "## Source Reference" in result
+        # Findings section should be preserved
+        assert "## Findings to Synthesize" in result
+
+
+class TestStructuredDropSources:
+    """Tests for structured_drop_sources() — checklist 4.2."""
+
+    def test_short_prompt_unchanged(self):
+        """Prompt within budget is returned unchanged."""
+        prompt = _build_synthesis_style_prompt(num_sources=2, source_content_len=50)
+        result = structured_drop_sources(prompt, max_tokens=100_000)
+        assert result == prompt
+
+    def test_drops_low_quality_sources_first(self):
+        """Low-quality sources should be dropped before high-quality ones."""
+        prompt = _build_synthesis_style_prompt(
+            num_sources=5,
+            source_content_len=500,
+            qualities=["high", "high", "low", "low", "medium"],
+        )
+        # Budget that requires dropping ~2 sources
+        budget = len(prompt) // 5
+        result = structured_drop_sources(prompt, max_tokens=budget)
+
+        assert len(result) < len(prompt)
+        # High-quality sources should survive
+        assert "Source 1 Title [high]" in result
+        assert "Source 2 Title [high]" in result
+        # Low-quality sources should be dropped first
+        assert "Source 3 Title [low]" not in result or "Source 4 Title [low]" not in result
+
+    def test_drops_largest_within_same_quality(self):
+        """Among same-quality sources, largest should be dropped first."""
+        parts = [
+            "# Research Query\ntest query",
+            "",
+            "## Source Reference",
+        ]
+        # Source 1: medium, short
+        parts.append("- **[1]**: Short Source [medium]")
+        parts.append("  URL: https://example.com/1")
+        parts.append("  Snippet: brief.")
+        # Source 2: medium, very long
+        parts.append("- **[2]**: Long Source [medium]")
+        parts.append("  URL: https://example.com/2")
+        parts.append("  Snippet: " + "verbose content " * 200)
+        # Source 3: medium, short
+        parts.append("- **[3]**: Another Short [medium]")
+        parts.append("  URL: https://example.com/3")
+        parts.append("  Snippet: brief content.")
+
+        prompt = "\n".join(parts)
+        budget = len(prompt) // 5
+
+        result = structured_drop_sources(prompt, max_tokens=budget)
+
+        # Source 2 (longest) should be dropped first
+        assert "Long Source [medium]" not in result
+        # Shorter sources should survive
+        assert "Short Source [medium]" in result
+
+    def test_detects_analysis_style_sources(self):
+        """Should detect Source N (ID: ...) patterns from analysis phase."""
+        prompt = _build_analysis_style_prompt(num_sources=5, source_content_len=1000)
+        budget = len(prompt) // 5
+
+        result = structured_drop_sources(prompt, max_tokens=budget)
+
+        assert len(result) < len(prompt)
+        # Should still have some sources
+        assert "Source" in result
+
+    def test_fallback_for_no_sources(self):
+        """Prompt with no recognizable source entries falls back to char truncation."""
+        prompt = "X" * 10000
+        result = structured_drop_sources(prompt, max_tokens=500)
+        assert len(result) < 10000
+        assert "[... content truncated for context limits]" in result
+
+    def test_final_char_truncation_if_still_over(self):
+        """If dropping all sources is still not enough, char truncation kicks in."""
+        # Very small budget that no amount of source dropping can satisfy
+        prompt = _build_synthesis_style_prompt(num_sources=2, source_content_len=100)
+        result = structured_drop_sources(prompt, max_tokens=10)
+        assert len(result) < len(prompt)
+        assert "[... content truncated for context limits]" in result
+
+
+class TestApplyTruncationStrategy:
+    """Tests for _apply_truncation_strategy() — strategy dispatch."""
+
+    def test_retry_1_uses_block_truncation(self):
+        """Retry 1 should use structured block truncation."""
+        prompt = _build_synthesis_style_prompt(num_sources=5, source_content_len=2000)
+        result = _apply_truncation_strategy(prompt, error_max_tokens=500, model=None, retry_count=1)
+        assert len(result) < len(prompt)
+        # Headers should be preserved
+        assert "## Findings to Synthesize" in result
+
+    def test_retry_2_uses_source_dropping(self):
+        """Retry 2 should use quality-aware source dropping."""
+        prompt = _build_synthesis_style_prompt(
+            num_sources=5,
+            source_content_len=1000,
+            qualities=["high", "high", "low", "low", "medium"],
+        )
+        result = _apply_truncation_strategy(prompt, error_max_tokens=500, model=None, retry_count=2)
+        assert len(result) < len(prompt)
+
+    def test_retry_3_uses_char_truncation(self):
+        """Retry 3 should use character-based truncation."""
+        prompt = "X" * 50000
+        result = _apply_truncation_strategy(prompt, error_max_tokens=500, model=None, retry_count=3)
+        assert len(result) < 50000
+        assert "[... content truncated for context limits]" in result
+
+    def test_unstructured_falls_back_to_char(self):
+        """Unstructured prompt on retry 1 should fall back to char truncation."""
+        prompt = "X" * 50000
+        result = _apply_truncation_strategy(prompt, error_max_tokens=500, model=None, retry_count=1)
+        assert len(result) < 50000
+
+    def test_uses_model_registry_when_no_error_tokens(self):
+        """Should use model registry when error_max_tokens is None."""
+        # gpt-4o has 128K tokens → 512K chars budget. Use a prompt larger than
+        # the reduced budget (128K * 0.9^3 ≈ 93K tokens → 373K chars)
+        prompt = "X" * 500000
+        result = _apply_truncation_strategy(
+            prompt, error_max_tokens=None, model="gpt-4o", retry_count=3,
+        )
+        assert len(result) < 500000
+
+    def test_uses_fallback_when_no_info(self):
+        """Should use fallback context window when no error tokens or model match."""
+        prompt = "X" * 1000000
+        result = _apply_truncation_strategy(
+            prompt, error_max_tokens=None, model="unknown-model", retry_count=3,
+        )
+        assert len(result) < 1000000
+
+    def test_strategy_names_cover_all_retries(self):
+        """Strategy name mapping should cover retries 1-3."""
+        assert 1 in _TRUNCATION_STRATEGY_NAMES
+        assert 2 in _TRUNCATION_STRATEGY_NAMES
+        assert 3 in _TRUNCATION_STRATEGY_NAMES
+
+
+class TestStructuredTruncationIntegration:
+    """Integration tests: structured truncation through execute_llm_call — checklist 4.4-4.6."""
+
+    @pytest.mark.asyncio
+    async def test_structured_prompt_preserves_high_quality_on_retry(
+        self, mock_workflow, sample_state
+    ):
+        """When a structured prompt triggers context window error, retry should
+        use structured truncation that preserves high-quality sources (4.4)."""
+        structured_prompt = _build_synthesis_style_prompt(
+            num_sources=10,
+            source_content_len=2000,
+            qualities=["high", "low", "high", "low", "medium",
+                        "high", "low", "medium", "low", "high"],
+        )
+
+        mock_workflow._execute_provider_async.side_effect = [
+            ContextWindowError("too long", prompt_tokens=50000, max_tokens=2000),
+            _make_success_result(),
+        ]
+
+        ret = await execute_llm_call(
+            workflow=mock_workflow,
+            state=sample_state,
+            phase_name="synthesis",
+            system_prompt="sys",
+            user_prompt=structured_prompt,
+            provider_id="p",
+            model="m",
+            temperature=0.3,
+            timeout=60.0,
+        )
+
+        assert isinstance(ret, LLMCallResult)
+        # The retry prompt should be shorter
+        prompts = [
+            call.kwargs["prompt"]
+            for call in mock_workflow._execute_provider_async.call_args_list
+        ]
+        assert len(prompts[1]) < len(prompts[0])
+        # Structure should be preserved in the truncated prompt
+        assert "## Findings to Synthesize" in prompts[1]
+
+    @pytest.mark.asyncio
+    async def test_char_fallback_works_after_structured_fails(
+        self, mock_workflow, sample_state
+    ):
+        """Char-based fallback on retry 3 should still produce a usable prompt (4.5)."""
+        err = ContextWindowError("too long", prompt_tokens=50000, max_tokens=1000)
+        mock_workflow._execute_provider_async.side_effect = [
+            err, err, err,
+            _make_success_result(),
+        ]
+
+        ret = await execute_llm_call(
+            workflow=mock_workflow,
+            state=sample_state,
+            phase_name="synthesis",
+            system_prompt="sys",
+            user_prompt=_build_synthesis_style_prompt(num_sources=10, source_content_len=2000),
+            provider_id="p",
+            model="m",
+            temperature=0.3,
+            timeout=60.0,
+        )
+
+        assert isinstance(ret, LLMCallResult)
+        assert mock_workflow._execute_provider_async.call_count == 4
+
+    @pytest.mark.asyncio
+    async def test_existing_recovery_behavior_unchanged_for_unstructured(
+        self, mock_workflow, sample_state
+    ):
+        """Unstructured prompts should still get progressively shorter on each retry (4.6)."""
+        original_prompt = "X" * 50000
+
+        mock_workflow._execute_provider_async.side_effect = [
+            ContextWindowError("too long", prompt_tokens=5000, max_tokens=4096),
+            ContextWindowError("still too long", prompt_tokens=4500, max_tokens=4096),
+            _make_success_result(),
+        ]
+
+        ret = await execute_llm_call(
+            workflow=mock_workflow,
+            state=sample_state,
+            phase_name="analysis",
+            system_prompt="sys",
+            user_prompt=original_prompt,
+            provider_id="p",
+            model="m",
+            temperature=0.3,
+            timeout=60.0,
+        )
+
+        assert isinstance(ret, LLMCallResult)
+        prompts = [
+            call.kwargs["prompt"]
+            for call in mock_workflow._execute_provider_async.call_args_list
+        ]
+        assert len(prompts) == 3
+        # Each retry should have a shorter or equal user prompt
+        assert len(prompts[0]) >= len(prompts[1]) >= len(prompts[2])
+        # First call should use the original prompt
+        assert prompts[0] == original_prompt

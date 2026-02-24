@@ -69,20 +69,26 @@
 
 ## Phase 4: Message-Aware Token Recovery
 
-- [ ] **4.1** Add `_structured_truncation()` helper to `_helpers.py`
-  - Parse prompt into source/finding blocks
-  - Identify block boundaries (section headers, source markers)
-  - Truncate longest blocks first, preserving all block headers
-- [ ] **4.2** Add quality-aware source dropping
-  - If quality scores available, drop lowest-quality sources first
-  - Otherwise drop longest sources first (heuristic: length ≠ quality)
-- [ ] **4.3** Update retry loop in `execute_llm_call()` (lines 288-351)
-  - Retry 1: structured truncation (longest blocks first)
-  - Retry 2: source dropping (lowest quality or longest)
-  - Retry 3: current char-based truncation (fallback)
-- [ ] **4.4** Test: structured truncation preserves high-quality sources
-- [ ] **4.5** Test: char-based fallback still works when structured fails
-- [ ] **4.6** Test: no regression in existing token recovery tests
+- [x] **4.1** Add `_structured_truncation()` helper to `_helpers.py`
+  - `_split_prompt_sections()` splits at markdown header boundaries
+  - `structured_truncate_blocks()` truncates longest sections first, preserving protected sections
+  - Source entry detection via `_SOURCE_ENTRY_PATTERNS` for synthesis, analysis, compression formats
+- [x] **4.2** Add quality-aware source dropping
+  - `structured_drop_sources()` scores by `[high]`/`[medium]`/`[low]` markers
+  - Falls back to length-based scoring within same quality tier
+  - Drops lowest-quality, largest sources first
+- [x] **4.3** Update retry loop in `execute_llm_call()` (lines 358-420)
+  - `_apply_truncation_strategy()` dispatches based on retry count
+  - Retry 1: `structured_truncate_blocks` (longest blocks first)
+  - Retry 2: `structured_drop_sources` (lowest quality or longest)
+  - Retry 3: `truncate_to_token_estimate` char-based truncation (fallback)
+  - Each strategy falls back to char-based when no structure is found
+- [x] **4.4** Test: structured truncation preserves high-quality sources
+  - `TestStructuredTruncateBlocks` (6 tests) + `TestStructuredTruncationIntegration.test_structured_prompt_preserves_high_quality_on_retry`
+- [x] **4.5** Test: char-based fallback still works when structured fails
+  - `TestStructuredTruncateBlocks.test_fallback_for_unstructured_prompt` + `TestStructuredTruncationIntegration.test_char_fallback_works_after_structured_fails`
+- [x] **4.6** Test: no regression in existing token recovery tests
+  - 1867 passed, 6 skipped, 0 failures across full research test suite
 
 ---
 

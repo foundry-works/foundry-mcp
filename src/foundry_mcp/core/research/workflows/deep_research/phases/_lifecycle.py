@@ -26,6 +26,8 @@ from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research._helpers import (
     estimate_token_limit_for_model,
     safe_resolve_model_for_role,
+    structured_drop_sources,
+    structured_truncate_blocks,
     truncate_to_token_estimate,
 )
 
@@ -202,6 +204,68 @@ def _truncate_for_retry(
     return truncate_fn(user_prompt, reduced_budget)
 
 
+# Human-readable names for each truncation strategy tier (for logging).
+_TRUNCATION_STRATEGY_NAMES: dict[int, str] = {
+    1: "structured_block_truncation",
+    2: "quality_aware_source_dropping",
+    3: "char_truncation",
+}
+
+
+def _apply_truncation_strategy(
+    user_prompt: str,
+    error_max_tokens: Optional[int],
+    model: Optional[str],
+    retry_count: int,
+) -> str:
+    """Select and apply the appropriate truncation strategy for a retry.
+
+    Implements tiered truncation that preserves the most relevant content:
+
+    - **Retry 1 — structured block truncation:** splits the prompt at
+      markdown header boundaries and truncates the longest content
+      sections first, preserving structure and protected sections.
+    - **Retry 2 — quality-aware source dropping:** identifies individual
+      source entries, scores them by quality markers or length, and
+      removes the lowest-value sources entirely.
+    - **Retry 3 — character-based truncation:** simple tail-chopping at
+      a natural boundary (existing fallback behaviour).
+
+    Each strategy falls back to character-based truncation when the
+    prompt lacks recognisable structure (e.g. no markdown headers or
+    no source-entry patterns).
+
+    Args:
+        user_prompt: The current user prompt to truncate
+        error_max_tokens: Token limit reported by the provider error
+            (may be ``None``)
+        model: Model identifier for registry-based limit lookup
+        retry_count: Current retry number (1, 2, or 3)
+
+    Returns:
+        Truncated user prompt string
+    """
+    max_tokens = error_max_tokens
+    if max_tokens is None:
+        max_tokens = estimate_token_limit_for_model(model, MODEL_TOKEN_LIMITS)
+    if max_tokens is None:
+        max_tokens = _FALLBACK_CONTEXT_WINDOW
+
+    budget = int(max_tokens * (_TRUNCATION_FACTOR ** retry_count))
+
+    if retry_count == 1:
+        result = structured_truncate_blocks(user_prompt, budget)
+        if result != user_prompt:
+            return result
+    elif retry_count == 2:
+        result = structured_drop_sources(user_prompt, budget)
+        if result != user_prompt:
+            return result
+
+    # Retry 3 or fallback when structured strategies don't reduce enough
+    return truncate_to_token_estimate(user_prompt, budget)
+
+
 async def execute_llm_call(
     workflow: Any,
     state: DeepResearchState,
@@ -315,19 +379,19 @@ async def execute_llm_call(
                 break  # All retries exhausted
 
             token_limit_retries += 1
-            current_user_prompt = _truncate_for_retry(
+            current_user_prompt = _apply_truncation_strategy(
                 current_user_prompt, e.max_tokens, model, token_limit_retries,
-                truncate_to_token_estimate, estimate_token_limit_for_model,
-                MODEL_TOKEN_LIMITS,
             )
 
+            strategy = _TRUNCATION_STRATEGY_NAMES.get(token_limit_retries, "unknown")
             logger.warning(
-                "%s phase context window exceeded (attempt %d/%d), "
+                "%s phase context window exceeded (attempt %d/%d, strategy=%s), "
                 "truncating user prompt and retrying. "
                 "prompt_tokens=%s, max_tokens=%s, provider=%s",
                 phase_name.capitalize(),
                 token_limit_retries,
                 _MAX_TOKEN_LIMIT_RETRIES,
+                strategy,
                 e.prompt_tokens,
                 e.max_tokens,
                 e.provider,
@@ -337,19 +401,19 @@ async def execute_llm_call(
             if _is_context_window_error(e) and attempt < _MAX_TOKEN_LIMIT_RETRIES:
                 last_context_error = e
                 token_limit_retries += 1
-                current_user_prompt = _truncate_for_retry(
+                current_user_prompt = _apply_truncation_strategy(
                     current_user_prompt, None, model, token_limit_retries,
-                    truncate_to_token_estimate, estimate_token_limit_for_model,
-                    MODEL_TOKEN_LIMITS,
                 )
 
+                strategy = _TRUNCATION_STRATEGY_NAMES.get(token_limit_retries, "unknown")
                 logger.warning(
                     "%s phase detected provider-specific context window error "
-                    "(attempt %d/%d), truncating user prompt. "
+                    "(attempt %d/%d, strategy=%s), truncating user prompt. "
                     "error_class=%s, message=%s",
                     phase_name.capitalize(),
                     token_limit_retries,
                     _MAX_TOKEN_LIMIT_RETRIES,
+                    strategy,
                     type(e).__name__,
                     str(e)[:200],
                 )
