@@ -1,20 +1,37 @@
 """Supervision phase mixin for DeepResearchWorkflow.
 
-Assesses coverage of completed sub-queries and generates follow-up queries
-to fill gaps before proceeding to analysis. Modeled after the iterative
-supervisor loop in open_deep_research, adapted for foundry-mcp's
-single-prompt architecture.
+Assesses coverage of completed sub-queries and generates follow-up research
+directives to fill gaps before proceeding to analysis.
+
+Supports two supervision models (configurable via ``deep_research_delegation_model``):
+
+1. **Delegation model** (default, Phase 4 PLAN): The supervisor generates
+   paragraph-length ``ResearchDirective`` objects targeting specific gaps.
+   Directives are executed as parallel topic researchers within the supervision
+   phase itself — no re-entry into the GATHERING phase is needed. This mirrors
+   open_deep_research's ``ConductResearch`` supervisor pattern.
+
+2. **Query-generation model** (fallback): The supervisor generates single-sentence
+   follow-up queries appended to the sub-query list. The workflow then loops back
+   to GATHERING to execute them. This is the original model preserved for backward
+   compatibility.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
 from typing import TYPE_CHECKING, Any, Optional
 from urllib.parse import urlparse
 
-from foundry_mcp.core.research.models.deep_research import DeepResearchState
+from foundry_mcp.core.research.models.deep_research import (
+    DeepResearchState,
+    ResearchDirective,
+    TopicResearchResult,
+)
+from foundry_mcp.core.research.models.sources import SubQuery
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research._helpers import (
     extract_json,
@@ -26,8 +43,12 @@ from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import 
 
 logger = logging.getLogger(__name__)
 
-# Maximum follow-up queries the supervisor can generate per round
+# Maximum follow-up queries the supervisor can generate per round (query-generation model)
 _MAX_FOLLOW_UPS_PER_ROUND = 3
+
+# Maximum directives the supervisor can generate per round (delegation model)
+# Actual cap also bounded by config.deep_research_max_concurrent_research_units
+_MAX_DIRECTIVES_PER_ROUND = 5
 
 
 class SupervisionPhaseMixin:
@@ -37,6 +58,8 @@ class SupervisionPhaseMixin:
     - config, memory, hooks, orchestrator (instance attributes)
     - _write_audit_event(), _check_cancellation() (cross-cutting methods)
     - _execute_provider_async() (inherited from ResearchWorkflowBase)
+    - _execute_topic_research_async() (from TopicResearchMixin, for delegation)
+    - _get_search_provider() (from GatheringPhaseMixin, for delegation)
     """
 
     config: Any
@@ -46,6 +69,13 @@ class SupervisionPhaseMixin:
 
         def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
         def _check_cancellation(self, *args: Any, **kwargs: Any) -> None: ...
+        async def _execute_topic_research_async(self, *args: Any, **kwargs: Any) -> Any: ...
+        def _get_search_provider(self, provider_name: str) -> Any: ...
+        def _get_tavily_search_kwargs(self, state: DeepResearchState) -> dict[str, Any]: ...
+
+    # ==================================================================
+    # Main entry point — dispatches to delegation or query-generation
+    # ==================================================================
 
     async def _execute_supervision_async(
         self,
@@ -53,7 +83,730 @@ class SupervisionPhaseMixin:
         provider_id: Optional[str],
         timeout: float,
     ) -> WorkflowResult:
-        """Execute supervision phase: assess coverage and generate follow-up queries.
+        """Execute supervision phase: assess coverage and fill gaps.
+
+        Dispatches to either the delegation model (default) or the legacy
+        query-generation model based on ``deep_research_delegation_model`` config.
+
+        Args:
+            state: Current research state with completed sub-queries
+            provider_id: LLM provider to use
+            timeout: Request timeout in seconds
+
+        Returns:
+            WorkflowResult with metadata["should_continue_gathering"] flag
+        """
+        use_delegation = getattr(self.config, "deep_research_delegation_model", True)
+
+        if use_delegation:
+            return await self._execute_supervision_delegation_async(
+                state, provider_id, timeout,
+            )
+        else:
+            return await self._execute_supervision_query_generation_async(
+                state, provider_id, timeout,
+            )
+
+    # ==================================================================
+    # Delegation model (Phase 4 PLAN)
+    # ==================================================================
+
+    async def _execute_supervision_delegation_async(
+        self,
+        state: DeepResearchState,
+        provider_id: Optional[str],
+        timeout: float,
+    ) -> WorkflowResult:
+        """Execute supervision via directive-based delegation.
+
+        Implements the multi-step supervision loop:
+        1. **Think**: Analyze compressed findings, identify gaps
+        2. **Delegate**: Generate ResearchDirective objects from gap analysis
+        3. **Execute**: Spawn parallel topic researchers for directives
+        4. **Compress**: Inline compression of new results (via existing infra)
+        5. **Assess**: Evaluate coverage and decide continue/complete
+
+        The loop runs within a single supervision phase call. When delegation
+        produces new research, the results are merged into state directly —
+        no re-entry into the GATHERING phase is needed.
+
+        Args:
+            state: Current research state
+            provider_id: LLM provider to use
+            timeout: Request timeout in seconds
+
+        Returns:
+            WorkflowResult with should_continue_gathering=False (delegation
+            handles its own gathering internally)
+        """
+        min_sources = getattr(
+            self.config,
+            "deep_research_supervision_min_sources_per_query",
+            2,
+        )
+
+        phase_start_time = time.perf_counter()
+        self._write_audit_event(
+            state,
+            "phase.started",
+            data={
+                "phase_name": "supervision",
+                "model": "delegation",
+                "iteration": state.iteration,
+                "supervision_round": state.supervision_round,
+                "task_id": state.id,
+            },
+        )
+
+        # --- Delegation loop ---
+        # Each iteration: think → delegate → execute → assess
+        # Bounded by max_supervision_rounds.
+        total_directives_executed = 0
+        total_new_sources = 0
+
+        while state.supervision_round < state.max_supervision_rounds:
+            self._check_cancellation(state)
+
+            logger.info(
+                "Supervision delegation round %d/%d: %d completed sub-queries, %d sources",
+                state.supervision_round + 1,
+                state.max_supervision_rounds,
+                len(state.completed_sub_queries()),
+                len(state.sources),
+            )
+
+            # Build coverage data
+            coverage_data = self._build_per_query_coverage(state)
+
+            # --- Heuristic early-exit (round > 0) ---
+            if state.supervision_round > 0:
+                heuristic = self._assess_coverage_heuristic(state, min_sources)
+                if not heuristic["should_continue_gathering"]:
+                    logger.info(
+                        "Supervision delegation: heuristic sufficient at round %d, advancing",
+                        state.supervision_round,
+                    )
+                    self._write_audit_event(
+                        state,
+                        "supervision_result",
+                        data={
+                            "reason": "heuristic_sufficient",
+                            "model": "delegation",
+                            "supervision_round": state.supervision_round,
+                            "coverage_summary": heuristic,
+                        },
+                    )
+                    history = state.metadata.setdefault("supervision_history", [])
+                    history.append({
+                        "round": state.supervision_round,
+                        "method": "delegation_heuristic",
+                        "should_continue_gathering": False,
+                        "directives_executed": 0,
+                        "overall_coverage": "sufficient",
+                    })
+                    state.supervision_round += 1
+                    break
+
+            # --- Step 1: Think (gap analysis) ---
+            think_output = await self._supervision_think_step(
+                state, coverage_data, timeout,
+            )
+
+            # --- Step 2: Delegate (generate directives) ---
+            self._check_cancellation(state)
+            directives, research_complete = await self._supervision_delegate_step(
+                state, coverage_data, think_output, provider_id, timeout,
+            )
+
+            # Check for ResearchComplete signal
+            if research_complete:
+                logger.info(
+                    "Supervision delegation: ResearchComplete signal at round %d",
+                    state.supervision_round,
+                )
+                history = state.metadata.setdefault("supervision_history", [])
+                history.append({
+                    "round": state.supervision_round,
+                    "method": "delegation_complete",
+                    "should_continue_gathering": False,
+                    "directives_generated": 0,
+                    "overall_coverage": "sufficient",
+                    "think_output": think_output,
+                })
+                state.supervision_round += 1
+                break
+
+            if not directives:
+                logger.info(
+                    "Supervision delegation: no directives generated at round %d, advancing",
+                    state.supervision_round,
+                )
+                history = state.metadata.setdefault("supervision_history", [])
+                history.append({
+                    "round": state.supervision_round,
+                    "method": "delegation_no_directives",
+                    "should_continue_gathering": False,
+                    "directives_generated": 0,
+                    "overall_coverage": "partial",
+                    "think_output": think_output,
+                })
+                state.supervision_round += 1
+                break
+
+            # Store directives for audit
+            state.directives.extend(directives)
+
+            # --- Step 3: Execute directives as parallel topic researchers ---
+            self._check_cancellation(state)
+            directive_results = await self._execute_directives_async(
+                state, directives, timeout,
+            )
+
+            round_new_sources = sum(r.sources_found for r in directive_results)
+            total_new_sources += round_new_sources
+            total_directives_executed += len(directive_results)
+
+            # --- Step 4: Think-after-results (assess what was learned) ---
+            post_think_output: Optional[str] = None
+            if directive_results:
+                post_coverage_data = self._build_per_query_coverage(state)
+                post_think_output = await self._supervision_think_step(
+                    state, post_coverage_data, timeout,
+                )
+
+            # --- Step 5: Record history and advance round ---
+            history = state.metadata.setdefault("supervision_history", [])
+            history.append({
+                "round": state.supervision_round,
+                "method": "delegation",
+                "should_continue_gathering": True,
+                "directives_generated": len(directives),
+                "directives_executed": len(directive_results),
+                "new_sources": round_new_sources,
+                "think_output": think_output,
+                "post_execution_think": post_think_output,
+                "directive_topics": [d.research_topic[:100] for d in directives],
+            })
+
+            state.supervision_round += 1
+            self.memory.save_deep_research(state)
+
+            # If no new sources were found this round, stop delegating
+            if round_new_sources == 0:
+                logger.info(
+                    "Supervision delegation: no new sources in round %d, stopping",
+                    state.supervision_round,
+                )
+                break
+
+        # Save final state
+        self.memory.save_deep_research(state)
+
+        self._write_audit_event(
+            state,
+            "supervision_result",
+            data={
+                "model": "delegation",
+                "supervision_round": state.supervision_round,
+                "total_directives_executed": total_directives_executed,
+                "total_new_sources": total_new_sources,
+                "should_continue_gathering": False,
+            },
+        )
+
+        logger.info(
+            "Supervision delegation complete: %d rounds, %d directives, %d new sources",
+            state.supervision_round,
+            total_directives_executed,
+            total_new_sources,
+        )
+
+        finalize_phase(self, state, "supervision", phase_start_time)
+
+        return WorkflowResult(
+            success=True,
+            content=(
+                f"Supervision delegation: {state.supervision_round} rounds, "
+                f"{total_directives_executed} directives, {total_new_sources} new sources"
+            ),
+            metadata={
+                "research_id": state.id,
+                "iteration": state.iteration,
+                "supervision_round": state.supervision_round,
+                "should_continue_gathering": False,
+                "total_directives_executed": total_directives_executed,
+                "total_new_sources": total_new_sources,
+                "model": "delegation",
+            },
+        )
+
+    # ------------------------------------------------------------------
+    # Delegation sub-steps
+    # ------------------------------------------------------------------
+
+    async def _supervision_think_step(
+        self,
+        state: DeepResearchState,
+        coverage_data: list[dict[str, Any]],
+        timeout: float,
+    ) -> Optional[str]:
+        """Run the think step: gap analysis before delegation.
+
+        Args:
+            state: Current research state
+            coverage_data: Per-sub-query coverage data
+            timeout: Request timeout
+
+        Returns:
+            Think output text, or None if the step failed
+        """
+        think_prompt = self._build_think_prompt(state, coverage_data)
+        think_system = self._build_think_system_prompt()
+
+        self._check_cancellation(state)
+
+        think_result = await execute_llm_call(
+            workflow=self,
+            state=state,
+            phase_name="supervision_think",
+            system_prompt=think_system,
+            user_prompt=think_prompt,
+            provider_id=None,
+            model=None,
+            temperature=0.2,
+            timeout=getattr(self.config, "deep_research_reflection_timeout", 60.0),
+            role="reflection",
+        )
+        if isinstance(think_result, WorkflowResult):
+            logger.warning(
+                "Supervision think step failed, proceeding without gap analysis: %s",
+                think_result.error,
+            )
+            return None
+
+        think_output = think_result.result.content
+        logger.info(
+            "Supervision think step completed: %d chars, %s tokens",
+            len(think_output or ""),
+            think_result.result.tokens_used,
+        )
+        return think_output
+
+    async def _supervision_delegate_step(
+        self,
+        state: DeepResearchState,
+        coverage_data: list[dict[str, Any]],
+        think_output: Optional[str],
+        provider_id: Optional[str],
+        timeout: float,
+    ) -> tuple[list[ResearchDirective], bool]:
+        """Generate research directives from gap analysis.
+
+        Args:
+            state: Current research state
+            coverage_data: Per-sub-query coverage data
+            think_output: Gap analysis from think step
+            provider_id: LLM provider to use
+            timeout: Request timeout
+
+        Returns:
+            Tuple of (directives list, research_complete flag)
+        """
+        system_prompt = self._build_delegation_system_prompt()
+        user_prompt = self._build_delegation_user_prompt(
+            state, coverage_data, think_output,
+        )
+
+        call_result = await execute_llm_call(
+            workflow=self,
+            state=state,
+            phase_name="supervision_delegate",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            provider_id=provider_id or state.supervision_provider,
+            model=state.supervision_model,
+            temperature=0.3,
+            timeout=timeout,
+            role="delegation",
+        )
+
+        if isinstance(call_result, WorkflowResult):
+            logger.warning(
+                "Supervision delegation LLM call failed: %s. No directives generated.",
+                call_result.error,
+            )
+            return [], False
+
+        directives, research_complete = self._parse_delegation_response(
+            call_result.result.content, state,
+        )
+
+        self._write_audit_event(
+            state,
+            "supervision_delegation",
+            data={
+                "provider_id": call_result.result.provider_id,
+                "model_used": call_result.result.model_used,
+                "tokens_used": call_result.result.tokens_used,
+                "directives_generated": len(directives),
+                "research_complete": research_complete,
+                "directive_topics": [d.research_topic[:100] for d in directives],
+            },
+        )
+
+        return directives, research_complete
+
+    async def _execute_directives_async(
+        self,
+        state: DeepResearchState,
+        directives: list[ResearchDirective],
+        timeout: float,
+    ) -> list[TopicResearchResult]:
+        """Execute research directives as parallel topic researchers.
+
+        Converts each directive into a SubQuery and spawns parallel
+        topic researchers using the existing gathering infrastructure.
+        Results (sources, topic research results) are merged into state.
+
+        Args:
+            state: Current research state
+            directives: Research directives to execute
+            timeout: Per-operation timeout
+
+        Returns:
+            List of TopicResearchResult from directive execution
+        """
+        max_concurrent = getattr(
+            self.config, "deep_research_max_concurrent_research_units", 5,
+        )
+        topic_max_searches = getattr(
+            self.config, "deep_research_topic_max_tool_calls", 10,
+        )
+        max_sources_per_provider = max(2, state.max_sources_per_query // max(1, len(directives)))
+
+        # Sort directives by priority (1=critical first)
+        sorted_directives = sorted(directives, key=lambda d: d.priority)
+
+        # Initialize search providers
+        provider_names = getattr(
+            self.config,
+            "deep_research_providers",
+            ["tavily", "google", "semantic_scholar"],
+        )
+        available_providers = []
+        for name in provider_names:
+            provider = self._get_search_provider(name)
+            if provider is not None:
+                available_providers.append(provider)
+
+        if not available_providers:
+            logger.warning("No search providers available for directive execution")
+            return []
+
+        # Shared dedup state
+        seen_urls: set[str] = {s.url for s in state.sources if s.url}
+        seen_titles: dict[str, str] = {}
+        from foundry_mcp.core.research.workflows.deep_research.source_quality import _normalize_title
+        for source in state.sources:
+            normalized = _normalize_title(source.title)
+            if normalized and len(normalized) > 20:
+                seen_titles.setdefault(normalized, source.url or "")
+
+        semaphore = asyncio.Semaphore(max_concurrent)
+        state_lock = asyncio.Lock()
+
+        # Create sub-queries from directives
+        directive_sub_queries: list[SubQuery] = []
+        for directive in sorted_directives:
+            sq = state.add_sub_query(
+                query=directive.research_topic,
+                rationale=f"Delegation directive (round {directive.supervision_round}): {directive.perspective}",
+                priority=directive.priority,
+            )
+            directive_sub_queries.append(sq)
+
+        logger.info(
+            "Executing %d directives as parallel topic researchers (max_concurrent=%d)",
+            len(directive_sub_queries),
+            max_concurrent,
+        )
+
+        self._write_audit_event(
+            state,
+            "directive_execution_start",
+            data={
+                "directive_count": len(directive_sub_queries),
+                "max_concurrent": max_concurrent,
+                "available_providers": [p.get_provider_name() for p in available_providers],
+            },
+        )
+
+        # Spawn parallel topic researchers
+        async def run_directive_researcher(sq: SubQuery) -> TopicResearchResult:
+            try:
+                return await self._execute_topic_research_async(
+                    sub_query=sq,
+                    state=state,
+                    available_providers=available_providers,
+                    max_searches=topic_max_searches,
+                    max_sources_per_provider=max_sources_per_provider,
+                    timeout=timeout,
+                    seen_urls=seen_urls,
+                    seen_titles=seen_titles,
+                    state_lock=state_lock,
+                    semaphore=semaphore,
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning(
+                    "Directive researcher failed for sub-query %s: %s. Non-fatal.",
+                    sq.id,
+                    exc,
+                )
+                sq.mark_failed(f"Directive execution failed: {exc}")
+                return TopicResearchResult(
+                    sub_query_id=sq.id,
+                    sources_found=0,
+                    completion_rationale=f"Failed: {exc}",
+                )
+
+        tasks = [run_directive_researcher(sq) for sq in directive_sub_queries]
+        results = await asyncio.gather(*tasks, return_exceptions=False)
+
+        # Merge results into state
+        for result in results:
+            state.topic_research_results.append(result)
+
+        self.memory.save_deep_research(state)
+
+        successful = [r for r in results if r.sources_found > 0]
+        total_sources = sum(r.sources_found for r in results)
+        logger.info(
+            "Directive execution complete: %d/%d successful, %d total new sources",
+            len(successful),
+            len(results),
+            total_sources,
+        )
+
+        self._write_audit_event(
+            state,
+            "directive_execution_complete",
+            data={
+                "directives_total": len(results),
+                "directives_successful": len(successful),
+                "total_new_sources": total_sources,
+            },
+        )
+
+        return list(results)
+
+    # ------------------------------------------------------------------
+    # Delegation prompts
+    # ------------------------------------------------------------------
+
+    def _build_delegation_system_prompt(self) -> str:
+        """Build system prompt for the delegation step.
+
+        Returns:
+            System prompt instructing directive generation
+        """
+        return """You are a research lead delegating tasks to specialized researchers. Your task is to analyze research gaps and generate detailed research directives.
+
+Your response MUST be valid JSON with this exact structure:
+{
+    "research_complete": false,
+    "directives": [
+        {
+            "research_topic": "Detailed paragraph-length description of what to investigate...",
+            "perspective": "What angle or perspective to approach from",
+            "evidence_needed": "What specific evidence, data, or sources to seek",
+            "priority": 1
+        }
+    ],
+    "rationale": "Why these directives were chosen"
+}
+
+Guidelines:
+- Set "research_complete" to true ONLY when existing coverage is sufficient across all dimensions
+- Each directive's "research_topic" MUST be a detailed paragraph (2-4 sentences) specifying:
+  - The specific topic to investigate
+  - The research approach (compare, investigate, validate, survey, etc.)
+  - What the researcher should focus on and what to exclude
+- "perspective" should specify the angle: technical, comparative, historical, regulatory, user-focused, etc.
+- "evidence_needed" should name concrete evidence types: statistics, case studies, expert opinions, benchmarks, etc.
+- "priority": 1=critical gap (blocks report quality), 2=important (improves comprehensiveness), 3=nice-to-have
+- Maximum 5 directives per round
+- Do NOT duplicate research already covered — target SPECIFIC gaps
+- Directives should be complementary, not overlapping — each covers a different dimension
+
+IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
+
+    def _build_delegation_user_prompt(
+        self,
+        state: DeepResearchState,
+        coverage_data: list[dict[str, Any]],
+        think_output: Optional[str] = None,
+    ) -> str:
+        """Build user prompt for directive generation.
+
+        Args:
+            state: Current research state
+            coverage_data: Per-sub-query coverage data
+            think_output: Gap analysis from think step
+
+        Returns:
+            User prompt string
+        """
+        parts = [
+            f"# Research Query\n{state.original_query}",
+            "",
+        ]
+
+        if state.research_brief and state.research_brief != state.original_query:
+            parts.extend([
+                "## Research Brief",
+                state.research_brief,
+                "",
+            ])
+
+        parts.extend([
+            "## Research Status",
+            f"- Iteration: {state.iteration}/{state.max_iterations}",
+            f"- Supervision round: {state.supervision_round + 1}/{state.max_supervision_rounds}",
+            f"- Completed sub-queries: {len(state.completed_sub_queries())}",
+            f"- Total sources: {len(state.sources)}",
+            "",
+        ])
+
+        # Per-query coverage with compressed findings
+        if coverage_data:
+            parts.append("## Current Research Coverage")
+            for entry in coverage_data:
+                parts.append(f"\n### {entry['query']}")
+                parts.append(f"**Sources:** {entry['source_count']} | **Domains:** {entry['unique_domains']}")
+                if entry.get("compressed_findings_excerpt"):
+                    parts.append(f"**Key findings:**\n{entry['compressed_findings_excerpt']}")
+                elif entry.get("findings_summary"):
+                    parts.append(f"**Summary:** {entry['findings_summary']}")
+            parts.append("")
+
+        # Gap analysis from think step
+        if think_output:
+            parts.extend([
+                "## Gap Analysis",
+                "",
+                "<gap_analysis>",
+                think_output.strip(),
+                "</gap_analysis>",
+                "",
+                "Generate research directives that DIRECTLY address the gaps identified above.",
+                "Each directive should target a specific gap with a detailed research plan.",
+                "",
+            ])
+
+        # Previously executed directives (to avoid repetition)
+        if state.directives:
+            parts.append("## Previously Executed Directives (DO NOT repeat)")
+            for d in state.directives[-10:]:  # Last 10 for context
+                parts.append(f"- [P{d.priority}] {d.research_topic[:120]}")
+            parts.append("")
+
+        parts.extend([
+            "## Instructions",
+            "1. Analyze the current coverage and gap analysis",
+            "2. If all research dimensions are well-covered, set research_complete=true",
+            "3. Otherwise, generate 1-5 detailed research directives targeting specific gaps",
+            "4. Each directive should be a paragraph-length research assignment",
+            "5. Prioritize critical gaps (priority 1) over nice-to-have improvements (priority 3)",
+            "",
+            "Return your response as JSON.",
+        ])
+
+        return "\n".join(parts)
+
+    def _parse_delegation_response(
+        self,
+        content: str,
+        state: DeepResearchState,
+    ) -> tuple[list[ResearchDirective], bool]:
+        """Parse LLM response into research directives.
+
+        Args:
+            content: Raw LLM response
+            state: Current research state
+
+        Returns:
+            Tuple of (directives list, research_complete flag)
+        """
+        if not content:
+            return [], False
+
+        json_str = extract_json(content)
+        if not json_str:
+            logger.warning("No JSON found in delegation response")
+            # Graceful fallback: try to create a single directive from the think output
+            return [], False
+
+        try:
+            data = json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.error("Failed to parse delegation JSON: %s", e)
+            return [], False
+
+        # Check for research complete signal
+        research_complete = bool(data.get("research_complete", False))
+        if research_complete:
+            return [], True
+
+        # Parse directives
+        max_units = getattr(
+            self.config, "deep_research_max_concurrent_research_units", 5,
+        )
+        cap = min(max_units, _MAX_DIRECTIVES_PER_ROUND)
+
+        raw_directives = data.get("directives", [])
+        if not isinstance(raw_directives, list):
+            logger.warning("Delegation response 'directives' is not a list")
+            return [], False
+
+        directives: list[ResearchDirective] = []
+        for d in raw_directives[:cap]:
+            if not isinstance(d, dict):
+                continue
+            topic = d.get("research_topic", "").strip()
+            if not topic:
+                continue
+            # Validate priority
+            try:
+                priority = min(max(int(d.get("priority", 2)), 1), 3)
+            except (ValueError, TypeError):
+                priority = 2
+
+            directives.append(ResearchDirective(
+                research_topic=topic,
+                perspective=d.get("perspective", ""),
+                evidence_needed=d.get("evidence_needed", ""),
+                priority=priority,
+                supervision_round=state.supervision_round,
+            ))
+
+        return directives, False
+
+    # ==================================================================
+    # Query-generation model (legacy fallback)
+    # ==================================================================
+
+    async def _execute_supervision_query_generation_async(
+        self,
+        state: DeepResearchState,
+        provider_id: Optional[str],
+        timeout: float,
+    ) -> WorkflowResult:
+        """Execute supervision via follow-up query generation (legacy model).
+
+        This is the original supervision implementation preserved for backward
+        compatibility when ``deep_research_delegation_model=False``.
 
         This phase:
         1. Builds per-sub-query coverage data (source count, quality, domains)
@@ -140,6 +893,7 @@ class SupervisionPhaseMixin:
             "phase.started",
             data={
                 "phase_name": "supervision",
+                "model": "query_generation",
                 "iteration": state.iteration,
                 "supervision_round": state.supervision_round,
                 "task_id": state.id,
@@ -147,42 +901,11 @@ class SupervisionPhaseMixin:
         )
 
         # --- Think step: deliberate on gaps before generating follow-ups ---
-        # The think step is a separate LLM call using a cheap model that
-        # forces explicit gap analysis. Its output is fed into the follow-up
-        # generation prompt so queries are grounded in deliberate reasoning.
-        # Skip on round > 0 (the first round already provides grounding).
         think_output: Optional[str] = None
         if state.supervision_round == 0:
-            think_prompt = self._build_think_prompt(state, coverage_data)
-            think_system = self._build_think_system_prompt()
-
-            self._check_cancellation(state)
-
-            think_result = await execute_llm_call(
-                workflow=self,
-                state=state,
-                phase_name="supervision_think",
-                system_prompt=think_system,
-                user_prompt=think_prompt,
-                provider_id=None,  # Resolved by role
-                model=None,  # Resolved by role
-                temperature=0.2,  # Low temperature for analytical reasoning
-                timeout=getattr(self.config, "deep_research_reflection_timeout", 60.0),
-                role="reflection",  # Uses cheap model
+            think_output = await self._supervision_think_step(
+                state, coverage_data, timeout,
             )
-            if isinstance(think_result, WorkflowResult):
-                # Think step failed — proceed without it (non-fatal)
-                logger.warning(
-                    "Supervision think step failed, proceeding without gap analysis: %s",
-                    think_result.error,
-                )
-            else:
-                think_output = think_result.result.content
-                logger.info(
-                    "Supervision think step completed: %d chars, %s tokens",
-                    len(think_output or ""),
-                    think_result.result.tokens_used,
-                )
 
         # Build prompts (with think output if available)
         system_prompt = self._build_supervision_system_prompt(state)
@@ -323,6 +1046,10 @@ class SupervisionPhaseMixin:
                 "overall_coverage": parsed.get("overall_coverage", "unknown"),
             },
         )
+
+    # ==================================================================
+    # Shared helpers (used by both models)
+    # ==================================================================
 
     def _build_per_query_coverage(
         self,
@@ -500,7 +1227,7 @@ class SupervisionPhaseMixin:
         )
 
     def _build_supervision_system_prompt(self, state: DeepResearchState) -> str:
-        """Build system prompt for coverage assessment.
+        """Build system prompt for coverage assessment (query-generation model).
 
         Instructs the LLM to evaluate research coverage and return
         structured JSON with follow-up query recommendations.

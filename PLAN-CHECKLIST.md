@@ -161,16 +161,16 @@
 
 ## Phase 4: Supervisor Delegation Model
 
-- [ ] **4.1** Add `ResearchDirective` dataclass to state model
+- [x] **4.1** Add `ResearchDirective` dataclass to state model
   - Fields: `research_topic: str` (paragraph-length), `perspective: str`, `evidence_needed: str`, `priority: int`
   - Add `directives: list[ResearchDirective]` to supervision state tracking
   - Add serialization support
-- [ ] **4.2** Add `deep_research_max_concurrent_research_units: int = 5` config
+- [x] **4.2** Add `deep_research_max_concurrent_research_units: int = 5` config
   - Caps parallel researchers per delegation round
   - Add `deep_research_delegation_model: bool = True` flag
   - When disabled, falls back to existing query-generation supervision
   - Add `from_toml_dict()` parsing
-- [ ] **4.3** Refactor `_execute_supervision_async()` — delegation loop
+- [x] **4.3** Refactor `_execute_supervision_async()` — delegation loop
   - Replace single LLM assessment call with multi-step loop:
     1. **Think**: analyze compressed findings, identify gaps (existing think step)
     2. **Delegate**: generate `ResearchDirective` objects from gap analysis (new)
@@ -179,40 +179,40 @@
     5. **Assess**: evaluate coverage and decide continue/complete (updated)
   - Loop bounded by `max_supervision_rounds`
   - Exit on: `ResearchComplete` signal, all gaps filled, or round limit reached
-- [ ] **4.4** Add `_build_delegation_prompt()` to supervision
+- [x] **4.4** Add `_build_delegation_prompt()` to supervision
   - System prompt: "You are a research lead delegating tasks to specialized researchers"
   - Input: research brief, compressed findings from all topics, gap analysis from think step
   - Output format: JSON array of `ResearchDirective` objects
   - Guidance: paragraph-length directives, specify approach and evidence type
   - Limit: max `max_concurrent_research_units` directives per round
   - Include `ResearchComplete` signal option (when no more gaps)
-- [ ] **4.5** Add `_parse_delegation_response()`
+- [x] **4.5** Add `_parse_delegation_response()`
   - Extract `ResearchDirective` objects from LLM JSON response
   - Validate: research_topic non-empty, priority 1-3
   - Handle `research_complete: true` signal
   - Cap directives at `max_concurrent_research_units`
   - Graceful fallback: on parse failure, generate single directive from gap analysis
-- [ ] **4.6** Add `_execute_directives_async()` to supervision
+- [x] **4.6** Add `_execute_directives_async()` to supervision
   - Convert each `ResearchDirective` into a `SubQuery` (directive topic as query text)
   - Spawn parallel `_execute_topic_research_async()` calls (reuse gathering infrastructure)
   - Bounded by `asyncio.Semaphore(max_concurrent_research_units)`
   - Collect `TopicResearchResult` objects with inline compression
   - Add new sources/findings to state under lock
   - Non-fatal: individual directive failures don't block others
-- [ ] **4.7** Add think-before-delegate and think-after-results
+- [x] **4.7** Add think-before-delegate and think-after-results
   - Before delegation: think step articulates specific gaps (existing from prior plan)
   - After results return: think step assesses what was learned and what remains
   - Both use reflection-tier model
   - Think outputs logged in supervision_history
-- [ ] **4.8** Update `workflow_execution.py` for delegation model
+- [x] **4.8** Update `workflow_execution.py` for delegation model
   - Supervision can now trigger inline gathering (not just follow-up query append)
   - New results merged into state alongside original gathering results
   - Phase transition: after supervision completes, proceed to ANALYSIS (unchanged)
-- [ ] **4.9** Ensure backward compatibility
+- [x] **4.9** Ensure backward compatibility
   - When `deep_research_delegation_model=False`, use existing query-generation path
   - Existing tests pass without modification
   - State model additions are optional fields with defaults
-- [ ] **4.10** Add tests for supervisor delegation
+- [x] **4.10** Add tests for supervisor delegation
   - Test: supervisor generates paragraph-length directives (not single-sentence queries)
   - Test: directives target specific gaps identified in think output
   - Test: parallel researcher execution respects concurrency limit

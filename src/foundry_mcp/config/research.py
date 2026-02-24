@@ -112,6 +112,12 @@ class ResearchConfig:
     deep_research_supervision_provider: Optional[str] = None
     deep_research_supervision_model: Optional[str] = None
 
+    # Supervisor delegation model (Phase 4 PLAN)
+    deep_research_delegation_model: bool = True  # Use directive-based delegation (vs. query-generation fallback)
+    deep_research_max_concurrent_research_units: int = 5  # Max parallel researchers per delegation round
+    deep_research_delegation_provider: Optional[str] = None  # LLM provider for delegation prompt (uses supervision fallback)
+    deep_research_delegation_model_name: Optional[str] = None  # Model override for delegation prompt
+
     # Deep research contradiction detection in analysis phase
     deep_research_enable_contradiction_detection: bool = True  # LLM-based contradiction detection between findings
 
@@ -366,6 +372,13 @@ class ResearchConfig:
             ),
             deep_research_supervision_provider=data.get("deep_research_supervision_provider"),
             deep_research_supervision_model=data.get("deep_research_supervision_model"),
+            # Supervisor delegation model (Phase 4 PLAN)
+            deep_research_delegation_model=_parse_bool(data.get("deep_research_delegation_model", True)),
+            deep_research_max_concurrent_research_units=int(
+                data.get("deep_research_max_concurrent_research_units", 5)
+            ),
+            deep_research_delegation_provider=data.get("deep_research_delegation_provider"),
+            deep_research_delegation_model_name=data.get("deep_research_delegation_model_name"),
             # Deep research contradiction detection
             deep_research_enable_contradiction_detection=_parse_bool(
                 data.get("deep_research_enable_contradiction_detection", True)
@@ -1019,6 +1032,7 @@ class ResearchConfig:
         "clarification": ["clarification", "research", "analysis"],
         "evaluation": ["evaluation", "research", "analysis"],
         "brief": ["brief", "research", "analysis"],
+        "delegation": ["delegation", "supervision", "reflection"],
     }
 
     def resolve_model_for_role(self, role: str) -> Tuple[str, Optional[str]]:

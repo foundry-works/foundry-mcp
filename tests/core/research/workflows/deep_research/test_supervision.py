@@ -92,9 +92,12 @@ def _make_state(
 class StubSupervision(SupervisionPhaseMixin):
     """Concrete class for testing SupervisionPhaseMixin in isolation."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, delegation_model: bool = False) -> None:
         self.config = MagicMock()
         self.config.deep_research_supervision_min_sources_per_query = 2
+        self.config.deep_research_delegation_model = delegation_model
+        self.config.deep_research_max_concurrent_research_units = 5
+        self.config.deep_research_reflection_timeout = 60.0
         self.memory = MagicMock()
         self._audit_events: list[tuple[str, dict]] = []
 
@@ -968,3 +971,451 @@ class TestThinkToolIntegration:
         assert think_kwargs["temperature"] == 0.2
         assert think_kwargs["provider_id"] is None  # resolved by role
         assert think_kwargs["model"] is None  # resolved by role
+
+
+# ===========================================================================
+# Phase 4 PLAN: Supervisor Delegation Model Tests
+# ===========================================================================
+
+
+class TestResearchDirectiveModel:
+    """Tests for the ResearchDirective dataclass."""
+
+    def test_directive_has_required_fields(self):
+        """ResearchDirective contains all required fields with defaults."""
+        from foundry_mcp.core.research.models.deep_research import ResearchDirective
+
+        directive = ResearchDirective(
+            research_topic="Investigate the comparative effectiveness of transformer vs CNN architectures for image classification tasks, focusing on accuracy-compute tradeoffs.",
+        )
+
+        assert directive.research_topic.startswith("Investigate")
+        assert directive.perspective == ""
+        assert directive.evidence_needed == ""
+        assert directive.priority == 2
+        assert directive.id.startswith("dir-")
+        assert directive.supervision_round == 0
+
+    def test_directive_serialization(self):
+        """ResearchDirective round-trips through JSON serialization."""
+        from foundry_mcp.core.research.models.deep_research import ResearchDirective
+
+        directive = ResearchDirective(
+            research_topic="Research topic here",
+            perspective="technical",
+            evidence_needed="benchmarks",
+            priority=1,
+            supervision_round=2,
+        )
+
+        data = directive.model_dump()
+        restored = ResearchDirective(**data)
+        assert restored.research_topic == directive.research_topic
+        assert restored.perspective == "technical"
+        assert restored.priority == 1
+        assert restored.supervision_round == 2
+
+    def test_directives_field_on_state(self):
+        """DeepResearchState has a directives list field (default empty)."""
+        state = DeepResearchState(original_query="test")
+        assert state.directives == []
+        assert isinstance(state.directives, list)
+
+    def test_directives_persisted_in_state_serialization(self):
+        """Directives survive state serialization round-trip."""
+        from foundry_mcp.core.research.models.deep_research import ResearchDirective
+
+        state = DeepResearchState(original_query="test")
+        state.directives.append(
+            ResearchDirective(
+                research_topic="Investigate X",
+                perspective="comparative",
+                priority=1,
+            )
+        )
+
+        data = state.model_dump()
+        restored = DeepResearchState(**data)
+        assert len(restored.directives) == 1
+        assert restored.directives[0].research_topic == "Investigate X"
+
+
+class TestDelegationPrompts:
+    """Tests for delegation prompt building and parsing."""
+
+    def test_delegation_system_prompt_requests_json(self):
+        """Delegation system prompt requests valid JSON output."""
+        stub = StubSupervision(delegation_model=True)
+        prompt = stub._build_delegation_system_prompt()
+
+        assert "valid JSON" in prompt
+        assert "research_complete" in prompt
+        assert "directives" in prompt
+        assert "research_topic" in prompt
+        assert "perspective" in prompt
+        assert "evidence_needed" in prompt
+
+    def test_delegation_user_prompt_includes_coverage(self):
+        """Delegation user prompt includes coverage data and gap analysis."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=2, sources_per_query=2)
+        coverage = stub._build_per_query_coverage(state)
+
+        prompt = stub._build_delegation_user_prompt(
+            state, coverage, think_output="Missing: historical context"
+        )
+
+        assert state.original_query in prompt
+        assert "Missing: historical context" in prompt
+        assert "<gap_analysis>" in prompt
+        assert "Sources:" in prompt
+
+    def test_delegation_user_prompt_includes_prior_directives(self):
+        """Delegation user prompt lists previously executed directives."""
+        from foundry_mcp.core.research.models.deep_research import ResearchDirective
+
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=2, sources_per_query=2)
+        state.directives.append(
+            ResearchDirective(
+                research_topic="Previously investigated topic about transformers",
+                priority=1,
+            )
+        )
+        coverage = stub._build_per_query_coverage(state)
+
+        prompt = stub._build_delegation_user_prompt(state, coverage)
+
+        assert "Previously Executed Directives" in prompt
+        assert "Previously investigated topic" in prompt
+
+    def test_parse_delegation_response_valid(self):
+        """Parse a valid delegation response with directives."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=2, sources_per_query=2)
+
+        response = json.dumps({
+            "research_complete": False,
+            "directives": [
+                {
+                    "research_topic": "Investigate the historical development of deep learning from perceptrons through modern transformers, focusing on key architectural innovations.",
+                    "perspective": "historical",
+                    "evidence_needed": "academic papers, timeline data",
+                    "priority": 1,
+                },
+                {
+                    "research_topic": "Survey current hardware requirements for training large language models.",
+                    "perspective": "technical",
+                    "evidence_needed": "benchmarks, cost data",
+                    "priority": 2,
+                },
+            ],
+            "rationale": "Two key gaps identified",
+        })
+
+        directives, complete = stub._parse_delegation_response(response, state)
+
+        assert complete is False
+        assert len(directives) == 2
+        assert directives[0].priority == 1
+        assert "historical development" in directives[0].research_topic
+        assert directives[0].perspective == "historical"
+        assert directives[1].priority == 2
+
+    def test_parse_delegation_response_research_complete(self):
+        """Parse a response signaling research completion."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=2, sources_per_query=2)
+
+        response = json.dumps({
+            "research_complete": True,
+            "directives": [],
+            "rationale": "All dimensions well covered",
+        })
+
+        directives, complete = stub._parse_delegation_response(response, state)
+
+        assert complete is True
+        assert len(directives) == 0
+
+    def test_parse_delegation_response_caps_directives(self):
+        """Directives are capped by max_concurrent_research_units."""
+        stub = StubSupervision(delegation_model=True)
+        stub.config.deep_research_max_concurrent_research_units = 2
+        state = _make_state(num_completed=1, sources_per_query=1)
+
+        response = json.dumps({
+            "research_complete": False,
+            "directives": [
+                {"research_topic": f"Topic {i}", "priority": 2}
+                for i in range(5)
+            ],
+            "rationale": "",
+        })
+
+        directives, _ = stub._parse_delegation_response(response, state)
+
+        assert len(directives) == 2  # Capped at max_concurrent_research_units
+
+    def test_parse_delegation_response_invalid_json(self):
+        """Invalid JSON returns empty directives gracefully."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=1, sources_per_query=1)
+
+        directives, complete = stub._parse_delegation_response("not json at all", state)
+
+        assert len(directives) == 0
+        assert complete is False
+
+    def test_parse_delegation_response_empty_content(self):
+        """Empty content returns empty directives."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=1, sources_per_query=1)
+
+        directives, complete = stub._parse_delegation_response("", state)
+
+        assert len(directives) == 0
+        assert complete is False
+
+    def test_parse_delegation_response_skips_empty_topics(self):
+        """Directives with empty research_topic are skipped."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=1, sources_per_query=1)
+
+        response = json.dumps({
+            "research_complete": False,
+            "directives": [
+                {"research_topic": "", "priority": 1},
+                {"research_topic": "Valid topic", "priority": 2},
+            ],
+            "rationale": "",
+        })
+
+        directives, _ = stub._parse_delegation_response(response, state)
+
+        assert len(directives) == 1
+        assert directives[0].research_topic == "Valid topic"
+
+    def test_parse_delegation_response_clamps_priority(self):
+        """Priority values are clamped to 1-3 range."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=1, sources_per_query=1)
+
+        response = json.dumps({
+            "research_complete": False,
+            "directives": [
+                {"research_topic": "Topic A", "priority": 0},
+                {"research_topic": "Topic B", "priority": 10},
+            ],
+            "rationale": "",
+        })
+
+        directives, _ = stub._parse_delegation_response(response, state)
+
+        assert directives[0].priority == 1  # Clamped up from 0
+        assert directives[1].priority == 3  # Clamped down from 10
+
+
+class TestDelegationIntegration:
+    """Integration tests for the delegation supervision model."""
+
+    @pytest.mark.asyncio
+    async def test_delegation_dispatches_correctly(self):
+        """When delegation_model=True, _execute_supervision_async uses delegation path."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=2, sources_per_query=3, supervision_round=1)
+
+        # Round > 0 with sufficient sources triggers heuristic early exit
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        ):
+            result = await stub._execute_supervision_async(
+                state=state, provider_id="test-provider", timeout=30.0
+            )
+
+        assert result.success is True
+        assert result.metadata.get("model") == "delegation"
+
+    @pytest.mark.asyncio
+    async def test_query_generation_fallback(self):
+        """When delegation_model=False, uses query-generation path."""
+        stub = StubSupervision(delegation_model=False)
+        state = _make_state(num_completed=2, sources_per_query=3, supervision_round=1)
+
+        result = await stub._execute_supervision_async(
+            state=state, provider_id="test-provider", timeout=30.0
+        )
+
+        assert result.success is True
+        assert result.metadata.get("method") == "heuristic"
+        # No delegation-specific metadata
+        assert "model" not in result.metadata
+
+    @pytest.mark.asyncio
+    async def test_delegation_research_complete_signal(self):
+        """ResearchComplete signal terminates the delegation loop."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=2, sources_per_query=2, supervision_round=0)
+
+        delegation_response = json.dumps({
+            "research_complete": True,
+            "directives": [],
+            "rationale": "All dimensions covered",
+        })
+
+        async def mock_execute_llm_call(**kwargs):
+            if kwargs.get("phase_name") == "supervision_think":
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True, content="Gap analysis", tokens_used=50
+                )
+                return result
+            elif kwargs.get("phase_name") == "supervision_delegate":
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True,
+                    content=delegation_response,
+                    provider_id="test",
+                    model_used="test",
+                    tokens_used=80,
+                    duration_ms=400.0,
+                )
+                return result
+            # No other calls expected
+            raise AssertionError(f"Unexpected call: {kwargs.get('phase_name')}")
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+            side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        ):
+            result = await stub._execute_supervision_async(
+                state=state, provider_id="test-provider", timeout=30.0
+            )
+
+        assert result.success is True
+        assert result.metadata["should_continue_gathering"] is False
+        # Check history records completion
+        history = state.metadata.get("supervision_history", [])
+        assert len(history) == 1
+        assert history[0]["method"] == "delegation_complete"
+
+    @pytest.mark.asyncio
+    async def test_delegation_round_limit_enforced(self):
+        """Delegation loop respects max_supervision_rounds."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(
+            num_completed=2, sources_per_query=2,
+            supervision_round=0, max_supervision_rounds=1,
+        )
+
+        delegation_response = json.dumps({
+            "research_complete": False,
+            "directives": [
+                {"research_topic": "Topic A", "priority": 2},
+            ],
+            "rationale": "Need more",
+        })
+
+        call_phases: list[str] = []
+
+        async def mock_execute_llm_call(**kwargs):
+            call_phases.append(kwargs.get("phase_name", "unknown"))
+            if kwargs.get("phase_name") == "supervision_think":
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True, content="Gaps exist", tokens_used=40
+                )
+                return result
+            elif kwargs.get("phase_name") == "supervision_delegate":
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True,
+                    content=delegation_response,
+                    provider_id="test",
+                    model_used="test",
+                    tokens_used=60,
+                    duration_ms=300.0,
+                )
+                return result
+            raise AssertionError(f"Unexpected: {kwargs.get('phase_name')}")
+
+        # Mock _execute_topic_research_async to avoid needing real providers
+        async def mock_topic_research(*args, **kwargs):
+            sq = kwargs.get("sub_query") or args[0]
+            return TopicResearchResult(
+                sub_query_id=sq.id,
+                sources_found=2,
+                searches_performed=1,
+            )
+
+        mock_provider = MagicMock()
+        mock_provider.get_provider_name.return_value = "tavily"
+
+        stub.config.deep_research_providers = ["tavily"]
+        stub.config.deep_research_topic_max_tool_calls = 10
+        stub._execute_topic_research_async = mock_topic_research
+        stub._get_search_provider = lambda provider_name: mock_provider
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+            side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        ):
+            result = await stub._execute_supervision_async(
+                state=state, provider_id="test-provider", timeout=30.0
+            )
+
+        assert result.success is True
+        # Only 1 round executed (max_supervision_rounds=1)
+        assert state.supervision_round == 1
+        assert result.metadata["total_directives_executed"] == 1
+
+    @pytest.mark.asyncio
+    async def test_delegation_no_directives_stops_loop(self):
+        """When no directives are generated, the loop exits."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=2, sources_per_query=2, supervision_round=0)
+
+        empty_delegation = json.dumps({
+            "research_complete": False,
+            "directives": [],
+            "rationale": "Cannot identify specific gaps",
+        })
+
+        async def mock_execute_llm_call(**kwargs):
+            if kwargs.get("phase_name") == "supervision_think":
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True, content="Analysis", tokens_used=40
+                )
+                return result
+            elif kwargs.get("phase_name") == "supervision_delegate":
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True,
+                    content=empty_delegation,
+                    provider_id="test",
+                    model_used="test",
+                    tokens_used=60,
+                    duration_ms=300.0,
+                )
+                return result
+            raise AssertionError(f"Unexpected: {kwargs.get('phase_name')}")
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+            side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        ):
+            result = await stub._execute_supervision_async(
+                state=state, provider_id="test-provider", timeout=30.0
+            )
+
+        assert result.success is True
+        assert result.metadata["total_directives_executed"] == 0
+        history = state.metadata["supervision_history"]
+        assert history[0]["method"] == "delegation_no_directives"
