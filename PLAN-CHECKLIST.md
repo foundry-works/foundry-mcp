@@ -7,21 +7,21 @@
 
 ## Phase 1: Think-Tool Deliberation in Supervision
 
-- [ ] **1.1** Add `_build_think_prompt()` to `SupervisionPhaseMixin`
+- [x] **1.1** Add `_build_think_prompt()` to `SupervisionPhaseMixin`
   - Generates gap-analysis-only prompt from per-sub-query coverage data
   - Does NOT produce follow-up queries — only articulates what's found and what's missing
   - Uses coverage_data dict already built by `_build_coverage_data()`
-- [ ] **1.2** Execute think call before coverage assessment in `_execute_supervision_async()`
+- [x] **1.2** Execute think call before coverage assessment in `_execute_supervision_async()`
   - Separate LLM call using reflection role (cheap model)
   - Guarded by heuristic fast-path: skip when `supervision_round > 0` and coverage sufficient
   - Timeout matches `deep_research_reflection_timeout`
-- [ ] **1.3** Pass think output into `_build_supervision_user_prompt()`
+- [x] **1.3** Pass think output into `_build_supervision_user_prompt()`
   - Think output becomes a `<gap_analysis>` section in the follow-up generation prompt
   - Follow-up queries should reference specific gaps identified in think output
-- [ ] **1.4** Record think output in `state.metadata["supervision_history"]`
+- [x] **1.4** Record think output in `state.metadata["supervision_history"]`
   - Each supervision round entry gets a `think_output` field
   - Preserves full deliberation chain for traceability
-- [ ] **1.5** Add tests for think-tool integration
+- [x] **1.5** Add tests for think-tool integration
   - Test: think output contains per-sub-query gap analysis
   - Test: follow-up queries reference gaps from think output
   - Test: think step skipped on heuristic fast-path

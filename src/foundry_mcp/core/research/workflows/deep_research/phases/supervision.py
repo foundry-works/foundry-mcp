@@ -146,9 +146,49 @@ class SupervisionPhaseMixin:
             },
         )
 
-        # Build prompts
+        # --- Think step: deliberate on gaps before generating follow-ups ---
+        # The think step is a separate LLM call using a cheap model that
+        # forces explicit gap analysis. Its output is fed into the follow-up
+        # generation prompt so queries are grounded in deliberate reasoning.
+        # Skip on round > 0 (the first round already provides grounding).
+        think_output: Optional[str] = None
+        if state.supervision_round == 0:
+            think_prompt = self._build_think_prompt(state, coverage_data)
+            think_system = self._build_think_system_prompt()
+
+            self._check_cancellation(state)
+
+            think_result = await execute_llm_call(
+                workflow=self,
+                state=state,
+                phase_name="supervision_think",
+                system_prompt=think_system,
+                user_prompt=think_prompt,
+                provider_id=None,  # Resolved by role
+                model=None,  # Resolved by role
+                temperature=0.2,  # Low temperature for analytical reasoning
+                timeout=getattr(self.config, "deep_research_reflection_timeout", 60.0),
+                role="reflection",  # Uses cheap model
+            )
+            if isinstance(think_result, WorkflowResult):
+                # Think step failed — proceed without it (non-fatal)
+                logger.warning(
+                    "Supervision think step failed, proceeding without gap analysis: %s",
+                    think_result.error,
+                )
+            else:
+                think_output = think_result.result.content
+                logger.info(
+                    "Supervision think step completed: %d chars, %s tokens",
+                    len(think_output or ""),
+                    think_result.result.tokens_used,
+                )
+
+        # Build prompts (with think output if available)
         system_prompt = self._build_supervision_system_prompt(state)
-        user_prompt = self._build_supervision_user_prompt(state, coverage_data)
+        user_prompt = self._build_supervision_user_prompt(
+            state, coverage_data, think_output
+        )
 
         # Check for cancellation before making provider call
         self._check_cancellation(state)
@@ -223,19 +263,20 @@ class SupervisionPhaseMixin:
         # Increment supervision round
         state.supervision_round += 1
 
-        # Record supervision history
+        # Record supervision history (including think output for traceability)
         history = state.metadata.setdefault("supervision_history", [])
-        history.append(
-            {
-                "round": state.supervision_round,
-                "method": "llm",
-                "should_continue_gathering": should_continue,
-                "follow_ups_added": new_sub_queries,
-                "overall_coverage": parsed.get("overall_coverage", "unknown"),
-                "per_query_assessment": parsed.get("per_query_assessment", []),
-                "rationale": parsed.get("rationale", ""),
-            }
-        )
+        history_entry: dict[str, Any] = {
+            "round": state.supervision_round,
+            "method": "llm",
+            "should_continue_gathering": should_continue,
+            "follow_ups_added": new_sub_queries,
+            "overall_coverage": parsed.get("overall_coverage", "unknown"),
+            "per_query_assessment": parsed.get("per_query_assessment", []),
+            "rationale": parsed.get("rationale", ""),
+        }
+        if think_output:
+            history_entry["think_output"] = think_output
+        history.append(history_entry)
 
         # Save state
         self.memory.save_deep_research(state)
@@ -362,6 +403,95 @@ class SupervisionPhaseMixin:
 
         return coverage
 
+    def _build_think_prompt(
+        self,
+        state: DeepResearchState,
+        coverage_data: list[dict[str, Any]],
+    ) -> str:
+        """Build a gap-analysis-only prompt for the think step.
+
+        This is the think-tool equivalent: it forces the LLM to explicitly
+        reason through findings before acting. The prompt asks for structured
+        gap analysis WITHOUT producing follow-up queries — that happens in the
+        separate act step (coverage assessment).
+
+        The think step articulates:
+        - What was found per sub-query
+        - What domains/perspectives are represented
+        - What perspectives or information gaps exist
+        - What specific types of information would fill those gaps
+
+        Args:
+            state: Current research state
+            coverage_data: Per-sub-query coverage from _build_per_query_coverage
+
+        Returns:
+            Think prompt string for gap analysis
+        """
+        parts = [
+            f"# Research Gap Analysis\n",
+            f"**Original Query:** {state.original_query}\n",
+        ]
+
+        if state.research_brief:
+            brief_excerpt = state.research_brief[:500]
+            parts.append(f"**Research Brief:** {brief_excerpt}\n")
+
+        parts.append(f"**Iteration:** {state.iteration}/{state.max_iterations}")
+        parts.append(f"**Supervision Round:** {state.supervision_round + 1}/{state.max_supervision_rounds}")
+        parts.append(f"**Total Sources:** {len(state.sources)}\n")
+
+        # Per-sub-query findings and coverage
+        if coverage_data:
+            parts.append("## Per-Sub-Query Coverage\n")
+            for entry in coverage_data:
+                parts.append(f"### {entry['query']}")
+                parts.append(f"- **Status:** {entry['status']}")
+                parts.append(f"- **Sources found:** {entry['source_count']}")
+                qd = entry["quality_distribution"]
+                parts.append(
+                    f"- **Quality:** HIGH={qd['HIGH']}, MEDIUM={qd['MEDIUM']}, "
+                    f"LOW={qd['LOW']}"
+                )
+                parts.append(f"- **Domains:** {', '.join(entry['domain_list']) if entry['domain_list'] else 'none'}")
+                if entry.get("findings_summary"):
+                    parts.append(f"- **Findings:** {entry['findings_summary']}")
+                parts.append("")
+
+        parts.extend([
+            "## Instructions\n",
+            "Analyze the research coverage above. For EACH sub-query, articulate:",
+            "1. What key information was found",
+            "2. What domains and perspectives are represented",
+            "3. What specific information gaps exist",
+            "4. What types of sources or angles would fill those gaps\n",
+            "Then provide an overall assessment of:",
+            "- Which research dimensions are well-covered",
+            "- Which dimensions are missing or underrepresented",
+            "- What specific knowledge gaps, if addressed, would most improve the research\n",
+            "DO NOT generate follow-up queries. Focus ONLY on analysis of what exists and what's missing.",
+            "Be specific: name exact topics, perspectives, or data types that are absent.\n",
+            "Respond in plain text with clear section headings.",
+        ])
+
+        return "\n".join(parts)
+
+    def _build_think_system_prompt(self) -> str:
+        """Build system prompt for the think step LLM call.
+
+        Returns:
+            System prompt instructing analytical gap assessment
+        """
+        return (
+            "You are a research gap analyst. Your task is to evaluate the "
+            "coverage quality of completed research and identify specific "
+            "information gaps. You do NOT generate follow-up queries — you "
+            "only analyze what has been found and what is missing.\n\n"
+            "Be specific and concise. Name exact topics, perspectives, data "
+            "types, or source categories that are absent. Your analysis will "
+            "be used by a separate process to generate targeted follow-up queries."
+        )
+
     def _build_supervision_system_prompt(self, state: DeepResearchState) -> str:
         """Build system prompt for coverage assessment.
 
@@ -414,15 +544,20 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         self,
         state: DeepResearchState,
         coverage_data: list[dict[str, Any]],
+        think_output: Optional[str] = None,
     ) -> str:
         """Build user prompt with research context and coverage data.
 
         Includes the original query, research brief, per-query coverage
-        table, existing sub-queries for dedup, and round progress.
+        table, existing sub-queries for dedup, round progress, and
+        optionally the think-step gap analysis to ground follow-up generation.
 
         Args:
             state: Current research state
             coverage_data: Per-sub-query coverage from _build_per_query_coverage
+            think_output: Optional gap analysis from the think step. When
+                provided, included as a ``<gap_analysis>`` section so the LLM
+                generates follow-up queries grounded in explicit reasoning.
 
         Returns:
             User prompt string
@@ -464,6 +599,21 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             prompt_parts.append(f"- [{sq.status}] {sq.query}")
         prompt_parts.append("")
 
+        # Think-step gap analysis (grounds follow-up query generation)
+        if think_output:
+            prompt_parts.extend([
+                "## Gap Analysis (from prior deliberation step)",
+                "",
+                "<gap_analysis>",
+                think_output.strip(),
+                "</gap_analysis>",
+                "",
+                "Use the gap analysis above to generate TARGETED follow-up queries "
+                "that address the specific gaps identified. Each follow-up query "
+                "should directly correspond to a gap mentioned in the analysis.",
+                "",
+            ])
+
         # Instructions
         prompt_parts.extend(
             [
@@ -472,10 +622,13 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                 "2. Determine overall coverage status",
                 "3. If coverage is insufficient or partial, generate specific follow-up queries",
                 "4. Follow-up queries should drill deeper, not repeat existing queries",
-                "",
-                "Return your assessment as JSON.",
             ]
         )
+        if think_output:
+            prompt_parts.append(
+                "5. Each follow-up query MUST reference a specific gap from the gap analysis above"
+            )
+        prompt_parts.extend(["", "Return your assessment as JSON."])
 
         return "\n".join(prompt_parts)
 

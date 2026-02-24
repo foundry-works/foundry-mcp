@@ -605,3 +605,366 @@ class TestSupervisionIntegration:
 
         assert result.metadata["follow_ups_added"] == 1  # budget_remaining = 1
         assert len(state.sub_queries) == 3  # 2 original + 1 capped
+
+
+# ===========================================================================
+# 1.5  Think-tool deliberation tests
+# ===========================================================================
+
+
+class TestThinkToolPrompts:
+    """Tests for _build_think_prompt and _build_think_system_prompt."""
+
+    def test_think_prompt_contains_per_query_coverage(self):
+        """Think prompt includes per-sub-query coverage with gap analysis instructions."""
+        stub = StubSupervision()
+        state = _make_state(num_completed=2, sources_per_query=2)
+        coverage = stub._build_per_query_coverage(state)
+        prompt = stub._build_think_prompt(state, coverage)
+
+        # Contains original query
+        assert state.original_query in prompt
+        # Contains per-sub-query data
+        assert "Sub-query 0" in prompt
+        assert "Sub-query 1" in prompt
+        # Contains coverage metrics
+        assert "Sources found:" in prompt
+        assert "Quality:" in prompt
+        assert "Domains:" in prompt
+        # Contains gap analysis instructions
+        assert "DO NOT generate follow-up queries" in prompt
+        assert "information gaps" in prompt
+
+    def test_think_prompt_includes_research_brief(self):
+        """Think prompt includes research brief excerpt when available."""
+        stub = StubSupervision()
+        state = _make_state(num_completed=1, sources_per_query=1)
+        state.research_brief = "A comprehensive study of neural network architectures"
+        coverage = stub._build_per_query_coverage(state)
+        prompt = stub._build_think_prompt(state, coverage)
+
+        assert "comprehensive study of neural network" in prompt
+
+    def test_think_prompt_handles_empty_coverage(self):
+        """Think prompt works with no coverage data (no completed queries)."""
+        stub = StubSupervision()
+        state = _make_state(num_completed=0, num_pending=2)
+        coverage = stub._build_per_query_coverage(state)
+        prompt = stub._build_think_prompt(state, coverage)
+
+        # Should still contain instructions even without per-query data
+        assert "DO NOT generate follow-up queries" in prompt
+        assert state.original_query in prompt
+
+    def test_think_system_prompt_forbids_query_generation(self):
+        """Think system prompt explicitly forbids generating follow-up queries."""
+        stub = StubSupervision()
+        system = stub._build_think_system_prompt()
+
+        assert "do not generate follow-up queries" in system.lower()
+        assert "gap" in system.lower()
+
+
+class TestThinkToolInUserPrompt:
+    """Tests for think output integration into supervision user prompt."""
+
+    def test_user_prompt_includes_gap_analysis_when_provided(self):
+        """User prompt includes <gap_analysis> section when think output is given."""
+        stub = StubSupervision()
+        state = _make_state(num_completed=2, sources_per_query=2)
+        coverage = stub._build_per_query_coverage(state)
+
+        think_output = (
+            "## Per-Query Analysis\n"
+            "Sub-query 0 covers neural network basics but lacks historical context.\n"
+            "Sub-query 1 has good coverage of training methods but misses regularization.\n\n"
+            "## Overall Gaps\n"
+            "Missing: historical development, regularization techniques, hardware requirements."
+        )
+
+        prompt = stub._build_supervision_user_prompt(state, coverage, think_output)
+
+        assert "<gap_analysis>" in prompt
+        assert "</gap_analysis>" in prompt
+        assert "historical context" in prompt
+        assert "regularization" in prompt
+        assert "TARGETED follow-up queries" in prompt
+        assert "MUST reference a specific gap" in prompt
+
+    def test_user_prompt_no_gap_section_when_think_absent(self):
+        """User prompt omits gap analysis section when no think output."""
+        stub = StubSupervision()
+        state = _make_state(num_completed=2, sources_per_query=2)
+        coverage = stub._build_per_query_coverage(state)
+
+        prompt = stub._build_supervision_user_prompt(state, coverage, think_output=None)
+
+        assert "<gap_analysis>" not in prompt
+        assert "MUST reference a specific gap" not in prompt
+
+    def test_user_prompt_no_gap_section_when_empty_string(self):
+        """User prompt omits gap analysis section when think output is empty."""
+        stub = StubSupervision()
+        state = _make_state(num_completed=2, sources_per_query=2)
+        coverage = stub._build_per_query_coverage(state)
+
+        prompt = stub._build_supervision_user_prompt(state, coverage, think_output="")
+
+        assert "<gap_analysis>" not in prompt
+
+
+class TestThinkToolIntegration:
+    """Integration tests for think-tool deliberation in supervision execution."""
+
+    @pytest.mark.asyncio
+    async def test_think_step_executes_on_round_zero(self):
+        """Think step executes on supervision_round=0 and output flows to user prompt."""
+        stub = StubSupervision()
+        state = _make_state(
+            num_completed=2, sources_per_query=1, supervision_round=0
+        )
+        state.max_sub_queries = 10
+
+        think_response = (
+            "Sub-query 0 lacks diversity — only 1 source from a single domain. "
+            "Missing: academic perspectives and peer-reviewed research."
+        )
+
+        supervision_response = json.dumps(
+            {
+                "overall_coverage": "partial",
+                "per_query_assessment": [],
+                "follow_up_queries": [
+                    {
+                        "query": "peer-reviewed deep learning surveys",
+                        "rationale": "Addresses missing academic perspectives",
+                        "priority": 2,
+                    }
+                ],
+                "should_continue_gathering": True,
+                "rationale": "Need academic sources",
+            }
+        )
+
+        # Track calls to distinguish think vs supervision LLM calls
+        call_count = 0
+
+        async def mock_execute_llm_call(**kwargs):
+            nonlocal call_count
+            call_count += 1
+
+            if kwargs.get("phase_name") == "supervision_think":
+                # Think step — return gap analysis
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True,
+                    content=think_response,
+                    provider_id="reflection-provider",
+                    model_used="cheap-model",
+                    tokens_used=50,
+                    duration_ms=200.0,
+                )
+                return result
+            else:
+                # Supervision step — verify think output was included in prompt
+                user_prompt = kwargs.get("user_prompt", "")
+                assert "<gap_analysis>" in user_prompt, (
+                    "Think output should be included in supervision user prompt"
+                )
+                assert "academic perspectives" in user_prompt
+
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True,
+                    content=supervision_response,
+                    provider_id="test-provider",
+                    model_used="test-model",
+                    tokens_used=100,
+                    duration_ms=500.0,
+                )
+                return result
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+            side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        ):
+            result = await stub._execute_supervision_async(
+                state=state, provider_id="test-provider", timeout=30.0
+            )
+
+        assert result.success is True
+        assert call_count == 2  # think + supervision
+        assert result.metadata["follow_ups_added"] == 1
+
+        # Think output recorded in history
+        history = state.metadata["supervision_history"]
+        assert len(history) == 1
+        assert "think_output" in history[0]
+        assert "academic perspectives" in history[0]["think_output"]
+
+    @pytest.mark.asyncio
+    async def test_think_step_skipped_on_round_gt_zero(self):
+        """Think step is skipped when supervision_round > 0.
+
+        When round > 0, the heuristic fast-path triggers (it always returns
+        should_continue_gathering=False), so no LLM calls are made at all.
+        This verifies the think step guard (round == 0) is correct by
+        confirming that round > 0 takes the heuristic path without any
+        LLM calls — meaning the think step is inherently skipped.
+        """
+        stub = StubSupervision()
+        state = _make_state(
+            num_completed=2, sources_per_query=3, supervision_round=1
+        )
+
+        call_phases: list[str] = []
+
+        async def mock_execute_llm_call(**kwargs):
+            call_phases.append(kwargs.get("phase_name", "unknown"))
+            result = MagicMock()
+            result.result = WorkflowResult(
+                success=True,
+                content="{}",
+                provider_id="test-provider",
+                model_used="test-model",
+                tokens_used=80,
+                duration_ms=400.0,
+            )
+            return result
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+            side_effect=mock_execute_llm_call,
+        ):
+            result = await stub._execute_supervision_async(
+                state=state, provider_id="test-provider", timeout=30.0
+            )
+
+        assert result.success is True
+        assert result.metadata["method"] == "heuristic"
+        # No LLM calls at all — heuristic path, so think step was skipped
+        assert call_phases == []
+        # History should NOT have think_output
+        history = state.metadata["supervision_history"]
+        assert "think_output" not in history[0]
+
+    @pytest.mark.asyncio
+    async def test_think_step_failure_is_non_fatal(self):
+        """When think step fails, supervision proceeds without gap analysis."""
+        stub = StubSupervision()
+        state = _make_state(
+            num_completed=2, sources_per_query=2, supervision_round=0
+        )
+        state.max_sub_queries = 10
+
+        supervision_response = json.dumps(
+            {
+                "overall_coverage": "sufficient",
+                "per_query_assessment": [],
+                "follow_up_queries": [],
+                "should_continue_gathering": False,
+                "rationale": "Coverage is sufficient",
+            }
+        )
+
+        async def mock_execute_llm_call(**kwargs):
+            if kwargs.get("phase_name") == "supervision_think":
+                # Think step fails — returns WorkflowResult directly
+                return WorkflowResult(
+                    success=False,
+                    content="",
+                    error="Provider timeout",
+                )
+            else:
+                # Supervision proceeds without gap analysis
+                user_prompt = kwargs.get("user_prompt", "")
+                assert "<gap_analysis>" not in user_prompt, (
+                    "Should NOT have gap analysis when think step fails"
+                )
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True,
+                    content=supervision_response,
+                    provider_id="test-provider",
+                    model_used="test-model",
+                    tokens_used=80,
+                    duration_ms=400.0,
+                )
+                return result
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+            side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        ):
+            result = await stub._execute_supervision_async(
+                state=state, provider_id="test-provider", timeout=30.0
+            )
+
+        assert result.success is True
+        # History should NOT have think_output since it failed
+        history = state.metadata["supervision_history"]
+        assert "think_output" not in history[0]
+
+    @pytest.mark.asyncio
+    async def test_think_step_uses_reflection_role(self):
+        """Think step LLM call uses the 'reflection' role for cheap model routing."""
+        stub = StubSupervision()
+        state = _make_state(
+            num_completed=2, sources_per_query=1, supervision_round=0
+        )
+        state.max_sub_queries = 10
+
+        captured_kwargs: list[dict] = []
+
+        async def mock_execute_llm_call(**kwargs):
+            captured_kwargs.append(kwargs)
+            if kwargs.get("phase_name") == "supervision_think":
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True,
+                    content="Gap analysis here",
+                    provider_id="reflection-provider",
+                    model_used="cheap-model",
+                    tokens_used=45,
+                    duration_ms=150.0,
+                )
+                return result
+            else:
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True,
+                    content=json.dumps({
+                        "overall_coverage": "sufficient",
+                        "per_query_assessment": [],
+                        "follow_up_queries": [],
+                        "should_continue_gathering": False,
+                        "rationale": "OK",
+                    }),
+                    provider_id="test-provider",
+                    model_used="test-model",
+                    tokens_used=80,
+                    duration_ms=400.0,
+                )
+                return result
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+            side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        ):
+            await stub._execute_supervision_async(
+                state=state, provider_id="test-provider", timeout=30.0
+            )
+
+        # Verify think step used reflection role
+        think_kwargs = captured_kwargs[0]
+        assert think_kwargs["phase_name"] == "supervision_think"
+        assert think_kwargs["role"] == "reflection"
+        assert think_kwargs["temperature"] == 0.2
+        assert think_kwargs["provider_id"] is None  # resolved by role
+        assert think_kwargs["model"] is None  # resolved by role
