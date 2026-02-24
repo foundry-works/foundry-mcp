@@ -1,7 +1,7 @@
 """Async workflow execution engine for deep research.
 
-Orchestrates the multi-phase workflow (planning, gathering, analysis,
-synthesis, refinement) with cancellation support, error handling,
+Orchestrates the multi-phase workflow (planning, gathering, supervision,
+analysis, synthesis, refinement) with cancellation support, error handling,
 and resource cleanup.
 """
 
@@ -68,6 +68,7 @@ class WorkflowExecutionMixin:
         async def _execute_analysis_async(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_synthesis_async(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_refinement_async(self, *args: Any, **kwargs: Any) -> Any: ...
+        async def _execute_supervision_async(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_extract_followup_async(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_digest_step_async(self, *args: Any, **kwargs: Any) -> Any: ...
 
@@ -332,6 +333,36 @@ class WorkflowExecutionMixin:
                         )
                         # Persist state with digested content
                         self.memory.save_deep_research(state)
+
+                if state.phase == DeepResearchPhase.SUPERVISION:
+                    if not getattr(self.config, "deep_research_enable_supervision", True):
+                        state.advance_phase()  # Skip directly to ANALYSIS
+                    else:
+                        err = await self._run_phase(
+                            state,
+                            DeepResearchPhase.SUPERVISION,
+                            self._execute_supervision_async(
+                                state=state,
+                                provider_id=resolve_phase_provider(self.config, "supervision", "reflection"),
+                                timeout=self.config.get_phase_timeout("supervision"),
+                            ),
+                            skip_transition=True,  # We handle transition manually
+                        )
+                        if err:
+                            return err
+                        await self._maybe_reflect(state, DeepResearchPhase.SUPERVISION)
+
+                        # Check if supervisor wants more gathering
+                        last_hist = (state.metadata.get("supervision_history") or [{}])[-1]
+                        should_gather = last_hist.get("should_continue_gathering", False)
+                        has_pending = len(state.pending_sub_queries()) > 0
+                        within_limit = state.supervision_round < state.max_supervision_rounds
+
+                        if should_gather and has_pending and within_limit:
+                            state.phase = DeepResearchPhase.GATHERING
+                            continue  # Inner loop: re-enter GATHERING
+                        else:
+                            state.advance_phase()  # SUPERVISION → ANALYSIS
 
                 if state.phase == DeepResearchPhase.ANALYSIS:
                     err = await self._run_phase(

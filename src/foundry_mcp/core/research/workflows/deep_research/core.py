@@ -77,6 +77,9 @@ from foundry_mcp.core.research.workflows.deep_research.phases.refinement import 
 from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
     SynthesisPhaseMixin,
 )
+from foundry_mcp.core.research.workflows.deep_research.phases.supervision import (
+    SupervisionPhaseMixin,
+)
 from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
     TopicResearchMixin,
 )
@@ -108,6 +111,7 @@ class DeepResearchWorkflow(
     PlanningPhaseMixin,
     GatheringPhaseMixin,
     TopicResearchMixin,
+    SupervisionPhaseMixin,
     AnalysisPhaseMixin,
     SynthesisPhaseMixin,
     RefinementPhaseMixin,

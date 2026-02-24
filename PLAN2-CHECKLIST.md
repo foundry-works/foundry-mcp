@@ -53,18 +53,18 @@
 
 ## Sub-Phase 6.5: Workflow Execution Integration
 
-- [ ] **6.5.1** Add `_execute_supervision_async` TYPE_CHECKING stub to `WorkflowExecutionMixin`
-- [ ] **6.5.2** Add SUPERVISION block in `while True` loop after GATHERING block
+- [x] **6.5.1** Add `_execute_supervision_async` TYPE_CHECKING stub to `WorkflowExecutionMixin`
+- [x] **6.5.2** Add SUPERVISION block in `while True` loop after GATHERING block
   - `skip_transition=True` for manual transition control
   - Loop-back to GATHERING when `should_continue_gathering` and pending queries within limit
   - `advance_phase()` to ANALYSIS when supervision is satisfied
-- [ ] **6.5.3** Handle supervision-disabled path: `advance_phase()` to skip SUPERVISION entirely
+- [x] **6.5.3** Handle supervision-disabled path: `advance_phase()` to skip SUPERVISION entirely
 
 ---
 
 ## Sub-Phase 6.6: Core Class Wiring
 
-- [ ] **6.6.1** Add `SupervisionPhaseMixin` to `DeepResearchWorkflow` class inheritance in `core.py`
+- [x] **6.6.1** Add `SupervisionPhaseMixin` to `DeepResearchWorkflow` class inheritance in `core.py`
 - [x] **6.6.2** Add import and export in `phases/__init__.py`
 
 ---
