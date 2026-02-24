@@ -36,6 +36,7 @@ from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import 
     execute_llm_call,
     execute_structured_llm_call,
     finalize_phase,
+    truncate_supervision_messages,
 )
 
 logger = logging.getLogger(__name__)
@@ -165,6 +166,13 @@ class SupervisionPhaseMixin:
                 len(state.sources),
             )
 
+            # Apply token-limit guard on supervision message history
+            if state.supervision_messages:
+                state.supervision_messages = truncate_supervision_messages(
+                    state.supervision_messages,
+                    model=state.supervision_model,
+                )
+
             # Build coverage data
             coverage_data = self._build_per_query_coverage(state)
 
@@ -204,9 +212,27 @@ class SupervisionPhaseMixin:
 
             # --- Step 2: Delegate (generate directives) ---
             self._check_cancellation(state)
-            directives, research_complete = await self._supervision_delegate_step(
+            directives, research_complete, delegation_content = await self._supervision_delegate_step(
                 state, coverage_data, think_output, provider_id, timeout,
             )
+
+            # --- Accumulate supervisor messages ---
+            # Capture think output as assistant message
+            if think_output:
+                state.supervision_messages.append({
+                    "role": "assistant",
+                    "type": "think",
+                    "round": state.supervision_round,
+                    "content": think_output,
+                })
+            # Capture delegation response as assistant message
+            if delegation_content:
+                state.supervision_messages.append({
+                    "role": "assistant",
+                    "type": "delegation",
+                    "round": state.supervision_round,
+                    "content": delegation_content,
+                })
 
             # Check for ResearchComplete signal
             if research_complete:
@@ -255,6 +281,17 @@ class SupervisionPhaseMixin:
             round_new_sources = sum(r.sources_found for r in directive_results)
             total_new_sources += round_new_sources
             total_directives_executed += len(directive_results)
+
+            # --- Accumulate compressed findings as tool-result messages ---
+            for result in directive_results:
+                if result.compressed_findings:
+                    state.supervision_messages.append({
+                        "role": "tool_result",
+                        "type": "research_findings",
+                        "round": state.supervision_round,
+                        "directive_id": result.sub_query_id,
+                        "content": result.compressed_findings,
+                    })
 
             # --- Step 4: Think-after-results (assess what was learned) ---
             post_think_output: Optional[str] = None
@@ -419,7 +456,7 @@ class SupervisionPhaseMixin:
         think_output: Optional[str],
         provider_id: Optional[str],
         timeout: float,
-    ) -> tuple[list[ResearchDirective], bool]:
+    ) -> tuple[list[ResearchDirective], bool, Optional[str]]:
         """Generate research directives from gap or decomposition analysis.
 
         For first-round supervisor-owned decomposition, generates initial
@@ -434,7 +471,7 @@ class SupervisionPhaseMixin:
             timeout: Request timeout
 
         Returns:
-            Tuple of (directives list, research_complete flag)
+            Tuple of (directives list, research_complete flag, raw LLM response content)
         """
         is_first_round = self._is_first_round_decomposition(state)
         if is_first_round:
@@ -468,7 +505,7 @@ class SupervisionPhaseMixin:
                 "Supervision delegation LLM call failed: %s. No directives generated.",
                 call_result.error,
             )
-            return [], False
+            return [], False, None
 
         # Structured parse succeeded — extract directives from DelegationResponse
         if call_result.parsed is not None:
@@ -500,7 +537,9 @@ class SupervisionPhaseMixin:
             },
         )
 
-        return directives, research_complete
+        # Return raw LLM response content for message accumulation
+        raw_content = call_result.result.content
+        return directives, research_complete, raw_content
 
     async def _execute_directives_async(
         self,
@@ -724,6 +763,35 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             f"- Total sources: {len(state.sources)}",
             "",
         ])
+
+        # Prior supervisor conversation (accumulated across rounds)
+        if state.supervision_messages:
+            parts.append("## Prior Supervisor Conversation")
+            parts.append(
+                "Below is your conversation history from previous rounds. "
+                "Reference your prior reasoning and the research findings "
+                "to avoid re-delegating already-covered topics."
+            )
+            parts.append("")
+            for msg in state.supervision_messages:
+                msg_round = msg.get("round", "?")
+                msg_type = msg.get("type", "unknown")
+                msg_content = msg.get("content", "")
+                if msg.get("role") == "assistant" and msg_type == "think":
+                    parts.append(f"### [Round {msg_round}] Your Gap Analysis")
+                    parts.append(msg_content)
+                    parts.append("")
+                elif msg.get("role") == "assistant" and msg_type == "delegation":
+                    parts.append(f"### [Round {msg_round}] Your Delegation Response")
+                    parts.append(msg_content)
+                    parts.append("")
+                elif msg.get("role") == "tool_result":
+                    directive_id = msg.get("directive_id", "unknown")
+                    parts.append(f"### [Round {msg_round}] Research Findings (directive {directive_id})")
+                    parts.append(msg_content)
+                    parts.append("")
+            parts.append("---")
+            parts.append("")
 
         # Per-query coverage with compressed findings
         if coverage_data:

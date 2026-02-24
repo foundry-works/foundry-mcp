@@ -1,325 +1,138 @@
-# PLAN: Deep Research — Supervisor Orchestration, Compression & Synthesis Alignment
-
-**Branch:** `tyler/foundry-mcp-20260223-0747`
-**Date:** 2026-02-24
-**Reference:** `~/GitHub/open_deep_research` (RACE 0.4344, #6 Deep Research Bench)
-**Status:** Draft
-**Depends on:** All prior plan phases complete (summarization, brief, inline compression, structured outputs, delegation, pipeline collapse, reflection simplification)
-
----
+# PLAN: Deep Research Alignment Improvements
 
 ## Context
 
-After completing seven prior plan phases that aligned foundry-mcp with open_deep_research on per-result summarization, research briefs, inline compression, structured outputs, supervisor delegation, pipeline simplification, and reflection — comparative analysis reveals four remaining structural gaps, ranked by downstream quality impact.
-
-These four changes focus on the core research loop (how work gets orchestrated) and the output boundary (how findings become reports). No changes to tool calling, search providers, or evaluation infrastructure.
-
-### Gap Analysis Summary
-
-| # | Gap | Root cause | Quality impact |
-|---|-----|-----------|----------------|
-| 1 | **Rigid phase pipeline** | Separate PLANNING → GATHERING → SUPERVISION phases commit to a full decomposition before seeing any results | Supervisor can only patch gaps after ALL initial gathering completes; no adaptive decomposition |
-| 2 | **Compression from metadata, not conversation** | Compression prompt receives structured `TopicResearchResult` fields (reflection notes, refined queries) instead of the raw researcher message history | Loses the researcher's reasoning chain, failed attempts, and iterative refinements — degrades synthesis quality on complex topics |
-| 3 | **Synthesis prompt underspecified** | Foundry synthesis prompt has good structure guidance but misses open_deep_research's concrete citation rules, language-matching emphasis, verbosity expectations, and section fluidity | Final report quality gap: less comprehensive sections, weaker citation formatting, occasional language mismatches |
-| 4 | **Token recovery truncates state fields, not messages** | On token limit errors, foundry-mcp uniformly degrades state fields via fidelity tracking rather than pruning old message context while preserving recent reasoning | Loses recent LLM reasoning (most valuable) proportionally with old context (least valuable) |
-
-Phases are ordered by leverage: Phase 1 is the largest architectural change and unblocks the most downstream improvement. Phases 2-4 are smaller, independent prompt/recovery changes that each improve a specific quality dimension.
+Comparison of foundry-mcp's deep research workflow against `open_deep_research` (upstream reference) revealed several areas where alignment can improve research quality. This plan addresses the actionable gaps, ordered by expected impact.
 
 ---
 
-## Phase 1: Unify Supervision as the Research Orchestrator
+## Phase 1 — Supervisor Message Accumulation
 
-**Effort:** Medium-High | **Impact:** Very High
+**Problem:** open_deep_research's supervisor accumulates its conversation across rounds — it sees its own prior AIMessage + ToolMessages containing compressed research results from each delegation. foundry-mcp rebuilds context from structured coverage data each round (source counts, quality distributions, findings excerpts truncated to 2000 chars). This means the supervisor never sees its own prior reasoning or the full compressed output from earlier rounds.
+
+**Why it matters:** The supervisor's gap analysis quality degrades when it can't reference its own prior thinking. Coverage metrics are a lossy proxy for the actual research content. The supervisor may re-delegate topics it already covered because it only sees truncated excerpts, not the full compressed findings.
+
+**Changes:**
+
+1. **Accumulate supervisor messages across rounds.** Maintain a `supervision_messages: list[dict]` on `DeepResearchState` that grows across rounds:
+   - Round N system prompt + user prompt → AIMessage (delegation response) → synthetic ToolMessages with compressed findings from each executed directive
+   - Pass full message list to delegation LLM on round N+1
+   - Keep the existing structured coverage data as a supplement, not the sole context
+
+2. **Inject compressed findings as tool-result messages.** After each directive's topic researcher completes and compresses, format its `compressed_findings` as a ToolMessage-style entry in the supervisor's message history. This mirrors how open_deep_research feeds `ConductResearch` results back.
+
+3. **Token-limit guard on supervisor history.** Apply the same message-aware truncation strategy (oldest-first removal) if the accumulated supervisor messages approach the model's context limit. The structured coverage data serves as the fallback when messages are truncated.
+
 **Files:**
-- `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py` (expand first-round decomposition to be the primary path)
-- `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py` (simplify phase flow)
-- `src/foundry_mcp/core/research/workflows/deep_research/phases/planning.py` (deprecate from default path)
-- `src/foundry_mcp/core/research/workflows/deep_research/phases/gathering.py` (deprecate from default path)
-- `src/foundry_mcp/core/research/models/deep_research.py` (phase enum adjustments)
-- `src/foundry_mcp/config/research.py` (config)
-
-### Problem
-
-open_deep_research has no PLANNING or GATHERING phase. The `supervisor` function (deep_researcher.py:178-224) is the sole orchestrator: it receives the research brief, decomposes on its first iteration via `ConductResearch` tool calls, sees the results, assesses gaps, and delegates follow-ups — all in one continuous loop. The decomposer and the gap assessor are the same entity, sharing a mental model.
-
-foundry-mcp currently has supervisor-owned decomposition as an *implemented feature* (`_is_first_round_decomposition()` at supervision.py:337-352, first-round think/delegate prompts, and the BRIEF → SUPERVISION transition at workflow_execution.py:194-199). However, it coexists with the legacy PLANNING and GATHERING phases. The current `workflow_execution.py` flow (lines 194-252):
-
-```
-BRIEF → (skip PLANNING/GATHERING) → SUPERVISION loop → SYNTHESIS
-```
-
-...already works as intended. But the codebase retains PLANNING and GATHERING as fully wired phases that legacy saved states can resume into, and the supervision loop only runs the first-round decomposition path when no prior topic results exist. The task now is to complete this transition:
-
-1. **Make supervisor-owned decomposition the only default path** — remove the conditional that checks for `deep_research_supervisor_owned_decomposition` config flag and make it unconditional.
-2. **Ensure the supervision loop handles the full lifecycle** — round 0 decomposes, rounds 1+ assess and delegate, with no expectation of GATHERING as a separate phase.
-3. **Clean up dead code paths** — the PLANNING phase's decomposition logic is now dead code on the default path. Mark it as legacy/deprecated.
-4. **Harden the loop termination** — currently round 0 always delegates (no heuristic early-exit). Ensure that round 0 delegates even for trivially simple queries (single directive) and that the heuristic gate at round > 0 properly assesses the decomposition round's results.
-
-The key quality win: the supervisor can *adaptively* decompose. For a simple factual query, it issues 1 directive; sees the results are sufficient in round 1; stops. For a complex comparison, it issues 3 parallel directives in round 0; sees gaps in round 1; issues 2 targeted follow-ups; stops in round 2. The planning phase can't do this because it commits to a decomposition before any research happens.
-
-### Design
-
-Complete the transition that prior plan phases started:
-
-1. **Remove config guard**: The `deep_research_supervisor_owned_decomposition` flag becomes always-True. The BRIEF → SUPERVISION transition in `workflow_execution.py` is unconditional (it already is on line 198-199, but verify no other code paths check this flag).
-
-2. **GATHERING as legacy-resume-only**: The GATHERING block in `workflow_execution.py` (lines 205-219) already has a comment "Legacy saved states may resume at GATHERING; let it proceed." Formalize this: GATHERING only executes if `state.phase == DeepResearchPhase.GATHERING` on entry (resumed from saved state). New workflows never enter GATHERING.
-
-3. **PLANNING as legacy-resume-only**: Same treatment. If a saved state resumes at PLANNING, run it; new workflows skip it entirely.
-
-4. **Supervision round 0 prompt quality**: The first-round think and delegate prompts (already implemented) absorb open_deep_research's supervisor guidance:
-   - "Bias toward a single researcher for simple factual queries"
-   - "Parallelize for explicit comparisons (one per element)"
-   - "2-5 directives for typical queries"
-   - Self-critique: "Before delegating, verify no redundant directives and no missing perspectives"
-
-5. **Post-decomposition assessment**: After round 0 directives execute, the heuristic at round > 0 (`_assess_coverage_heuristic`) sees the decomposition results and decides whether gaps exist. This is the key adaptive behavior: the supervisor *reacts* to what the researchers found.
-
-6. **Remove the config flag**: Delete `deep_research_supervisor_owned_decomposition` from `research.py` and its `from_toml_dict()` parsing. It's no longer optional.
-
-### Changes
-
-1. Remove `deep_research_supervisor_owned_decomposition` config flag from `research.py` — behavior is now always-on
-2. Update `workflow_execution.py`:
-   - Remove conditional logic around PLANNING and GATHERING for new workflows
-   - Keep PLANNING/GATHERING blocks for legacy resume only (guarded by `state.phase ==` check)
-   - Ensure the BRIEF → SUPERVISION transition is the sole default path
-3. Clean up any references to the config flag in supervision.py, planning.py, gathering.py
-4. Review first-round think/delegate prompts for quality — ensure they match open_deep_research's supervisor guidance level
-5. Add deprecation log when PLANNING or GATHERING phase runs from legacy resume
-6. Verify round 0 → round 1 handoff: heuristic should assess round 0 results before deciding on round 1
-7. Tests
-
-### Validation
-
-- Test: new workflow goes BRIEF → SUPERVISION (round 0 decomposition) → SUPERVISION (round 1+ gap assessment) → SYNTHESIS
-- Test: PLANNING and GATHERING phases never execute for new workflows
-- Test: legacy saved state at GATHERING resumes correctly
-- Test: legacy saved state at PLANNING resumes correctly
-- Test: simple query produces 1 directive; sufficient in round 1
-- Test: complex comparison produces 3+ directives; round 1 may delegate follow-ups
-- Test: round 0 results feed into round 1 heuristic assessment
-- Test: config flag removed — no runtime error from old config files referencing it
-- Test: no regression in overall research quality (manual inspection of sample queries)
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py` — accumulate and pass messages
+- `src/foundry_mcp/core/research/workflows/deep_research/models/deep_research.py` — add `supervision_messages` field to state
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/_lifecycle.py` — token guard for supervisor context
 
 ---
 
-## Phase 2: Pass Full Message History to Compression
+## Phase 2 — Researcher Forced Reflection via think_tool
 
-**Effort:** Small | **Impact:** Medium
+**Problem:** open_deep_research explicitly requires the researcher to call `think_tool` after every search before doing anything else. The prompt says "CRITICAL: Use think_tool after each search to reflect on results and plan next steps" and the supervisor prompt forbids calling think_tool in parallel with other tools. foundry-mcp's researcher treats `think` as optional and allows multiple tool calls per turn, meaning the researcher can skip reflection entirely and chain searches without pausing.
+
+**Why it matters:** Forced reflection between searches is a core quality mechanism — it makes the researcher assess what it found before deciding the next query. Without it, researchers tend to exhaust their budget on broad, overlapping searches rather than progressively narrowing.
+
+**Changes:**
+
+1. **Add reflection enforcement to the researcher prompt.** Update `_build_researcher_system_prompt` in `topic_research.py`:
+   - After each `web_search` or `extract_content` call, the researcher MUST call `think` before issuing another search
+   - `think` may NOT be called in parallel with `web_search` or `extract_content`
+   - Multiple `web_search` calls in a single turn are allowed ONLY if they are the first tool calls of the turn (initial broadening)
+
+2. **Validate tool call ordering in the ReAct loop.** In `_execute_react_turn` (or equivalent), check that if the previous turn contained a search tool, the current turn starts with a `think` call. If not, inject a synthetic think prompt asking the researcher to reflect before continuing. This is a soft enforcement — log a warning and inject rather than hard-block.
+
 **Files:**
-- `src/foundry_mcp/core/research/workflows/deep_research/phases/compression.py` (prompt enhancement)
-- `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py` (persist message history on result)
-- `src/foundry_mcp/core/research/models/deep_research.py` (model field)
-
-### Problem
-
-open_deep_research's `compress_research` function (deep_researcher.py:511-585) passes the **full researcher message history** — all tool outputs, AI reflections, search results, and reasoning — to the compression model. The compression prompt says: "All relevant information should be repeated and rewritten verbatim, but in a cleaner format... Only these fully comprehensive cleaned findings are going to be returned to the user, so it's crucial that you don't lose any information."
-
-foundry-mcp's `_compress_single_topic_async` (compression.py:50-150) builds the compression prompt from **structured metadata**: `TopicResearchResult` fields like `reflection_notes`, `refined_queries`, `completion_rationale`, and source content. It reconstructs an "iteration history" from these fields (lines 106-139).
-
-The problem: the structured metadata is a *lossy projection* of the actual conversation. The raw message history contains:
-- The researcher's explicit reasoning at each step ("I found X but it doesn't answer Y, so I'll search for Z")
-- Failed search context ("This search returned irrelevant results about A instead of B")
-- Tool response content as the researcher actually saw it
-- Think-tool deliberation ("The sources contradict each other on point P...")
-
-This context helps the compression model preserve the right information and produce better-cited summaries. The structured metadata loses the reasoning chain and reduces compression quality, especially for complex topics where the research journey matters.
-
-### Design
-
-Store the raw message history on `TopicResearchResult` and pass it to the compression prompt:
-
-1. **Persist message history**: The topic researcher's ReAct loop already maintains `message_history: list[dict]` (topic_research.py). After the loop completes, store it on the `TopicResearchResult`.
-
-2. **Compression prompt enhancement**: Update `_compress_single_topic_async` to include the raw message history in the prompt when available, in addition to the existing structured metadata. Format it as open_deep_research does: sequential tool calls and AI responses in chronological order.
-
-3. **Prompt structure alignment**: Adopt open_deep_research's compression prompt structure:
-   - `<Task>`: Clean up findings, preserve ALL relevant information verbatim
-   - `<Guidelines>`: Comprehensive, include ALL sources, inline citations, Sources section
-   - `<Output Format>`: Queries/tool calls made, Fully comprehensive findings, Sources list
-   - `<Citation Rules>`: Sequential numbering, `[1] Title: URL` format
-   - Critical reminder: preserve verbatim, don't summarize
-
-4. **Fallback**: If `message_history` is empty (e.g., legacy results without it), fall back to the existing structured metadata approach. No breaking change.
-
-5. **Token budget**: Message history can be large. Apply the existing `max_content_length` cap to the total message history block. Truncate oldest messages first (preserving the most recent reasoning).
-
-### Changes
-
-1. Add `message_history: list[dict] = Field(default_factory=list)` to `TopicResearchResult` in `models/deep_research.py`
-2. Store `message_history` on result object at end of ReAct loop in `topic_research.py` (after line ~540 where the loop ends)
-3. Update `_compress_single_topic_async` in `compression.py`:
-   - When `topic_result.message_history` is non-empty, build prompt from message history (chronological tool calls + AI responses)
-   - Adopt open_deep_research's `compress_research_system_prompt` structure: Task, Guidelines, Output Format, Citation Rules sections
-   - When `message_history` is empty, fall back to existing structured metadata prompt
-4. Apply `max_content_length` cap to total message history block in prompt
-5. Tests
-
-### Validation
-
-- Test: message history stored on TopicResearchResult after ReAct loop
-- Test: compression prompt includes raw message history when available
-- Test: compression prompt falls back to structured metadata when message_history empty
-- Test: message history truncated to max_content_length (oldest messages dropped first)
-- Test: compression output includes citation format matching open_deep_research (`[N] Title: URL`)
-- Test: compression output includes "Queries and Tool Calls Made" section
-- Test: no regression — existing compression tests pass with new prompt structure
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py` — prompt update + turn validation
 
 ---
 
-## Phase 3: Align Synthesis Prompt with open_deep_research
+## Phase 3 — Synthesis Source Format Alignment
 
-**Effort:** Small | **Impact:** Medium
+**Problem:** open_deep_research's final report prompt tells the model to use `[Title](URL)` markdown links inline AND to build a `### Sources` section with `[N] Source Title: URL` format. foundry-mcp tells the model NOT to generate a Sources section (it's auto-appended) and uses `[N]` inline only. The auto-appended section uses `[N] [Title](URL)` markdown link format.
+
+The net effect is similar, but there's a gap: open_deep_research's prompt explicitly asks the model to use `[Title](URL)` inline references (clickable links), while foundry-mcp only asks for bare `[N]` numbers. This means foundry-mcp reports have less navigable inline text — readers must scroll to the Sources section to find URLs.
+
+**Why it matters:** Inline markdown links are significantly more useful in rendered markdown environments. A reader seeing `[MIT Tech Review](https://...)` mid-paragraph gets immediate context about the source authority without scrolling.
+
+**Changes:**
+
+1. **Add inline markdown link guidance to synthesis prompt.** Update `_build_synthesis_system_prompt`:
+   - Instruct the model to use `[Title](URL) [N]` format for first reference to each source
+   - Subsequent references to the same source use just `[N]`
+   - Keep the auto-appended Sources section as the canonical reference
+
+2. **Update postprocess_citations to preserve inline links.** The current regex `\[(\d+)\](?!\()` already avoids markdown links. Verify that `[Title](URL) [N]` patterns survive post-processing without the `[N]` being stripped as dangling.
+
 **Files:**
-- `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py` (prompt updates)
-
-### Problem
-
-Foundry-mcp's synthesis system prompt (synthesis.py:329-376) is good but diverges from open_deep_research's `final_report_generation_prompt` (prompts.py:228-308) in several specific ways that affect output quality:
-
-1. **Section verbosity expectations**: open_deep_research explicitly says "Each section should be as long as necessary to deeply answer the question... It is expected that sections will be fairly long and verbose. You are writing a deep research report, and users will expect a thorough answer." Foundry's prompt says "provide depth, not surface-level summaries" but doesn't set the expectation of length.
-
-2. **Section fluidity**: open_deep_research says "Section is a VERY fluid and loose concept. You can structure your report however you think is best, including in ways that are not listed above!" Foundry's structure guidance is more prescriptive (fixed template per query type) with a mandatory "Analysis" section containing "Supporting Evidence", "Conflicting Information", and "Limitations" subsections.
-
-3. **Citation format**: open_deep_research uses `[Title](URL)` markdown links inline AND numbered `[1] Source Title: URL` at the end. Foundry uses only numbered `[N]` inline with automatic Sources section appended by `postprocess_citations()`.
-
-4. **Language matching emphasis**: open_deep_research repeats the language-matching instruction three times with increasing urgency ("CRITICAL", "REMEMBER"). Foundry mentions it once.
-
-5. **Self-referential language**: open_deep_research says "Do NOT ever refer to yourself as the writer" and "Do not say what you are doing in the report. Just write the report without any commentary." Foundry says "Never refer to yourself" and "Never use meta-commentary" which is similar but less emphatic.
-
-6. **Mandatory Analysis section**: Foundry requires an "Analysis" section with "Supporting Evidence", "Conflicting Information", and "Limitations" subsections for every query type. open_deep_research has no such requirement — the structure is query-driven. This forced structure can feel formulaic for simple queries.
-
-### Design
-
-Targeted prompt updates to close the specific gaps, while keeping foundry-mcp's strengths (query-type classification, structure guidance):
-
-1. **Add verbosity expectation**: Explicitly tell the model that sections should be thorough and lengthy. Users expect deep research.
-
-2. **Soften structure prescriptiveness**: Keep query-type structure hints but add open_deep_research's "you can structure however you think is best" permission. Make the Analysis section optional rather than mandatory.
-
-3. **Strengthen language matching**: Add a second, more emphatic language-matching instruction at the end of the system prompt (matching open_deep_research's emphasis pattern).
-
-4. **Citation format**: Keep the current `[N]` inline numbering (it works well with `postprocess_citations()`), but add guidance about citation importance: "Citations are extremely important. Pay attention to getting these right. Users will use citations to look into more information."
-
-5. **Section writing rules**: Add open_deep_research's per-section rules: "Use ## for section titles", "Write in paragraph form by default; use bullet points only when listing discrete items", "Each section should be as long as necessary."
-
-6. **Remove mandatory Analysis subsections**: Replace the mandatory "Supporting Evidence / Conflicting Information / Limitations" structure with optional guidance: "Include analysis of conflicting information and limitations where relevant, but do not force these into separate subsections if they don't apply."
-
-### Changes
-
-1. Update `_build_synthesis_system_prompt` in synthesis.py:
-   - Add section verbosity expectation ("thorough, lengthy sections expected")
-   - Soften structure guidance ("these are suggestions — structure however makes sense")
-   - Make Analysis subsections optional ("include where relevant, not mandatory")
-   - Add citation importance emphasis
-   - Add second language-matching reminder at end
-   - Add per-section writing rules from open_deep_research
-2. No changes to `_build_synthesis_user_prompt` — the data formatting is already good
-3. Tests
-
-### Validation
-
-- Test: system prompt includes verbosity expectation language
-- Test: structure guidance includes "structure however you think is best" permission
-- Test: Analysis subsections are described as optional, not mandatory
-- Test: citation guidance includes importance emphasis
-- Test: language matching instruction appears at least twice in system prompt
-- Test: prompt still includes query-type classification and structure hints (no regression)
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py` — prompt update
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/_citation_postprocess.py` — verify/fix regex
 
 ---
 
-## Phase 4: Message-Aware Token Limit Recovery
+## Phase 4 — Token Limit Recovery in Report Generation
 
-**Effort:** Small | **Impact:** Medium
+**Problem:** open_deep_research handles token limits during report generation with a clear 3-tier strategy: first try full context, then truncate findings to `model_token_limit * 4` characters, then progressively reduce by 10% per retry (max 3 retries). foundry-mcp delegates token recovery to the lifecycle layer's message-aware truncation, which operates on message history rather than findings content. For synthesis specifically, this is suboptimal — the findings string is what needs truncating, not the message structure.
+
+**Why it matters:** If synthesis hits a token limit, the current recovery truncates messages (which may remove the system prompt or research context) rather than trimming the findings payload. open_deep_research's approach of specifically truncating the findings string while keeping the prompt intact is more targeted.
+
+**Changes:**
+
+1. **Add findings-specific truncation in synthesis phase.** In the synthesis execution path, catch token-limit errors and implement:
+   - First retry: truncate the user prompt's findings section to `model_token_limit * 4` characters
+   - Subsequent retries: reduce by 10% per attempt
+   - Max 3 retries
+   - Keep the system prompt and source reference intact; only trim findings text
+   - Fall back to the existing lifecycle-level recovery if findings truncation alone doesn't resolve it
+
+2. **Log truncation metrics.** Record how much content was dropped and at which retry, so the audit trail shows synthesis fidelity degradation.
+
 **Files:**
-- `src/foundry_mcp/core/research/workflows/deep_research/phases/_lifecycle.py` (retry logic)
-- `src/foundry_mcp/core/research/workflows/deep_research/phases/compression.py` (compression-specific recovery)
-- `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py` (synthesis-specific recovery)
-
-### Problem
-
-open_deep_research handles token limit errors with a message-aware truncation strategy (utils.py:848-866): `remove_up_to_last_ai_message(messages)` prunes the oldest messages while preserving the most recent AI reasoning. On retry, if still over limit, it reduces by 10% character count. Max 3 attempts.
-
-foundry-mcp's `execute_llm_call` in `_lifecycle.py` has token limit detection and recovery but uses a different strategy: it relies on the `final_fit_validate` preflight check and fidelity-based content degradation to stay within limits. When a token limit error occurs at runtime (preflight passed but actual call fails), the recovery options are limited.
-
-The problem: the most valuable content in a prompt is typically the *most recent* context — the latest research findings, the most recent reasoning, the current gap analysis. Uniform truncation (or fidelity degradation across all content) loses recent context proportionally with old context. Message-aware truncation preserves recency.
-
-### Design
-
-Add message-aware truncation as a retry strategy for compression and synthesis phases:
-
-1. **Compression retry**: When `_compress_single_topic_async` gets a token limit error:
-   - First retry: truncate the message history block (drop oldest messages, preserving recent)
-   - Second retry: additionally reduce source content by 10%
-   - Third retry: reduce by another 10%
-   - After 3 retries: return without compression (non-fatal, use raw findings)
-
-2. **Synthesis retry**: When `_execute_synthesis_async` gets a token limit error:
-   - First retry: truncate the per-topic findings (drop oldest topics' compressed_findings first, preserving most recent/highest priority)
-   - Second retry: reduce remaining content by 10%
-   - Third retry: reduce by another 10%
-   - After 3 retries: generate partial report with available content
-
-3. **Generic helper**: Add `truncate_prompt_for_retry(prompt: str, attempt: int, max_attempts: int = 3) -> str` to `_lifecycle.py`:
-   - Attempt 1: remove first 20% of content
-   - Attempt 2: remove first 30% of content
-   - Attempt 3: remove first 40% of content
-   - Preserves system prompt (never truncated)
-   - Preserves the last N characters (most recent context)
-
-4. **Provider-specific detection**: The existing `ContextWindowError` detection is good. Ensure it covers the patterns from open_deep_research (utils.py:665-785):
-   - OpenAI: `BadRequestError` + "maximum context length" / "too many tokens"
-   - Anthropic: `BadRequestError` + "prompt is too long" / "too many tokens"
-   - Google: `ResourceExhausted` / `InvalidArgument` with token keywords
-
-### Changes
-
-1. Add `truncate_prompt_for_retry()` helper to `_lifecycle.py`
-2. Wrap the LLM call in `_compress_single_topic_async` with a retry loop:
-   - Catch token limit errors
-   - Apply `truncate_prompt_for_retry()` to user prompt
-   - Retry up to 3 times
-   - Log each retry with truncation percentage
-3. Wrap the LLM call in `_execute_synthesis_async` with a retry loop:
-   - Same pattern as compression
-   - Truncate per-topic findings (oldest/lowest-priority first)
-4. Verify provider-specific error detection patterns cover OpenAI, Anthropic, Google
-5. Tests
-
-### Validation
-
-- Test: compression retries on token limit error with progressive truncation
-- Test: synthesis retries on token limit error with progressive truncation
-- Test: system prompt is never truncated (only user prompt content)
-- Test: most recent context preserved (truncation removes oldest content first)
-- Test: max 3 retries before graceful fallback
-- Test: provider-specific error detection for OpenAI, Anthropic, Google patterns
-- Test: non-token-limit errors are NOT retried (only token limit triggers retry)
-- Test: retry metadata recorded in audit events
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py` — add try/retry with findings truncation
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/_lifecycle.py` — ensure lifecycle recovery doesn't conflict
 
 ---
 
-## Risk Assessment
+## Phase 5 — Researcher Stop Heuristics Alignment
 
-| Phase | Risk | Mitigation |
-|-------|------|-----------|
-| **1: Supervisor orchestrator** | Legacy saved states break if PLANNING/GATHERING phases removed | Keep phase code for resume; only new workflows skip them |
-| **1: Supervisor orchestrator** | Round 0 decomposition quality regresses vs. planning phase | Compare decomposition outputs; first-round prompts already tested |
-| **2: Message history compression** | Message history inflates prompt beyond token limits | Cap at `max_content_length`; truncate oldest messages |
-| **2: Message history compression** | Pydantic serialization size increase | `message_history` excluded from compact repr |
-| **3: Synthesis prompt** | Longer, more verbose reports increase token costs | Acceptable tradeoff for quality; matches user expectations |
-| **4: Token recovery** | Retry loops add latency on token limit errors | Max 3 retries (bounded); only triggers on actual errors |
+**Problem:** open_deep_research's researcher prompt has explicit "Stop Immediately When" rules:
+- You can answer comprehensively
+- You have 3+ relevant examples/sources
+- Last 2 searches returned similar info (diminishing returns)
+
+foundry-mcp's researcher prompt says to call `research_complete` "when confident or diminishing returns" but lacks the specific heuristics. The `early_completion` flag exists but the decision criteria are vague.
+
+**Why it matters:** Without concrete stop rules, researchers either over-search (wasting budget) or under-search (missing important sources). The "3+ examples" and "last 2 searches similar" rules are simple, effective heuristics.
+
+**Changes:**
+
+1. **Add explicit stop heuristics to researcher system prompt.** Update `_build_researcher_system_prompt`:
+   - "Stop and call research_complete when ANY of: (a) you can answer the research question comprehensively, (b) you have found 3+ high-quality, relevant sources, (c) the last 2 searches returned substantially similar results"
+
+2. **Carry the heuristics into the think prompt.** When the researcher calls `think`, include a checklist: "Before your next search, check: Do I have 3+ relevant sources? Did my last 2 searches overlap? Can I answer comprehensively now?"
+
+**Files:**
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py` — prompt updates
 
 ---
 
-## Dependency Graph
+## Phase 6 — Supervisor think_tool Pattern
 
-```
-Phase 1 (Supervisor orchestrator)   ← independent, highest leverage
-Phase 2 (Message history compression) ← independent
-Phase 3 (Synthesis prompt)           ← independent
-Phase 4 (Token limit recovery)       ← independent, benefits from Phase 2
-```
+**Problem:** open_deep_research's supervisor uses `think_tool` as a first-class tool call — the supervisor decides when to reflect, and the reflection is recorded in the message history as a ToolMessage. This means the supervisor's reasoning about gaps is visible in the conversation and feeds into subsequent rounds. foundry-mcp's supervisor has a separate `_execute_supervision_think_async` phase that runs a dedicated LLM call for gap analysis, but the output is passed as structured data, not accumulated in a message history.
 
-All phases are independent and can be implemented in parallel. Phase 1 is recommended first due to highest leverage. Phase 4 benefits slightly from Phase 2 (message history gives the token recovery more granular truncation targets).
+This is closely related to Phase 1 (message accumulation). The improvement here is specifically about making the supervisor's gap-analysis reasoning conversational rather than ephemeral.
+
+**Why it matters:** When the supervisor's think output is a standalone structured blob, it's disconnected from the delegation decision. When it's part of the message history, the LLM can reference its own prior reasoning ("In my earlier analysis, I identified X gap — the new findings from researcher 3 partially address it but Y remains open").
+
+**Changes:**
+
+1. **Integrate think output into supervisor message history.** After the think phase produces gap analysis text, inject it as an assistant message in the supervisor's accumulated messages (from Phase 1). The delegation prompt then naturally follows in the same conversation.
+
+2. **Make think and delegate a single conversation turn.** Instead of two separate LLM calls (think → delegate), consider making think the first part of a single call: system prompt + accumulated history + "First, analyze coverage gaps. Then, generate directives." This reduces latency and ensures the delegation is directly informed by the gap analysis without prompt-engineering the handoff. Evaluate whether single-call quality matches two-call quality before committing.
+
+**Files:**
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py` — restructure think+delegate flow
+- Dependent on Phase 1 (message accumulation)

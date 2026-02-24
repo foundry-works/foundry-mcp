@@ -774,6 +774,16 @@ class DeepResearchState(BaseModel):
     )
     supervision_provider: Optional[str] = Field(default=None)
     supervision_model: Optional[str] = Field(default=None)
+    supervision_messages: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description=(
+            "Accumulated supervisor conversation across delegation rounds. "
+            "Contains the supervisor's prior think outputs, delegation responses, "
+            "and compressed research findings from each executed directive. "
+            "Passed to the delegation LLM on subsequent rounds so it can "
+            "reference its own prior reasoning and the full research context."
+        ),
+    )
 
     system_prompt: Optional[str] = Field(default=None)
     metadata: dict[str, Any] = Field(default_factory=dict)

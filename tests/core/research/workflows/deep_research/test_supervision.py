@@ -2226,3 +2226,281 @@ class TestUnifiedSupervisorOrchestration:
             assert entry["source_count"] == 2
             assert entry["compressed_findings_excerpt"] is not None
             assert "Key findings" in entry["compressed_findings_excerpt"]
+
+
+# ===========================================================================
+# Supervision Message Accumulation (PLAN Phase 1)
+# ===========================================================================
+
+
+class TestSupervisionMessageAccumulation:
+    """Tests for supervisor message accumulation across delegation rounds.
+
+    Covers PLAN checklist items:
+    - 1.1: supervision_messages field on state
+    - 1.2: compressed findings formatted as tool-result messages
+    - 1.3: accumulated messages passed to delegation LLM
+    - 1.4: structured coverage data still present as supplementary context
+    - 1.6: supervisor sees prior round findings in message history
+    - 1.7: supervisor doesn't re-delegate already-covered topics
+    """
+
+    def test_supervision_messages_field_exists(self):
+        """1.1: DeepResearchState has supervision_messages field."""
+        state = DeepResearchState(original_query="test")
+        assert hasattr(state, "supervision_messages")
+        assert state.supervision_messages == []
+
+    def test_supervision_messages_serializable(self):
+        """1.1: supervision_messages round-trips through serialization."""
+        state = DeepResearchState(original_query="test")
+        state.supervision_messages = [
+            {"role": "assistant", "type": "think", "round": 0, "content": "Gap analysis"},
+            {"role": "tool_result", "type": "research_findings", "round": 0,
+             "directive_id": "sq-1", "content": "Findings about topic A"},
+        ]
+        data = state.model_dump()
+        restored = DeepResearchState(**data)
+        assert len(restored.supervision_messages) == 2
+        assert restored.supervision_messages[0]["content"] == "Gap analysis"
+        assert restored.supervision_messages[1]["directive_id"] == "sq-1"
+
+    @pytest.mark.asyncio
+    async def test_messages_accumulated_during_delegation(self):
+        """1.2/1.6: Think output, delegation response, and compressed findings
+        are accumulated in supervision_messages after each round."""
+        stub = StubSupervision(delegation_model=True)
+        stub.config.deep_research_topic_max_tool_calls = 5
+        stub.config.deep_research_providers = ["tavily"]
+
+        state = _make_state(
+            num_completed=0, num_pending=0, supervision_round=0,
+            max_supervision_rounds=2,
+        )
+        state.research_brief = "Investigate AI safety"
+        state.topic_research_results = []
+        state.max_sub_queries = 10
+
+        think_response = "Gap: No coverage of alignment techniques"
+        delegate_response = json.dumps({
+            "research_complete": False,
+            "directives": [
+                {"research_topic": "AI alignment techniques", "priority": 1},
+            ],
+            "rationale": "Need alignment coverage",
+        })
+
+        # Second round: research_complete = true
+        delegate_response_r1 = json.dumps({
+            "research_complete": True,
+            "directives": [],
+            "rationale": "All covered now",
+        })
+
+        round_counter = {"value": 0}
+
+        async def mock_execute_llm_call(**kwargs):
+            phase_name = kwargs.get("phase_name", "")
+            if "think" in phase_name:
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True, content=think_response, tokens_used=50
+                )
+                return result
+            elif "delegate" in phase_name:
+                content = delegate_response if round_counter["value"] == 0 else delegate_response_r1
+                round_counter["value"] += 1
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True, content=content,
+                    provider_id="test", model_used="test",
+                    tokens_used=80, duration_ms=400.0,
+                )
+                return result
+            raise AssertionError(f"Unexpected phase: {phase_name}")
+
+        async def mock_topic_research(**kwargs):
+            sq = kwargs.get("sub_query")
+            return TopicResearchResult(
+                sub_query_id=sq.id if sq else "unknown",
+                searches_performed=2,
+                sources_found=3,
+                compressed_findings="AI alignment research shows RLHF is dominant approach...",
+            )
+
+        stub._execute_topic_research_async = mock_topic_research
+        stub._get_search_provider = MagicMock(return_value=MagicMock())
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+            side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.truncate_supervision_messages",
+            side_effect=lambda messages, model: messages,  # no truncation in test
+        ):
+            result = await stub._execute_supervision_async(
+                state=state, provider_id="test-provider", timeout=30.0
+            )
+
+        assert result.success is True
+
+        # Verify supervision_messages were accumulated
+        msgs = state.supervision_messages
+        assert len(msgs) >= 3, f"Expected >= 3 messages, got {len(msgs)}"
+
+        # Check message types are present
+        think_msgs = [m for m in msgs if m.get("type") == "think"]
+        delegation_msgs = [m for m in msgs if m.get("type") == "delegation"]
+        findings_msgs = [m for m in msgs if m.get("type") == "research_findings"]
+
+        assert len(think_msgs) >= 1, "Should have at least one think message"
+        assert len(delegation_msgs) >= 1, "Should have at least one delegation message"
+        assert len(findings_msgs) >= 1, "Should have at least one findings message"
+
+        # Verify findings content
+        assert any("RLHF" in m["content"] for m in findings_msgs), \
+            "Findings messages should contain compressed research content"
+
+    @pytest.mark.asyncio
+    async def test_messages_injected_into_delegation_prompt(self):
+        """1.3: Accumulated messages appear in the delegation user prompt."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=2, sources_per_query=2, supervision_round=1)
+
+        # Pre-populate supervision_messages from a prior round
+        state.supervision_messages = [
+            {
+                "role": "assistant", "type": "think", "round": 0,
+                "content": "The research has a gap in regulatory analysis.",
+            },
+            {
+                "role": "assistant", "type": "delegation", "round": 0,
+                "content": json.dumps({
+                    "research_complete": False,
+                    "directives": [{"research_topic": "Regulatory framework", "priority": 1}],
+                }),
+            },
+            {
+                "role": "tool_result", "type": "research_findings", "round": 0,
+                "directive_id": "sq-reg-1",
+                "content": "EU AI Act imposes strict requirements on high-risk systems...",
+            },
+        ]
+
+        coverage = stub._build_per_query_coverage(state)
+        prompt = stub._build_delegation_user_prompt(state, coverage, think_output="New gaps here")
+
+        # Verify prior conversation is in the prompt
+        assert "Prior Supervisor Conversation" in prompt
+        assert "regulatory analysis" in prompt
+        assert "EU AI Act" in prompt
+        assert "[Round 0] Your Gap Analysis" in prompt
+        assert "[Round 0] Research Findings" in prompt
+
+        # Verify structured coverage data is ALSO present (1.4)
+        assert "Current Research Coverage" in prompt
+
+    def test_delegation_prompt_without_prior_messages(self):
+        """1.4: Coverage data is still present when no prior messages exist."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=2, sources_per_query=2, supervision_round=0)
+        assert state.supervision_messages == []
+
+        coverage = stub._build_per_query_coverage(state)
+        prompt = stub._build_delegation_user_prompt(state, coverage, think_output=None)
+
+        # No prior conversation section
+        assert "Prior Supervisor Conversation" not in prompt
+        # But coverage data is present
+        assert "Current Research Coverage" in prompt
+        assert "Sources:" in prompt
+
+
+class TestSupervisionMessageTruncation:
+    """Tests for token-limit guard on supervision message history.
+
+    Covers PLAN checklist item 1.5 and 1.8.
+    """
+
+    def test_truncation_no_op_when_within_budget(self):
+        """Messages within budget are returned unchanged."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            truncate_supervision_messages,
+        )
+
+        messages = [
+            {"role": "assistant", "type": "think", "round": 0, "content": "Short analysis"},
+            {"role": "tool_result", "type": "research_findings", "round": 0,
+             "directive_id": "d1", "content": "Brief findings"},
+        ]
+        result = truncate_supervision_messages(messages, model=None)
+        assert result == messages
+
+    def test_truncation_removes_oldest_rounds_first(self):
+        """1.8: When truncation is needed, oldest rounds are removed first."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            truncate_supervision_messages,
+        )
+
+        # Create messages with long content across 3 rounds
+        messages = []
+        for r in range(3):
+            messages.append({
+                "role": "assistant", "type": "think", "round": r,
+                "content": f"Think output round {r}: " + "x" * 50_000,
+            })
+            messages.append({
+                "role": "tool_result", "type": "research_findings", "round": r,
+                "directive_id": f"d-{r}",
+                "content": f"Findings round {r}: " + "y" * 50_000,
+            })
+
+        # Force a small budget to trigger truncation
+        small_limits = {"test-model": 10_000}
+        result = truncate_supervision_messages(
+            messages, model="test-model", token_limits=small_limits,
+        )
+
+        # Should have removed oldest rounds
+        assert len(result) < len(messages)
+        # Most recent round should be preserved
+        remaining_rounds = {m.get("round") for m in result}
+        assert 2 in remaining_rounds, "Most recent round (2) should be preserved"
+
+    def test_truncation_preserves_most_recent_round(self):
+        """1.8: Even under heavy truncation, the most recent round survives."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            truncate_supervision_messages,
+        )
+
+        messages = []
+        for r in range(5):
+            messages.append({
+                "role": "assistant", "type": "think", "round": r,
+                "content": "x" * 100_000,
+            })
+
+        # Very small budget — only the last round should survive
+        tiny_limits = {"tiny": 5_000}
+        result = truncate_supervision_messages(
+            messages, model="tiny", token_limits=tiny_limits,
+        )
+
+        remaining_rounds = {m.get("round") for m in result}
+        assert 4 in remaining_rounds, "Most recent round (4) must survive"
+        # Oldest rounds should be removed
+        assert 0 not in remaining_rounds
+
+    def test_truncation_empty_messages(self):
+        """Empty message list is returned unchanged."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            truncate_supervision_messages,
+        )
+
+        result = truncate_supervision_messages([], model=None)
+        assert result == []

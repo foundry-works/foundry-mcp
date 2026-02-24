@@ -104,6 +104,95 @@ MODEL_TOKEN_LIMITS: dict[str, int] = _load_model_token_limits()
 
 
 # ---------------------------------------------------------------------------
+# Supervision message history truncation
+# ---------------------------------------------------------------------------
+
+# Reserve this fraction of the model's context window for the supervision
+# message history.  The rest is needed for the system prompt, coverage data,
+# and the LLM's response tokens.
+_SUPERVISION_HISTORY_BUDGET_FRACTION: float = 0.4
+
+# Characters-per-token estimate used for budget calculations (same heuristic
+# as open_deep_research and truncate_to_token_estimate).
+_CHARS_PER_TOKEN: int = 4
+
+
+def truncate_supervision_messages(
+    messages: list[dict[str, Any]],
+    model: Optional[str],
+    token_limits: Optional[dict[str, int]] = None,
+) -> list[dict[str, Any]]:
+    """Truncate supervision message history using oldest-first removal.
+
+    When the accumulated supervision messages approach the model's context
+    limit, removes the oldest complete rounds first (preserving the most
+    recent rounds which contain the freshest research findings).
+
+    The budget is ``model_context_window * _SUPERVISION_HISTORY_BUDGET_FRACTION``
+    tokens (converted to characters via the 4-chars/token heuristic).
+
+    Args:
+        messages: The supervision message history to potentially truncate.
+        model: Model identifier for context-window lookup.
+        token_limits: Token limit registry (defaults to ``MODEL_TOKEN_LIMITS``).
+
+    Returns:
+        The (possibly truncated) message list.  Returns the original list
+        unchanged if it fits within budget.
+    """
+    if not messages:
+        return messages
+
+    limits = token_limits if token_limits is not None else MODEL_TOKEN_LIMITS
+    max_tokens = estimate_token_limit_for_model(model, limits)
+    if max_tokens is None:
+        max_tokens = _FALLBACK_CONTEXT_WINDOW
+
+    budget_chars = int(max_tokens * _SUPERVISION_HISTORY_BUDGET_FRACTION * _CHARS_PER_TOKEN)
+
+    # Compute total character count of all message contents
+    total_chars = sum(len(msg.get("content", "")) for msg in messages)
+    if total_chars <= budget_chars:
+        return messages
+
+    # Group messages by round for round-level removal
+    rounds: dict[int, list[int]] = {}
+    for idx, msg in enumerate(messages):
+        r = msg.get("round", 0)
+        rounds.setdefault(r, []).append(idx)
+
+    sorted_rounds = sorted(rounds.keys())
+
+    # Remove oldest rounds until we fit within budget.
+    # Always preserve the most recent round even if it exceeds the budget.
+    most_recent_round = sorted_rounds[-1]
+    indices_to_remove: set[int] = set()
+    for r in sorted_rounds:
+        if total_chars <= budget_chars:
+            break
+        if r == most_recent_round:
+            break  # Never remove the most recent round
+        for idx in rounds[r]:
+            total_chars -= len(messages[idx].get("content", ""))
+            indices_to_remove.add(idx)
+
+    if not indices_to_remove:
+        return messages
+
+    truncated = [msg for idx, msg in enumerate(messages) if idx not in indices_to_remove]
+    removed_rounds = sorted({messages[idx].get("round", 0) for idx in indices_to_remove})
+    logger.info(
+        "Truncated supervision message history: removed %d messages from rounds %s "
+        "(budget=%d chars, remaining=%d chars)",
+        len(indices_to_remove),
+        removed_rounds,
+        budget_chars,
+        sum(len(msg.get("content", "")) for msg in truncated),
+    )
+    return truncated
+
+
+# ---------------------------------------------------------------------------
 # Provider-specific context-window error detection
 # ---------------------------------------------------------------------------
 

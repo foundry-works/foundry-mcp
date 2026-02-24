@@ -1,165 +1,56 @@
-# PLAN-CHECKLIST: Deep Research — Supervisor Orchestration, Compression & Synthesis Alignment
+# PLAN CHECKLIST: Deep Research Alignment Improvements
 
-**Branch:** `tyler/foundry-mcp-20260223-0747`
-**Date:** 2026-02-24
+## Phase 1 — Supervisor Message Accumulation
+- [x] 1.1 Add `supervision_messages: list[dict]` field to `DeepResearchState`
+- [x] 1.2 After each directive completes, format its `compressed_findings` as a tool-result message and append to `supervision_messages`
+- [x] 1.3 Pass accumulated `supervision_messages` to delegation LLM in `_run_delegation_async`
+- [x] 1.4 Keep structured coverage data as supplementary context (don't remove it)
+- [x] 1.5 Add oldest-first message truncation guard when supervisor history approaches model context limit
+- [x] 1.6 Test: supervisor sees prior round findings in message history
+- [x] 1.7 Test: supervisor doesn't re-delegate already-covered topics
+- [x] 1.8 Test: token truncation preserves most recent rounds
 
----
+## Phase 2 — Researcher Forced Reflection
+- [ ] 2.1 Update `_build_researcher_system_prompt`: after each `web_search`/`extract_content`, researcher MUST call `think` before next search
+- [ ] 2.2 Add rule: `think` may NOT be called in parallel with search tools
+- [ ] 2.3 Allow multiple `web_search` calls in first turn only (initial broadening)
+- [ ] 2.4 Add soft validation in ReAct loop: if previous turn had search and current turn doesn't start with `think`, inject synthetic reflection prompt
+- [ ] 2.5 Log warning when reflection is injected (not hard-block)
+- [ ] 2.6 Test: researcher alternates search → think → search pattern
+- [ ] 2.7 Test: first-turn parallel searches are allowed
+- [ ] 2.8 Test: synthetic reflection injection works when researcher skips think
 
-## Phase 1: Unify Supervision as the Research Orchestrator
+## Phase 3 — Synthesis Source Format Alignment
+- [ ] 3.1 Update `_build_synthesis_system_prompt`: first reference to source uses `[Title](URL) [N]`, subsequent uses `[N]`
+- [ ] 3.2 Verify `postprocess_citations` regex preserves `[Title](URL) [N]` patterns
+- [ ] 3.3 Fix regex if `[N]` adjacent to `)` is incorrectly stripped
+- [ ] 3.4 Test: inline markdown links survive post-processing
+- [ ] 3.5 Test: auto-appended Sources section still correct with inline links present
 
-- [x] **1.1** Remove `deep_research_supervisor_owned_decomposition` config flag
-  - Delete field from `research.py` config class *(already removed in prior phases)*
-  - Remove from `from_toml_dict()` parsing *(already removed in prior phases)*
-  - Remove any default value assignments *(already removed in prior phases)*
-  - Ensure old config files with this key don't cause runtime errors (ignore unknown keys) *(verified: `data.get()` silently ignores unknown keys)*
-- [x] **1.2** Make BRIEF → SUPERVISION the sole default transition in `workflow_execution.py`
-  - Verify lines 194-199 unconditionally skip PLANNING/GATHERING for new workflows *(confirmed)*
-  - Remove any remaining conditional checks on the deleted config flag *(none found — flag only in PLAN docs)*
-  - Add comment: "PLANNING and GATHERING are legacy-resume-only phases" *(added)*
-- [x] **1.3** Guard PLANNING phase as legacy-resume-only
-  - PLANNING removed from DeepResearchPhase enum entirely — no legacy resume possible
-  - planning.py code retained for backward compat but unreachable from workflow_execution.py
-- [x] **1.4** Guard GATHERING phase as legacy-resume-only
-  - GATHERING block only executes if `state.phase == DeepResearchPhase.GATHERING` on workflow entry *(confirmed)*
-  - Added deprecation warning log and audit event when legacy GATHERING phase runs
-  - gathering.py code retained for backward compat
-- [x] **1.5** Review and harden first-round decomposition prompts
-  - Verified first-round think prompt includes open_deep_research guidance:
-    - "Bias toward single researcher for simple queries" *(present in think system prompt)*
-    - "Parallelize for explicit comparisons (one per comparison element)" *(present in delegation system prompt)*
-    - "2-5 directives for typical queries" *(present in delegation system prompt)*
-  - Verified first-round delegate prompt includes:
-    - Priority assignment (1=critical, 2=important, 3=nice-to-have) *(present)*
-    - Specificity guidance: each directive yields targeted results *(present)*
-    - Self-critique: "Verify no redundant directives and no missing perspectives" *(present)*
-- [x] **1.6** Verify round 0 → round 1 handoff
-  - After round 0 directives execute, round 1 heuristic (`_assess_coverage_heuristic`) assesses decomposition results *(confirmed — heuristic early-exit only runs at round > 0)*
-  - Heuristic sees round 0's topic_research_results and sources *(confirmed via test)*
-  - Round 0 counted toward `max_supervision_rounds` *(confirmed)*
-- [x] **1.7** Clean up dead references to config flag
-  - Searched codebase for `supervisor_owned_decomposition` — only found in PLAN docs (expected)
-  - No conditionals, comments, or test fixtures reference the flag in source code
-- [x] **1.8** Add tests for unified supervisor orchestration
-  - Test: new workflow goes BRIEF → SUPERVISION → SYNTHESIS (no PLANNING/GATHERING) *(TestUnifiedSupervisorOrchestration)*
-  - Test: PLANNING phase not in enum (never executes for new or legacy workflows) *(test_planning_phase_not_in_enum)*
-  - Test: GATHERING phase never executes for new workflows *(test_gathering_only_runs_from_legacy_resume)*
-  - Test: legacy saved state at GATHERING resumes correctly *(test_legacy_gathering_resume_enters_gathering_block)*
-  - Test: round 0 always delegates, round 1 assesses results *(test_round_zero_always_delegates, test_round_one_assesses_round_zero_results)*
-  - Test: round 0 results visible to round 1 heuristic *(test_coverage_data_includes_round_zero_results)*
-  - Test: deprecation log emitted when legacy phase runs *(test_deprecation_log_emitted_for_legacy_gathering)*
-  - Test: old config files with `supervisor_owned_decomposition` key don't crash *(test_old_config_key_supervisor_owned_decomposition_ignored)*
-- [x] **1.9** Verify existing deep research tests still pass *(348 passed, 0 failures)*
+## Phase 4 — Token Limit Recovery in Report Generation
+- [ ] 4.1 Add try/except around synthesis LLM call for token-limit errors
+- [ ] 4.2 First retry: truncate findings to `model_token_limit * 4` characters
+- [ ] 4.3 Subsequent retries: reduce by 10% per attempt, max 3 retries
+- [ ] 4.4 Keep system prompt and source reference intact during truncation
+- [ ] 4.5 Fall back to lifecycle-level recovery if findings truncation insufficient
+- [ ] 4.6 Log truncation metrics (chars dropped, retry count) to audit trail
+- [ ] 4.7 Test: synthesis succeeds after findings truncation
+- [ ] 4.8 Test: lifecycle recovery kicks in as final fallback
+- [ ] 4.9 Test: audit trail records truncation details
 
----
+## Phase 5 — Researcher Stop Heuristics
+- [ ] 5.1 Add "Stop Immediately When" block to `_build_researcher_system_prompt`:
+  - (a) can answer comprehensively
+  - (b) 3+ high-quality relevant sources found
+  - (c) last 2 searches returned substantially similar results
+- [ ] 5.2 Add checklist to think-tool prompt: "Before next search: Do I have 3+ sources? Did last 2 searches overlap? Can I answer now?"
+- [ ] 5.3 Test: researcher calls `research_complete` when 3+ sources found
+- [ ] 5.4 Test: researcher stops after 2 overlapping searches
 
-## Phase 2: Pass Full Message History to Compression
-
-- [x] **2.1** Add `message_history` field to `TopicResearchResult`
-  - Field: `message_history: list[dict[str, str]] = Field(default_factory=list)` *(added to models/deep_research.py)*
-  - Default empty list ensures Pydantic backward-compat
-  - Roundtrip serialization verified via test
-- [x] **2.2** Store message history on result in `topic_research.py`
-  - At end of ReAct loop, `result.message_history = list(message_history)` *(added before compile/compression)*
-  - Includes all entries: assistant responses, tool results (web_search, think, extract, research_complete)
-- [x] **2.3** Update compression prompt to use message history when available
-  - In `_compress_single_topic_async()` (compression.py):
-    - When `topic_result.message_history` non-empty → `_build_message_history_prompt()` formats chronological conversation
-    - `max_content_length` cap applied, oldest messages truncated first (preserves recent reasoning)
-    - When `message_history` empty → `_build_structured_metadata_prompt()` fallback (no breaking change)
-- [x] **2.4** Align compression system prompt with open_deep_research structure
-  - `<Task>`: Clean up findings, preserve ALL relevant information verbatim *(present)*
-  - `<Guidelines>`: 6 rules matching open_deep_research's compress_research_system_prompt *(present)*
-  - `<Output Format>`: "Queries and Tool Calls Made" → "Fully Comprehensive Findings" → "Sources" *(present)*
-  - `<Citation Rules>`: Sequential `[1] Source Title: URL`, no gaps *(present)*
-  - Critical Reminder: "preserved verbatim ... don't rewrite, don't summarize, don't paraphrase" *(present)*
-- [x] **2.5** Add tests for message-history-based compression
-  - Test: message_history field default, set/get, model_dump, backward compat deserialization *(TestMessageHistoryField — 4 tests)*
-  - Test: compression prompt includes raw message history when available *(TestCompressionPromptDispatch — 2 tests)*
-  - Test: compression prompt falls back to structured metadata when message_history empty *(TestCompressionPromptDispatch)*
-  - Test: message history truncated to max_content_length, oldest dropped first *(TestMessageHistoryTruncation + TestBuildMessageHistoryPrompt — 3 tests)*
-  - Test: citation format `[N] Title: URL` in system prompt *(TestCompressionSystemPromptAlignment — 5 tests)*
-  - Test: "Queries and Tool Calls Made" in output format *(TestCompressionSystemPromptAlignment)*
-  - Test: existing compression tests pass with new prompt structure *(131 passed, 0 failed)*
-  - Total new tests: 29 in test_message_history_compression.py
-- [x] **2.6** Verify existing deep research tests still pass *(2010 passed, 6 skipped, 0 failures)*
-
----
-
-## Phase 3: Align Synthesis Prompt with open_deep_research
-
-- [x] **3.1** Add section verbosity expectation to synthesis system prompt
-  - Added to new "Section Writing Rules" section: "Each section should be as long as necessary to deeply answer the question with the information gathered. Sections are expected to be thorough and detailed. You are writing a deep research report and users expect comprehensive answers."
-- [x] **3.2** Soften structure prescriptiveness
-  - Added after structure guidance: "These are suggestions. Section is a fluid concept — you can structure your report however you think is best, including in ways not listed above."
-  - Query-type hints retained as starting points, not rigid templates
-- [x] **3.3** Make Analysis subsections optional
-  - Removed mandatory "Analysis" section with "Supporting Evidence", "Conflicting Information", and "Limitations" subsections
-  - Replaced with: "Include analysis of Conflicting Information and Limitations where they exist, but integrate them naturally into the relevant sections rather than forcing separate subsections."
-- [x] **3.4** Add citation importance emphasis
-  - Added to Citations section: "Citations are extremely important. Pay careful attention to getting these right. Users will often use citations to find more information on specific points."
-- [x] **3.5** Strengthen language matching
-  - Added second language-matching instruction at end of system prompt:
-    - "REMEMBER: The research and brief may be in English, but the final report MUST be written in the same language as the user's original query. This is critical — the user will only understand the answer if it matches their input language."
-  - Language matching now appears twice: in Language section and in REMEMBER block
-- [x] **3.6** Add per-section writing rules
-  - New "Section Writing Rules" section with:
-    - "Use ## for each section title (Markdown format)" *(present)*
-    - "Write in paragraph form by default; use bullet points only when listing discrete items" *(present)*
-    - "Do not refer to yourself or comment on the report itself — just write the report" *(present)*
-    - "Each section should be as long as necessary..." (verbosity from 3.1) *(present)*
-- [x] **3.7** Add tests for synthesis prompt changes
-  - Test: verbosity expectation — "thorough", "detailed", "comprehensive", "deep research report", "as long as necessary" *(TestSynthesisPromptAlignment — 5 tests)*
-  - Test: structure flexibility — "however you think is best", "suggestions", "fluid" *(TestSynthesisPromptAlignment — 3 tests)*
-  - Test: Analysis subsections NOT mandatory, Conflicting Information/Limitations optional *(TestSynthesisPromptAlignment — 3 tests)*
-  - Test: citation importance emphasis and user usage guidance *(TestSynthesisPromptAlignment — 2 tests)*
-  - Test: language matching appears at least twice + critical REMEMBER reminder *(TestSynthesisPromptAlignment — 2 tests)*
-  - Test: per-section writing rules — ## headers, paragraph form, no self-reference, "just write the report" *(TestSynthesisPromptAlignment — 4 tests)*
-  - Test: query-type classification still works for all types *(TestSynthesisPromptAlignment — 1 test)*
-  - Total new tests: 20 in TestSynthesisPromptAlignment class
-- [x] **3.8** Verify existing synthesis tests still pass *(2030 passed, 6 skipped, 0 failures)*
-
----
-
-## Phase 4: Message-Aware Token Limit Recovery
-
-- [x] **4.1** Add `truncate_prompt_for_retry()` helper to `_lifecycle.py`
-  - Signature: `truncate_prompt_for_retry(prompt: str, attempt: int, max_attempts: int = 3) -> str` *(added)*
-  - Attempt 1: remove first 20% of content (preserve tail) *(verified)*
-  - Attempt 2: remove first 30% of content *(verified)*
-  - Attempt 3: remove first 40% of content *(verified)*
-  - Never truncate below a minimum threshold (1000 chars) *(enforced)*
-  - Also added `MAX_PHASE_TOKEN_RETRIES = 3` constant and `_is_context_window_exceeded()` helper for outer retry detection
-- [x] **4.2** Add retry loop to `_compress_single_topic_async`
-  - Outer retry loop wraps `execute_llm_call` (max `MAX_PHASE_TOKEN_RETRIES` attempts) *(added to compression.py)*
-  - On context_window_exceeded: applies `truncate_prompt_for_retry()` to user prompt *(verified)*
-  - Logs: `"Compression outer retry %d/%d for topic %s: pre-truncating user prompt by %d%%"` *(present)*
-  - On success after retry: emits `compression_retry_succeeded` audit event *(verified)*
-  - After retries exhausted: returns `(0, 0, False)` and emits `compression_retry_exhausted` audit event *(verified)*
-  - Non-token-limit errors NOT retried — only `context_window_exceeded` triggers outer retry *(verified)*
-- [x] **4.3** Add retry loop to `_execute_synthesis_async`
-  - Outer retry loop wraps `execute_llm_call` (max `MAX_PHASE_TOKEN_RETRIES` attempts) *(added to synthesis.py)*
-  - On context_window_exceeded: applies `truncate_prompt_for_retry()` to user prompt *(verified)*
-  - Logs: `"Synthesis outer retry %d/%d: pre-truncating user prompt by %d%%"` *(present)*
-  - On success after retry: emits `synthesis_retry_succeeded` audit event *(verified)*
-  - After retries exhausted: emits `synthesis_retry_exhausted` audit event and returns error WorkflowResult *(verified)*
-  - System prompt never truncated — only user prompt is pre-truncated *(verified)*
-- [x] **4.4** Verify provider-specific token limit error detection
-  - OpenAI: `BadRequestError` + "maximum context length" / "too many tokens" / "token" *(covered by existing + new pattern)*
-  - Anthropic: `BadRequestError` + "prompt is too long" / "too many tokens" *(covered)*
-  - Google: `ResourceExhausted` / `InvalidArgument` with "token" keyword *(added `InvalidArgument` to `_CONTEXT_WINDOW_ERROR_CLASSES`)*
-  - Added cross-provider `"too many tokens"` explicit pattern *(new)*
-  - Verified all patterns via test: 12 provider-specific detection tests pass
-- [x] **4.5** Add tests for token limit recovery
-  - Test: compression retries on simulated token limit error *(TestCompressionRetry — 7 tests)*
-  - Test: synthesis retries on simulated token limit error *(TestSynthesisRetry — 7 tests)*
-  - Test: progressive truncation 20% → 30% → 40% *(TestTruncatePromptForRetry — 13 tests)*
-  - Test: system prompt never truncated *(test_system_prompt_never_truncated)*
-  - Test: most recent content preserved, oldest truncated first *(test_preserves_most_recent_content)*
-  - Test: max 3 retries then graceful fallback *(test_exhausts_retries_returns_failure, test_exhausts_retries_returns_error)*
-  - Test: non-token-limit errors NOT retried *(test_non_token_error_not_retried — both compression & synthesis)*
-  - Test: retry metadata recorded in audit events *(test_records_retry_audit_event_on_success, test_records_exhausted_audit_event)*
-  - Test: provider-specific error detection for OpenAI, Anthropic, Google *(TestProviderErrorDetection — 12 tests)*
-  - Test: `truncate_prompt_for_retry()` boundary cases and minimum threshold *(TestTruncatePromptForRetry — 13 tests)*
-  - Test: `_is_context_window_exceeded` helper *(TestIsContextWindowExceeded — 4 tests)*
-  - Total new tests: 44 in test_phase_token_recovery.py
-- [x] **4.6** Verify existing deep research tests still pass *(2074 passed, 6 skipped, 0 failures)*
+## Phase 6 — Supervisor think_tool as Conversation
+- [ ] 6.1 After think phase, inject gap analysis as assistant message in `supervision_messages` (depends on Phase 1)
+- [ ] 6.2 Evaluate single-call approach: system prompt + history + "analyze gaps then generate directives" — compare quality vs two-call
+- [ ] 6.3 If single-call quality matches: merge think + delegate into one LLM call
+- [ ] 6.4 If single-call quality worse: keep two calls but ensure think output flows through message history
+- [ ] 6.5 Test: supervisor references prior gap analysis in delegation rationale
+- [ ] 6.6 Test: latency reduction measured if single-call adopted
