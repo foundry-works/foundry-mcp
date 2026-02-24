@@ -7,11 +7,11 @@
 
 ## Sub-Phase 6.1: State Model Extensions
 
-- [ ] **6.1.1** Add `SUPERVISION = "supervision"` to `DeepResearchPhase` enum between GATHERING and ANALYSIS
-- [ ] **6.1.2** Add supervision fields to `DeepResearchState`: `supervision_round`, `max_supervision_rounds`, `supervision_provider`, `supervision_model`
-- [ ] **6.1.3** Update `start_new_iteration()` to reset `supervision_round = 0`
-- [ ] **6.1.4** Update `advance_phase()` docstring to include SUPERVISION
-- [ ] **6.1.5** Add `should_continue_supervision()` method to `DeepResearchState`
+- [x] **6.1.1** Add `SUPERVISION = "supervision"` to `DeepResearchPhase` enum between GATHERING and ANALYSIS
+- [x] **6.1.2** Add supervision fields to `DeepResearchState`: `supervision_round`, `max_supervision_rounds`, `supervision_provider`, `supervision_model`
+- [x] **6.1.3** Update `start_new_iteration()` to reset `supervision_round = 0`
+- [x] **6.1.4** Update `advance_phase()` docstring to include SUPERVISION
+- [x] **6.1.5** Add `should_continue_supervision()` method to `DeepResearchState`
 
 ---
 

@@ -251,6 +251,9 @@ class TestDeepResearchState:
         assert state.phase == DeepResearchPhase.GATHERING
 
         state.advance_phase()
+        assert state.phase == DeepResearchPhase.SUPERVISION
+
+        state.advance_phase()
         assert state.phase == DeepResearchPhase.ANALYSIS
 
         state.advance_phase()

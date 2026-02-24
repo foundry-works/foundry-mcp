@@ -176,13 +176,14 @@ class DeepResearchConfig(BaseModel):
 class DeepResearchPhase(str, Enum):
     """Phases of the DEEP_RESEARCH workflow.
 
-    The deep research workflow progresses through six sequential phases:
+    The deep research workflow progresses through seven sequential phases:
     0. CLARIFICATION - (Optional) Analyze query specificity and ask clarifying questions
     1. PLANNING - Analyze the query and decompose into focused sub-queries
     2. GATHERING - Execute sub-queries in parallel and collect sources
-    3. ANALYSIS - Extract findings and assess source quality
-    4. SYNTHESIS - Combine findings into a comprehensive report
-    5. REFINEMENT - Identify gaps and potentially loop back for more research
+    3. SUPERVISION - Assess coverage gaps and generate follow-up queries
+    4. ANALYSIS - Extract findings and assess source quality
+    5. SYNTHESIS - Combine findings into a comprehensive report
+    6. REFINEMENT - Identify gaps and potentially loop back for more research
 
     The ordering of these enum values is significant - it defines the
     progression through advance_phase() method.
@@ -191,6 +192,7 @@ class DeepResearchPhase(str, Enum):
     CLARIFICATION = "clarification"
     PLANNING = "planning"
     GATHERING = "gathering"
+    SUPERVISION = "supervision"
     ANALYSIS = "analysis"
     SYNTHESIS = "synthesis"
     REFINEMENT = "refinement"
@@ -333,6 +335,18 @@ class DeepResearchState(BaseModel):
     analysis_model: Optional[str] = Field(default=None)
     synthesis_model: Optional[str] = Field(default=None)
     refinement_model: Optional[str] = Field(default=None)
+
+    # Supervision tracking (iterative coverage assessment)
+    supervision_round: int = Field(
+        default=0,
+        description="Current supervision round within this iteration (0-based, resets each refinement iteration)",
+    )
+    max_supervision_rounds: int = Field(
+        default=3,
+        description="Maximum supervisor assess-delegate rounds per iteration",
+    )
+    supervision_provider: Optional[str] = Field(default=None)
+    supervision_model: Optional[str] = Field(default=None)
 
     system_prompt: Optional[str] = Field(default=None)
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -608,9 +622,9 @@ class DeepResearchState(BaseModel):
         """Advance to the next research phase.
 
         Phases advance in order: CLARIFICATION -> PLANNING -> GATHERING ->
-        ANALYSIS -> SYNTHESIS -> REFINEMENT. Does nothing if already at
-        REFINEMENT. The phase order is derived from the DeepResearchPhase
-        enum definition order.
+        SUPERVISION -> ANALYSIS -> SYNTHESIS -> REFINEMENT. Does nothing if
+        already at REFINEMENT. The phase order is derived from the
+        DeepResearchPhase enum definition order.
 
         Returns:
             The new phase after advancement
@@ -638,6 +652,20 @@ class DeepResearchState(BaseModel):
             return False
         return True
 
+    def should_continue_supervision(self) -> bool:
+        """Check if another supervision round should occur.
+
+        Returns True if:
+        - Current supervision_round < max_supervision_rounds AND
+        - There are pending sub-queries to process
+
+        Returns:
+            True if supervision should continue, False otherwise
+        """
+        if self.supervision_round >= self.max_supervision_rounds:
+            return False
+        return len(self.pending_sub_queries()) > 0
+
     def start_new_iteration(self) -> int:
         """Start a new refinement iteration.
 
@@ -655,6 +683,7 @@ class DeepResearchState(BaseModel):
         """
         self.iteration += 1
         self.phase = DeepResearchPhase.GATHERING
+        self.supervision_round = 0
         self.updated_at = datetime.now(timezone.utc)
         return self.iteration
 
