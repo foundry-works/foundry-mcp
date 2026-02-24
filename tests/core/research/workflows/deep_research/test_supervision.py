@@ -102,7 +102,6 @@ class StubSupervision(SupervisionPhaseMixin):
     def __init__(self, *, delegation_model: bool = False) -> None:
         self.config = MagicMock()
         self.config.deep_research_supervision_min_sources_per_query = 2
-        self.config.deep_research_delegation_model = delegation_model
         self.config.deep_research_max_concurrent_research_units = 5
         self.config.deep_research_reflection_timeout = 60.0
         self.memory = MagicMock()
@@ -157,14 +156,14 @@ class TestSupervisionStateModel:
     """State model tests for the SUPERVISION phase."""
 
     def test_supervision_phase_in_enum(self):
-        """SUPERVISION exists in enum between GATHERING and ANALYSIS."""
+        """SUPERVISION exists in enum between GATHERING and SYNTHESIS."""
         phases = list(DeepResearchPhase)
         gathering_idx = phases.index(DeepResearchPhase.GATHERING)
         supervision_idx = phases.index(DeepResearchPhase.SUPERVISION)
-        analysis_idx = phases.index(DeepResearchPhase.ANALYSIS)
+        synthesis_idx = phases.index(DeepResearchPhase.SYNTHESIS)
 
         assert supervision_idx == gathering_idx + 1
-        assert analysis_idx == supervision_idx + 1
+        assert synthesis_idx == supervision_idx + 1
 
     def test_advance_phase_gathering_to_supervision(self):
         """advance_phase() from GATHERING goes to SUPERVISION."""
@@ -176,27 +175,27 @@ class TestSupervisionStateModel:
         assert new_phase == DeepResearchPhase.SUPERVISION
         assert state.phase == DeepResearchPhase.SUPERVISION
 
-    def test_advance_phase_supervision_to_analysis(self):
-        """advance_phase() from SUPERVISION goes to ANALYSIS."""
+    def test_advance_phase_supervision_to_synthesis(self):
+        """advance_phase() from SUPERVISION goes to SYNTHESIS."""
         state = DeepResearchState(
             original_query="test",
             phase=DeepResearchPhase.SUPERVISION,
         )
         new_phase = state.advance_phase()
-        assert new_phase == DeepResearchPhase.ANALYSIS
-        assert state.phase == DeepResearchPhase.ANALYSIS
+        assert new_phase == DeepResearchPhase.SYNTHESIS
+        assert state.phase == DeepResearchPhase.SYNTHESIS
 
-    def test_start_new_iteration_resets_supervision_round(self):
-        """start_new_iteration() resets supervision_round to 0."""
+    def test_supervision_round_resets_manually(self):
+        """supervision_round field can be reset to 0 between iterations."""
         state = DeepResearchState(
             original_query="test",
-            phase=DeepResearchPhase.REFINEMENT,
+            phase=DeepResearchPhase.SUPERVISION,
             supervision_round=2,
         )
-        new_iter = state.start_new_iteration()
-        assert new_iter == 2
+        # Simulate what workflow code does between iterations: reset the counter
+        state.supervision_round = 0
         assert state.supervision_round == 0
-        assert state.phase == DeepResearchPhase.GATHERING
+        assert state.phase == DeepResearchPhase.SUPERVISION
 
     def test_should_continue_supervision_within_limit(self):
         """Returns True when pending sub-queries exist and within round limit."""
@@ -431,41 +430,65 @@ class TestSupervisionIntegration:
 
     @pytest.mark.asyncio
     async def test_supervision_loop_adds_follow_up_queries(self):
-        """LLM-driven supervision adds follow-up sub-queries to state."""
+        """Delegation supervision generates directives targeting coverage gaps."""
         stub = StubSupervision()
+        stub.config.deep_research_providers = ["tavily"]
+        stub.config.deep_research_topic_max_tool_calls = 5
+        # sources_per_query=1 keeps coverage below min_sources=2 so heuristic
+        # does not short-circuit on round=0.
         state = _make_state(num_completed=2, sources_per_query=1, supervision_round=0)
-        # Set max_sub_queries budget
         state.max_sub_queries = 10
+        state.topic_research_results = []
 
-        llm_response = json.dumps(
-            {
-                "overall_coverage": "partial",
-                "per_query_assessment": [
-                    {"sub_query_id": "sq-0", "coverage": "partial", "rationale": "needs more"},
-                ],
-                "follow_up_queries": [
-                    {"query": "What is backpropagation?", "rationale": "Core concept", "priority": 2},
-                    {"query": "How do CNNs differ from RNNs?", "rationale": "Architecture gap", "priority": 2},
-                ],
-                "should_continue_gathering": True,
-                "rationale": "Need more specific results",
-            }
-        )
+        # Delegation response — research_complete=False signals more work needed
+        delegation_response = json.dumps({
+            "research_complete": False,
+            "directives": [
+                {
+                    "research_topic": "Investigate backpropagation fundamentals and gradient flow.",
+                    "perspective": "technical",
+                    "evidence_needed": "papers, tutorials",
+                    "priority": 2,
+                },
+                {
+                    "research_topic": "Compare CNN vs RNN architecture trade-offs.",
+                    "perspective": "comparative",
+                    "evidence_needed": "benchmarks",
+                    "priority": 2,
+                },
+            ],
+            "rationale": "Need more specific results",
+        })
 
-        mock_result = MagicMock()
-        mock_result.result = WorkflowResult(
-            success=True,
-            content=llm_response,
-            provider_id="test-provider",
-            model_used="test-model",
-            tokens_used=100,
-            duration_ms=500.0,
-        )
+        async def mock_execute_llm_call(**kwargs):
+            result = MagicMock()
+            result.result = WorkflowResult(
+                success=True,
+                content=delegation_response,
+                provider_id="test-provider",
+                model_used="test-model",
+                tokens_used=100,
+                duration_ms=500.0,
+            )
+            return result
+
+        async def mock_topic_research(**kwargs):
+            sq = kwargs.get("sub_query")
+            return TopicResearchResult(
+                sub_query_id=sq.id if sq else "unknown",
+                searches_performed=1,
+                sources_found=2,
+            )
+
+        stub._execute_topic_research_async = mock_topic_research
+        stub._get_search_provider = MagicMock(return_value=MagicMock())
 
         with patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-            new_callable=AsyncMock,
-            return_value=mock_result,
+            side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
         ), patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
         ):
@@ -474,19 +497,18 @@ class TestSupervisionIntegration:
             )
 
         assert result.success is True
-        assert result.metadata["follow_ups_added"] == 2
-        assert result.metadata["should_continue_gathering"] is True
-        # Original 2 + 2 follow-ups
-        assert len(state.sub_queries) == 4
-        assert state.sub_queries[-1].query == "How do CNNs differ from RNNs?"
-        assert state.sub_queries[-1].priority == 2
-        assert state.supervision_round == 1
+        assert result.metadata["should_continue_gathering"] is False
+        assert result.metadata["model"] == "delegation"
+        # Two directives executed in round 0
+        assert result.metadata["total_directives_executed"] == 2
+        # Round 0 ran (→ round 1), then heuristic fired on round 1 (→ round 2)
+        assert state.supervision_round >= 1
 
         # Supervision history recorded
         history = state.metadata["supervision_history"]
-        assert len(history) == 1
-        assert history[0]["method"] == "llm"
-        assert history[0]["follow_ups_added"] == 2
+        # First history entry is the delegation round with 2 directives
+        delegation_entry = next(h for h in history if h["method"] == "delegation")
+        assert delegation_entry["directives_executed"] == 2
 
     @pytest.mark.asyncio
     async def test_supervision_loop_terminates_at_max_rounds(self):
@@ -506,8 +528,11 @@ class TestSupervisionIntegration:
 
         assert result.success is True
         assert result.metadata["should_continue_gathering"] is False
-        assert result.metadata["method"] == "heuristic"
+        assert result.metadata["model"] == "delegation"
         assert state.supervision_round == 2  # incremented
+        # History records the heuristic early-exit
+        history = state.metadata["supervision_history"]
+        assert history[0]["method"] == "delegation_heuristic"
 
     @pytest.mark.asyncio
     async def test_supervision_skipped_when_disabled(self):
@@ -521,42 +546,41 @@ class TestSupervisionIntegration:
         if not getattr(config, "deep_research_enable_supervision", True):
             state.advance_phase()
 
-        assert state.phase == DeepResearchPhase.ANALYSIS
+        assert state.phase == DeepResearchPhase.SYNTHESIS
 
     @pytest.mark.asyncio
     async def test_supervision_proceeds_when_all_covered(self):
-        """When LLM says coverage is sufficient, should_continue_gathering is False."""
+        """When LLM signals research_complete=True, should_continue_gathering is False."""
         stub = StubSupervision()
         state = _make_state(num_completed=2, sources_per_query=3, supervision_round=0)
         state.max_sub_queries = 10
+        state.topic_research_results = []
 
-        llm_response = json.dumps(
-            {
-                "overall_coverage": "sufficient",
-                "per_query_assessment": [
-                    {"sub_query_id": "sq-0", "coverage": "sufficient", "rationale": "Good"},
-                    {"sub_query_id": "sq-1", "coverage": "sufficient", "rationale": "Good"},
-                ],
-                "follow_up_queries": [],
-                "should_continue_gathering": False,
-                "rationale": "All aspects well covered",
-            }
-        )
+        # research_complete=True signals that all dimensions are covered
+        delegation_response = json.dumps({
+            "research_complete": True,
+            "directives": [],
+            "rationale": "All aspects well covered",
+        })
 
-        mock_result = MagicMock()
-        mock_result.result = WorkflowResult(
-            success=True,
-            content=llm_response,
-            provider_id="test-provider",
-            model_used="test-model",
-            tokens_used=80,
-            duration_ms=400.0,
-        )
+        async def mock_execute_llm_call(**kwargs):
+            result = MagicMock()
+            result.result = WorkflowResult(
+                success=True,
+                content=delegation_response,
+                provider_id="test-provider",
+                model_used="test-model",
+                tokens_used=80,
+                duration_ms=400.0,
+            )
+            return result
 
         with patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-            new_callable=AsyncMock,
-            return_value=mock_result,
+            side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
         ), patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
         ):
@@ -566,18 +590,22 @@ class TestSupervisionIntegration:
 
         assert result.success is True
         assert result.metadata["should_continue_gathering"] is False
-        assert result.metadata["follow_ups_added"] == 0
-        assert result.metadata["overall_coverage"] == "sufficient"
+        assert result.metadata["total_directives_executed"] == 0
         # No new sub-queries added
         assert len(state.sub_queries) == 2
+        # History records delegation_complete
+        history = state.metadata["supervision_history"]
+        assert history[0]["method"] == "delegation_complete"
 
     @pytest.mark.asyncio
     async def test_supervision_llm_failure_falls_back_to_heuristic(self):
-        """When LLM call fails, supervision falls back to heuristic."""
+        """When both LLM calls fail, supervision degrades gracefully with no directives."""
         stub = StubSupervision()
         state = _make_state(num_completed=2, sources_per_query=2, supervision_round=0)
+        state.topic_research_results = []
 
-        # execute_llm_call returns WorkflowResult directly on failure
+        # execute_llm_call returns WorkflowResult directly on failure for both
+        # think and delegate steps.
         failed_result = WorkflowResult(
             success=False,
             content="",
@@ -588,57 +616,10 @@ class TestSupervisionIntegration:
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
             new_callable=AsyncMock,
             return_value=failed_result,
-        ):
-            result = await stub._execute_supervision_async(
-                state=state, provider_id="test-provider", timeout=30.0
-            )
-
-        assert result.success is True  # Graceful degradation
-        assert result.metadata["method"] == "heuristic_fallback"
-        # Heuristic never generates follow-ups
-        assert result.metadata["should_continue_gathering"] is False
-        # History recorded
-        history = state.metadata["supervision_history"]
-        assert len(history) == 1
-        assert history[0]["method"] == "heuristic_fallback"
-        assert "Provider timeout" in history[0]["error"]
-
-    @pytest.mark.asyncio
-    async def test_supervision_respects_sub_query_budget(self):
-        """Follow-up queries are capped by max_sub_queries budget."""
-        stub = StubSupervision()
-        state = _make_state(num_completed=2, sources_per_query=1, supervision_round=0)
-        # Very tight budget: only room for 1 more sub-query
-        state.max_sub_queries = 3  # already have 2
-
-        llm_response = json.dumps(
-            {
-                "overall_coverage": "insufficient",
-                "per_query_assessment": [],
-                "follow_up_queries": [
-                    {"query": "Follow-up A", "rationale": "r1", "priority": 2},
-                    {"query": "Follow-up B", "rationale": "r2", "priority": 2},
-                    {"query": "Follow-up C", "rationale": "r3", "priority": 2},
-                ],
-                "should_continue_gathering": True,
-                "rationale": "",
-            }
-        )
-
-        mock_result = MagicMock()
-        mock_result.result = WorkflowResult(
-            success=True,
-            content=llm_response,
-            provider_id="test-provider",
-            model_used="test-model",
-            tokens_used=50,
-            duration_ms=300.0,
-        )
-
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
             new_callable=AsyncMock,
-            return_value=mock_result,
+            return_value=failed_result,
         ), patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
         ):
@@ -646,8 +627,76 @@ class TestSupervisionIntegration:
                 state=state, provider_id="test-provider", timeout=30.0
             )
 
-        assert result.metadata["follow_ups_added"] == 1  # budget_remaining = 1
-        assert len(state.sub_queries) == 3  # 2 original + 1 capped
+        assert result.success is True  # Graceful degradation
+        assert result.metadata["model"] == "delegation"
+        assert result.metadata["should_continue_gathering"] is False
+        assert result.metadata["total_directives_executed"] == 0
+        # History recorded — no directives generated due to LLM failures
+        history = state.metadata["supervision_history"]
+        assert len(history) == 1
+        assert history[0]["method"] == "delegation_no_directives"
+
+    @pytest.mark.asyncio
+    async def test_supervision_respects_directive_budget(self):
+        """Directives are capped by max_concurrent_research_units config."""
+        stub = StubSupervision()
+        # Cap concurrent research units to 1 directive per round
+        stub.config.deep_research_max_concurrent_research_units = 1
+        stub.config.deep_research_providers = ["tavily"]
+        stub.config.deep_research_topic_max_tool_calls = 5
+
+        state = _make_state(num_completed=2, sources_per_query=1, supervision_round=0)
+        state.max_sub_queries = 10
+        state.topic_research_results = []
+
+        # LLM proposes 3 directives but only 1 should survive the cap
+        delegation_response = json.dumps({
+            "research_complete": False,
+            "directives": [
+                {"research_topic": "Investigate topic A in detail.", "priority": 2},
+                {"research_topic": "Investigate topic B in detail.", "priority": 2},
+                {"research_topic": "Investigate topic C in detail.", "priority": 2},
+            ],
+            "rationale": "",
+        })
+
+        async def mock_execute_llm_call(**kwargs):
+            result = MagicMock()
+            result.result = WorkflowResult(
+                success=True,
+                content=delegation_response,
+                provider_id="test-provider",
+                model_used="test-model",
+                tokens_used=50,
+                duration_ms=300.0,
+            )
+            return result
+
+        async def mock_topic_research(**kwargs):
+            sq = kwargs.get("sub_query")
+            return TopicResearchResult(
+                sub_query_id=sq.id if sq else "unknown",
+                searches_performed=1,
+                sources_found=2,
+            )
+
+        stub._execute_topic_research_async = mock_topic_research
+        stub._get_search_provider = MagicMock(return_value=MagicMock())
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+            side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        ):
+            result = await stub._execute_supervision_async(
+                state=state, provider_id="test-provider", timeout=30.0
+            )
+
+        assert result.metadata["total_directives_executed"] == 1  # capped at 1
 
 
 # ===========================================================================
@@ -761,43 +810,32 @@ class TestThinkToolIntegration:
 
     @pytest.mark.asyncio
     async def test_think_step_executes_on_round_zero(self):
-        """Think step executes on supervision_round=0 and output flows to user prompt."""
+        """Think step executes on supervision_round=0 and output flows into delegate prompt."""
         stub = StubSupervision()
         state = _make_state(
             num_completed=2, sources_per_query=1, supervision_round=0
         )
         state.max_sub_queries = 10
+        state.topic_research_results = []
 
         think_response = (
             "Sub-query 0 lacks diversity — only 1 source from a single domain. "
             "Missing: academic perspectives and peer-reviewed research."
         )
 
-        supervision_response = json.dumps(
-            {
-                "overall_coverage": "partial",
-                "per_query_assessment": [],
-                "follow_up_queries": [
-                    {
-                        "query": "peer-reviewed deep learning surveys",
-                        "rationale": "Addresses missing academic perspectives",
-                        "priority": 2,
-                    }
-                ],
-                "should_continue_gathering": True,
-                "rationale": "Need academic sources",
-            }
-        )
+        delegation_response = json.dumps({
+            "research_complete": True,
+            "directives": [],
+            "rationale": "Covered after think analysis",
+        })
 
-        # Track calls to distinguish think vs supervision LLM calls
-        call_count = 0
+        # Track calls to distinguish think vs delegate LLM calls
+        think_call_count = 0
 
         async def mock_execute_llm_call(**kwargs):
-            nonlocal call_count
-            call_count += 1
-
+            nonlocal think_call_count
             if kwargs.get("phase_name") == "supervision_think":
-                # Think step — return gap analysis
+                think_call_count += 1
                 result = MagicMock()
                 result.result = WorkflowResult(
                     success=True,
@@ -808,28 +846,35 @@ class TestThinkToolIntegration:
                     duration_ms=200.0,
                 )
                 return result
-            else:
-                # Supervision step — verify think output was included in prompt
-                user_prompt = kwargs.get("user_prompt", "")
-                assert "<gap_analysis>" in user_prompt, (
-                    "Think output should be included in supervision user prompt"
-                )
-                assert "academic perspectives" in user_prompt
+            # Other calls (delegation delegate step routed via execute_structured_llm_call)
+            result = MagicMock()
+            result.result = WorkflowResult(
+                success=True,
+                content=delegation_response,
+                provider_id="test-provider",
+                model_used="test-model",
+                tokens_used=100,
+                duration_ms=500.0,
+            )
+            return result
 
-                result = MagicMock()
-                result.result = WorkflowResult(
-                    success=True,
-                    content=supervision_response,
-                    provider_id="test-provider",
-                    model_used="test-model",
-                    tokens_used=100,
-                    duration_ms=500.0,
-                )
-                return result
+        async def mock_execute_structured_llm_call(**kwargs):
+            # Verify think output was included in delegate user prompt.
+            # For first-round decomposition (round=0, no prior results), the think
+            # output is wrapped in <decomposition_strategy> tags.
+            user_prompt = kwargs.get("user_prompt", "")
+            assert "<decomposition_strategy>" in user_prompt, (
+                "Think output should be included in first-round delegation user prompt"
+            )
+            assert "academic perspectives" in user_prompt
+            return await _wrap_as_structured_mock(mock_execute_llm_call)(**kwargs)
 
         with patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
             side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+            side_effect=mock_execute_structured_llm_call,
         ), patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
         ):
@@ -838,8 +883,8 @@ class TestThinkToolIntegration:
             )
 
         assert result.success is True
-        assert call_count == 2  # think + supervision
-        assert result.metadata["follow_ups_added"] == 1
+        assert think_call_count == 1  # think step executed once
+        assert result.metadata["total_directives_executed"] == 0
 
         # Think output recorded in history
         history = state.metadata["supervision_history"]
@@ -849,13 +894,11 @@ class TestThinkToolIntegration:
 
     @pytest.mark.asyncio
     async def test_think_step_skipped_on_round_gt_zero(self):
-        """Think step is skipped when supervision_round > 0.
+        """Think step is skipped when supervision_round > 0 with sufficient coverage.
 
-        When round > 0, the heuristic fast-path triggers (it always returns
-        should_continue_gathering=False), so no LLM calls are made at all.
-        This verifies the think step guard (round == 0) is correct by
-        confirming that round > 0 takes the heuristic path without any
-        LLM calls — meaning the think step is inherently skipped.
+        When round > 0 and the heuristic finds sufficient coverage, the
+        delegation loop exits early via ``delegation_heuristic`` without
+        making any LLM calls — meaning the think step is inherently skipped.
         """
         stub = StubSupervision()
         state = _make_state(
@@ -886,31 +929,29 @@ class TestThinkToolIntegration:
             )
 
         assert result.success is True
-        assert result.metadata["method"] == "heuristic"
+        assert result.metadata["model"] == "delegation"
         # No LLM calls at all — heuristic path, so think step was skipped
         assert call_phases == []
-        # History should NOT have think_output
+        # History records heuristic early-exit, NOT think_output
         history = state.metadata["supervision_history"]
+        assert history[0]["method"] == "delegation_heuristic"
         assert "think_output" not in history[0]
 
     @pytest.mark.asyncio
     async def test_think_step_failure_is_non_fatal(self):
-        """When think step fails, supervision proceeds without gap analysis."""
+        """When think step fails, delegation proceeds without gap analysis."""
         stub = StubSupervision()
         state = _make_state(
             num_completed=2, sources_per_query=2, supervision_round=0
         )
         state.max_sub_queries = 10
+        state.topic_research_results = []
 
-        supervision_response = json.dumps(
-            {
-                "overall_coverage": "sufficient",
-                "per_query_assessment": [],
-                "follow_up_queries": [],
-                "should_continue_gathering": False,
-                "rationale": "Coverage is sufficient",
-            }
-        )
+        delegation_response = json.dumps({
+            "research_complete": True,
+            "directives": [],
+            "rationale": "Coverage is sufficient",
+        })
 
         async def mock_execute_llm_call(**kwargs):
             if kwargs.get("phase_name") == "supervision_think":
@@ -920,26 +961,32 @@ class TestThinkToolIntegration:
                     content="",
                     error="Provider timeout",
                 )
-            else:
-                # Supervision proceeds without gap analysis
-                user_prompt = kwargs.get("user_prompt", "")
-                assert "<gap_analysis>" not in user_prompt, (
-                    "Should NOT have gap analysis when think step fails"
-                )
-                result = MagicMock()
-                result.result = WorkflowResult(
-                    success=True,
-                    content=supervision_response,
-                    provider_id="test-provider",
-                    model_used="test-model",
-                    tokens_used=80,
-                    duration_ms=400.0,
-                )
-                return result
+            # Other calls (delegate path via execute_structured_llm_call)
+            result = MagicMock()
+            result.result = WorkflowResult(
+                success=True,
+                content=delegation_response,
+                provider_id="test-provider",
+                model_used="test-model",
+                tokens_used=80,
+                duration_ms=400.0,
+            )
+            return result
+
+        async def mock_execute_structured_llm_call(**kwargs):
+            # Verify no gap_analysis section when think step failed
+            user_prompt = kwargs.get("user_prompt", "")
+            assert "<gap_analysis>" not in user_prompt, (
+                "Should NOT have gap analysis when think step fails"
+            )
+            return await _wrap_as_structured_mock(mock_execute_llm_call)(**kwargs)
 
         with patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
             side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+            side_effect=mock_execute_structured_llm_call,
         ), patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
         ):
@@ -948,9 +995,11 @@ class TestThinkToolIntegration:
             )
 
         assert result.success is True
-        # History should NOT have think_output since it failed
+        # History records delegation_complete since research_complete=True
         history = state.metadata["supervision_history"]
-        assert "think_output" not in history[0]
+        assert history[0]["method"] == "delegation_complete"
+        # think_output is None/not present since think step failed
+        assert not history[0].get("think_output")
 
     @pytest.mark.asyncio
     async def test_think_step_uses_reflection_role(self):
@@ -960,11 +1009,18 @@ class TestThinkToolIntegration:
             num_completed=2, sources_per_query=1, supervision_round=0
         )
         state.max_sub_queries = 10
+        state.topic_research_results = []
 
-        captured_kwargs: list[dict] = []
+        captured_llm_kwargs: list[dict] = []
+
+        delegation_response = json.dumps({
+            "research_complete": True,
+            "directives": [],
+            "rationale": "OK",
+        })
 
         async def mock_execute_llm_call(**kwargs):
-            captured_kwargs.append(kwargs)
+            captured_llm_kwargs.append(kwargs)
             if kwargs.get("phase_name") == "supervision_think":
                 result = MagicMock()
                 result.result = WorkflowResult(
@@ -980,13 +1036,7 @@ class TestThinkToolIntegration:
                 result = MagicMock()
                 result.result = WorkflowResult(
                     success=True,
-                    content=json.dumps({
-                        "overall_coverage": "sufficient",
-                        "per_query_assessment": [],
-                        "follow_up_queries": [],
-                        "should_continue_gathering": False,
-                        "rationale": "OK",
-                    }),
+                    content=delegation_response,
                     provider_id="test-provider",
                     model_used="test-model",
                     tokens_used=80,
@@ -998,6 +1048,9 @@ class TestThinkToolIntegration:
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
             side_effect=mock_execute_llm_call,
         ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
+        ), patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
         ):
             await stub._execute_supervision_async(
@@ -1005,7 +1058,8 @@ class TestThinkToolIntegration:
             )
 
         # Verify think step used reflection role
-        think_kwargs = captured_kwargs[0]
+        # captured_llm_kwargs[0] is the think step (first execute_llm_call invocation)
+        think_kwargs = captured_llm_kwargs[0]
         assert think_kwargs["phase_name"] == "supervision_think"
         assert think_kwargs["role"] == "reflection"
         assert think_kwargs["temperature"] == 0.2
@@ -1277,21 +1331,6 @@ class TestDelegationIntegration:
         assert result.metadata.get("model") == "delegation"
 
     @pytest.mark.asyncio
-    async def test_query_generation_fallback(self):
-        """When delegation_model=False, uses query-generation path."""
-        stub = StubSupervision(delegation_model=False)
-        state = _make_state(num_completed=2, sources_per_query=3, supervision_round=1)
-
-        result = await stub._execute_supervision_async(
-            state=state, provider_id="test-provider", timeout=30.0
-        )
-
-        assert result.success is True
-        assert result.metadata.get("method") == "heuristic"
-        # No delegation-specific metadata
-        assert "model" not in result.metadata
-
-    @pytest.mark.asyncio
     async def test_delegation_research_complete_signal(self):
         """ResearchComplete signal terminates the delegation loop."""
         stub = StubSupervision(delegation_model=True)
@@ -1478,28 +1517,18 @@ class TestDelegationIntegration:
 class TestSupervisorOwnedDecompositionDetection:
     """Tests for _is_first_round_decomposition() detection logic."""
 
-    def test_first_round_detected_when_all_conditions_met(self):
-        """Returns True: config enabled, round 0, no prior topic results."""
+    def test_first_round_detected_when_round_zero_no_results(self):
+        """Returns True: round 0, no prior topic results."""
         stub = StubSupervision(delegation_model=True)
-        stub.config.deep_research_supervisor_owned_decomposition = True
         state = _make_state(
             num_completed=0, num_pending=0, supervision_round=0,
         )
         state.topic_research_results = []
         assert stub._is_first_round_decomposition(state) is True
 
-    def test_not_first_round_when_config_disabled(self):
-        """Returns False when supervisor_owned_decomposition config is False."""
-        stub = StubSupervision(delegation_model=True)
-        stub.config.deep_research_supervisor_owned_decomposition = False
-        state = _make_state(num_completed=0, supervision_round=0)
-        state.topic_research_results = []
-        assert stub._is_first_round_decomposition(state) is False
-
     def test_not_first_round_when_round_gt_zero(self):
         """Returns False when supervision_round > 0 (already past first round)."""
         stub = StubSupervision(delegation_model=True)
-        stub.config.deep_research_supervisor_owned_decomposition = True
         state = _make_state(num_completed=2, supervision_round=1)
         state.topic_research_results = []
         assert stub._is_first_round_decomposition(state) is False
@@ -1507,7 +1536,6 @@ class TestSupervisorOwnedDecompositionDetection:
     def test_not_first_round_when_topic_results_exist(self):
         """Returns False when topic_research_results already present."""
         stub = StubSupervision(delegation_model=True)
-        stub.config.deep_research_supervisor_owned_decomposition = True
         state = _make_state(num_completed=1, supervision_round=0)
         state.topic_research_results = [
             TopicResearchResult(
@@ -1633,7 +1661,6 @@ class TestFirstRoundDecompositionIntegration:
     async def test_first_round_produces_initial_directives(self):
         """Supervisor round 0 produces initial decomposition directives from brief."""
         stub = StubSupervision(delegation_model=True)
-        stub.config.deep_research_supervisor_owned_decomposition = True
         stub.config.deep_research_topic_max_tool_calls = 5
         stub.config.deep_research_providers = ["tavily"]
 
@@ -1744,17 +1771,27 @@ class TestFirstRoundDecompositionIntegration:
         assert state.supervision_round >= 1
 
     @pytest.mark.asyncio
-    async def test_backward_compat_when_decomposition_disabled(self):
-        """When supervisor_owned_decomposition=False, round 0 uses standard gap analysis."""
+    async def test_second_round_uses_gap_analysis(self):
+        """Round > 0 uses standard gap-driven delegation (not first-round decomposition).
+
+        The heuristic always returns should_continue_gathering=False (conservative),
+        so we patch it to force True — this lets the delegation path run so we can
+        verify it uses the standard (non-first-round) prompts.
+        """
         stub = StubSupervision(delegation_model=True)
-        stub.config.deep_research_supervisor_owned_decomposition = False
         stub.config.deep_research_topic_max_tool_calls = 5
         stub.config.deep_research_providers = ["tavily"]
 
         state = _make_state(
-            num_completed=2, num_pending=0, supervision_round=0,
+            num_completed=2, num_pending=0, supervision_round=1,
         )
-        state.topic_research_results = []
+        state.topic_research_results = [
+            TopicResearchResult(
+                sub_query_id="sq-0",
+                searches_performed=1,
+                sources_found=2,
+            )
+        ]
         state.max_sub_queries = 10
 
         # Standard gap-driven delegation response (research complete)
@@ -1776,6 +1813,16 @@ class TestFirstRoundDecompositionIntegration:
             )
             return result
 
+        # Patch heuristic to return should_continue_gathering=True so the
+        # delegation path runs (heuristic normally always returns False).
+        def mock_heuristic(state, min_sources):
+            return {
+                "overall_coverage": "partial",
+                "should_continue_gathering": True,
+                "queries_assessed": 2,
+                "queries_sufficient": 1,
+            }
+
         with patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
             side_effect=mock_execute_llm_call,
@@ -1784,7 +1831,7 @@ class TestFirstRoundDecompositionIntegration:
             side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
         ), patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
-        ):
+        ), patch.object(stub, "_assess_coverage_heuristic", side_effect=mock_heuristic):
             result = await stub._execute_supervision_delegation_async(
                 state=state, provider_id="test-provider", timeout=30.0,
             )
@@ -1799,7 +1846,6 @@ class TestFirstRoundDecompositionIntegration:
     async def test_round_zero_counted_toward_max_rounds(self):
         """Decomposition round 0 counts toward max_supervision_rounds budget."""
         stub = StubSupervision(delegation_model=True)
-        stub.config.deep_research_supervisor_owned_decomposition = True
         stub.config.deep_research_topic_max_tool_calls = 5
         stub.config.deep_research_providers = ["tavily"]
 
@@ -1868,72 +1914,32 @@ class TestFirstRoundDecompositionIntegration:
 
 
 class TestPhaseFlowSupervisorOwnedDecomposition:
-    """Tests for workflow phase flow changes with supervisor-owned decomposition."""
-
-    def test_planning_phase_skipped_when_supervisor_decomposition_enabled(self):
-        """When config enabled, PLANNING phase is skipped and phase jumps to SUPERVISION."""
-        state = DeepResearchState(
-            original_query="test query",
-            phase=DeepResearchPhase.PLANNING,
-        )
-        config = MagicMock()
-        config.deep_research_supervisor_owned_decomposition = True
-
-        # Simulate the workflow_execution.py logic
-        supervisor_owned = getattr(
-            config, "deep_research_supervisor_owned_decomposition", True,
-        )
-        if supervisor_owned:
-            state.phase = DeepResearchPhase.SUPERVISION
-        else:
-            # Would run planning phase
-            pass
-
-        assert state.phase == DeepResearchPhase.SUPERVISION
-
-    def test_planning_phase_runs_when_supervisor_decomposition_disabled(self):
-        """When config disabled, PLANNING phase runs normally."""
-        state = DeepResearchState(
-            original_query="test query",
-            phase=DeepResearchPhase.PLANNING,
-        )
-        config = MagicMock()
-        config.deep_research_supervisor_owned_decomposition = False
-
-        supervisor_owned = getattr(
-            config, "deep_research_supervisor_owned_decomposition", True,
-        )
-        if supervisor_owned:
-            state.phase = DeepResearchPhase.SUPERVISION
-
-        # Phase should remain PLANNING
-        assert state.phase == DeepResearchPhase.PLANNING
+    """Tests for workflow phase flow with supervisor-owned decomposition."""
 
     def test_brief_to_supervision_transition(self):
-        """BRIEF → SUPERVISION transition works when supervisor-owned decomposition enabled."""
+        """BRIEF → GATHERING → SUPERVISION transition follows the active phase order."""
         state = DeepResearchState(
             original_query="test query",
             phase=DeepResearchPhase.BRIEF,
             research_brief="Enriched research brief",
         )
 
-        # Simulate: BRIEF completes → advance to PLANNING → skip to SUPERVISION
-        state.advance_phase()  # BRIEF → PLANNING
-        assert state.phase == DeepResearchPhase.PLANNING
+        # BRIEF → GATHERING
+        state.advance_phase()
+        assert state.phase == DeepResearchPhase.GATHERING
 
-        # Then supervisor-owned decomposition kicks in
-        state.phase = DeepResearchPhase.SUPERVISION
+        # GATHERING → SUPERVISION
+        state.advance_phase()
         assert state.phase == DeepResearchPhase.SUPERVISION
 
-    def test_refinement_still_goes_to_gathering(self):
-        """start_new_iteration still sets phase to GATHERING (refinement flow unchanged)."""
+    def test_supervision_to_synthesis_transition(self):
+        """SUPERVISION → SYNTHESIS transition follows the active phase order."""
         state = DeepResearchState(
             original_query="test query",
-            phase=DeepResearchPhase.REFINEMENT,
+            phase=DeepResearchPhase.SUPERVISION,
             supervision_round=2,
         )
-        state.start_new_iteration()
-
-        # Refinement always loops back to GATHERING
-        assert state.phase == DeepResearchPhase.GATHERING
-        assert state.supervision_round == 0
+        # advance_phase() from SUPERVISION goes to SYNTHESIS
+        new_phase = state.advance_phase()
+        assert new_phase == DeepResearchPhase.SYNTHESIS
+        assert state.phase == DeepResearchPhase.SYNTHESIS

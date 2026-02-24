@@ -1,11 +1,10 @@
-"""Tests for Phase 3 PLAN: Collapse Post-Gathering Pipeline.
+"""Tests for the collapsed post-gathering pipeline (SUPERVISION -> SYNTHESIS).
 
 Tests cover:
-1. Default pipeline skips ANALYSIS, COMPRESSION, REFINEMENT phases
+1. Active phase transitions (CLARIFICATION -> BRIEF -> GATHERING -> SUPERVISION -> SYNTHESIS)
 2. Synthesis consumes per-topic compressed findings directly
-3. Config flags enable optional phases (backward compat)
-4. Citations preserved in direct-to-synthesis path
-5. Graceful fallback when compressed_findings missing
+3. Citations preserved in direct-to-synthesis path
+4. Graceful fallback when compressed_findings missing
 """
 
 from __future__ import annotations
@@ -131,50 +130,12 @@ class StubSynthesis(SynthesisPhaseMixin):
 
 
 class TestConfigDefaults:
-    """Tests for Phase 3 config flag defaults."""
+    """Tests for pipeline config defaults."""
 
-    def test_enable_analysis_digest_default_false(self) -> None:
-        """Analysis digest is disabled by default."""
-        config = ResearchConfig()
-        assert config.deep_research_enable_analysis_digest is False
-
-    def test_enable_refinement_default_false(self) -> None:
-        """Refinement is disabled by default."""
-        config = ResearchConfig()
-        assert config.deep_research_enable_refinement is False
-
-    def test_enable_global_compression_default_false(self) -> None:
-        """Global compression is disabled by default (changed from True)."""
-        config = ResearchConfig()
-        assert config.deep_research_enable_global_compression is False
-
-    def test_from_toml_enables_analysis_digest(self) -> None:
-        """from_toml_dict respects enable_analysis_digest=True."""
-        config = ResearchConfig.from_toml_dict(
-            {"deep_research_enable_analysis_digest": True}
-        )
-        assert config.deep_research_enable_analysis_digest is True
-
-    def test_from_toml_enables_refinement(self) -> None:
-        """from_toml_dict respects enable_refinement=True."""
-        config = ResearchConfig.from_toml_dict(
-            {"deep_research_enable_refinement": True}
-        )
-        assert config.deep_research_enable_refinement is True
-
-    def test_from_toml_enables_global_compression(self) -> None:
-        """from_toml_dict respects enable_global_compression=True."""
-        config = ResearchConfig.from_toml_dict(
-            {"deep_research_enable_global_compression": True}
-        )
-        assert config.deep_research_enable_global_compression is True
-
-    def test_from_toml_defaults_match_class_defaults(self) -> None:
-        """from_toml_dict with empty dict matches class defaults."""
+    def test_from_toml_empty_dict_returns_defaults(self) -> None:
+        """from_toml_dict with empty dict returns default ResearchConfig."""
         config = ResearchConfig.from_toml_dict({})
-        assert config.deep_research_enable_analysis_digest is False
-        assert config.deep_research_enable_refinement is False
-        assert config.deep_research_enable_global_compression is False
+        assert config.default_provider is not None
 
 
 # =============================================================================
@@ -182,55 +143,32 @@ class TestConfigDefaults:
 # =============================================================================
 
 
-class TestPhaseFlowSkipAnalysis:
-    """Tests for ANALYSIS phase skip logic in workflow_execution."""
+class TestPhaseFlowActivePhases:
+    """Tests for active phase transitions in the collapsed pipeline."""
 
-    def test_advance_phase_from_supervision_goes_to_analysis(self) -> None:
-        """advance_phase from SUPERVISION goes to ANALYSIS (enum order)."""
+    def test_advance_phase_from_supervision_goes_to_synthesis(self) -> None:
+        """advance_phase from SUPERVISION goes to SYNTHESIS (active pipeline)."""
         state = _make_state(phase=DeepResearchPhase.SUPERVISION)
         state.advance_phase()
-        assert state.phase == DeepResearchPhase.ANALYSIS
-
-    def test_advance_phase_from_analysis_goes_to_compression(self) -> None:
-        """advance_phase from ANALYSIS goes to COMPRESSION (enum order)."""
-        state = _make_state(phase=DeepResearchPhase.ANALYSIS)
-        state.advance_phase()
-        assert state.phase == DeepResearchPhase.COMPRESSION
-
-    def test_advance_phase_from_compression_goes_to_synthesis(self) -> None:
-        """advance_phase from COMPRESSION goes to SYNTHESIS."""
-        state = _make_state(phase=DeepResearchPhase.COMPRESSION)
-        state.advance_phase()
         assert state.phase == DeepResearchPhase.SYNTHESIS
 
-    def test_skip_chain_analysis_compression_reaches_synthesis(self) -> None:
-        """Two advance_phase calls from ANALYSIS (skip both) reach SYNTHESIS."""
-        state = _make_state(phase=DeepResearchPhase.ANALYSIS)
-        # Skip ANALYSIS → COMPRESSION
+    def test_advance_phase_from_gathering_goes_to_supervision(self) -> None:
+        """advance_phase from GATHERING goes to SUPERVISION."""
+        state = _make_state(phase=DeepResearchPhase.GATHERING)
         state.advance_phase()
-        assert state.phase == DeepResearchPhase.COMPRESSION
-        # Skip COMPRESSION → SYNTHESIS
+        assert state.phase == DeepResearchPhase.SUPERVISION
+
+    def test_advance_phase_from_brief_goes_to_gathering(self) -> None:
+        """advance_phase from BRIEF goes to GATHERING."""
+        state = _make_state(phase=DeepResearchPhase.BRIEF)
         state.advance_phase()
-        assert state.phase == DeepResearchPhase.SYNTHESIS
+        assert state.phase == DeepResearchPhase.GATHERING
 
-
-class TestPhaseFlowRefinement:
-    """Tests for REFINEMENT phase gating by config flag."""
-
-    def test_should_continue_refinement_with_gaps(self) -> None:
-        """should_continue_refinement returns True with unresolved gaps."""
-        state = _make_state()
-        state.iteration = 1
-        state.max_iterations = 3
-        state.add_gap("Missing information about dosage effects")
-        assert state.should_continue_refinement() is True
-
-    def test_should_continue_refinement_no_gaps(self) -> None:
-        """should_continue_refinement returns False without gaps."""
-        state = _make_state()
-        state.iteration = 1
-        state.max_iterations = 3
-        assert state.should_continue_refinement() is False
+    def test_advance_phase_from_clarification_goes_to_brief(self) -> None:
+        """advance_phase from CLARIFICATION goes to BRIEF."""
+        state = _make_state(phase=DeepResearchPhase.CLARIFICATION)
+        state.advance_phase()
+        assert state.phase == DeepResearchPhase.BRIEF
 
 
 # =============================================================================
@@ -413,18 +351,7 @@ class TestSynthesisEntryCheck:
 
 
 class TestBackwardCompatFullPipeline:
-    """Tests that all flags enabled restores the full pipeline."""
-
-    def test_all_flags_enabled_config(self) -> None:
-        """All three flags can be enabled simultaneously."""
-        config = ResearchConfig.from_toml_dict({
-            "deep_research_enable_analysis_digest": True,
-            "deep_research_enable_global_compression": True,
-            "deep_research_enable_refinement": True,
-        })
-        assert config.deep_research_enable_analysis_digest is True
-        assert config.deep_research_enable_global_compression is True
-        assert config.deep_research_enable_refinement is True
+    """Tests for synthesis pipeline compatibility."""
 
     def test_findings_path_used_with_analysis_enabled(self) -> None:
         """When analysis findings exist, standard synthesis path is used."""

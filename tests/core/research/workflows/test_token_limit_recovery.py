@@ -63,7 +63,7 @@ def sample_state():
     return DeepResearchState(
         id="deepres-token-recovery-test",
         original_query="token recovery test query",
-        phase=DeepResearchPhase.PLANNING,
+        phase=DeepResearchPhase.BRIEF,
         iteration=1,
         max_iterations=3,
     )

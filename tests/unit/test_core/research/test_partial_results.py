@@ -141,7 +141,7 @@ class TestPartialResultCancellationFlow:
     async def test_cancel_after_synthesis_preserves_iteration(self):
         """Should preserve iteration when cancelled after synthesis completes."""
         state = DeepResearchState(original_query="Test cancellation")
-        state.phase = DeepResearchPhase.REFINEMENT
+        state.phase = DeepResearchPhase.SYNTHESIS
         state.iteration = 2
         state.metadata["iteration_in_progress"] = False  # Synthesis completed
         state.metadata["last_completed_iteration"] = 2
@@ -165,7 +165,7 @@ class TestPartialResultCancellationFlow:
     async def test_cancel_first_iteration_marks_for_discard(self):
         """Should mark first iteration for discard when cancelled before completion."""
         state = DeepResearchState(original_query="Test cancellation")
-        state.phase = DeepResearchPhase.ANALYSIS
+        state.phase = DeepResearchPhase.GATHERING
         state.iteration = 1
         state.metadata["iteration_in_progress"] = True
         # No last_completed_iteration yet
@@ -191,8 +191,8 @@ class TestIterationProgressTracking:
         """Should track iteration progress through gathering to synthesis."""
         state = DeepResearchState(original_query="Test query")
 
-        # Phase: PLANNING - no iteration_in_progress
-        state.phase = DeepResearchPhase.PLANNING
+        # Phase: BRIEF - no iteration_in_progress
+        state.phase = DeepResearchPhase.BRIEF
         assert state.metadata.get("iteration_in_progress") is None
 
         # Phase: GATHERING - iteration starts
@@ -200,8 +200,8 @@ class TestIterationProgressTracking:
         state.metadata["iteration_in_progress"] = True
         assert state.metadata["iteration_in_progress"] is True
 
-        # Phase: ANALYSIS - still in progress
-        state.phase = DeepResearchPhase.ANALYSIS
+        # Phase: SUPERVISION - still in progress
+        state.phase = DeepResearchPhase.SUPERVISION
         assert state.metadata["iteration_in_progress"] is True
 
         # Phase: SYNTHESIS - iteration completes
@@ -212,19 +212,19 @@ class TestIterationProgressTracking:
         assert state.metadata["last_completed_iteration"] == 1
 
     def test_progress_flag_lifecycle_refinement_iteration(self):
-        """Should track progress through refinement iteration."""
+        """Should track progress through a second gathering-to-synthesis iteration."""
         state = DeepResearchState(original_query="Test query")
         state.iteration = 1
         state.metadata["last_completed_iteration"] = 1
 
-        # Start refinement - new iteration begins
-        state.phase = DeepResearchPhase.REFINEMENT
+        # Start second iteration - new gathering begins
+        state.phase = DeepResearchPhase.GATHERING
         state.iteration = 2
         state.metadata["iteration_in_progress"] = True
         assert state.metadata["iteration_in_progress"] is True
         assert state.metadata["last_completed_iteration"] == 1
 
-        # Refinement to synthesis completes
+        # Gathering to synthesis completes
         state.phase = DeepResearchPhase.SYNTHESIS
         state.metadata["iteration_in_progress"] = False
         state.metadata["last_completed_iteration"] = 2

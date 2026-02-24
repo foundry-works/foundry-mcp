@@ -1000,11 +1000,10 @@ class TestTopicAgentConfig:
     """Tests for topic agent configuration keys."""
 
     def test_default_config_topic_agents_enabled(self) -> None:
-        """Topic agents are enabled by default with correct budget defaults."""
+        """Topic agent config has correct budget defaults."""
         from foundry_mcp.config.research import ResearchConfig
 
         config = ResearchConfig()
-        assert config.deep_research_enable_topic_agents is True
         assert config.deep_research_topic_max_tool_calls == 10
         # Backward-compat alias
         assert config.deep_research_topic_max_searches == 10
@@ -1018,13 +1017,11 @@ class TestTopicAgentConfig:
         from foundry_mcp.config.research import ResearchConfig
 
         data = {
-            "deep_research_enable_topic_agents": True,
             "deep_research_topic_max_tool_calls": 8,
             "deep_research_topic_reflection_provider": "[cli]gemini:flash",
         }
         config = ResearchConfig.from_toml_dict(data)
 
-        assert config.deep_research_enable_topic_agents is True
         assert config.deep_research_topic_max_tool_calls == 8
         assert config.deep_research_topic_max_searches == 8  # backward-compat alias
         assert config.deep_research_topic_reflection_provider == "[cli]gemini:flash"
@@ -1041,12 +1038,12 @@ class TestTopicAgentConfig:
         assert config.deep_research_topic_max_searches == 7
 
     def test_from_toml_dict_string_bool(self) -> None:
-        """String 'true' is parsed as boolean True."""
+        """String 'true' is parsed as boolean True for boolean config fields."""
         from foundry_mcp.config.research import ResearchConfig
 
-        data = {"deep_research_enable_topic_agents": "true"}
+        data = {"deep_research_enable_extract": "true"}
         config = ResearchConfig.from_toml_dict(data)
-        assert config.deep_research_enable_topic_agents is True
+        assert config.deep_research_enable_extract is True
 
 
 # =============================================================================

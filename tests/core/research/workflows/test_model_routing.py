@@ -39,7 +39,7 @@ def _make_config(**overrides: Any) -> ResearchConfig:
 
 def _make_state(
     query: str = "What is quantum computing?",
-    phase: DeepResearchPhase = DeepResearchPhase.PLANNING,
+    phase: DeepResearchPhase = DeepResearchPhase.BRIEF,
 ) -> DeepResearchState:
     """Create a minimal DeepResearchState for testing."""
     return DeepResearchState(
@@ -111,15 +111,6 @@ class TestResolveModelForRole:
         provider, model = config.resolve_model_for_role("research")
         assert provider == "claude"
         assert model == "opus"
-
-    def test_phase_fallback_for_research(self) -> None:
-        """'research' role falls back to analysis phase config."""
-        config = _make_config(
-            default_provider="gemini",
-            deep_research_analysis_provider="openai",
-        )
-        provider, model = config.resolve_model_for_role("research")
-        assert provider == "openai"
 
     def test_phase_fallback_for_report(self) -> None:
         """'report' role falls back to synthesis phase config."""

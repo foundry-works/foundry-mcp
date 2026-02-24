@@ -47,7 +47,7 @@ def sample_state():
     return DeepResearchState(
         id="deepres-lifecycle-test",
         original_query="lifecycle test query",
-        phase=DeepResearchPhase.PLANNING,
+        phase=DeepResearchPhase.BRIEF,
         iteration=1,
         max_iterations=3,
     )

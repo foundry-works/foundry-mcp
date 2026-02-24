@@ -195,7 +195,7 @@ class TestStatusResponseHeartbeat:
         state = DeepResearchState(
             id="test-no-heartbeat",
             original_query="test query",
-            phase=DeepResearchPhase.PLANNING,
+            phase=DeepResearchPhase.BRIEF,
         )
         assert state.last_heartbeat_at is None
 

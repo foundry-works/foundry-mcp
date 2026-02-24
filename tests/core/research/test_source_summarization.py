@@ -420,62 +420,6 @@ class TestSummarizeSources:
 
 
 # ---------------------------------------------------------------------------
-# Config flag tests
-# ---------------------------------------------------------------------------
-
-
-class TestFetchTimeSummarizationConfig:
-    """Tests for fetch_time_summarization config flag."""
-
-    def test_config_default_enabled(self):
-        """fetch_time_summarization defaults to True."""
-        from foundry_mcp.config.research import ResearchConfig
-
-        config = ResearchConfig()
-        assert config.deep_research_fetch_time_summarization is True
-
-    def test_config_opt_out(self):
-        """fetch_time_summarization can be disabled."""
-        from foundry_mcp.config.research import ResearchConfig
-
-        config = ResearchConfig(deep_research_fetch_time_summarization=False)
-        assert config.deep_research_fetch_time_summarization is False
-
-    def test_config_from_toml_enabled(self):
-        """TOML parsing correctly reads fetch_time_summarization."""
-        from foundry_mcp.config.research import ResearchConfig
-
-        config = ResearchConfig.from_toml_dict({"deep_research_fetch_time_summarization": True})
-        assert config.deep_research_fetch_time_summarization is True
-
-    def test_config_from_toml_disabled(self):
-        """TOML parsing correctly reads fetch_time_summarization=false."""
-        from foundry_mcp.config.research import ResearchConfig
-
-        config = ResearchConfig.from_toml_dict({"deep_research_fetch_time_summarization": False})
-        assert config.deep_research_fetch_time_summarization is False
-
-    def test_config_summarization_provider(self):
-        """Summarization provider config fields are accessible."""
-        from foundry_mcp.config.research import ResearchConfig
-
-        config = ResearchConfig(
-            deep_research_summarization_provider="gemini",
-            deep_research_summarization_model="flash",
-        )
-        assert config.get_summarization_provider() == "gemini"
-        assert config.get_summarization_model() == "flash"
-
-    def test_config_summarization_provider_fallback(self):
-        """Summarization provider falls back to default_provider when not set."""
-        from foundry_mcp.config.research import ResearchConfig
-
-        config = ResearchConfig(default_provider="claude")
-        assert config.get_summarization_provider() == "claude"
-        assert config.get_summarization_model() is None
-
-
-# ---------------------------------------------------------------------------
 # max_content_length truncation tests (Phase 2 alignment)
 # ---------------------------------------------------------------------------
 

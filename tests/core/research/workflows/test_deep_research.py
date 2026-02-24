@@ -50,40 +50,36 @@ def mock_config():
     config.deep_research_audit_artifacts = True
     # Per-phase timeout configuration
     config.deep_research_planning_timeout = 60.0
-    config.deep_research_analysis_timeout = 90.0
     config.deep_research_synthesis_timeout = 180.0
-    config.deep_research_refinement_timeout = 60.0
     # Per-phase provider configuration
     config.deep_research_planning_provider = None
-    config.deep_research_analysis_provider = None
     config.deep_research_synthesis_provider = None
-    config.deep_research_refinement_provider = None
     # Clarification provider configuration
     config.deep_research_clarification_provider = None
     # Topic agent configuration
     config.deep_research_topic_reflection_provider = None
     config.deep_research_reflection_provider = None
-    config.deep_research_topic_max_searches = 3
-    config.deep_research_enable_topic_agents = False
+    # Use an integer cap so range(topic_max_searches) works in tests and the
+    # loop exits after 1 search (before the LLM reflection step).
+    config.deep_research_topic_max_tool_calls = 1
     # Stale task threshold
     config.deep_research_stale_task_seconds = 300.0
 
     # Helper method mocks
     def get_phase_timeout(phase: str) -> float:
         mapping = {
+            "clarification": config.deep_research_planning_timeout,
+            "brief": config.deep_research_planning_timeout,
             "planning": config.deep_research_planning_timeout,
-            "analysis": config.deep_research_analysis_timeout,
+            "supervision": config.deep_research_planning_timeout,
             "synthesis": config.deep_research_synthesis_timeout,
-            "refinement": config.deep_research_refinement_timeout,
         }
         return mapping.get(phase.lower(), config.deep_research_timeout)
 
     def get_phase_provider(phase: str) -> str:
         mapping = {
             "planning": config.deep_research_planning_provider,
-            "analysis": config.deep_research_analysis_provider,
             "synthesis": config.deep_research_synthesis_provider,
-            "refinement": config.deep_research_refinement_provider,
         }
         return mapping.get(phase.lower()) or config.default_provider
 
@@ -130,7 +126,7 @@ def sample_deep_research_state():
         id="deepres-test123",
         original_query="What is deep learning?",
         research_brief="Investigating deep learning fundamentals",
-        phase=DeepResearchPhase.PLANNING,
+        phase=DeepResearchPhase.BRIEF,
         iteration=1,
         max_iterations=3,
     )
@@ -150,7 +146,7 @@ class TestDeepResearchState:
         state = DeepResearchState(original_query="Test query")
 
         assert state.original_query == "Test query"
-        assert state.phase == DeepResearchPhase.PLANNING
+        assert state.phase == DeepResearchPhase.CLARIFICATION
         assert state.iteration == 1
         assert state.max_iterations == 3
         assert len(state.sub_queries) == 0
@@ -242,10 +238,10 @@ class TestDeepResearchState:
         assert state.get_gap("missing") is None
 
     def test_advance_phase(self, sample_deep_research_state):
-        """Should advance through phases correctly."""
+        """Should advance through active phases correctly."""
         state = sample_deep_research_state
 
-        assert state.phase == DeepResearchPhase.PLANNING
+        assert state.phase == DeepResearchPhase.BRIEF
 
         state.advance_phase()
         assert state.phase == DeepResearchPhase.GATHERING
@@ -254,16 +250,7 @@ class TestDeepResearchState:
         assert state.phase == DeepResearchPhase.SUPERVISION
 
         state.advance_phase()
-        assert state.phase == DeepResearchPhase.ANALYSIS
-
-        state.advance_phase()
-        assert state.phase == DeepResearchPhase.COMPRESSION
-
-        state.advance_phase()
         assert state.phase == DeepResearchPhase.SYNTHESIS
-
-        state.advance_phase()
-        assert state.phase == DeepResearchPhase.REFINEMENT
 
     def test_pending_sub_queries(self, sample_deep_research_state):
         """Should return only pending sub-queries."""
@@ -276,21 +263,6 @@ class TestDeepResearchState:
         pending = state.pending_sub_queries()
         assert len(pending) == 1
         assert pending[0].query == "Query 2"
-
-    def test_should_continue_refinement(self, sample_deep_research_state):
-        """Should correctly determine if refinement should continue."""
-        state = sample_deep_research_state
-
-        # No gaps, should not continue
-        assert state.should_continue_refinement() is False
-
-        # Add unresolved gap
-        state.add_gap("Missing info")
-        assert state.should_continue_refinement() is True
-
-        # Max iterations reached
-        state.iteration = 3
-        assert state.should_continue_refinement() is False
 
     def test_mark_completed(self, sample_deep_research_state):
         """Should mark research as completed."""
@@ -885,7 +857,7 @@ class TestDeepResearchWorkflow:
         assert result.success is True
         assert "deepres-test123" in result.content
         assert result.metadata["research_id"] == "deepres-test123"
-        assert result.metadata["phase"] == "planning"
+        assert result.metadata["phase"] == "brief"
 
     def test_get_report_not_generated(self, mock_config, mock_memory, sample_deep_research_state):
         """Should return error when report not yet generated."""
@@ -951,9 +923,9 @@ class TestPhaseConfiguration:
     def test_get_phase_timeout_returns_phase_specific_values(self, mock_config):
         """Should return correct timeout for each phase."""
         assert mock_config.get_phase_timeout("planning") == 60.0
-        assert mock_config.get_phase_timeout("analysis") == 90.0
+        assert mock_config.get_phase_timeout("brief") == 60.0
+        assert mock_config.get_phase_timeout("supervision") == 60.0
         assert mock_config.get_phase_timeout("synthesis") == 180.0
-        assert mock_config.get_phase_timeout("refinement") == 60.0
 
     def test_get_phase_timeout_fallback_for_unknown_phase(self, mock_config):
         """Should fallback to default timeout for unknown phases."""
@@ -963,29 +935,25 @@ class TestPhaseConfiguration:
     def test_get_phase_provider_returns_default_when_unset(self, mock_config):
         """Should return default provider when phase provider is None."""
         assert mock_config.get_phase_provider("planning") == "test-provider"
-        assert mock_config.get_phase_provider("analysis") == "test-provider"
+        assert mock_config.get_phase_provider("brief") == "test-provider"
         assert mock_config.get_phase_provider("synthesis") == "test-provider"
-        assert mock_config.get_phase_provider("refinement") == "test-provider"
+        assert mock_config.get_phase_provider("supervision") == "test-provider"
 
     def test_get_phase_provider_returns_phase_specific_when_set(self, mock_config):
         """Should return phase-specific provider when configured."""
         mock_config.deep_research_synthesis_provider = "claude"
-        mock_config.deep_research_analysis_provider = "openai"
 
         # Re-bind helper to pick up new values
         def get_phase_provider(phase: str) -> str:
             mapping = {
                 "planning": mock_config.deep_research_planning_provider,
-                "analysis": mock_config.deep_research_analysis_provider,
                 "synthesis": mock_config.deep_research_synthesis_provider,
-                "refinement": mock_config.deep_research_refinement_provider,
             }
             return mapping.get(phase.lower()) or mock_config.default_provider
 
         mock_config.get_phase_provider = get_phase_provider
 
         assert mock_config.get_phase_provider("synthesis") == "claude"
-        assert mock_config.get_phase_provider("analysis") == "openai"
         assert mock_config.get_phase_provider("planning") == "test-provider"
 
     def test_state_initializes_with_phase_providers(self, mock_config, mock_memory):
@@ -998,9 +966,7 @@ class TestPhaseConfiguration:
         def get_phase_provider(phase: str) -> str:
             mapping = {
                 "planning": mock_config.deep_research_planning_provider,
-                "analysis": mock_config.deep_research_analysis_provider,
                 "synthesis": mock_config.deep_research_synthesis_provider,
-                "refinement": mock_config.deep_research_refinement_provider,
             }
             return mapping.get(phase.lower()) or mock_config.default_provider
 
@@ -1012,15 +978,11 @@ class TestPhaseConfiguration:
         state = DeepResearchState(
             original_query="Test query",
             planning_provider=mock_config.get_phase_provider("planning"),
-            analysis_provider=mock_config.get_phase_provider("analysis"),
             synthesis_provider=mock_config.get_phase_provider("synthesis"),
-            refinement_provider=mock_config.get_phase_provider("refinement"),
         )
 
         assert state.planning_provider == "test-provider"
-        assert state.analysis_provider == "test-provider"
         assert state.synthesis_provider == "claude"
-        assert state.refinement_provider == "test-provider"
 
 
 class TestResearchConfigHelpers:
@@ -1033,15 +995,12 @@ class TestResearchConfigHelpers:
         config = ResearchConfig(
             deep_research_timeout=120.0,
             deep_research_planning_timeout=60.0,
-            deep_research_analysis_timeout=90.0,
             deep_research_synthesis_timeout=180.0,
-            deep_research_refinement_timeout=45.0,
         )
 
         assert config.get_phase_timeout("planning") == 60.0
-        assert config.get_phase_timeout("analysis") == 90.0
+        assert config.get_phase_timeout("brief") == 60.0
         assert config.get_phase_timeout("synthesis") == 180.0
-        assert config.get_phase_timeout("refinement") == 45.0
         # Unknown phase falls back to default
         assert config.get_phase_timeout("unknown") == 120.0
 
@@ -1052,13 +1011,13 @@ class TestResearchConfigHelpers:
         config = ResearchConfig(
             default_provider="gemini",
             deep_research_synthesis_provider="claude",
-            deep_research_analysis_provider="openai",
         )
 
         assert config.get_phase_provider("planning") == "gemini"
-        assert config.get_phase_provider("analysis") == "openai"
+        assert config.get_phase_provider("brief") == "gemini"
         assert config.get_phase_provider("synthesis") == "claude"
-        assert config.get_phase_provider("refinement") == "gemini"
+        # Phases with no specific provider fall back to default
+        assert config.get_phase_provider("supervision") == "gemini"
 
     def test_from_toml_dict_parses_phase_config(self):
         """Should parse phase config from TOML dict."""
@@ -1553,9 +1512,9 @@ class TestStatusPersistenceThrottle:
         workflow = workflow_with_throttle
         state = sample_deep_research_state
 
-        # Simulate recent persistence at PLANNING phase
+        # Simulate recent persistence at BRIEF phase
         workflow._last_persisted_at = datetime.now(timezone.utc)
-        workflow._last_persisted_phase = DeepResearchPhase.PLANNING
+        workflow._last_persisted_phase = DeepResearchPhase.BRIEF
         workflow._last_persisted_iteration = state.iteration
 
         # Change phase to GATHERING
@@ -2204,11 +2163,19 @@ class TestDeepResearchProviderFailover:
             )
 
         assert result.success is True
-        # Verify circuit breaker states are captured
-        assert "circuit_breaker_states" in result.metadata
-        cb_states = result.metadata["circuit_breaker_states"]
-        assert "start" in cb_states
-        assert "end" in cb_states
+        # Verify circuit breaker states are captured in the audit log
+        # (they are no longer in WorkflowResult.metadata; they go to the JSONL audit file)
+        audit_path = mock_memory.base_path / "deep_research" / f"{state_with_pending_queries.id}.audit.jsonl"
+        assert audit_path.exists()
+        lines = audit_path.read_text(encoding="utf-8").splitlines()
+        gathering_events = [
+            json.loads(line) for line in lines
+            if json.loads(line).get("event_type") == "gathering_result"
+        ]
+        assert len(gathering_events) >= 1
+        event_data = gathering_events[0]["data"]
+        assert "circuit_breaker_states_start" in event_data
+        assert "circuit_breaker_states_end" in event_data
 
     def _create_mock_provider(self, name: str, sources: list) -> MagicMock:
         """Helper to create mock search provider."""
@@ -2377,7 +2344,7 @@ class TestRunPhaseHelper:
             id="test-run-phase",
             original_query="Test query",
             research_brief="Test",
-            phase=DeepResearchPhase.PLANNING,
+            phase=DeepResearchPhase.BRIEF,
             iteration=1,
         )
 
@@ -2388,12 +2355,12 @@ class TestRunPhaseHelper:
         workflow.hooks = MagicMock()
         workflow._safe_orchestrator_transition = MagicMock()
 
-        result = await workflow._run_phase(state, DeepResearchPhase.PLANNING, executor)
+        result = await workflow._run_phase(state, DeepResearchPhase.BRIEF, executor)
 
         assert result is None
         workflow.hooks.emit_phase_start.assert_called_once_with(state)
         workflow.hooks.emit_phase_complete.assert_called_once_with(state)
-        workflow._safe_orchestrator_transition.assert_called_once_with(state, DeepResearchPhase.PLANNING)
+        workflow._safe_orchestrator_transition.assert_called_once_with(state, DeepResearchPhase.BRIEF)
 
     @pytest.mark.asyncio
     async def test_failure_path(self, workflow, state):
@@ -2404,7 +2371,7 @@ class TestRunPhaseHelper:
         workflow._safe_orchestrator_transition = MagicMock()
         workflow._flush_state = MagicMock()
 
-        result = await workflow._run_phase(state, DeepResearchPhase.PLANNING, executor)
+        result = await workflow._run_phase(state, DeepResearchPhase.BRIEF, executor)
 
         assert result is fail_result
         assert state.metadata.get("failed") is True
@@ -2424,7 +2391,7 @@ class TestRunPhaseHelper:
 
         result = await workflow._run_phase(
             state,
-            DeepResearchPhase.REFINEMENT,
+            DeepResearchPhase.SUPERVISION,
             executor,
             skip_error_check=True,
         )
@@ -2462,7 +2429,7 @@ class TestRunPhaseHelper:
         executor = AsyncMock(return_value=WorkflowResult(success=True, content="ok"))()
 
         with pytest.raises(asyncio.CancelledError):
-            await workflow._run_phase(state, DeepResearchPhase.PLANNING, executor)
+            await workflow._run_phase(state, DeepResearchPhase.BRIEF, executor)
 
     @pytest.mark.asyncio
     async def test_audit_events_written(self, workflow, state, mock_memory):
@@ -2471,7 +2438,7 @@ class TestRunPhaseHelper:
         workflow.hooks = MagicMock()
         workflow._safe_orchestrator_transition = MagicMock()
 
-        await workflow._run_phase(state, DeepResearchPhase.ANALYSIS, executor)
+        await workflow._run_phase(state, DeepResearchPhase.GATHERING, executor)
 
         # Verify audit events were written
         audit_path = mock_memory.base_path / "deep_research" / f"{state.id}.audit.jsonl"
@@ -2490,7 +2457,7 @@ class TestRunPhaseHelper:
         workflow.hooks = MagicMock()
         workflow._flush_state = MagicMock()
 
-        await workflow._run_phase(state, DeepResearchPhase.PLANNING, executor)
+        await workflow._run_phase(state, DeepResearchPhase.BRIEF, executor)
 
         audit_path = mock_memory.base_path / "deep_research" / f"{state.id}.audit.jsonl"
         assert audit_path.exists()
@@ -2560,7 +2527,7 @@ class TestBackwardCompatDeserialization:
         payload: dict = {
             "id": "deepres-legacy-001",
             "original_query": "Legacy test query",
-            "phase": "planning",
+            "phase": "brief",
             "iteration": 1,
             "max_iterations": 3,
             "sources": sources,
@@ -2635,9 +2602,7 @@ class TestBackwardCompatDeserialization:
 
         # Provider tracking defaults to None
         assert state.planning_provider is None
-        assert state.analysis_provider is None
         assert state.synthesis_provider is None
-        assert state.refinement_provider is None
         assert state.planning_model is None
 
     def test_roundtrip_serialization_preserves_all_fields(self):

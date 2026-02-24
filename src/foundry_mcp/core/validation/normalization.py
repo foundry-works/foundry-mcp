@@ -38,8 +38,10 @@ def _is_valid_spec_id(spec_id: str) -> bool:
     return bool(re.match(pattern, spec_id))
 
 
-def _is_valid_iso8601(value: str) -> bool:
+def _is_valid_iso8601(value: Any) -> bool:
     """Check if value is valid ISO 8601 date."""
+    if not isinstance(value, str):
+        return False
     try:
         # Try parsing with Z suffix
         if value.endswith("Z"):

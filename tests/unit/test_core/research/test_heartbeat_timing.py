@@ -40,17 +40,12 @@ def mock_config():
     config.deep_research_providers = ["tavily"]
     config.deep_research_audit_artifacts = False  # Disable audit for these tests
     config.deep_research_planning_timeout = 60.0
-    config.deep_research_analysis_timeout = 90.0
     config.deep_research_synthesis_timeout = 180.0
-    config.deep_research_refinement_timeout = 60.0
     config.deep_research_planning_provider = None
-    config.deep_research_analysis_provider = None
     config.deep_research_synthesis_provider = None
-    config.deep_research_refinement_provider = None
     config.deep_research_max_retries = 0
     config.deep_research_retry_delay = 1.0
     # Digest configuration
-    config.deep_research_digest_policy = "off"  # Disable digest for these tests
     config.deep_research_digest_min_chars = 10000
     config.deep_research_digest_max_sources = 8
     config.deep_research_digest_timeout = 60.0
@@ -66,18 +61,14 @@ def mock_config():
     def get_phase_timeout(phase: str) -> float:
         mapping = {
             "planning": config.deep_research_planning_timeout,
-            "analysis": config.deep_research_analysis_timeout,
             "synthesis": config.deep_research_synthesis_timeout,
-            "refinement": config.deep_research_refinement_timeout,
         }
         return mapping.get(phase.lower(), config.deep_research_timeout)
 
     def get_phase_provider(phase: str) -> str:
         mapping = {
             "planning": config.deep_research_planning_provider,
-            "analysis": config.deep_research_analysis_provider,
             "synthesis": config.deep_research_synthesis_provider,
-            "refinement": config.deep_research_refinement_provider,
         }
         return mapping.get(phase.lower()) or config.default_provider
 
@@ -117,7 +108,7 @@ def sample_state():
         id="deepres-heartbeat-test",
         original_query="Test heartbeat timing",
         research_brief="Testing heartbeat update timing",
-        phase=DeepResearchPhase.PLANNING,
+        phase=DeepResearchPhase.BRIEF,
         iteration=1,
         max_iterations=3,
     )
@@ -191,53 +182,6 @@ class TestHeartbeatTiming:
         )
 
     @pytest.mark.asyncio
-    async def test_analysis_phase_heartbeat_before_provider_call(self, mock_config, mock_memory):
-        """Should update heartbeat BEFORE making provider call in analysis phase."""
-        workflow = DeepResearchWorkflow(mock_config, mock_memory)
-
-        # Create state with sources for analysis
-        state = DeepResearchState(
-            id="deepres-analysis-heartbeat",
-            original_query="Test analysis heartbeat",
-            phase=DeepResearchPhase.ANALYSIS,
-        )
-        # Add a source to analyze
-        state.add_source(
-            title="Test Source",
-            url="https://example.com/test",
-            snippet="Test content for analysis",
-        )
-
-        heartbeat_before_call: Optional[datetime] = None
-
-        def track_save(*args, **kwargs):
-            pass  # Just track calls
-
-        mock_memory.save_deep_research.side_effect = track_save
-
-        async def track_provider(*args, **kwargs):
-            nonlocal heartbeat_before_call
-            heartbeat_before_call = state.last_heartbeat_at
-            return WorkflowResult(
-                success=True,
-                content='{"findings": [{"content": "test finding", "confidence": "high", "category": "test"}]}',
-                provider_id="test-provider",
-                model_used="test-model",
-                tokens_used=30,
-                duration_ms=100.0,
-            )
-
-        with patch.object(workflow, "_execute_provider_async", side_effect=track_provider):
-            with patch.object(workflow, "_check_cancellation"):
-                await workflow._execute_analysis_async(
-                    state=state,
-                    provider_id=None,
-                    timeout=90.0,
-                )
-
-        assert heartbeat_before_call is not None, "Heartbeat should be updated before provider call in analysis phase"
-
-    @pytest.mark.asyncio
     async def test_synthesis_phase_heartbeat_before_provider_call(self, mock_config, mock_memory):
         """Should update heartbeat BEFORE making provider call in synthesis phase."""
         workflow = DeepResearchWorkflow(mock_config, mock_memory)
@@ -278,53 +222,6 @@ class TestHeartbeatTiming:
                 )
 
         assert heartbeat_before_call is not None, "Heartbeat should be updated before provider call in synthesis phase"
-
-    @pytest.mark.asyncio
-    async def test_refinement_phase_heartbeat_before_provider_call(self, mock_config, mock_memory):
-        """Should update heartbeat BEFORE making provider call in refinement phase."""
-        workflow = DeepResearchWorkflow(mock_config, mock_memory)
-
-        # Create state with gaps for refinement
-        state = DeepResearchState(
-            id="deepres-refinement-heartbeat",
-            original_query="Test refinement heartbeat",
-            phase=DeepResearchPhase.REFINEMENT,
-        )
-        # Add findings and gaps
-        state.add_finding(
-            content="Existing finding",
-            confidence=ConfidenceLevel.MEDIUM,
-            category="test",
-        )
-        state.add_gap(
-            description="Missing information about X",
-            suggested_queries=["What is X?"],
-            priority=1,
-        )
-
-        heartbeat_before_call: Optional[datetime] = None
-
-        async def track_provider(*args, **kwargs):
-            nonlocal heartbeat_before_call
-            heartbeat_before_call = state.last_heartbeat_at
-            return WorkflowResult(
-                success=True,
-                content='{"gaps": [], "suggested_queries": []}',
-                provider_id="test-provider",
-                model_used="test-model",
-                tokens_used=30,
-                duration_ms=100.0,
-            )
-
-        with patch.object(workflow, "_execute_provider_async", side_effect=track_provider):
-            with patch.object(workflow, "_check_cancellation"):
-                await workflow._execute_refinement_async(
-                    state=state,
-                    provider_id=None,
-                    timeout=60.0,
-                )
-
-        assert heartbeat_before_call is not None, "Heartbeat should be updated before provider call in refinement phase"
 
     @pytest.mark.asyncio
     async def test_gathering_phase_heartbeat_before_search_calls(self, mock_config, mock_memory):

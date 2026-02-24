@@ -1,14 +1,14 @@
 """Cross-phase integration test for deep research pipeline (PT.5).
 
 Verifies state propagation and data consistency across all phases:
-  CLARIFICATION → PLANNING → (simulated GATHERING) → ANALYSIS → SYNTHESIS
+  CLARIFICATION → BRIEF → (simulated GATHERING) → SUPERVISION → SYNTHESIS
 
 Uses mocked LLM providers but exercises real phase logic:
 - Real prompt building (system + user)
 - Real response parsing
 - Real state mutation
 - Real constraint/data propagation between phases
-- Compressed findings flow from gathering → analysis → synthesis
+- Compressed findings flow from gathering → synthesis
 
 Gathering is simulated (populated manually) because it uses search
 providers rather than LLM calls.
@@ -65,7 +65,7 @@ class StubWorkflow(ClarificationPhaseMixin, PlanningPhaseMixin, SynthesisPhaseMi
     def __init__(self) -> None:
         self.config = MagicMock()
         self.config.audit_verbosity = "minimal"
-        self.config.deep_research_enable_planning_critique = False  # Not under test here
+        self.config.deep_research_enable_planning_critique = False  # Disable critique — not under test
         self.memory = MagicMock()
         self.memory.save_deep_research = MagicMock()
         self._audit_events: list[tuple[str, dict]] = []
@@ -171,9 +171,9 @@ class TestCrossPhaseIntegration:
         assert "PostgreSQL" in state.clarification_constraints["verification"]
 
         # ------------------------------------------------------------------
-        # Phase 2: PLANNING — should see clarification constraints
+        # Phase 2: BRIEF — should see clarification constraints
         # ------------------------------------------------------------------
-        state.phase = DeepResearchPhase.PLANNING
+        state.phase = DeepResearchPhase.BRIEF
 
         planning_response = json.dumps({
             "research_brief": "Comparing PostgreSQL and MySQL for OLTP with focus on write performance, cost, and 2024 benchmarks.",
@@ -266,9 +266,9 @@ class TestCrossPhaseIntegration:
         assert source3.citation_number == 3
 
         # ------------------------------------------------------------------
-        # Phase 4: ANALYSIS (simulated — add findings manually)
+        # Phase 4: SUPERVISION (simulated — add findings manually)
         # ------------------------------------------------------------------
-        state.phase = DeepResearchPhase.ANALYSIS
+        state.phase = DeepResearchPhase.SUPERVISION
 
         finding1 = state.add_finding(
             content="PostgreSQL 16 achieves 25% higher TPS than MySQL 8.0 on write-heavy OLTP workloads.",
@@ -391,7 +391,7 @@ For write-intensive OLTP applications, PostgreSQL offers superior performance at
         state = DeepResearchState(
             id="deepres-propagation-test",
             original_query="How does caching work?",
-            phase=DeepResearchPhase.PLANNING,
+            phase=DeepResearchPhase.BRIEF,
             iteration=1,
             max_iterations=3,
         )
@@ -445,7 +445,7 @@ For write-intensive OLTP applications, PostgreSQL offers superior performance at
         state = DeepResearchState(
             id="deepres-no-constraints",
             original_query="Compare PostgreSQL vs MySQL",
-            phase=DeepResearchPhase.PLANNING,
+            phase=DeepResearchPhase.BRIEF,
             iteration=1,
             max_iterations=3,
         )
@@ -588,7 +588,7 @@ class TestCompressedFindingsCrossPhase:
         state = DeepResearchState(
             id="deepres-compressed-flow",
             original_query="Compare cloud storage providers for enterprise backup",
-            phase=DeepResearchPhase.ANALYSIS,
+            phase=DeepResearchPhase.SUPERVISION,
             iteration=1,
             max_iterations=3,
             research_brief="Research cloud storage providers focusing on enterprise backup pricing, reliability, and compliance.",
@@ -826,7 +826,7 @@ class TestBriefRefinement:
         state = DeepResearchState(
             id="deepres-brief-specificity",
             original_query="tell me about databases",  # Deliberately vague
-            phase=DeepResearchPhase.PLANNING,
+            phase=DeepResearchPhase.BRIEF,
             iteration=1,
             max_iterations=3,
         )
@@ -897,7 +897,7 @@ class TestBriefRefinement:
         state = DeepResearchState(
             id="deepres-brief-wiring",
             original_query="tell me about caching",  # Vague
-            phase=DeepResearchPhase.PLANNING,
+            phase=DeepResearchPhase.BRIEF,
             iteration=1,
             max_iterations=3,
         )
@@ -976,7 +976,7 @@ class TestBriefRefinement:
         state = DeepResearchState(
             id="deepres-brief-fallback",
             original_query="Compare React and Vue",
-            phase=DeepResearchPhase.PLANNING,
+            phase=DeepResearchPhase.BRIEF,
             iteration=1,
             max_iterations=3,
         )

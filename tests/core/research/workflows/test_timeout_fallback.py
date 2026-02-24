@@ -95,7 +95,7 @@ class TestConfigFallbackProviders:
     def test_get_phase_fallback_providers_empty_by_default(self) -> None:
         config = ResearchConfig()
         assert config.get_phase_fallback_providers("planning") == []
-        assert config.get_phase_fallback_providers("analysis") == []
+        assert config.get_phase_fallback_providers("synthesis") == []
 
     def test_get_phase_fallback_providers_configured(self) -> None:
         config = ResearchConfig(
@@ -110,7 +110,6 @@ class TestConfigFallbackProviders:
             "claude:opus",
             "gemini:pro",
         ]
-        assert config.get_phase_fallback_providers("analysis") == []
 
     def test_get_phase_fallback_providers_unknown_phase(self) -> None:
         config = ResearchConfig(
@@ -138,7 +137,7 @@ class TestConfigFromTomlDict:
     def test_parse_phase_fallback_providers(self) -> None:
         data = {
             "deep_research_planning_providers": ["gemini:pro", "claude:sonnet"],
-            "deep_research_analysis_providers": ["gemini:pro"],
+            "deep_research_synthesis_providers": ["gemini:pro"],
             "deep_research_max_retries": 3,
             "deep_research_retry_delay": 8.5,
         }
@@ -147,8 +146,7 @@ class TestConfigFromTomlDict:
             "gemini:pro",
             "claude:sonnet",
         ]
-        assert config.deep_research_analysis_providers == ["gemini:pro"]
-        assert config.deep_research_synthesis_providers == []
+        assert config.deep_research_synthesis_providers == ["gemini:pro"]
         assert config.deep_research_max_retries == 3
         assert config.deep_research_retry_delay == 8.5
 

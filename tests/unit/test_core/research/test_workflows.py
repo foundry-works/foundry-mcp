@@ -1007,7 +1007,7 @@ class TestDeepResearchRobustness:
         from foundry_mcp.core.research.workflows.deep_research import AgentDecision, AgentRole
 
         decision = AgentDecision(
-            agent=AgentRole.PLANNER,
+            agent=AgentRole.BRIEFER,
             action="test",
             rationale="test rationale",
             inputs={},

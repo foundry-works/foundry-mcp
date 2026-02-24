@@ -68,7 +68,7 @@ class TestCancellationIntegration:
         state = DeepResearchState(
             id="test-cancel-partial",
             original_query="test query",
-            phase=DeepResearchPhase.ANALYSIS,
+            phase=DeepResearchPhase.GATHERING,
         )
         state.sub_queries = [
             SubQuery(id="sq-1", query="sub query 1", status="completed"),
@@ -181,7 +181,7 @@ class TestCrashRecoveryIntegration:
         state = DeepResearchState(
             id="test-crash-progress",
             original_query="test query",
-            phase=DeepResearchPhase.ANALYSIS,
+            phase=DeepResearchPhase.SUPERVISION,
         )
         state.sub_queries = [
             SubQuery(id="sq-1", query="q1", status="completed"),
