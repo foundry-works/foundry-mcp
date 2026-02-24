@@ -1,4 +1,4 @@
-# PLAN-CHECKLIST: Deep Research Architecture — Brief, Compression, Delegation & Tooling
+# PLAN-CHECKLIST: Deep Research Architecture — Brief, Compression & Delegation
 
 **Branch:** `tyler/foundry-mcp-20260223-0747`
 **Date:** 2026-02-24
@@ -227,59 +227,3 @@
   - Test: new sources properly merged into state with dedup
   - Test: total search budget respected across delegation rounds
 
----
-
-## Phase 5: Dynamic Tool Injection (MCP)
-
-- [ ] **5.1** Add MCP config to `ResearchConfig`
-  - `deep_research_enable_mcp_tools: bool = False` (opt-in)
-  - `deep_research_mcp_servers: list[MCPServerConfig] = []`
-  - Add `MCPServerConfig` dataclass: `url: str`, `tools: Optional[list[str]]`, `auth_required: bool = False`, `timeout: float = 30.0`
-  - Add `from_toml_dict()` parsing
-- [ ] **5.2** Create `providers/mcp_tools.py` — MCP tool loader
-  - `load_mcp_research_tools(servers: list[MCPServerConfig])` → list of tool wrappers
-  - Connect to MCP servers, list available tools, filter by config
-  - Cache loaded tools for session lifetime (avoid reconnecting per topic)
-  - Return: list of `MCPResearchTool` objects with name, description, invoke method
-- [ ] **5.3** Add `wrap_mcp_tool()` — tool error handling wrapper
-  - Timeout enforcement per tool call (configurable per server)
-  - Non-fatal error handling: catch exceptions, return error description as tool result
-  - Authentication error handling: log and skip (don't block research)
-  - Interaction-required errors (code -32003): log URL, skip
-  - Redact sensitive data in error logs
-- [ ] **5.4** Add `get_mcp_tool_descriptions()` — prompt integration
-  - Generate human-readable tool descriptions for researcher system prompt
-  - Format: tool name, description, parameter schema (abbreviated)
-  - Include usage guidance: "Use these specialized tools when search results indicate they would provide more specific data"
-- [ ] **5.5** Update `_execute_gathering_async()` — load MCP tools at phase init
-  - Load MCP tools once at gathering start
-  - Pass tool list to each topic researcher
-  - Cleanup: close MCP connections at gathering end
-- [ ] **5.6** Update `_execute_topic_research_async()` — accept tools parameter
-  - New parameter: `additional_tools: list[MCPResearchTool] = []`
-  - Pass through to ReAct loop
-- [ ] **5.7** Update reflection prompt — MCP tool awareness
-  - When MCP tools available, add tool descriptions to reflection system prompt
-  - Add new reflection field: `tool_to_call: Optional[str]` with `tool_args: Optional[dict]`
-  - Guidance: "If a specialized tool would provide more targeted information than a general search, recommend using it"
-- [ ] **5.8** Update ReAct loop — MCP tool execution
-  - After reflection, if `tool_to_call` is non-empty and tool exists:
-    - Invoke MCP tool via wrapper
-    - Process result as a `ResearchSource` entry
-    - Count as 1 tool call toward `max_tool_calls` budget
-  - MCP tool calls go through same dedup pipeline
-- [ ] **5.9** Add `tools_used: list[str]` to `TopicResearchResult`
-  - Track which tools (search, extract, MCP) were used per topic
-  - Include in audit events
-- [ ] **5.10** Add tests for MCP tool injection
-  - Test: MCP tools loaded from configured servers
-  - Test: tool descriptions included in researcher prompt
-  - Test: researcher can invoke MCP tool and use results
-  - Test: MCP tool failures non-fatal (research continues)
-  - Test: tool calls count toward iteration budget
-  - Test: `tools_used` tracks MCP tool usage
-  - Test: MCP disabled by default
-  - Test: authentication errors handled gracefully
-  - Test: tool name filtering works
-  - Test: cached tools reused across topic researchers
-  - Test: MCP connections cleaned up after gathering

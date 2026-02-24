@@ -1,4 +1,4 @@
-# PLAN: Deep Research Architecture — Brief, Compression, Delegation & Tooling
+# PLAN: Deep Research Architecture — Brief, Compression & Delegation
 
 **Branch:** `tyler/foundry-mcp-20260223-0747`
 **Date:** 2026-02-24
@@ -10,7 +10,7 @@
 
 ## Context
 
-Comparative analysis of foundry-mcp deep research against `open_deep_research` (RACE score 0.4344, #6 on Deep Research Bench) after completing two prior plan cycles (12 phases total) reveals five remaining structural gaps. Prior work aligned token management, compression, reflection patterns, and evaluation. What remains is:
+Comparative analysis of foundry-mcp deep research against `open_deep_research` (RACE score 0.4344, #6 on Deep Research Bench) after completing two prior plan cycles (12 phases total) reveals four remaining structural gaps. Prior work aligned token management, compression, reflection patterns, and evaluation. What remains is:
 
 1. **Query enrichment** — open_deep_research transforms raw user messages into a detailed research brief (source preferences, filled dimensions, specificity) before planning. foundry-mcp refines the query during planning but never creates a standalone research brief that drives all downstream phases.
 
@@ -20,9 +20,7 @@ Comparative analysis of foundry-mcp deep research against `open_deep_research` (
 
 4. **Supervision model** — open_deep_research's supervisor delegates *research tasks* (detailed paragraph-length directives) to parallel researcher agents via `ConductResearch`. foundry-mcp's supervisor generates follow-up *queries* (single-sentence strings). The delegation model produces more targeted, context-rich research assignments.
 
-5. **Tool extensibility** — open_deep_research dynamically loads MCP tools into researcher agents. foundry-mcp researchers have a fixed toolkit (search providers only). No mechanism for injecting custom tools at runtime.
-
-Phases are ordered by dependency chain: Phase 1 is independent with highest upstream impact. Phase 2 is prerequisite for Phase 4. Phase 3 enables Phase 5. Phase 4 depends on Phase 2 (supervisor needs compressed findings). Phase 5 depends on Phase 3 (flexible tool loop).
+Phases are ordered by dependency chain: Phase 1 is independent with highest upstream impact. Phase 2 is prerequisite for Phase 4. Phase 4 depends on Phase 2 (supervisor needs compressed findings).
 
 ---
 
@@ -286,69 +284,3 @@ Refactor supervision into a delegation-based model that mirrors open_deep_resear
 - Test: directive priorities influence execution order
 - Test: total search budget respected across delegation rounds
 
----
-
-## Phase 5: Dynamic Tool Injection (MCP)
-
-**Effort:** Medium | **Impact:** Medium
-**Files:**
-- `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py` (tool loading)
-- `src/foundry_mcp/core/research/providers/` (new MCP provider wrapper)
-- `src/foundry_mcp/config/research.py` (MCP config)
-- `src/foundry_mcp/core/research/models/deep_research.py` (tool tracking)
-
-### Problem
-
-open_deep_research dynamically loads MCP tools into researcher agents at runtime (utils.py `load_mcp_tools()`). Researchers can use custom tools alongside search — for example, a code analysis tool for technical research, a financial data API for market research, or a specialized academic database. This extensibility lets the system adapt to domain-specific research needs.
-
-foundry-mcp researchers have a fixed toolkit: search providers (Tavily, Perplexity, Google, Semantic Scholar) and the extract tool (Phase 3). There's no mechanism to inject custom tools at runtime. The MCP server infrastructure exists in foundry-mcp (it's an MCP server itself), but the deep research workflow doesn't consume external MCP tools.
-
-### Design
-
-Add dynamic tool loading for per-topic researchers:
-
-1. **MCP config**: New config section for MCP tool sources:
-   ```
-   deep_research_mcp_servers: list of {url, tools, auth_required}
-   ```
-   Each entry specifies an MCP server URL, optional tool name filter, and auth requirements.
-
-2. **Tool loading**: At gathering phase init, load tools from configured MCP servers. Cache loaded tools for the session.
-
-3. **Tool injection**: Each topic researcher receives the loaded MCP tools alongside search and extract tools. The reflection prompt includes tool descriptions so the researcher can decide when to use them.
-
-4. **Error handling**: MCP tool failures are non-fatal. Wrap each MCP tool call with timeout and error catching. Authentication errors surface as retry-able messages. Interaction-required errors (code -32003) are logged but don't block research.
-
-5. **Tool tracking**: `TopicResearchResult` tracks which tools were used per topic for observability.
-
-### Changes
-
-1. Add `deep_research_mcp_servers: list[MCPServerConfig] = []` to `ResearchConfig`
-2. Add `MCPServerConfig` dataclass: `url`, `tools` (optional filter), `auth_required`, `timeout`
-3. Create `providers/mcp_tools.py`:
-   - `load_mcp_research_tools()` — loads and caches tools from configured servers
-   - `wrap_mcp_tool()` — wraps tool with timeout, error handling, auth
-   - `get_mcp_tool_descriptions()` — generates prompt descriptions for loaded tools
-4. Update `_execute_gathering_async()` — load MCP tools at phase init, pass to topic researchers
-5. Update `_execute_topic_research_async()` — accept additional tools parameter
-6. Update reflection system prompt — include MCP tool descriptions when tools are available
-7. Add `tools_used: list[str]` field to `TopicResearchResult`
-8. Add MCP tool call support in ReAct loop:
-   - After reflection, if reflection recommends a tool call, execute it
-   - Tool results fed into next reflection cycle
-   - MCP tool calls count toward `max_tool_calls` budget
-9. Add `deep_research_enable_mcp_tools: bool = False` config flag (opt-in, disabled by default)
-10. Tests
-
-### Validation
-
-- Test: MCP tools loaded from configured servers
-- Test: tool descriptions included in researcher prompt when tools available
-- Test: researcher can invoke MCP tool and use results
-- Test: MCP tool failures are non-fatal (research continues)
-- Test: tool calls count toward iteration budget
-- Test: tools_used field tracks MCP tool usage
-- Test: MCP disabled by default (opt-in flag)
-- Test: authentication errors handled gracefully
-- Test: tool name filtering works (only specified tools loaded)
-- Test: cached tools reused across topic researchers within same session
