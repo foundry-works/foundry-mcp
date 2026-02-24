@@ -583,3 +583,108 @@ class ActionHandlersMixin:
                 content="",
                 error=f"Task '{research_id}' already completed",
             )
+
+    def _evaluate_research(self, research_id: Optional[str]) -> WorkflowResult:
+        """Evaluate a completed research report using LLM-as-judge.
+
+        Loads the research session, validates the report exists, runs
+        evaluation across 6 quality dimensions, and returns scores.
+
+        Args:
+            research_id: ID of the research session to evaluate
+
+        Returns:
+            WorkflowResult with evaluation scores or error
+        """
+        if not research_id:
+            return WorkflowResult(
+                success=False,
+                content="",
+                error="research_id is required for evaluation",
+            )
+
+        state = self.memory.load_deep_research(research_id)
+        if state is None:
+            return WorkflowResult(
+                success=False,
+                content="",
+                error=f"Research session '{research_id}' not found",
+            )
+
+        if not state.report:
+            return WorkflowResult(
+                success=False,
+                content="",
+                error="Research report not yet generated. Complete research first.",
+            )
+
+        # Resolve evaluation provider/model/timeout from config
+        eval_provider = getattr(self.config, "deep_research_evaluation_provider", None)
+        eval_model = getattr(self.config, "deep_research_evaluation_model", None)
+        eval_timeout = getattr(self.config, "deep_research_evaluation_timeout", 360.0)
+
+        from foundry_mcp.core.research.evaluation.evaluator import evaluate_report
+
+        # Run evaluation (handle sync/async boundary)
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        asyncio.run,
+                        evaluate_report(
+                            workflow=self,
+                            state=state,
+                            provider_id=eval_provider,
+                            model=eval_model,
+                            timeout=eval_timeout,
+                        ),
+                    )
+                    result = future.result()
+            else:
+                result = loop.run_until_complete(
+                    evaluate_report(
+                        workflow=self,
+                        state=state,
+                        provider_id=eval_provider,
+                        model=eval_model,
+                        timeout=eval_timeout,
+                    )
+                )
+        except RuntimeError:
+            result = asyncio.run(
+                evaluate_report(
+                    workflow=self,
+                    state=state,
+                    provider_id=eval_provider,
+                    model=eval_model,
+                    timeout=eval_timeout,
+                )
+            )
+
+        # If evaluate_report returned a WorkflowResult (error), pass through
+        if isinstance(result, WorkflowResult):
+            return result
+
+        # Build response from EvaluationResult
+        score_summary = "\n".join(
+            f"  {ds.name}: {ds.raw_score}/5 ({ds.normalized_score:.2f}) — {ds.rationale}"
+            for ds in result.dimension_scores
+        )
+        content = (
+            f"Evaluation of research '{research_id}':\n"
+            f"Composite Score: {result.composite_score:.3f} (0-1 scale)\n\n"
+            f"Dimension Scores:\n{score_summary}"
+        )
+
+        return WorkflowResult(
+            success=True,
+            content=content,
+            metadata={
+                "research_id": research_id,
+                "evaluation": result.to_dict(),
+                "composite_score": result.composite_score,
+            },
+        )

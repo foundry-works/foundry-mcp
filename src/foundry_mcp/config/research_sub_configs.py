@@ -176,3 +176,8 @@ class DeepResearchConfig:
     digest_fetch_pdfs: bool = False
     archive_content: bool = False
     archive_retention_days: int = 30
+
+    # Evaluation configuration
+    evaluation_provider: Optional[str] = None
+    evaluation_model: Optional[str] = None
+    evaluation_timeout: float = 360.0

@@ -29,6 +29,7 @@ _ACTION_SUMMARY = {
     "deep-research-report": "Get final report from deep research",
     "deep-research-list": "List deep research sessions",
     "deep-research-delete": "Delete a deep research session",
+    "deep-research-evaluate": "Evaluate research report quality (LLM-as-judge)",
     "thread-list": "List conversation threads",
     "thread-get": "Get full thread details including messages",
     "thread-delete": "Delete a conversation thread",

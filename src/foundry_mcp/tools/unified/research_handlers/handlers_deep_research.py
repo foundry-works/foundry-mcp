@@ -34,6 +34,10 @@ _DR_DELETE_SCHEMA = {
     "research_id": Str(required=True),
 }
 
+_DR_EVALUATE_SCHEMA = {
+    "research_id": Str(required=True),
+}
+
 
 def _handle_deep_research(
     *,
@@ -237,6 +241,38 @@ def _handle_deep_research_report(
                 error_code=ErrorCode.NOT_FOUND,
                 error_type=ErrorType.NOT_FOUND,
                 remediation="Ensure research is complete or use deep-research-status to check",
+            )
+        )
+
+
+def _handle_deep_research_evaluate(
+    *,
+    research_id: Optional[str] = None,
+    **kwargs: Any,
+) -> dict:
+    """Handle deep-research-evaluate action (LLM-as-judge quality scoring)."""
+    payload = {"research_id": research_id}
+    err = validate_payload(payload, _DR_EVALUATE_SCHEMA, tool_name="research", action="deep-research-evaluate")
+    if err:
+        return err
+
+    config = _get_config()
+    workflow = DeepResearchWorkflow(config.research, _get_memory())
+
+    result = workflow.execute(
+        research_id=research_id,
+        action="evaluate",
+    )
+
+    if result.success:
+        return asdict(success_response(data=dict(result.metadata) if result.metadata else {}))
+    else:
+        return asdict(
+            error_response(
+                result.error or "Evaluation failed",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+                remediation="Ensure research is complete with a generated report",
             )
         )
 

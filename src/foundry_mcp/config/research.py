@@ -132,6 +132,11 @@ class ResearchConfig:
     deep_research_global_compression_model: Optional[str] = None  # Model override for global compression
     deep_research_global_compression_timeout: float = 360.0  # Timeout for global compression LLM call (seconds)
 
+    # Research quality evaluation (LLM-as-judge)
+    deep_research_evaluation_provider: Optional[str] = None  # LLM provider for evaluation (uses research-tier if not set)
+    deep_research_evaluation_model: Optional[str] = None  # Model override for evaluation
+    deep_research_evaluation_timeout: float = 360.0  # Timeout for evaluation LLM call (seconds)
+
     # Multi-model cost optimization — role-based model hierarchy (Phase 6)
     # "research" role: main reasoning for analysis, planning, clarification (strongest available)
     deep_research_research_provider: Optional[str] = None
@@ -372,6 +377,12 @@ class ResearchConfig:
             deep_research_global_compression_model=data.get("deep_research_global_compression_model"),
             deep_research_global_compression_timeout=float(
                 data.get("deep_research_global_compression_timeout", 360.0)
+            ),
+            # Research quality evaluation (LLM-as-judge)
+            deep_research_evaluation_provider=data.get("deep_research_evaluation_provider"),
+            deep_research_evaluation_model=data.get("deep_research_evaluation_model"),
+            deep_research_evaluation_timeout=float(
+                data.get("deep_research_evaluation_timeout", 360.0)
             ),
             # Multi-model cost optimization — role-based hierarchy (Phase 6)
             deep_research_research_provider=data.get("deep_research_research_provider"),
@@ -963,6 +974,7 @@ class ResearchConfig:
         "compression": ["compression"],
         "global_compression": ["global_compression", "compression", "research"],
         "clarification": ["clarification", "research", "analysis"],
+        "evaluation": ["evaluation", "research", "analysis"],
     }
 
     def resolve_model_for_role(self, role: str) -> Tuple[str, Optional[str]]:
@@ -1359,4 +1371,7 @@ class ResearchConfig:
             digest_fetch_pdfs=self.deep_research_digest_fetch_pdfs,
             archive_content=self.deep_research_archive_content,
             archive_retention_days=self.deep_research_archive_retention_days,
+            evaluation_provider=self.deep_research_evaluation_provider,
+            evaluation_model=self.deep_research_evaluation_model,
+            evaluation_timeout=self.deep_research_evaluation_timeout,
         )

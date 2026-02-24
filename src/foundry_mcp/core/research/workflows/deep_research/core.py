@@ -196,11 +196,12 @@ class DeepResearchWorkflow(
         - status: Get current status
         - report: Get final report
         - cancel: Cancel running task
+        - evaluate: Evaluate completed report quality (LLM-as-judge)
 
         Args:
             query: Research query (required for 'start')
-            research_id: Session ID (required for continue/status/report/cancel)
-            action: One of 'start', 'continue', 'status', 'report', 'cancel'
+            research_id: Session ID (required for continue/status/report/cancel/evaluate)
+            action: One of 'start', 'continue', 'status', 'report', 'cancel', 'evaluate'
             provider_id: Provider for LLM operations
             system_prompt: Optional custom system prompt
             max_iterations: Maximum refinement iterations (default: 3)
@@ -245,11 +246,13 @@ class DeepResearchWorkflow(
                 return self._get_report(research_id=research_id)
             elif action == "cancel":
                 return self._cancel_research(research_id=research_id)
+            elif action == "evaluate":
+                return self._evaluate_research(research_id=research_id)
             else:
                 return WorkflowResult(
                     success=False,
                     content="",
-                    error=f"Unknown action '{action}'. Use: start, continue, status, report, cancel",
+                    error=f"Unknown action '{action}'. Use: start, continue, status, report, cancel, evaluate",
                 )
         except Exception as exc:
             # Catch all exceptions to ensure graceful failure

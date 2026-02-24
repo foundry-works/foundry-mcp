@@ -103,44 +103,66 @@
 
 ## Phase 4: Research Quality Evaluation Framework
 
-- [ ] **4.1** Create evaluation package structure
+- [x] **4.1** Create evaluation package structure
   - `src/foundry_mcp/core/research/evaluation/__init__.py`
   - `src/foundry_mcp/core/research/evaluation/evaluator.py`
   - `src/foundry_mcp/core/research/evaluation/dimensions.py`
   - `src/foundry_mcp/core/research/evaluation/scoring.py`
-- [ ] **4.2** Define 6 evaluation dimensions with rubrics
+- [x] **4.2** Define 6 evaluation dimensions with rubrics
   - Depth (1-5): thoroughness of investigation
   - Source Quality (1-5): credibility, diversity, recency
   - Analytical Rigor (1-5): reasoning quality, evidence use
   - Completeness (1-5): coverage of all query dimensions
   - Groundedness (1-5): claims supported by cited evidence
   - Structure (1-5): organization, readability, citations
-- [ ] **4.3** Implement LLM-as-judge evaluator
+- [x] **4.3** Implement LLM-as-judge evaluator
   - Takes: research query, final report, source list
   - Produces: per-dimension score + rationale + composite score (0-1)
-  - Uses strong model (research-tier) for evaluation accuracy
+  - Uses strong model (research-tier) via role-based resolution ("evaluation" role)
   - Handles structured output parsing with fallback
-- [ ] **4.4** Add scoring normalization and composite calculation
-  - Normalize each dimension to 0-1
-  - Weighted composite (equal weights initially, configurable later)
-  - Confidence interval based on score variance across dimensions
-- [ ] **4.5** Add evaluation action to research action handler
-  - `action="evaluate"` with `research_id` parameter
-  - Loads completed research report from session
+  - Low temperature (0.1) for scoring consistency
+  - Integrates with `execute_llm_call()` lifecycle (heartbeat, audit, metrics, token-limit recovery)
+- [x] **4.4** Add scoring normalization and composite calculation
+  - Normalize each dimension to 0-1 via `(raw - 1) / 4`
+  - Weighted composite (equal weights initially, configurable via `compute_composite(weights=)`)
+  - Score variance across dimensions for confidence assessment
+  - Clamping of out-of-range LLM scores to [1, 5]
+- [x] **4.5** Add evaluation action to research action handler
+  - `action="evaluate"` with `research_id` parameter in `core.py` dispatch
+  - `_evaluate_research()` method in `ActionHandlersMixin`
+  - `_handle_deep_research_evaluate()` MCP handler in `handlers_deep_research.py`
+  - Registered as `deep-research-evaluate` action in router
   - Returns evaluation results in standard response envelope
-- [ ] **4.6** Add config keys for evaluation
+- [x] **4.6** Add config keys for evaluation
   - `deep_research_evaluation_provider`
   - `deep_research_evaluation_model`
-  - Update `ResearchConfig` and `from_dict()`
-- [ ] **4.7** Store evaluation results in session metadata
-  - `state.metadata["evaluation"]` with scores, rationales, composite
-- [ ] **4.8** Add test suite
-  - Test: consistent scores for identical reports (low variance)
+  - `deep_research_evaluation_timeout` (default 360s)
+  - Added "evaluation" to `_ROLE_RESOLUTION_CHAIN` (falls back to research → analysis)
+  - Updated `from_toml_dict()` parsing for all new config keys
+  - Updated `DeepResearchConfig` sub-config with evaluation fields
+- [x] **4.7** Store evaluation results in session metadata
+  - `state.metadata["evaluation"]` with scores, rationales, composite, weights, variance
+  - State persisted via `workflow.memory.save_deep_research()`
+  - Audit events: `evaluation.started`, `evaluation.completed`, `evaluation.failed`
+- [x] **4.8** Add test suite (70 tests)
+  - Test: 6 dimensions defined with complete rubrics (scores 1-5)
+  - Test: dimension names unique, frozen, and lookup works
+  - Test: score normalization (1→0.0, 3→0.5, 5→1.0, out-of-range raises)
+  - Test: composite normalizes to 0-1 for all input combinations
+  - Test: dimensions produce independent scores (not all identical)
   - Test: poor reports score lower than comprehensive reports
-  - Test: dimensions produce independent scores
-  - Test: composite normalizes to 0-1
+  - Test: variance zero for uniform, nonzero for varied scores
+  - Test: custom weights change composite
+  - Test: prompt includes query, report, sources, all rubrics, JSON instruction
+  - Test: long reports truncated, source count limited
+  - Test: parsing handles code blocks, surrounding text, missing dimensions
+  - Test: invalid JSON / missing scores key raises
   - Test: evaluation results persisted in session metadata
-  - Test: action handler returns evaluation in response envelope
+  - Test: audit events emitted (started, completed)
+  - Test: LLM failure and parse failure return error WorkflowResult
+  - Test: config fields, TOML parsing, role resolution chain
+  - Test: action handler validation (missing research_id, missing report, not found)
+  - Test: no regression in existing tests (2039 passed)
 
 ---
 
