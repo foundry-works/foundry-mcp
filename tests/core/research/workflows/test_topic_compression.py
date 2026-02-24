@@ -587,13 +587,13 @@ class TestCompressTopicFindings:
         sys_prompt = captured_system[0]
         # Key open_deep_research-aligned directives
         assert "preserved verbatim" in sys_prompt
-        assert "don't lose" in sys_prompt.lower()
-        assert "later LLM will merge" in sys_prompt
+        assert "lose any sources" in sys_prompt.lower()
+        assert "later LLM will be used to merge" in sys_prompt
         assert "inline citations" in sys_prompt.lower() or "[1]" in sys_prompt
-        assert "Queries Made" in sys_prompt
+        assert "Queries and Tool Calls Made" in sys_prompt
         assert "Comprehensive Findings" in sys_prompt
-        assert "Source List" in sys_prompt
-        assert "DO NOT" in sys_prompt
+        assert "Sources" in sys_prompt
+        assert "don't summarize" in sys_prompt.lower()
 
     @pytest.mark.asyncio
     async def test_fallback_on_provider_failure(self) -> None:

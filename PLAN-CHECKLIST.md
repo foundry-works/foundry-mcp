@@ -54,38 +54,34 @@
 
 ## Phase 2: Pass Full Message History to Compression
 
-- [ ] **2.1** Add `message_history` field to `TopicResearchResult`
-  - Field: `message_history: list[dict[str, str]] = Field(default_factory=list)`
-  - Exclude from compact repr / summary views (can be large)
-  - Ensure Pydantic serialization backward-compat (default empty list)
-- [ ] **2.2** Store message history on result in `topic_research.py`
-  - At end of ReAct loop (after line ~540), copy `message_history` to `result.message_history`
-  - Include all entries: assistant responses, tool results, system messages
-  - Cap at reasonable size if needed (e.g., last 50 entries)
-- [ ] **2.3** Update compression prompt to use message history when available
+- [x] **2.1** Add `message_history` field to `TopicResearchResult`
+  - Field: `message_history: list[dict[str, str]] = Field(default_factory=list)` *(added to models/deep_research.py)*
+  - Default empty list ensures Pydantic backward-compat
+  - Roundtrip serialization verified via test
+- [x] **2.2** Store message history on result in `topic_research.py`
+  - At end of ReAct loop, `result.message_history = list(message_history)` *(added before compile/compression)*
+  - Includes all entries: assistant responses, tool results (web_search, think, extract, research_complete)
+- [x] **2.3** Update compression prompt to use message history when available
   - In `_compress_single_topic_async()` (compression.py):
-    - Check `topic_result.message_history` — if non-empty, build prompt from message history
-    - Format: chronological tool calls and AI responses (role + content)
-    - Apply `max_content_length` cap to total message history block
-    - Truncate oldest messages first (preserve most recent reasoning)
-  - When `message_history` is empty: fall back to existing structured metadata prompt (no breaking change)
-- [ ] **2.4** Align compression system prompt with open_deep_research structure
-  - Adopt `compress_research_system_prompt` structure:
-    - `<Task>`: Clean up findings, preserve ALL relevant information verbatim
-    - `<Guidelines>`: 6 rules — comprehensive, include ALL sources, inline citations, Sources section, preserve all sources, don't lose sources
-    - `<Output Format>`: "Queries and Tool Calls Made" → "Fully Comprehensive Findings" → "Sources list"
-    - `<Citation Rules>`: Sequential numbering `[1] Title: URL`, no gaps
-    - Critical reminder: "preserve verbatim — don't rewrite, summarize, or paraphrase"
-  - Keep existing structured metadata as supplementary context (query text, iteration count, reflection notes)
-- [ ] **2.5** Add tests for message-history-based compression
-  - Test: message history stored on TopicResearchResult after ReAct loop
-  - Test: compression prompt includes raw message history when available
-  - Test: compression prompt falls back to structured metadata when message_history empty
-  - Test: message history truncated to max_content_length (oldest dropped first)
-  - Test: compression output includes `[N] Title: URL` citation format
-  - Test: compression output includes "Queries and Tool Calls Made" section
-  - Test: existing compression tests pass with new prompt structure (backward compat)
-- [ ] **2.6** Verify existing deep research tests still pass
+    - When `topic_result.message_history` non-empty → `_build_message_history_prompt()` formats chronological conversation
+    - `max_content_length` cap applied, oldest messages truncated first (preserves recent reasoning)
+    - When `message_history` empty → `_build_structured_metadata_prompt()` fallback (no breaking change)
+- [x] **2.4** Align compression system prompt with open_deep_research structure
+  - `<Task>`: Clean up findings, preserve ALL relevant information verbatim *(present)*
+  - `<Guidelines>`: 6 rules matching open_deep_research's compress_research_system_prompt *(present)*
+  - `<Output Format>`: "Queries and Tool Calls Made" → "Fully Comprehensive Findings" → "Sources" *(present)*
+  - `<Citation Rules>`: Sequential `[1] Source Title: URL`, no gaps *(present)*
+  - Critical Reminder: "preserved verbatim ... don't rewrite, don't summarize, don't paraphrase" *(present)*
+- [x] **2.5** Add tests for message-history-based compression
+  - Test: message_history field default, set/get, model_dump, backward compat deserialization *(TestMessageHistoryField — 4 tests)*
+  - Test: compression prompt includes raw message history when available *(TestCompressionPromptDispatch — 2 tests)*
+  - Test: compression prompt falls back to structured metadata when message_history empty *(TestCompressionPromptDispatch)*
+  - Test: message history truncated to max_content_length, oldest dropped first *(TestMessageHistoryTruncation + TestBuildMessageHistoryPrompt — 3 tests)*
+  - Test: citation format `[N] Title: URL` in system prompt *(TestCompressionSystemPromptAlignment — 5 tests)*
+  - Test: "Queries and Tool Calls Made" in output format *(TestCompressionSystemPromptAlignment)*
+  - Test: existing compression tests pass with new prompt structure *(131 passed, 0 failed)*
+  - Total new tests: 29 in test_message_history_compression.py
+- [x] **2.6** Verify existing deep research tests still pass *(2010 passed, 6 skipped, 0 failures)*
 
 ---
 

@@ -491,6 +491,12 @@ class TopicResearchMixin:
             if loop_should_break:
                 break
 
+        # --- Persist message history for downstream compression ---
+        # The raw conversation gives compression the researcher's full
+        # reasoning chain, failed attempts, and iterative refinements —
+        # significantly better than structured metadata alone.
+        result.message_history = list(message_history)
+
         # --- Compile per-topic summary ---
         # Merge accumulated tokens under lock
         async with state_lock:

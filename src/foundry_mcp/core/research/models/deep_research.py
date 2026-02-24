@@ -51,6 +51,15 @@ class TopicResearchResult(BaseModel):
         default_factory=list,
         description="IDs of sources discovered by this topic researcher",
     )
+    message_history: list[dict[str, str]] = Field(
+        default_factory=list,
+        description=(
+            "Raw message history from the ReAct research loop. Contains "
+            "all assistant responses, tool results, and system messages in "
+            "chronological order. Passed to compression for higher-quality "
+            "citation-rich summaries that preserve the researcher's reasoning chain."
+        ),
+    )
     compressed_findings: Optional[str] = Field(
         default=None,
         description=(

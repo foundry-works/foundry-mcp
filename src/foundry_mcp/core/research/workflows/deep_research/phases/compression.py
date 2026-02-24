@@ -22,6 +22,170 @@ from foundry_mcp.core.research.models.deep_research import DeepResearchState, To
 logger = logging.getLogger(__name__)
 
 
+# ------------------------------------------------------------------
+# Prompt construction helpers for _compress_single_topic_async
+# ------------------------------------------------------------------
+
+
+def _build_message_history_prompt(
+    *,
+    query_text: str,
+    message_history: list[dict[str, str]],
+    topic_sources: list[Any],
+    max_content_length: int,
+) -> str:
+    """Build compression user prompt from raw ReAct message history.
+
+    Passes the researcher's full conversation — tool calls, results,
+    reasoning — to the compression model, matching open_deep_research's
+    ``compress_research`` approach.  Oldest messages are truncated first
+    when the total exceeds *max_content_length*.
+
+    Args:
+        query_text: The research sub-query text.
+        message_history: Raw ReAct conversation (role + content dicts).
+        topic_sources: Sources belonging to this topic (for source list).
+        max_content_length: Character cap for the message history block.
+
+    Returns:
+        Formatted user prompt string.
+    """
+    # Format each message in chronological order
+    history_lines: list[str] = []
+    for msg in message_history:
+        role = msg.get("role", "unknown")
+        tool_name = msg.get("tool", "")
+        content = msg.get("content", "")
+
+        if role == "assistant":
+            history_lines.append(f"[Assistant]\n{content}")
+        elif role == "tool":
+            label = f"[Tool: {tool_name}]" if tool_name else "[Tool Result]"
+            history_lines.append(f"{label}\n{content}")
+        else:
+            history_lines.append(f"[{role}]\n{content}")
+
+    history_block = "\n\n".join(history_lines)
+
+    # Truncate oldest messages first if over budget
+    if len(history_block) > max_content_length:
+        # Walk forward from the end, keeping the most recent messages
+        kept: list[str] = []
+        remaining = max_content_length
+        for line in reversed(history_lines):
+            entry_len = len(line) + 2  # +2 for "\n\n" separator
+            if remaining >= entry_len:
+                kept.append(line)
+                remaining -= entry_len
+            else:
+                break
+        kept.reverse()
+        if kept:
+            history_block = "\n\n".join(kept)
+        else:
+            # Single very large message — hard-truncate from end
+            history_block = history_block[-max_content_length:]
+
+    # Build source reference list so the model can map citations
+    source_ref_lines: list[str] = []
+    for idx, src in enumerate(topic_sources, 1):
+        url_part = f": {src.url}" if src.url else ""
+        source_ref_lines.append(f"[{idx}] {src.title}{url_part}")
+    source_ref = "\n".join(source_ref_lines)
+
+    return (
+        f"Research sub-query: {query_text}\n\n"
+        f"Below is the full researcher conversation (tool calls and "
+        f"responses) for this topic:\n\n"
+        f"{history_block}\n\n"
+        f"Sources ({len(topic_sources)} total):\n"
+        f"{source_ref}\n\n"
+        f"All above messages are about research conducted by an AI "
+        f"Researcher. Please clean up these findings.\n\n"
+        f"DO NOT summarize the information. I want the raw information "
+        f"returned, just in a cleaner format. Make sure all relevant "
+        f"information is preserved - you can rewrite findings verbatim."
+    )
+
+
+def _build_structured_metadata_prompt(
+    *,
+    query_text: str,
+    topic_result: "TopicResearchResult",
+    topic_sources: list[Any],
+    max_content_length: int,
+) -> str:
+    """Build compression user prompt from structured metadata (fallback).
+
+    Used when ``message_history`` is empty — e.g., legacy results or
+    results loaded from saved state that predate the message history field.
+
+    Args:
+        query_text: The research sub-query text.
+        topic_result: Topic result with structured metadata fields.
+        topic_sources: Sources belonging to this topic.
+        max_content_length: Character cap for source content.
+
+    Returns:
+        Formatted user prompt string.
+    """
+    # Search iteration history
+    iteration_lines: list[str] = []
+
+    iteration_lines.append(
+        f'  1. Query: "{query_text}" '
+        f"-> {topic_result.sources_found} sources found"
+    )
+    if topic_result.reflection_notes:
+        iteration_lines.append(
+            f"     Reflection: {topic_result.reflection_notes[0]}"
+        )
+
+    for i, refined_q in enumerate(topic_result.refined_queries):
+        iter_num = i + 2
+        reflection = (
+            topic_result.reflection_notes[i + 1]
+            if i + 1 < len(topic_result.reflection_notes)
+            else ""
+        )
+        iteration_lines.append(f'  {iter_num}. Query: "{refined_q}"')
+        if reflection:
+            iteration_lines.append(
+                f"     Reflection: {reflection}"
+            )
+
+    if topic_result.early_completion and topic_result.completion_rationale:
+        iteration_lines.append(
+            f"  Completion: {topic_result.completion_rationale}"
+        )
+
+    iterations_block = "\n".join(iteration_lines)
+
+    # Source block with full content
+    source_lines: list[str] = []
+    for idx, src in enumerate(topic_sources, 1):
+        source_lines.append(f"[{idx}] Title: {src.title}")
+        if src.url:
+            source_lines.append(f"    URL: {src.url}")
+        content = src.content or src.snippet or ""
+        if content:
+            if len(content) > max_content_length:
+                content = content[:max_content_length] + "..."
+            source_lines.append(f"    Content: {content}")
+        source_lines.append("")
+
+    sources_block = "\n".join(source_lines)
+
+    return (
+        f"Research sub-query: {query_text}\n\n"
+        f"Search iterations:\n{iterations_block}\n\n"
+        f"Sources ({len(topic_sources)} total):\n\n"
+        f"{sources_block}\n"
+        "Clean up these findings preserving all relevant "
+        "information with inline citations."
+    )
+
+
 class CompressionMixin:
     """Per-topic compression methods. Mixed into DeepResearchWorkflow.
 
@@ -100,120 +264,91 @@ class CompressionMixin:
         )
 
         # ---------------------------------------------------------
-        # Build full research context (aligned with open_deep_research)
+        # System prompt — aligned with open_deep_research's
+        # compress_research_system_prompt structure
         # ---------------------------------------------------------
 
-        # Search iteration history
-        iteration_lines: list[str] = []
-
-        # First iteration: original query
-        iteration_lines.append(
-            f'  1. Query: "{query_text}" '
-            f"-> {topic_result.sources_found} sources found"
-        )
-        if topic_result.reflection_notes:
-            iteration_lines.append(
-                f"     Reflection: {topic_result.reflection_notes[0]}"
-            )
-
-        # Subsequent iterations: refined queries
-        for i, refined_q in enumerate(topic_result.refined_queries):
-            iter_num = i + 2
-            reflection = (
-                topic_result.reflection_notes[i + 1]
-                if i + 1 < len(topic_result.reflection_notes)
-                else ""
-            )
-            iteration_lines.append(f'  {iter_num}. Query: "{refined_q}"')
-            if reflection:
-                iteration_lines.append(
-                    f"     Reflection: {reflection}"
-                )
-
-        # Completion info
-        if topic_result.early_completion and topic_result.completion_rationale:
-            iteration_lines.append(
-                f"  Completion: {topic_result.completion_rationale}"
-            )
-
-        iterations_block = "\n".join(iteration_lines)
-
-        # Source block with full content (capped at max_content_length)
-        source_lines: list[str] = []
-        for idx, src in enumerate(topic_sources, 1):
-            source_lines.append(f"[{idx}] Title: {src.title}")
-            if src.url:
-                source_lines.append(f"    URL: {src.url}")
-            content = src.content or src.snippet or ""
-            if content:
-                if len(content) > max_content_length:
-                    content = content[:max_content_length] + "..."
-                source_lines.append(f"    Content: {content}")
-            source_lines.append("")
-
-        sources_block = "\n".join(source_lines)
-
-        # System prompt — aligned with open_deep_research directives
         system_prompt = (
             "You are a research assistant that has conducted research on "
-            "a topic by searching the web and gathering sources. Your job "
+            "a topic by calling several tools and web searches. Your job "
             "is now to clean up the findings, but preserve all of the "
-            "relevant statements and information gathered.\n\n"
+            "relevant statements and information that the researcher has "
+            "gathered.\n\n"
             "<Task>\n"
-            "Clean up information gathered from web searches in the "
-            "context below. All relevant information should be repeated "
-            "and rewritten verbatim, but in a cleaner format. The purpose "
-            "of this step is just to remove any obviously irrelevant or "
-            "duplicative information. For example, if three sources all "
-            "say the same thing, you could consolidate them with "
-            "appropriate citations.\n"
+            "You need to clean up information gathered from tool calls "
+            "and web searches in the existing messages. All relevant "
+            "information should be repeated and rewritten verbatim, but "
+            "in a cleaner format. The purpose of this step is just to "
+            "remove any obviously irrelevant or duplicative information. "
+            "For example, if three sources all say the same thing, you "
+            "could consolidate them with appropriate citations.\n"
             "Only these fully comprehensive cleaned findings are going to "
-            "be returned, so it's crucial that you don't lose any "
-            "information.\n"
+            "be returned to the user, so it's crucial that you don't "
+            "lose any information.\n"
             "</Task>\n\n"
             "<Guidelines>\n"
-            "1. Your output should be fully comprehensive and include ALL "
-            "of the information and sources gathered. Repeat key "
-            "information verbatim.\n"
-            "2. The output can be as long as necessary to return ALL "
-            "information.\n"
-            "3. Include inline citations [1], [2], etc. for each source.\n"
-            "4. Include a Source List at the end with all sources and "
-            "corresponding citations.\n"
-            "5. Make sure to include ALL sources and how they were used.\n"
-            "6. A later LLM will merge this with other topic reports "
-            "- don't lose any sources or information.\n"
+            "1. Your output findings should be fully comprehensive and "
+            "include ALL of the information and sources that the "
+            "researcher has gathered from tool calls and web searches. "
+            "It is expected that you repeat key information verbatim.\n"
+            "2. This report can be as long as necessary to return ALL of "
+            "the information that the researcher has gathered.\n"
+            "3. In your report, you should return inline citations for "
+            "each source that the researcher found.\n"
+            "4. You should include a Sources section at the end of the "
+            "report that lists all of the sources the researcher found "
+            "with corresponding citations, cited against statements in "
+            "the report.\n"
+            "5. Make sure to include ALL of the sources that the "
+            "researcher gathered in the report, and how they were used "
+            "to answer the question!\n"
+            "6. It's really important not to lose any sources. A later "
+            "LLM will be used to merge this report with others, so "
+            "having all of the sources is critical.\n"
             "</Guidelines>\n\n"
             "<Output Format>\n"
-            "## Queries Made\n"
-            "List of all search queries and iterations\n\n"
-            "## Comprehensive Findings\n"
-            "All findings with inline citations [1], [2], etc.\n"
-            "Group by theme when applicable.\n\n"
-            "## Source List\n"
-            "[1] Title - URL\n"
-            "[2] Title - URL\n"
+            "The report should be structured like this:\n"
+            "**Queries and Tool Calls Made**\n"
+            "**Fully Comprehensive Findings**\n"
+            "**Sources**\n"
             "</Output Format>\n\n"
             "<Citation Rules>\n"
-            "- Assign each unique URL a single citation number\n"
-            "- Number sources sequentially without gaps (1, 2, 3, ...)\n"
-            "- Format: [N] Source Title - URL\n"
+            "- Assign each unique URL a single citation number in your "
+            "text\n"
+            "- End with ### Sources that lists each source with "
+            "corresponding numbers\n"
+            "- IMPORTANT: Number sources sequentially without gaps "
+            "(1, 2, 3, 4, ...) in the final list regardless of which "
+            "sources you choose\n"
+            "- Example format:\n"
+            "  [1] Source Title: URL\n"
+            "  [2] Source Title: URL\n"
             "</Citation Rules>\n\n"
-            "CRITICAL: It is extremely important that any information "
-            "even remotely relevant is preserved verbatim. DO NOT "
-            "summarize, paraphrase, or rewrite findings - only clean up "
-            "the format."
+            "Critical Reminder: It is extremely important that any "
+            "information that is even remotely relevant to the research "
+            "topic is preserved verbatim (e.g. don't rewrite it, don't "
+            "summarize it, don't paraphrase it)."
         )
 
-        # User prompt — includes full research context
-        user_prompt = (
-            f"Research sub-query: {query_text}\n\n"
-            f"Search iterations:\n{iterations_block}\n\n"
-            f"Sources ({len(topic_sources)} total):\n\n"
-            f"{sources_block}\n"
-            "Clean up these findings preserving all relevant "
-            "information with inline citations."
-        )
+        # ---------------------------------------------------------
+        # Build user prompt — prefer raw message history when available
+        # ---------------------------------------------------------
+
+        if topic_result.message_history:
+            user_prompt = _build_message_history_prompt(
+                query_text=query_text,
+                message_history=topic_result.message_history,
+                topic_sources=topic_sources,
+                max_content_length=max_content_length,
+            )
+        else:
+            # Fallback: build from structured metadata (backward compat)
+            user_prompt = _build_structured_metadata_prompt(
+                query_text=query_text,
+                topic_result=topic_result,
+                topic_sources=topic_sources,
+                max_content_length=max_content_length,
+            )
 
         # Use execute_llm_call for progressive token-limit recovery
         call_result = await execute_llm_call(
