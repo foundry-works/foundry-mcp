@@ -10,6 +10,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
@@ -686,3 +687,135 @@ def content_similarity(text_a: str, text_b: str) -> float:
     union = len(shingles_a | shingles_b)
 
     return intersection / union if union > 0 else 0.0
+
+
+# ---------------------------------------------------------------------------
+# Novelty tagging for researcher stop decisions (Phase 3)
+# ---------------------------------------------------------------------------
+
+# Thresholds for novelty classification
+_NOVELTY_DUPLICATE_THRESHOLD: float = 0.7
+_NOVELTY_RELATED_THRESHOLD: float = 0.3
+
+
+@dataclass
+class NoveltyTag:
+    """Novelty classification for a single search result.
+
+    Attributes:
+        tag: Display tag — ``"[NEW]"``, ``"[RELATED: <title>]"``, or ``"[DUPLICATE]"``
+        category: One of ``"new"``, ``"related"``, ``"duplicate"``
+        similarity: Highest similarity score against existing sources
+        matched_title: Title of the most similar existing source (if any)
+    """
+
+    tag: str
+    category: str
+    similarity: float
+    matched_title: Optional[str] = None
+
+
+def compute_novelty_tag(
+    new_content: str,
+    new_url: Optional[str],
+    existing_sources: Sequence[tuple[str, str, Optional[str]]],
+    *,
+    duplicate_threshold: float = _NOVELTY_DUPLICATE_THRESHOLD,
+    related_threshold: float = _NOVELTY_RELATED_THRESHOLD,
+) -> NoveltyTag:
+    """Classify a new search result's novelty against existing sources.
+
+    Uses a two-pass approach: first checks URL domain overlap for a cheap
+    signal, then falls back to content similarity via ``content_similarity()``.
+
+    Args:
+        new_content: Content (or summary) of the new source.
+        new_url: URL of the new source (may be None).
+        existing_sources: List of ``(content, title, url)`` tuples for
+            sources already found for this sub-query.
+        duplicate_threshold: Similarity >= this is ``[DUPLICATE]``.
+        related_threshold: Similarity >= this (and < duplicate) is ``[RELATED]``.
+
+    Returns:
+        NoveltyTag with classification and metadata.
+    """
+    if not existing_sources:
+        return NoveltyTag(tag="[NEW]", category="new", similarity=0.0)
+
+    best_sim = 0.0
+    best_title: Optional[str] = None
+
+    for ex_content, ex_title, ex_url in existing_sources:
+        # Quick URL-domain check: same domain boosts similarity estimate
+        domain_boost = 0.0
+        if new_url and ex_url:
+            new_domain = _extract_domain(new_url)
+            ex_domain = _extract_domain(ex_url)
+            if new_domain and ex_domain and new_domain == ex_domain:
+                domain_boost = 0.1
+
+        sim = content_similarity(new_content, ex_content) + domain_boost
+        sim = min(sim, 1.0)  # cap at 1.0
+
+        if sim > best_sim:
+            best_sim = sim
+            best_title = ex_title
+
+    if best_sim >= duplicate_threshold:
+        return NoveltyTag(
+            tag="[DUPLICATE]",
+            category="duplicate",
+            similarity=best_sim,
+            matched_title=best_title,
+        )
+    elif best_sim >= related_threshold:
+        # Truncate title for readability
+        display_title = best_title[:60] + "..." if best_title and len(best_title) > 60 else best_title
+        return NoveltyTag(
+            tag=f"[RELATED: {display_title}]",
+            category="related",
+            similarity=best_sim,
+            matched_title=best_title,
+        )
+    else:
+        return NoveltyTag(tag="[NEW]", category="new", similarity=best_sim)
+
+
+def _extract_domain(url: str) -> Optional[str]:
+    """Extract the domain from a URL for cheap overlap detection.
+
+    Args:
+        url: Full URL string.
+
+    Returns:
+        Lowercase domain (e.g. ``"example.com"``), or None on parse failure.
+    """
+    try:
+        # Strip protocol and path
+        if "://" in url:
+            url = url.split("://", 1)[1]
+        domain = url.split("/", 1)[0].split("?", 1)[0].lower()
+        # Remove www. prefix for consistency
+        if domain.startswith("www."):
+            domain = domain[4:]
+        return domain or None
+    except (IndexError, AttributeError):
+        return None
+
+
+def build_novelty_summary(
+    tags: list[NoveltyTag],
+) -> str:
+    """Build a one-line novelty summary for the search results header.
+
+    Args:
+        tags: List of NoveltyTag results for all sources in a search batch.
+
+    Returns:
+        Summary string like ``"Novelty: 3 new, 1 related, 1 duplicate out of 5 results"``
+    """
+    new_count = sum(1 for t in tags if t.category == "new")
+    related_count = sum(1 for t in tags if t.category == "related")
+    dup_count = sum(1 for t in tags if t.category == "duplicate")
+    total = len(tags)
+    return f"Novelty: {new_count} new, {related_count} related, {dup_count} duplicate out of {total} results"

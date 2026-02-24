@@ -672,6 +672,8 @@ class TopicResearchMixin:
             "Reflection recorded. Before your next search, check the stop criteria:\n"
             "- Do I have 3+ high-quality relevant sources?\n"
             "- Did my last 2 searches return substantially similar information?\n"
+            "- Check novelty tags: if most recent results are [RELATED] or [DUPLICATE], "
+            "additional searches are unlikely to yield new insights.\n"
             "- Can I answer the research question comprehensively now?\n"
             "If YES to any, call research_complete instead of searching again."
         )
@@ -852,9 +854,45 @@ class TopicResearchMixin:
                 summ_exc,
             )
 
-        lines: list[str] = [f"Found {sources_added} new source(s):"]
-        for idx, src in enumerate(recent_sources, 1):
-            lines.append(f"\n--- SOURCE {idx}: {src.title} ---")
+        # --- Novelty scoring (Phase 3 ODR alignment) ---
+        # Compare each new source against existing sources for this sub-query
+        # to give the researcher explicit signals for stop decisions.
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            NoveltyTag,
+            build_novelty_summary,
+            compute_novelty_tag,
+        )
+
+        # Build existing source tuples (content, title, url) for comparison
+        # Only include sources already known *before* this search batch
+        pre_existing_sources: list[tuple[str, str, str | None]] = []
+        pre_existing_ids = {s.id for s in recent_sources}
+        for s in topic_sources:
+            if s.id not in pre_existing_ids:
+                pre_existing_sources.append(
+                    (s.content or s.snippet or "", s.title, s.url)
+                )
+
+        novelty_tags: list[NoveltyTag] = []
+        for src in recent_sources:
+            tag = compute_novelty_tag(
+                new_content=src.content or src.snippet or "",
+                new_url=src.url,
+                existing_sources=pre_existing_sources,
+            )
+            novelty_tags.append(tag)
+            # Store tag in source metadata for downstream consumers
+            src.metadata["novelty_tag"] = tag.category
+            src.metadata["novelty_similarity"] = tag.similarity
+
+        # Format results with novelty annotations
+        novelty_header = build_novelty_summary(novelty_tags)
+        lines: list[str] = [
+            f"Found {sources_added} new source(s):",
+            novelty_header,
+        ]
+        for idx, (src, ntag) in enumerate(zip(recent_sources, novelty_tags), 1):
+            lines.append(f"\n--- SOURCE {idx}: {src.title} {ntag.tag} ---")
             if src.url:
                 lines.append(f"URL: {src.url}")
             if src.metadata.get("summarized") and src.content:

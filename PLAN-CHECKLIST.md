@@ -11,23 +11,23 @@
 - [x] 1.8 Test: verify raw content preserved in metadata for compression phase
 
 ## Phase 2 — Inline Compression of Supervision Directive Results
-- [ ] 2.1 After `_execute_directives_async`, invoke `_compress_single_topic_async` for results without `compressed_findings`
-- [ ] 2.2 Use compressed output as `content` in `tool_result` messages appended to `state.supervision_messages`
-- [ ] 2.3 Add per-result compression timeout guard
-- [ ] 2.4 Fall back to truncated raw summary (800 chars) on compression failure
-- [ ] 2.5 Test: verify supervision messages contain compressed findings (not raw)
-- [ ] 2.6 Test: verify compression failure falls back to truncated summary
-- [ ] 2.7 Test: verify supervision message history growth rate is reduced vs baseline
+- [x] 2.1 After `_execute_directives_async`, invoke `_compress_single_topic_async` for results without `compressed_findings`
+- [x] 2.2 Use compressed output as `content` in `tool_result` messages appended to `state.supervision_messages`
+- [x] 2.3 Add per-result compression timeout guard
+- [x] 2.4 Fall back to truncated raw summary (800 chars) on compression failure
+- [x] 2.5 Test: verify supervision messages contain compressed findings (not raw)
+- [x] 2.6 Test: verify compression failure falls back to truncated summary
+- [x] 2.7 Test: verify supervision message history growth rate is reduced vs baseline
 
 ## Phase 3 — Novelty-Tagged Search Results for Researcher Stop Decisions
-- [ ] 3.1 Add novelty scoring in `_handle_web_search_tool` comparing new sources against existing sub-query sources
-- [ ] 3.2 Annotate formatted results with `[NEW]`, `[RELATED: <title>]`, or `[DUPLICATE]` tags
-- [ ] 3.3 Add novelty summary line to search results message header
-- [ ] 3.4 Update think-tool stop-criteria injection to reference novelty tags
-- [ ] 3.5 Add or reuse lightweight content similarity helper in `_helpers.py`
-- [ ] 3.6 Test: verify novelty tags appear in researcher message history
-- [ ] 3.7 Test: verify duplicate sources are correctly tagged
-- [ ] 3.8 Test: verify think injection references novelty context
+- [x] 3.1 Add novelty scoring in `_handle_web_search_tool` comparing new sources against existing sub-query sources
+- [x] 3.2 Annotate formatted results with `[NEW]`, `[RELATED: <title>]`, or `[DUPLICATE]` tags
+- [x] 3.3 Add novelty summary line to search results message header
+- [x] 3.4 Update think-tool stop-criteria injection to reference novelty tags
+- [x] 3.5 Add or reuse lightweight content similarity helper in `_helpers.py`
+- [x] 3.6 Test: verify novelty tags appear in researcher message history
+- [x] 3.7 Test: verify duplicate sources are correctly tagged
+- [x] 3.8 Test: verify think injection references novelty context
 
 ## Phase 4 — Type-Aware Supervision Message Truncation
 - [ ] 4.1 Implement type-aware budgeting: 60% reasoning (think + delegation), 40% findings (tool_result)
