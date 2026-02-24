@@ -95,6 +95,9 @@ class ResearchConfig:
     deep_research_reflection_provider: Optional[str] = None  # Uses default_provider if not set
     deep_research_reflection_timeout: float = 60.0  # Timeout per reflection call (seconds)
 
+    # Deep research planning self-critique (validates sub-query decomposition quality)
+    deep_research_enable_planning_critique: bool = True  # Self-critique of sub-query decomposition before gathering
+
     # Deep research iterative supervision (coverage gap assessment between gathering rounds)
     deep_research_enable_supervision: bool = True  # Master switch for iterative supervision loop
     deep_research_max_supervision_rounds: int = 3  # Max assess-delegate rounds per iteration
@@ -324,6 +327,8 @@ class ResearchConfig:
             deep_research_enable_reflection=_parse_bool(data.get("deep_research_enable_reflection", True)),
             deep_research_reflection_provider=data.get("deep_research_reflection_provider"),
             deep_research_reflection_timeout=float(data.get("deep_research_reflection_timeout", 60.0)),
+            # Deep research planning self-critique
+            deep_research_enable_planning_critique=_parse_bool(data.get("deep_research_enable_planning_critique", True)),
             # Deep research iterative supervision
             deep_research_enable_supervision=_parse_bool(data.get("deep_research_enable_supervision", True)),
             deep_research_max_supervision_rounds=int(data.get("deep_research_max_supervision_rounds", 3)),
@@ -1296,6 +1301,7 @@ class ResearchConfig:
             enable_contradiction_detection=self.deep_research_enable_contradiction_detection,
             enable_topic_agents=self.deep_research_enable_topic_agents,
             enable_supervision=self.deep_research_enable_supervision,
+            enable_planning_critique=self.deep_research_enable_planning_critique,
             fetch_time_summarization=self.deep_research_fetch_time_summarization,
             max_supervision_rounds=self.deep_research_max_supervision_rounds,
             supervision_min_sources_per_query=self.deep_research_supervision_min_sources_per_query,

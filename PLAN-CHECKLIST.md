@@ -31,29 +31,30 @@
 
 ## Phase 2: Think-Tool Self-Critique at Planning Boundary
 
-- [ ] **2.1** Add `_build_decomposition_critique_prompt()` to `PlanningPhaseMixin`
+- [x] **2.1** Add `_build_decomposition_critique_prompt()` to `PlanningPhaseMixin`
   - Takes generated sub-queries + original research brief as input
   - Evaluates: redundancies, missing perspectives, scope issues
   - Returns structured JSON: `{redundancies: [], gaps: [], adjustments: []}`
-- [ ] **2.2** Execute critique call after sub-query generation in `_execute_planning_async()`
+- [x] **2.2** Execute critique call after sub-query generation in `_execute_planning_async()`
   - Uses reflection role (cheap model)
   - Single round only (not iterative)
   - Runs before advancing to GATHERING phase
-- [ ] **2.3** Parse and apply critique adjustments to `state.sub_queries`
+- [x] **2.3** Parse and apply critique adjustments to `state.sub_queries`
   - Merge identified redundancies
   - Add sub-queries for identified perspective gaps
   - Respect `max_sub_queries` bound after adjustments
-- [ ] **2.4** Add config flag `deep_research_enable_planning_critique: bool = True`
+- [x] **2.4** Add config flag `deep_research_enable_planning_critique: bool = True`
   - Update `ResearchConfig` in `src/foundry_mcp/config/research.py`
-  - Add to `from_dict()` parsing
-- [ ] **2.5** Record critique in `state.metadata["planning_critique"]`
+  - Add to `from_toml_dict()` parsing
+  - Add to `DeepResearchConfig` sub-config dataclass
+- [x] **2.5** Record critique in `state.metadata["planning_critique"]`
   - Store original sub-queries, critique response, and adjusted sub-queries
-- [ ] **2.6** Add tests for planning self-critique
+- [x] **2.6** Add tests for planning self-critique (28 tests)
   - Test: redundant sub-queries identified and merged
   - Test: missing perspectives added
   - Test: sub-query count respects bounds after adjustments
   - Test: critique skipped when config flag disabled
-  - Test: no regression in existing planning tests
+  - Test: no regression in existing tests (1940 passed)
 
 ---
 

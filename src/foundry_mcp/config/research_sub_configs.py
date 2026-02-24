@@ -113,6 +113,7 @@ class DeepResearchConfig:
     enable_contradiction_detection: bool = True
     enable_topic_agents: bool = True
     enable_supervision: bool = True
+    enable_planning_critique: bool = True
     fetch_time_summarization: bool = True
 
     # Supervision settings

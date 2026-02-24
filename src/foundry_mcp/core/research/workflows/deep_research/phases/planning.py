@@ -195,6 +195,78 @@ class PlanningPhaseMixin:
             len(state.sub_queries),
         )
 
+        # ---------------------------------------------------------------
+        # Step 3: Self-critique of sub-query decomposition
+        # ---------------------------------------------------------------
+        enable_critique = getattr(
+            self.config, "deep_research_enable_planning_critique", True
+        )
+        if enable_critique and len(state.sub_queries) > 0:
+            original_queries = [
+                {"query": sq.query, "rationale": sq.rationale, "priority": sq.priority}
+                for sq in state.sub_queries
+            ]
+
+            critique_prompt = self._build_decomposition_critique_prompt(state)
+            self._check_cancellation(state)
+
+            critique_result = await execute_llm_call(
+                workflow=self,
+                state=state,
+                phase_name="planning_critique",
+                system_prompt=self._build_critique_system_prompt(),
+                user_prompt=critique_prompt,
+                provider_id=None,  # Resolved by role
+                model=None,  # Resolved by role
+                temperature=0.2,  # Low temperature for analytical reasoning
+                timeout=timeout,
+                role="reflection",  # Uses cheap model
+            )
+
+            if isinstance(critique_result, WorkflowResult):
+                # Critique failed — proceed without it (non-fatal)
+                logger.warning(
+                    "Planning critique LLM call failed, proceeding without critique: %s",
+                    critique_result.error,
+                )
+                state.metadata["planning_critique"] = {
+                    "original_sub_queries": original_queries,
+                    "critique_response": None,
+                    "adjusted_sub_queries": original_queries,
+                    "error": critique_result.error or "LLM call failed",
+                    "applied": False,
+                }
+            else:
+                critique_content = critique_result.result.content or ""
+                critique_parsed = self._parse_critique_response(critique_content)
+
+                if critique_parsed["has_changes"]:
+                    self._apply_critique_adjustments(state, critique_parsed)
+                    logger.info(
+                        "Planning critique applied: %d redundancies merged, "
+                        "%d gaps added, %d adjustments",
+                        len(critique_parsed.get("redundancies", [])),
+                        len(critique_parsed.get("gaps", [])),
+                        len(critique_parsed.get("adjustments", [])),
+                    )
+                else:
+                    logger.info("Planning critique: no changes recommended")
+
+                adjusted_queries = [
+                    {"query": sq.query, "rationale": sq.rationale, "priority": sq.priority}
+                    for sq in state.sub_queries
+                ]
+                state.metadata["planning_critique"] = {
+                    "original_sub_queries": original_queries,
+                    "critique_response": critique_content,
+                    "critique_parsed": critique_parsed,
+                    "adjusted_sub_queries": adjusted_queries,
+                    "applied": critique_parsed["has_changes"],
+                }
+
+            # Persist updated state with critique
+            self.memory.save_deep_research(state)
+
         finalize_phase(self, state, "planning", phase_start_time)
 
         return WorkflowResult(
@@ -400,3 +472,261 @@ Generate the research plan as JSON."""
         result["success"] = len(result["sub_queries"]) > 0
 
         return result
+
+    # ------------------------------------------------------------------
+    # Decomposition self-critique (Phase 2 of think-tool plan)
+    # ------------------------------------------------------------------
+
+    def _build_critique_system_prompt(self) -> str:
+        """Build system prompt for the decomposition critique step.
+
+        Returns:
+            System prompt instructing analytical critique of sub-queries
+        """
+        return (
+            "You are a research planning critic. Your task is to evaluate a set "
+            "of sub-queries generated for a research project and identify issues "
+            "with the decomposition quality.\n\n"
+            "You evaluate for:\n"
+            "1. Redundancies — sub-queries that overlap significantly\n"
+            "2. Missing perspectives — important angles not covered\n"
+            "3. Scope issues — queries that are too broad or too narrow\n\n"
+            "Your response MUST be valid JSON with this exact structure:\n"
+            "{\n"
+            '    "redundancies": [\n'
+            '        {"indices": [0, 2], "reason": "Both cover AI safety regulations", '
+            '"merged_query": "AI safety regulations and governance policies"}\n'
+            "    ],\n"
+            '    "gaps": [\n'
+            '        {"query": "A new sub-query to add", "rationale": "Covers missing perspective", "priority": 1}\n'
+            "    ],\n"
+            '    "adjustments": [\n'
+            '        {"index": 1, "revised_query": "More focused version", "reason": "Original too broad"}\n'
+            "    ],\n"
+            '    "assessment": "Brief overall assessment of decomposition quality"\n'
+            "}\n\n"
+            "Guidelines:\n"
+            "- Only flag TRUE redundancies (significant content overlap, not just related topics)\n"
+            "- Only add gaps for GENUINELY missing critical perspectives\n"
+            "- Keep the total sub-query count reasonable (2-7 after changes)\n"
+            "- If the decomposition is already good, return empty arrays\n"
+            "- merged_query in redundancies replaces ALL the redundant queries with one\n\n"
+            "IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."
+        )
+
+    def _build_decomposition_critique_prompt(self, state: DeepResearchState) -> str:
+        """Build critique prompt from generated sub-queries and research brief.
+
+        Presents the sub-queries back to an LLM for evaluation of redundancies,
+        missing perspectives, and scope issues.
+
+        Args:
+            state: Current research state with sub_queries populated
+
+        Returns:
+            Critique prompt string
+        """
+        parts: list[str] = [
+            f"# Research Brief\n{state.research_brief or state.original_query}\n",
+            "# Generated Sub-Queries\n",
+        ]
+
+        for i, sq in enumerate(state.sub_queries):
+            parts.append(
+                f"{i}. **{sq.query}**\n"
+                f"   Rationale: {sq.rationale or 'N/A'}\n"
+                f"   Priority: {sq.priority}"
+            )
+
+        parts.extend([
+            "",
+            "# Instructions",
+            "Evaluate the sub-queries above for:",
+            "1. **Redundancies**: Are any sub-queries covering essentially the same ground?",
+            "2. **Missing perspectives**: Are there important angles missing? "
+            "Consider: historical context, economic factors, technical details, "
+            "stakeholder perspectives, comparative analysis, recent developments.",
+            "3. **Scope issues**: Are any sub-queries too broad (need splitting) or "
+            "too narrow (could be merged with another)?",
+            "",
+            "Return your critique as JSON.",
+        ])
+
+        return "\n".join(parts)
+
+    def _parse_critique_response(self, content: str) -> dict[str, Any]:
+        """Parse the critique LLM response into structured adjustments.
+
+        Args:
+            content: Raw LLM response content
+
+        Returns:
+            Dict with 'redundancies', 'gaps', 'adjustments', 'assessment',
+            and 'has_changes' keys
+        """
+        result: dict[str, Any] = {
+            "redundancies": [],
+            "gaps": [],
+            "adjustments": [],
+            "assessment": "",
+            "has_changes": False,
+        }
+
+        if not content:
+            return result
+
+        json_str = extract_json(content)
+        if not json_str:
+            logger.warning("No JSON found in planning critique response")
+            return result
+
+        try:
+            data = json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.error("Failed to parse JSON from planning critique: %s", e)
+            return result
+
+        # Parse redundancies
+        raw_redundancies = data.get("redundancies", [])
+        if isinstance(raw_redundancies, list):
+            for r in raw_redundancies:
+                if not isinstance(r, dict):
+                    continue
+                indices = r.get("indices", [])
+                merged = r.get("merged_query", "").strip()
+                if isinstance(indices, list) and len(indices) >= 2 and merged:
+                    # Validate indices are integers
+                    try:
+                        int_indices = [int(i) for i in indices]
+                    except (ValueError, TypeError):
+                        continue
+                    result["redundancies"].append({
+                        "indices": int_indices,
+                        "reason": r.get("reason", ""),
+                        "merged_query": merged,
+                    })
+
+        # Parse gaps (new queries to add)
+        raw_gaps = data.get("gaps", [])
+        if isinstance(raw_gaps, list):
+            for g in raw_gaps:
+                if not isinstance(g, dict):
+                    continue
+                query = g.get("query", "").strip()
+                if query:
+                    result["gaps"].append({
+                        "query": query,
+                        "rationale": g.get("rationale", ""),
+                        "priority": min(max(int(g.get("priority", 1)), 1), 10),
+                    })
+
+        # Parse scope adjustments
+        raw_adjustments = data.get("adjustments", [])
+        if isinstance(raw_adjustments, list):
+            for a in raw_adjustments:
+                if not isinstance(a, dict):
+                    continue
+                revised = a.get("revised_query", "").strip()
+                if revised:
+                    try:
+                        idx = int(a.get("index", -1))
+                    except (ValueError, TypeError):
+                        continue
+                    result["adjustments"].append({
+                        "index": idx,
+                        "revised_query": revised,
+                        "reason": a.get("reason", ""),
+                    })
+
+        result["assessment"] = data.get("assessment", "")
+        result["has_changes"] = bool(
+            result["redundancies"] or result["gaps"] or result["adjustments"]
+        )
+
+        return result
+
+    def _apply_critique_adjustments(
+        self,
+        state: DeepResearchState,
+        critique: dict[str, Any],
+    ) -> None:
+        """Apply parsed critique adjustments to state.sub_queries.
+
+        Processes in order:
+        1. Scope adjustments (revise query text in-place)
+        2. Redundancy merges (replace redundant queries with merged version)
+        3. Gap additions (add new sub-queries for missing perspectives)
+
+        Respects ``state.max_sub_queries`` bound after all changes.
+
+        Args:
+            state: Current research state (sub_queries modified in-place)
+            critique: Parsed critique from _parse_critique_response
+        """
+        current_queries = list(state.sub_queries)
+
+        # 1. Apply scope adjustments (revise query text)
+        for adj in critique.get("adjustments", []):
+            idx = adj["index"]
+            if 0 <= idx < len(current_queries):
+                old_query = current_queries[idx].query
+                current_queries[idx].query = adj["revised_query"]
+                logger.debug(
+                    "Critique adjustment [%d]: '%s' -> '%s'",
+                    idx,
+                    old_query[:60],
+                    adj["revised_query"][:60],
+                )
+
+        # 2. Merge redundancies (collect indices to remove, add merged query)
+        indices_to_remove: set[int] = set()
+        merged_queries: list[dict[str, Any]] = []
+        for red in critique.get("redundancies", []):
+            valid_indices = [i for i in red["indices"] if 0 <= i < len(current_queries)]
+            if len(valid_indices) < 2:
+                continue
+            # Keep the best (lowest number) priority from the merged set
+            min_priority = min(
+                current_queries[i].priority for i in valid_indices
+            )
+            indices_to_remove.update(valid_indices)
+            merged_queries.append({
+                "query": red["merged_query"],
+                "rationale": red.get("reason", "Merged from redundant sub-queries"),
+                "priority": min_priority,
+            })
+
+        # Remove redundant queries
+        if indices_to_remove:
+            current_queries = [
+                sq for i, sq in enumerate(current_queries)
+                if i not in indices_to_remove
+            ]
+
+        # Replace state.sub_queries with the filtered list BEFORE adding new ones
+        state.sub_queries = current_queries
+
+        # Add merged queries via add_sub_query (generates proper IDs)
+        for mq in merged_queries:
+            state.add_sub_query(
+                query=mq["query"],
+                rationale=mq["rationale"],
+                priority=mq["priority"],
+            )
+
+        # 3. Add gap queries (missing perspectives)
+        for gap in critique.get("gaps", []):
+            if len(state.sub_queries) >= state.max_sub_queries:
+                logger.debug("Critique gap skipped (at max_sub_queries limit): %s", gap["query"][:60])
+                break
+            state.add_sub_query(
+                query=gap["query"],
+                rationale=gap.get("rationale", "Added from planning critique"),
+                priority=gap.get("priority", 1),
+            )
+
+        # Final safety: ensure we don't exceed max_sub_queries
+        if len(state.sub_queries) > state.max_sub_queries:
+            # Keep highest-priority queries (lowest priority number)
+            state.sub_queries.sort(key=lambda sq: sq.priority)
+            state.sub_queries = state.sub_queries[: state.max_sub_queries]

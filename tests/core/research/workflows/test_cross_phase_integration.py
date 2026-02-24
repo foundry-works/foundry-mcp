@@ -65,6 +65,7 @@ class StubWorkflow(ClarificationPhaseMixin, PlanningPhaseMixin, SynthesisPhaseMi
     def __init__(self) -> None:
         self.config = MagicMock()
         self.config.audit_verbosity = "minimal"
+        self.config.deep_research_enable_planning_critique = False  # Not under test here
         self.memory = MagicMock()
         self.memory.save_deep_research = MagicMock()
         self._audit_events: list[tuple[str, dict]] = []
