@@ -60,6 +60,7 @@ PHASE_TO_AGENT: dict[DeepResearchPhase, AgentRole] = {
     DeepResearchPhase.CLARIFICATION: AgentRole.CLARIFIER,
     DeepResearchPhase.PLANNING: AgentRole.PLANNER,
     DeepResearchPhase.GATHERING: AgentRole.GATHERER,
+    DeepResearchPhase.SUPERVISION: AgentRole.SUPERVISOR,
     DeepResearchPhase.ANALYSIS: AgentRole.ANALYZER,
     DeepResearchPhase.SYNTHESIS: AgentRole.SYNTHESIZER,
     DeepResearchPhase.REFINEMENT: AgentRole.REFINER,
@@ -308,6 +309,14 @@ class SupervisorOrchestrator:
                 "source_types": [st.value for st in state.source_types],
                 "max_sources_per_query": state.max_sources_per_query,
             }
+        elif phase == DeepResearchPhase.SUPERVISION:
+            return {
+                **base_inputs,
+                "completed_sub_queries": len(state.completed_sub_queries()),
+                "total_sources": len(state.sources),
+                "supervision_round": state.supervision_round,
+                "max_supervision_rounds": state.max_supervision_rounds,
+            }
         elif phase == DeepResearchPhase.ANALYSIS:
             return {
                 **base_inputs,
@@ -406,6 +415,15 @@ class SupervisorOrchestrator:
                     f"Gathering collected {source_count} sources. "
                     f"{'Sufficient' if quality_ok else 'May need more sources'}."
                 ),
+            }
+
+        elif phase == DeepResearchPhase.SUPERVISION:
+            pending = len(state.pending_sub_queries())
+            return {
+                "supervision_round": state.supervision_round,
+                "pending_follow_ups": pending,
+                "quality_ok": True,  # Supervision controls its own loop
+                "rationale": f"Supervision round {state.supervision_round}: {pending} follow-up queries queued.",
             }
 
         elif phase == DeepResearchPhase.ANALYSIS:
@@ -676,6 +694,16 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                 f"LOW={len([s for s in state.sources if s.quality == SourceQuality.LOW])}\n"
             )
 
+        elif phase == DeepResearchPhase.SUPERVISION:
+            pending = len(state.pending_sub_queries())
+            completed = len(state.completed_sub_queries())
+            base += (
+                f"\nSupervision round: {state.supervision_round}/{state.max_supervision_rounds}\n"
+                f"Completed sub-queries: {completed}\n"
+                f"Pending follow-up queries: {pending}\n"
+                f"Total sources: {len(state.sources)}\n"
+            )
+
         elif phase == DeepResearchPhase.ANALYSIS:
             high_conf = len([f for f in state.findings if f.confidence == ConfidenceLevel.HIGH])
             base += (
@@ -792,6 +820,11 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             DeepResearchPhase.GATHERING: (
                 f"Gathering complete. Collected {len(state.sources)} sources. "
                 f"Evaluate: Is source diversity sufficient? Quality distribution?"
+            ),
+            DeepResearchPhase.SUPERVISION: (
+                f"Supervision round {state.supervision_round} complete. "
+                f"{len(state.pending_sub_queries())} follow-up queries pending. "
+                "Evaluate: Is coverage sufficient or should gathering continue?"
             ),
             DeepResearchPhase.ANALYSIS: (
                 f"Analysis complete. Extracted {len(state.findings)} findings, "

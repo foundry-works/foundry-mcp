@@ -28,10 +28,10 @@
 
 ## Sub-Phase 6.3: Orchestration Updates
 
-- [ ] **6.3.1** Add `DeepResearchPhase.SUPERVISION: AgentRole.SUPERVISOR` to `PHASE_TO_AGENT`
-- [ ] **6.3.2** Add SUPERVISION case to `_build_agent_inputs()`
-- [ ] **6.3.3** Add SUPERVISION case to `_evaluate_phase_quality()`
-- [ ] **6.3.4** Add SUPERVISION to `get_reflection_prompt()` and `_build_reflection_llm_prompt()`
+- [x] **6.3.1** Add `DeepResearchPhase.SUPERVISION: AgentRole.SUPERVISOR` to `PHASE_TO_AGENT`
+- [x] **6.3.2** Add SUPERVISION case to `_build_agent_inputs()`
+- [x] **6.3.3** Add SUPERVISION case to `_evaluate_phase_quality()`
+- [x] **6.3.4** Add SUPERVISION to `get_reflection_prompt()` and `_build_reflection_llm_prompt()`
 
 ---
 
