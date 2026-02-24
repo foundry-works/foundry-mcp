@@ -94,16 +94,24 @@
 
 ## Phase 5: Reflection Enforcement
 
-- [ ] **5.1** Update reflection system prompt in `_topic_reflect()` (lines 395-417)
+- [x] **5.1** Update reflection system prompt in `_topic_reflect()` (lines 395-417)
   - Hard stop: research_complete=true when 3+ sources from distinct domains
   - Continue: only if <2 relevant sources found
   - Rationale must articulate specific gap to be filled
-- [ ] **5.2** Add guard: force research_complete if iteration >= max_searches
+  - Added domain diversity counting (with www. dedup) and `Distinct source domains: N` to user prompt
+  - Numbered decision rules: STOP, CONTINUE, ADEQUATE, NO RESULTS, rationale requirement
+- [x] **5.2** Add guard: force research_complete if iteration >= max_searches
   - Regardless of reflection LLM decision
-- [ ] **5.3** Add logging of reflection rationale for observability
-- [ ] **5.4** Test: reflection returns research_complete after 3+ distinct-domain sources
-- [ ] **5.5** Test: reflection never recommends continuing past max_searches
-- [ ] **5.6** Test: rationale field is always non-empty
+  - Added explicit `logger.info` when max_searches cap is hit
+- [x] **5.3** Add logging of reflection rationale for observability
+  - Every reflection decision now logged with `logger.info` showing complete/continue/rationale
+- [x] **5.4** Test: reflection returns research_complete after 3+ distinct-domain sources
+  - `TestReflectionEnforcement` (9 tests): prompt includes domain count, hard-stop rules, distinct-domain complete
+- [x] **5.5** Test: reflection never recommends continuing past max_searches
+  - `test_max_searches_enforced_regardless_of_reflection` + `test_max_searches_one_no_reflection`
+- [x] **5.6** Test: rationale field is always non-empty
+  - `test_rationale_always_non_empty_in_reflection_notes`, `test_rationale_from_failed_reflection_is_non_empty`, `test_rationale_from_exception_is_non_empty`
+  - 1876 passed, 6 skipped, 0 failures across full research test suite
 
 ---
 

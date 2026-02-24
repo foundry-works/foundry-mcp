@@ -1130,3 +1130,404 @@ class TestTopicAgentIntegration:
         assert all(isinstance(r, TopicResearchResult) for r in results)
         # Semaphore should have limited concurrency to 2
         assert max_concurrent_seen <= 2
+
+
+# =============================================================================
+# Phase 5: Reflection Enforcement tests
+# =============================================================================
+
+
+class TestReflectionEnforcement:
+    """Tests for Phase 5: tighter reflection decision boundaries.
+
+    Covers:
+    - 5.4: reflection prompt includes domain diversity and hard-stop rules
+    - 5.5: max_searches is enforced regardless of reflection decision
+    - 5.6: rationale field is always non-empty in reflection notes
+    """
+
+    @pytest.mark.asyncio
+    async def test_reflection_prompt_includes_domain_count(self) -> None:
+        """Reflection user prompt includes distinct domain count from state sources."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+
+        # Add sources from 3 distinct domains
+        for i, domain in enumerate(["arxiv.org", "nature.com", "ieee.org"]):
+            src = _make_source(
+                f"src-d{i}",
+                f"https://{domain}/paper{i}",
+                f"Paper from {domain}",
+            )
+            state.sources.append(src)
+
+        captured_prompts: list[str] = []
+
+        async def capture_provider(**kwargs):
+            captured_prompts.append(kwargs.get("prompt", ""))
+            result = MagicMock()
+            result.success = True
+            result.content = json.dumps({
+                "continue_searching": False,
+                "research_complete": True,
+                "rationale": "3 sources from 3 distinct domains",
+            })
+            result.tokens_used = 40
+            return result
+
+        mixin._provider_async_fn = capture_provider
+
+        await mixin._topic_reflect(
+            original_query="deep learning",
+            current_query="deep learning",
+            sources_found=3,
+            iteration=1,
+            max_iterations=3,
+            state=state,
+        )
+
+        assert len(captured_prompts) == 1
+        prompt = captured_prompts[0]
+        assert "Distinct source domains: 3" in prompt
+
+    @pytest.mark.asyncio
+    async def test_reflection_prompt_includes_hard_stop_rules(self) -> None:
+        """Reflection system prompt includes numbered hard-stop decision rules."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+
+        captured_system: list[str] = []
+
+        async def capture_provider(**kwargs):
+            captured_system.append(kwargs.get("system_prompt", ""))
+            result = MagicMock()
+            result.success = True
+            result.content = json.dumps({
+                "continue_searching": False,
+                "research_complete": False,
+                "rationale": "Test",
+            })
+            result.tokens_used = 40
+            return result
+
+        mixin._provider_async_fn = capture_provider
+
+        await mixin._topic_reflect(
+            original_query="test",
+            current_query="test",
+            sources_found=1,
+            iteration=1,
+            max_iterations=3,
+            state=state,
+        )
+
+        assert len(captured_system) == 1
+        sys_prompt = captured_system[0]
+        # Verify hard-stop rule
+        assert "STOP" in sys_prompt
+        assert "3 or more relevant sources" in sys_prompt
+        assert "distinct domains" in sys_prompt
+        # Verify continue-only-if-<2 rule
+        assert "fewer than 2 relevant sources" in sys_prompt
+        # Verify rationale requirement
+        assert "rationale field is REQUIRED" in sys_prompt
+        assert "must never be empty" in sys_prompt
+
+    @pytest.mark.asyncio
+    async def test_research_complete_after_distinct_domain_sources(self) -> None:
+        """Reflection with 3+ sources from distinct domains signals research_complete."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            parse_reflection_decision,
+        )
+
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+
+        # Add 3 sources from 3 distinct domains
+        for i, domain in enumerate(["arxiv.org", "nature.com", "ieee.org"]):
+            src = _make_source(
+                f"src-d{i}",
+                f"https://{domain}/paper{i}",
+                f"Paper from {domain}",
+            )
+            state.sources.append(src)
+
+        # LLM returns research_complete=true (following the hard-stop rule)
+        async def mock_complete(**kwargs):
+            result = MagicMock()
+            result.success = True
+            result.content = json.dumps({
+                "continue_searching": False,
+                "research_complete": True,
+                "rationale": "3 relevant sources from distinct domains (arxiv.org, nature.com, ieee.org)",
+            })
+            result.tokens_used = 40
+            return result
+
+        mixin._provider_async_fn = mock_complete
+
+        reflection = await mixin._topic_reflect(
+            original_query="deep learning",
+            current_query="deep learning",
+            sources_found=3,
+            iteration=1,
+            max_iterations=3,
+            state=state,
+        )
+
+        decision = parse_reflection_decision(reflection["raw_response"])
+        assert decision.research_complete is True
+        assert decision.continue_searching is False
+
+    @pytest.mark.asyncio
+    async def test_max_searches_enforced_regardless_of_reflection(self) -> None:
+        """Loop respects max_searches even if reflection always says continue."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        search_count = 0
+
+        async def counting_search(**kwargs):
+            nonlocal search_count
+            search_count += 1
+            return [_make_source(f"src-{search_count}", f"https://domain{search_count}.com/p")]
+
+        provider = MagicMock()
+        provider.get_provider_name.return_value = "tavily"
+        provider.search = counting_search
+
+        # Reflection always says continue
+        async def always_continue(**kwargs):
+            result = MagicMock()
+            result.success = True
+            result.content = json.dumps({
+                "continue_searching": True,
+                "refined_query": f"refined query v{search_count}",
+                "research_complete": False,
+                "rationale": "Need more sources to cover all angles",
+            })
+            result.tokens_used = 30
+            return result
+
+        mixin._provider_async_fn = always_continue
+
+        semaphore = asyncio.Semaphore(3)
+        state_lock = asyncio.Lock()
+
+        result = await mixin._execute_topic_research_async(
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=3,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=state_lock,
+            semaphore=semaphore,
+        )
+
+        # Must not exceed max_searches=3
+        assert result.searches_performed == 3
+        assert search_count == 3
+
+    @pytest.mark.asyncio
+    async def test_max_searches_one_no_reflection(self) -> None:
+        """With max_searches=1, no reflection is called at all."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        provider = _make_mock_provider("tavily")
+        reflection_called = False
+
+        async def should_not_call(**kwargs):
+            nonlocal reflection_called
+            reflection_called = True
+            result = MagicMock()
+            result.success = True
+            result.content = json.dumps({
+                "continue_searching": True,
+                "research_complete": False,
+                "rationale": "Should not be called",
+            })
+            result.tokens_used = 0
+            return result
+
+        mixin._provider_async_fn = should_not_call
+
+        semaphore = asyncio.Semaphore(3)
+        state_lock = asyncio.Lock()
+
+        result = await mixin._execute_topic_research_async(
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=1,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=state_lock,
+            semaphore=semaphore,
+        )
+
+        assert result.searches_performed == 1
+        assert not reflection_called
+
+    @pytest.mark.asyncio
+    async def test_rationale_always_non_empty_in_reflection_notes(self) -> None:
+        """Every reflection note has non-empty rationale content."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        reflect_call = 0
+
+        async def dynamic_search(**kwargs):
+            return [_make_source(f"src-r{reflect_call}", f"https://r{reflect_call}.com/p")]
+
+        provider = MagicMock()
+        provider.get_provider_name.return_value = "tavily"
+        provider.search = dynamic_search
+
+        async def mock_reflect_with_rationale(**kwargs):
+            nonlocal reflect_call
+            reflect_call += 1
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 30
+            if reflect_call == 1:
+                result.content = json.dumps({
+                    "continue_searching": True,
+                    "refined_query": "refined query",
+                    "research_complete": False,
+                    "rationale": "Only 1 source found, need broader coverage",
+                })
+            else:
+                result.content = json.dumps({
+                    "continue_searching": False,
+                    "research_complete": True,
+                    "rationale": "Sufficient sources from multiple domains now available",
+                })
+            return result
+
+        mixin._provider_async_fn = mock_reflect_with_rationale
+
+        semaphore = asyncio.Semaphore(3)
+        state_lock = asyncio.Lock()
+
+        result = await mixin._execute_topic_research_async(
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=3,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=state_lock,
+            semaphore=semaphore,
+        )
+
+        # At least one reflection should have been performed
+        assert len(result.reflection_notes) >= 1
+        # Every reflection note must be non-empty
+        for note in result.reflection_notes:
+            assert note, f"Reflection note was empty: {result.reflection_notes}"
+            assert len(note) > 0
+
+    @pytest.mark.asyncio
+    async def test_rationale_from_failed_reflection_is_non_empty(self) -> None:
+        """Even failed reflection produces non-empty rationale."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            parse_reflection_decision,
+        )
+
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+
+        # Provider failure
+        async def mock_fail(**kwargs):
+            result = MagicMock()
+            result.success = False
+            return result
+
+        mixin._provider_async_fn = mock_fail
+
+        reflection = await mixin._topic_reflect(
+            original_query="test",
+            current_query="test",
+            sources_found=0,
+            iteration=1,
+            max_iterations=3,
+            state=state,
+        )
+
+        decision = parse_reflection_decision(reflection["raw_response"])
+        assert decision.rationale, "Rationale should not be empty even on failure"
+        assert len(decision.rationale) > 0
+
+    @pytest.mark.asyncio
+    async def test_rationale_from_exception_is_non_empty(self) -> None:
+        """Exception in reflection produces non-empty rationale."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            parse_reflection_decision,
+        )
+
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+
+        async def mock_exception(**kwargs):
+            raise RuntimeError("Network timeout")
+
+        mixin._provider_async_fn = mock_exception
+
+        reflection = await mixin._topic_reflect(
+            original_query="test",
+            current_query="test",
+            sources_found=0,
+            iteration=1,
+            max_iterations=3,
+            state=state,
+        )
+
+        decision = parse_reflection_decision(reflection["raw_response"])
+        assert decision.rationale, "Rationale should not be empty even on exception"
+        assert len(decision.rationale) > 0
+
+    @pytest.mark.asyncio
+    async def test_domain_dedup_strips_www(self) -> None:
+        """Domain counting strips www. prefix for consistent dedup."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+
+        # Same domain with and without www.
+        state.sources.append(_make_source("s1", "https://www.example.com/a", "A"))
+        state.sources.append(_make_source("s2", "https://example.com/b", "B"))
+
+        captured_prompts: list[str] = []
+
+        async def capture(**kwargs):
+            captured_prompts.append(kwargs.get("prompt", ""))
+            result = MagicMock()
+            result.success = True
+            result.content = json.dumps({
+                "continue_searching": False,
+                "research_complete": False,
+                "rationale": "Test",
+            })
+            result.tokens_used = 10
+            return result
+
+        mixin._provider_async_fn = capture
+
+        await mixin._topic_reflect(
+            original_query="test",
+            current_query="test",
+            sources_found=2,
+            iteration=1,
+            max_iterations=3,
+            state=state,
+        )
+
+        # www.example.com and example.com should count as 1 domain
+        assert "Distinct source domains: 1" in captured_prompts[0]

@@ -132,6 +132,12 @@ class TopicResearchMixin:
             # If this is the last allowed iteration, skip reflection
             # (max_searches is the hard cap regardless of reflection)
             if iteration >= max_searches - 1:
+                logger.info(
+                    "Topic %r hit max_searches cap (%d/%d), stopping regardless of reflection",
+                    sub_query.id,
+                    iteration + 1,
+                    max_searches,
+                )
                 break
 
             # --- Mandatory reflection step ---
@@ -150,25 +156,30 @@ class TopicResearchMixin:
             decision = parse_reflection_decision(
                 reflection.get("raw_response", "")
             )
-            result.reflection_notes.append(
-                decision.rationale or reflection.get("assessment", "")
+            rationale = decision.rationale or reflection.get("assessment", "")
+            result.reflection_notes.append(rationale)
+
+            # Log every reflection decision for observability
+            logger.info(
+                "Topic %r reflection [iter %d/%d]: complete=%s, continue=%s, rationale=%s",
+                sub_query.id,
+                iteration + 1,
+                max_searches,
+                decision.research_complete,
+                decision.continue_searching,
+                rationale[:120] if rationale else "(empty)",
             )
 
             # Check for explicit research completion signal
             if decision.research_complete:
                 result.early_completion = True
-                result.completion_rationale = decision.rationale
-                logger.info(
-                    "Topic %r signalled research complete: %s",
-                    sub_query.id,
-                    decision.rationale[:100],
-                )
+                result.completion_rationale = rationale
                 break
 
             # Check if reflection says to stop searching
             if not decision.continue_searching:
                 result.completion_rationale = (
-                    decision.rationale or "Reflection decided to stop searching"
+                    rationale or "Reflection decided to stop searching"
                 )
                 break
 
@@ -392,6 +403,23 @@ class TopicResearchMixin:
                 source_qualities[quality_name] = source_qualities.get(quality_name, 0) + 1
         quality_summary = ", ".join(f"{k}={v}" for k, v in sorted(source_qualities.items())) or "none yet"
 
+        # Collect distinct domains for coverage assessment
+        distinct_domains: set[str] = set()
+        for src in state.sources:
+            if src.url:
+                try:
+                    from urllib.parse import urlparse
+
+                    domain = urlparse(src.url).netloc.lower()
+                    # Strip www. prefix for cleaner domain grouping
+                    if domain.startswith("www."):
+                        domain = domain[4:]
+                    if domain:
+                        distinct_domains.add(domain)
+                except Exception:
+                    pass
+        domain_count = len(distinct_domains)
+
         system_prompt = (
             "You are a research assistant evaluating search results for a specific sub-topic. "
             "After each search iteration, you MUST assess whether the research is sufficient "
@@ -401,25 +429,30 @@ class TopicResearchMixin:
             '  "continue_searching": true/false,\n'
             '  "refined_query": "new search query if continuing" or null,\n'
             '  "research_complete": true/false,\n'
-            '  "rationale": "brief explanation of your assessment"\n'
+            '  "rationale": "explain your assessment and what specific gap remains if continuing"\n'
             "}\n\n"
-            "Decision rules:\n"
-            "- Set research_complete=true if you have 3+ relevant sources from distinct "
-            "domains — this signals the topic is well-covered and exits the loop early\n"
-            "- Set continue_searching=true with a refined_query if sources are insufficient "
-            "or too narrow — the query will be retried with your refinement\n"
-            "- Set continue_searching=false (without research_complete) if sources are "
-            "adequate but not exceptional — this stops the loop for this topic\n"
-            "- If no sources were found at all, set continue_searching=true and suggest "
-            "a broader or alternative refined_query\n"
-            "- Keep refined queries focused on the original research topic\n"
-            "- Return ONLY valid JSON, no additional text"
+            "Decision rules (follow strictly):\n"
+            "1. STOP — set research_complete=true when you have 3 or more relevant sources "
+            "from distinct domains. This is a hard stop; do not continue searching.\n"
+            "2. CONTINUE — set continue_searching=true ONLY if fewer than 2 relevant sources "
+            "have been found. You MUST provide a refined_query and your rationale MUST "
+            "identify the specific information gap that another search would fill.\n"
+            "3. ADEQUATE — set continue_searching=false (without research_complete) if you "
+            "have 2+ sources but they are from the same domain or cover only one perspective. "
+            "This stops the loop without signalling full completion.\n"
+            "4. NO RESULTS — if zero sources were found, set continue_searching=true and "
+            "provide a broader or alternative refined_query.\n"
+            "5. The rationale field is REQUIRED and must never be empty. It must explain "
+            "your reasoning, not just restate the decision.\n"
+            "- Keep refined queries focused on the original research topic.\n"
+            "- Return ONLY valid JSON, no additional text."
         )
 
         user_prompt = (
             f"Original research sub-topic: {original_query}\n"
             f"Current search query: {current_query}\n"
             f"Sources found so far: {sources_found}\n"
+            f"Distinct source domains: {domain_count}\n"
             f"Source quality distribution: {quality_summary}\n"
             f"Search iteration: {iteration}/{max_iterations}\n\n"
             "Assess the research progress for this sub-topic and decide the next action."
