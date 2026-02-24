@@ -15,13 +15,16 @@ from typing import TYPE_CHECKING, Any
 
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
+    ReflectionDecision,
     TopicResearchResult,
+    parse_reflection_decision as parse_reflection_structured,
 )
 from foundry_mcp.core.research.models.sources import SourceQuality, SubQuery
 from foundry_mcp.core.research.workflows.deep_research._helpers import (
+    TopicReflectionDecision,
     content_similarity,
     extract_json,
-    parse_reflection_decision,
+    parse_reflection_decision as parse_reflection_legacy,
 )
 from foundry_mcp.core.research.workflows.deep_research.source_quality import (
     _normalize_title,
@@ -195,10 +198,13 @@ class TopicResearchMixin:
             )
             local_tokens_used += reflection.get("tokens_used", 0)
 
-            # Parse structured reflection decision
-            decision = parse_reflection_decision(
-                reflection.get("raw_response", "")
-            )
+            # Parse structured reflection decision — try Pydantic schema first,
+            # fall back to legacy regex-based parser on failure.
+            raw_response = reflection.get("raw_response", "")
+            try:
+                decision = parse_reflection_structured(raw_response)
+            except (ValueError, Exception):
+                decision = parse_reflection_legacy(raw_response)
             rationale = decision.rationale or reflection.get("assessment", "")
             result.reflection_notes.append(rationale)
 

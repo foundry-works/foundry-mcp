@@ -15,10 +15,14 @@ import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Optional
 
-from foundry_mcp.core.research.models.deep_research import DeepResearchState
+from foundry_mcp.core.research.models.deep_research import (
+    DeepResearchState,
+    ResearchBriefOutput,
+    parse_brief_output,
+)
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
-    execute_llm_call,
+    execute_structured_llm_call,
     finalize_phase,
 )
 
@@ -83,7 +87,10 @@ class BriefPhaseMixin:
 
         self._check_cancellation(state)
 
-        call_result = await execute_llm_call(
+        # Use structured output parsing with automatic retry on parse failure.
+        # parse_brief_output() accepts both JSON and plain-text responses
+        # for backward compatibility.
+        call_result = await execute_structured_llm_call(
             workflow=self,
             state=state,
             phase_name="brief",
@@ -93,6 +100,7 @@ class BriefPhaseMixin:
             model=None,  # Resolved by role
             temperature=0.4,  # Moderate creativity — enrichment, not invention
             timeout=timeout,
+            parse_fn=parse_brief_output,
             role="brief",  # Research-tier via _ROLE_RESOLUTION_CHAIN
         )
 
@@ -127,7 +135,13 @@ class BriefPhaseMixin:
             )
 
         result = call_result.result
-        brief_text = (result.content or "").strip()
+
+        # Extract brief text from structured parse or raw content
+        if call_result.parsed is not None:
+            brief_output: ResearchBriefOutput = call_result.parsed
+            brief_text = brief_output.research_brief.strip()
+        else:
+            brief_text = (result.content or "").strip()
 
         if brief_text:
             state.research_brief = brief_text
@@ -206,9 +220,16 @@ class BriefPhaseMixin:
             "include AND what it should exclude to prevent scope creep.\n"
             "5. **Preserve language**: Write the brief in the same language "
             "as the user's query.\n\n"
-            "Output ONLY the research brief as a well-structured paragraph "
-            "(or two). Do not include meta-commentary, greetings, or "
-            "formatting markers."
+            "Output your response as a JSON object with this schema:\n"
+            "{\n"
+            '  "research_brief": "The detailed, structured research brief paragraph(s)",\n'
+            '  "scope_boundaries": "What the research should include and exclude" or null,\n'
+            '  "source_preferences": "Preferred source types" or null\n'
+            "}\n\n"
+            "The research_brief field should contain the complete brief as a "
+            "well-structured paragraph (or two). Do not include meta-commentary, "
+            "greetings, or formatting markers in any field.\n\n"
+            "IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."
         )
 
     def _build_brief_user_prompt(self, state: DeepResearchState) -> str:

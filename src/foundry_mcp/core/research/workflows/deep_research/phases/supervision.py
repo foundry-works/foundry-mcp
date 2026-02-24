@@ -27,9 +27,11 @@ from typing import TYPE_CHECKING, Any, Optional
 from urllib.parse import urlparse
 
 from foundry_mcp.core.research.models.deep_research import (
+    DelegationResponse,
     DeepResearchState,
     ResearchDirective,
     TopicResearchResult,
+    parse_delegation_response,
 )
 from foundry_mcp.core.research.models.sources import SubQuery
 from foundry_mcp.core.research.workflows.base import WorkflowResult
@@ -37,7 +39,9 @@ from foundry_mcp.core.research.workflows.deep_research._helpers import (
     extract_json,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+    StructuredLLMCallResult,
     execute_llm_call,
+    execute_structured_llm_call,
     finalize_phase,
 )
 
@@ -461,7 +465,8 @@ class SupervisionPhaseMixin:
                 state, coverage_data, think_output,
             )
 
-        call_result = await execute_llm_call(
+        # Use structured output parsing with automatic retry on parse failure
+        call_result = await execute_structured_llm_call(
             workflow=self,
             state=state,
             phase_name="supervision_delegate",
@@ -471,6 +476,7 @@ class SupervisionPhaseMixin:
             model=state.supervision_model,
             temperature=0.3,
             timeout=timeout,
+            parse_fn=parse_delegation_response,
             role="delegation",
         )
 
@@ -481,9 +487,19 @@ class SupervisionPhaseMixin:
             )
             return [], False
 
-        directives, research_complete = self._parse_delegation_response(
-            call_result.result.content, state,
-        )
+        # Structured parse succeeded — extract directives from DelegationResponse
+        if call_result.parsed is not None:
+            delegation: DelegationResponse = call_result.parsed
+            research_complete = delegation.research_complete
+            directives = self._apply_directive_caps(delegation.directives, state)
+        else:
+            # Structured parse exhausted — fall back to legacy manual parsing
+            logger.warning(
+                "Structured delegation parse failed, falling back to legacy parser",
+            )
+            directives, research_complete = self._parse_delegation_response(
+                call_result.result.content, state,
+            )
 
         self._write_audit_event(
             state,
@@ -496,6 +512,8 @@ class SupervisionPhaseMixin:
                 "research_complete": research_complete,
                 "directive_topics": [d.research_topic[:100] for d in directives],
                 "is_first_round_decomposition": is_first_round,
+                "structured_parse": call_result.parsed is not None,
+                "parse_retries": call_result.parse_retries,
             },
         )
 
@@ -770,12 +788,43 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
         return "\n".join(parts)
 
+    def _apply_directive_caps(
+        self,
+        directives: list[ResearchDirective],
+        state: DeepResearchState,
+    ) -> list[ResearchDirective]:
+        """Apply business rules to structured-parsed directives.
+
+        Caps directive count, filters empty topics, and stamps
+        ``supervision_round`` on each directive. This is the structured-output
+        equivalent of the filtering logic in ``_parse_delegation_response()``.
+
+        Args:
+            directives: Raw directives from DelegationResponse schema
+            state: Current research state
+
+        Returns:
+            Capped and validated directive list
+        """
+        max_units = getattr(
+            self.config, "deep_research_max_concurrent_research_units", 5,
+        )
+        cap = min(max_units, _MAX_DIRECTIVES_PER_ROUND)
+
+        result: list[ResearchDirective] = []
+        for d in directives[:cap]:
+            if not d.research_topic.strip():
+                continue
+            d.supervision_round = state.supervision_round
+            result.append(d)
+        return result
+
     def _parse_delegation_response(
         self,
         content: str,
         state: DeepResearchState,
     ) -> tuple[list[ResearchDirective], bool]:
-        """Parse LLM response into research directives.
+        """Parse LLM response into research directives (legacy fallback).
 
         Args:
             content: Raw LLM response

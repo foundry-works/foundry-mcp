@@ -26,7 +26,14 @@ from foundry_mcp.core.research.models.sources import (
     SourceType,
     SubQuery,
 )
+from foundry_mcp.core.research.models.deep_research import (
+    DelegationResponse,
+    ResearchDirective,
+)
 from foundry_mcp.core.research.workflows.base import WorkflowResult
+from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+    StructuredLLMCallResult,
+)
 from foundry_mcp.core.research.workflows.deep_research.phases.supervision import (
     SupervisionPhaseMixin,
     _MAX_FOLLOW_UPS_PER_ROUND,
@@ -106,6 +113,39 @@ class StubSupervision(SupervisionPhaseMixin):
 
     def _check_cancellation(self, state: Any) -> None:
         pass
+
+
+def _wrap_as_structured_mock(mock_execute_llm_call):
+    """Wrap a mock_execute_llm_call to work as mock_execute_structured_llm_call.
+
+    The delegate step now uses execute_structured_llm_call() which accepts
+    a parse_fn. This helper wraps an existing LLM call mock so it returns
+    a StructuredLLMCallResult with the parsed DelegationResponse.
+    """
+
+    async def mock_execute_structured_llm_call(**kwargs):
+        parse_fn = kwargs.pop("parse_fn", None)
+        llm_result = await mock_execute_llm_call(**kwargs)
+
+        if isinstance(llm_result, WorkflowResult):
+            return llm_result
+
+        content = llm_result.result.content or ""
+        parsed = None
+        if parse_fn:
+            try:
+                parsed = parse_fn(content)
+            except Exception:
+                pass
+
+        return StructuredLLMCallResult(
+            result=llm_result.result,
+            llm_call_duration_ms=0.0,
+            parsed=parsed,
+            parse_retries=0,
+        )
+
+    return mock_execute_structured_llm_call
 
 
 # ===========================================================================
@@ -1288,6 +1328,9 @@ class TestDelegationIntegration:
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
             side_effect=mock_execute_llm_call,
         ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
+        ), patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
         ):
             result = await stub._execute_supervision_async(
@@ -1362,6 +1405,9 @@ class TestDelegationIntegration:
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
             side_effect=mock_execute_llm_call,
         ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
+        ), patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
         ):
             result = await stub._execute_supervision_async(
@@ -1408,6 +1454,9 @@ class TestDelegationIntegration:
         with patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
             side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
         ), patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
         ):
@@ -1676,6 +1725,9 @@ class TestFirstRoundDecompositionIntegration:
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
             side_effect=mock_execute_llm_call,
         ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
+        ), patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
         ):
             result = await stub._execute_supervision_delegation_async(
@@ -1727,6 +1779,9 @@ class TestFirstRoundDecompositionIntegration:
         with patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
             side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
         ), patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
         ):
@@ -1795,6 +1850,9 @@ class TestFirstRoundDecompositionIntegration:
         with patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
             side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
         ), patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
         ):

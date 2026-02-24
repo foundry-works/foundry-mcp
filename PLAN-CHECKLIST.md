@@ -163,7 +163,7 @@
 
 ## Phase 4: Structured Output Schemas at LLM Boundaries
 
-- [ ] **4.1** Add Pydantic schemas to `models/deep_research.py`
+- [x] **4.1** Add Pydantic schemas to `models/deep_research.py`
   - `DelegationResponse`:
     ```python
     class DelegationResponse(BaseModel):
@@ -187,28 +187,28 @@
         scope_boundaries: Optional[str] = None
         source_preferences: Optional[str] = None
     ```
-- [ ] **4.2** Update supervision delegation to use structured output
+- [x] **4.2** Update supervision delegation to use structured output
   - In `_execute_supervision_delegation_async()`:
     - Replace `_parse_delegation_response()` manual JSON parsing with `execute_structured_llm_call()` using `DelegationResponse` schema
     - Remove regex-based parsing fallbacks
     - Keep graceful degradation: on structured output failure, generate single directive from gap text
   - Verify `execute_structured_llm_call()` supports the schema (check retry logic)
-- [ ] **4.3** Update researcher reflection to use structured output
+- [x] **4.3** Update researcher reflection to use structured output
   - In `_topic_reflect()`:
     - Replace manual JSON parsing with structured output using `ReflectionDecision` schema
     - Remove regex + manual field extraction
     - Keep fallback: on parse failure, default to `continue_searching=True`
   - Verify structured output works with reflection-tier (cheap) model
-- [ ] **4.4** Update brief generation to use structured output
+- [x] **4.4** Update brief generation to use structured output
   - In `_execute_brief_async()`:
     - Use `ResearchBriefOutput` schema
     - Remove manual parsing
     - Keep fallback: on failure, use original query as brief
-- [ ] **4.5** Add provider compatibility handling
+- [x] **4.5** Add provider compatibility handling
   - Check if current provider supports structured output / tool use
   - When not supported: fall back to free-form JSON parsing (existing code path)
   - Log info when using fallback path
-- [ ] **4.6** Add tests for structured outputs
+- [x] **4.6** Add tests for structured outputs
   - Test: delegation response parsed via structured output (no regex)
   - Test: reflection decision parsed via structured output
   - Test: brief parsed via structured output

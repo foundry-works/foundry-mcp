@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Any, Literal, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from foundry_mcp.core.research.models.digest import make_fragment_id, parse_fragment_id
 from foundry_mcp.core.research.models.enums import ConfidenceLevel
@@ -109,6 +109,220 @@ class ResearchDirective(BaseModel):
         description="The supervision round that generated this directive",
     )
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+# =========================================================================
+# Structured output schemas for LLM boundaries (Phase 4 PLAN)
+# =========================================================================
+
+
+class DelegationResponse(BaseModel):
+    """Structured output schema for supervision delegation LLM calls.
+
+    Replaces free-form JSON parsing of delegation responses. The supervisor
+    LLM produces this schema to indicate whether research is complete or
+    to generate new research directives.
+
+    Used with ``execute_structured_llm_call()`` for type-safe parsing with
+    automatic retry on validation failure.
+    """
+
+    research_complete: bool = Field(
+        default=False,
+        description="True when existing coverage is sufficient across all dimensions",
+    )
+    directives: list[ResearchDirective] = Field(
+        default_factory=list,
+        description="Research directives targeting identified gaps",
+    )
+    rationale: str = Field(
+        default="",
+        description="Why these directives were chosen or why research is complete",
+    )
+
+
+class ReflectionDecision(BaseModel):
+    """Structured output schema for topic researcher reflection LLM calls.
+
+    Replaces free-form JSON parsing of reflection decisions. The researcher
+    LLM produces this schema after each search iteration to decide next steps.
+
+    Used with ``execute_structured_llm_call()`` for type-safe parsing with
+    automatic retry on validation failure.
+    """
+
+    continue_searching: bool = Field(
+        default=False,
+        description="Whether to continue searching for more sources",
+    )
+    research_complete: bool = Field(
+        default=False,
+        description=(
+            "True when the researcher is confident findings address the "
+            "research question. Stronger signal than continue_searching=False."
+        ),
+    )
+    refined_query: Optional[str] = Field(
+        default=None,
+        description="Refined search query if continuing (null if stopping)",
+    )
+    urls_to_extract: list[str] = Field(
+        default_factory=list,
+        description="URLs to extract full content from (max 2 recommended)",
+    )
+    rationale: str = Field(
+        default="",
+        description="Explanation of the assessment and what gap remains if continuing",
+    )
+
+    @field_validator("urls_to_extract", mode="before")
+    @classmethod
+    def _coerce_urls(cls, v: Any) -> list[str]:
+        """Accept null/None as empty list, filter to valid HTTP URLs."""
+        if v is None:
+            return []
+        if not isinstance(v, list):
+            return []
+        return [
+            str(u).strip()
+            for u in v
+            if isinstance(u, str) and u.strip().startswith("http")
+        ][:5]  # hard cap for safety
+
+
+class ResearchBriefOutput(BaseModel):
+    """Structured output schema for research brief generation LLM calls.
+
+    Replaces raw text parsing of brief output. The brief LLM produces this
+    schema to provide a structured research brief with optional scope and
+    source preference metadata.
+
+    Used with ``execute_structured_llm_call()`` for type-safe parsing with
+    automatic retry on validation failure.
+    """
+
+    research_brief: str = Field(
+        ...,
+        description="The detailed, structured research brief paragraph(s)",
+    )
+    scope_boundaries: Optional[str] = Field(
+        default=None,
+        description="What the research should include and exclude",
+    )
+    source_preferences: Optional[str] = Field(
+        default=None,
+        description="Preferred source types (primary, official, peer-reviewed, etc.)",
+    )
+
+
+# =========================================================================
+# Parse functions for execute_structured_llm_call()
+# =========================================================================
+
+
+def parse_delegation_response(content: str) -> DelegationResponse:
+    """Parse raw LLM content into a validated DelegationResponse.
+
+    Extracts JSON from the LLM response (handling markdown code blocks
+    and surrounding text), then validates against the DelegationResponse
+    schema. Raises ValueError on extraction or validation failure.
+
+    Intended as the ``parse_fn`` argument to ``execute_structured_llm_call()``.
+
+    Args:
+        content: Raw LLM response text
+
+    Returns:
+        Validated DelegationResponse instance
+
+    Raises:
+        ValueError: If no JSON found or validation fails
+    """
+    import json as _json
+
+    from foundry_mcp.core.research.workflows.deep_research._helpers import (
+        extract_json,
+    )
+
+    json_str = extract_json(content)
+    if not json_str:
+        raise ValueError("No JSON object found in delegation response")
+
+    data = _json.loads(json_str)
+    return DelegationResponse.model_validate(data)
+
+
+def parse_reflection_decision(content: str) -> ReflectionDecision:
+    """Parse raw LLM content into a validated ReflectionDecision.
+
+    Extracts JSON from the LLM response, then validates against the
+    ReflectionDecision schema. Raises ValueError on extraction or
+    validation failure.
+
+    Intended as the ``parse_fn`` argument to ``execute_structured_llm_call()``.
+
+    Args:
+        content: Raw LLM response text
+
+    Returns:
+        Validated ReflectionDecision instance
+
+    Raises:
+        ValueError: If no JSON found or validation fails
+    """
+    import json as _json
+
+    from foundry_mcp.core.research.workflows.deep_research._helpers import (
+        extract_json,
+    )
+
+    json_str = extract_json(content)
+    if not json_str:
+        raise ValueError("No JSON object found in reflection response")
+
+    data = _json.loads(json_str)
+    return ReflectionDecision.model_validate(data)
+
+
+def parse_brief_output(content: str) -> ResearchBriefOutput:
+    """Parse raw LLM content into a validated ResearchBriefOutput.
+
+    Attempts JSON extraction first. If the response contains valid JSON
+    matching the schema, returns the parsed model. If no JSON is found
+    but the content is non-empty, treats the entire content as the
+    ``research_brief`` field (backward compatibility with plain-text briefs).
+
+    Intended as the ``parse_fn`` argument to ``execute_structured_llm_call()``.
+
+    Args:
+        content: Raw LLM response text
+
+    Returns:
+        Validated ResearchBriefOutput instance
+
+    Raises:
+        ValueError: If content is empty or validation fails
+    """
+    import json as _json
+
+    from foundry_mcp.core.research.workflows.deep_research._helpers import (
+        extract_json,
+    )
+
+    if not content or not content.strip():
+        raise ValueError("Empty brief response")
+
+    # Try JSON extraction first
+    json_str = extract_json(content)
+    if json_str:
+        try:
+            data = _json.loads(json_str)
+            return ResearchBriefOutput.model_validate(data)
+        except (_json.JSONDecodeError, ValueError):
+            pass  # Fall through to plain-text handling
+
+    # Backward compat: treat plain text as the research_brief field
+    return ResearchBriefOutput(research_brief=content.strip())
 
 
 class Contradiction(BaseModel):
