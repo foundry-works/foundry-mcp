@@ -392,13 +392,15 @@ class TopicReflectionDecision:
     """Structured decision from a topic research reflection step.
 
     Captures whether the topic researcher should continue searching,
-    has completed research, or needs to refine its query.
+    has completed research, needs to refine its query, or wants to
+    extract full content from promising URLs.
     """
 
     continue_searching: bool = False
     refined_query: Optional[str] = None
     research_complete: bool = False
     rationale: str = ""
+    urls_to_extract: Optional[list[str]] = None
 
     def to_dict(self) -> dict:
         """Serialize to dict for audit/logging."""
@@ -407,6 +409,7 @@ class TopicReflectionDecision:
             "refined_query": self.refined_query,
             "research_complete": self.research_complete,
             "rationale": self.rationale,
+            "urls_to_extract": self.urls_to_extract,
         }
 
 
@@ -429,11 +432,22 @@ def parse_reflection_decision(text: str) -> TopicReflectionDecision:
     if json_str:
         try:
             data = json.loads(json_str)
+            # Parse urls_to_extract: accept list of strings, cap at reasonable limit
+            raw_urls = data.get("urls_to_extract")
+            urls_to_extract: Optional[list[str]] = None
+            if isinstance(raw_urls, list):
+                urls_to_extract = [
+                    str(u).strip() for u in raw_urls
+                    if isinstance(u, str) and u.strip().startswith("http")
+                ][:5]  # hard cap for safety
+                if not urls_to_extract:
+                    urls_to_extract = None
             return TopicReflectionDecision(
                 continue_searching=bool(data.get("continue_searching", False)),
                 refined_query=data.get("refined_query"),
                 research_complete=bool(data.get("research_complete", False)),
                 rationale=str(data.get("rationale", "")),
+                urls_to_extract=urls_to_extract,
             )
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
             logger.debug("Topic reflection JSON parse failed: %s", exc)

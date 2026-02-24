@@ -105,7 +105,7 @@ class ResearchConfig:
 
     # Deep research iterative supervision (coverage gap assessment between gathering rounds)
     deep_research_enable_supervision: bool = True  # Master switch for iterative supervision loop
-    deep_research_max_supervision_rounds: int = 3  # Max assess-delegate rounds per iteration
+    deep_research_max_supervision_rounds: int = 6  # Max assess-delegate rounds per iteration
     deep_research_supervision_min_sources_per_query: int = 2  # Minimum sources for "sufficient" coverage
 
     # Supervision LLM provider/model (uses reflection fallback if not set)
@@ -117,10 +117,14 @@ class ResearchConfig:
 
     # Deep research parallel topic researcher agents
     deep_research_enable_topic_agents: bool = True  # Master switch for per-topic ReAct loops in gathering
-    deep_research_topic_max_searches: int = 5  # Max search iterations per topic (ReAct loop limit)
+    deep_research_topic_max_tool_calls: int = 10  # Max tool calls (search + extract) per topic (ReAct loop limit)
     deep_research_topic_reflection_provider: Optional[str] = None  # Uses default_provider if not set
     deep_research_enable_content_dedup: bool = True  # Cross-researcher content-similarity deduplication
     deep_research_content_dedup_threshold: float = 0.8  # Jaccard similarity threshold for content dedup
+
+    # Per-topic URL extraction during gathering (Phase 3 PLAN)
+    deep_research_enable_extract: bool = True  # Allow researchers to extract full content from promising URLs
+    deep_research_extract_max_per_iteration: int = 2  # Max URLs to extract per ReAct iteration
 
     # Fetch-time source summarization (Phase 1)
     deep_research_fetch_time_summarization: bool = True  # Summarize raw search results at fetch time
@@ -356,7 +360,7 @@ class ResearchConfig:
             deep_research_enable_planning_critique=_parse_bool(data.get("deep_research_enable_planning_critique", True)),
             # Deep research iterative supervision
             deep_research_enable_supervision=_parse_bool(data.get("deep_research_enable_supervision", True)),
-            deep_research_max_supervision_rounds=int(data.get("deep_research_max_supervision_rounds", 3)),
+            deep_research_max_supervision_rounds=int(data.get("deep_research_max_supervision_rounds", 6)),
             deep_research_supervision_min_sources_per_query=int(
                 data.get("deep_research_supervision_min_sources_per_query", 2)
             ),
@@ -368,10 +372,18 @@ class ResearchConfig:
             ),
             # Deep research parallel topic researcher agents
             deep_research_enable_topic_agents=_parse_bool(data.get("deep_research_enable_topic_agents", True)),
-            deep_research_topic_max_searches=int(data.get("deep_research_topic_max_searches", 5)),
+            deep_research_topic_max_tool_calls=int(
+                data.get(
+                    "deep_research_topic_max_tool_calls",
+                    data.get("deep_research_topic_max_searches", 10),  # backward compat: accept old key
+                )
+            ),
             deep_research_topic_reflection_provider=data.get("deep_research_topic_reflection_provider"),
             deep_research_enable_content_dedup=_parse_bool(data.get("deep_research_enable_content_dedup", True)),
             deep_research_content_dedup_threshold=float(data.get("deep_research_content_dedup_threshold", 0.8)),
+            # Per-topic URL extraction during gathering
+            deep_research_enable_extract=_parse_bool(data.get("deep_research_enable_extract", True)),
+            deep_research_extract_max_per_iteration=int(data.get("deep_research_extract_max_per_iteration", 2)),
             # Fetch-time source summarization
             deep_research_fetch_time_summarization=_parse_bool(
                 data.get("deep_research_fetch_time_summarization", True)
@@ -513,6 +525,18 @@ class ResearchConfig:
         config.tavily_search_depth_configured = "tavily_search_depth" in data
         config.tavily_chunks_per_source_configured = "tavily_chunks_per_source" in data
         return config
+
+    @property
+    def deep_research_topic_max_searches(self) -> int:
+        """Backward-compat alias for deep_research_topic_max_tool_calls.
+
+        .. deprecated:: Use ``deep_research_topic_max_tool_calls`` instead.
+        """
+        return self.deep_research_topic_max_tool_calls
+
+    @deep_research_topic_max_searches.setter
+    def deep_research_topic_max_searches(self, value: int) -> None:
+        self.deep_research_topic_max_tool_calls = value
 
     def __post_init__(self) -> None:
         """Validate configuration fields after initialization."""
@@ -1362,7 +1386,7 @@ class ResearchConfig:
             max_concurrent=self.deep_research_max_concurrent,
             mode=self.deep_research_mode,
             audit_artifacts=self.deep_research_audit_artifacts,
-            topic_max_searches=self.deep_research_topic_max_searches,
+            topic_max_searches=self.deep_research_topic_max_tool_calls,
             enable_content_dedup=self.deep_research_enable_content_dedup,
             content_dedup_threshold=self.deep_research_content_dedup_threshold,
             reflection_timeout=self.deep_research_reflection_timeout,

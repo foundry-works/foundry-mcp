@@ -111,41 +111,41 @@
 
 ## Phase 3: Iteration Budget + Extract Tool for Researchers
 
-- [ ] **3.1** Raise iteration budget defaults
+- [x] **3.1** Raise iteration budget defaults
   - `deep_research_topic_max_searches`: 5 → 10
   - `deep_research_max_supervision_rounds`: 3 → 6
   - Update docstrings and config comments
   - Early-exit heuristic unchanged (prevents over-searching on simple queries)
-- [ ] **3.2** Rename `deep_research_topic_max_searches` to `deep_research_topic_max_tool_calls`
+- [x] **3.2** Rename `deep_research_topic_max_searches` to `deep_research_topic_max_tool_calls`
   - Backward compatibility: accept old name in `from_toml_dict()` with deprecation warning
   - Update all references in topic_research.py, config, tests
   - Reflects that search + extract both count toward budget
-- [ ] **3.3** Add `_topic_extract()` method to topic research
+- [x] **3.3** Add `_topic_extract()` method to topic research
   - Input: list of URLs to extract (max `deep_research_extract_max_per_iteration`)
   - Uses Tavily Extract API via existing provider infrastructure
   - Summarizes extracted content via `SourceSummarizer` (50K char cap)
   - Creates `ResearchSource` entries with full/summarized content
   - Respects concurrency semaphore and state lock for dedup
   - Non-fatal: extraction failures logged, research continues with search sources
-- [ ] **3.4** Update reflection decision schema
+- [x] **3.4** Update reflection decision schema
   - Add `urls_to_extract: Optional[list[str]] = None` field (max 2)
   - Update `parse_reflection_decision()` to handle new field
   - Backward compatible: field is optional, default None
-- [ ] **3.5** Update reflection system prompt for extract awareness
+- [x] **3.5** Update reflection system prompt for extract awareness
   - Add guidance: "If a search result snippet suggests rich content behind a URL (e.g., detailed technical documentation, comparison tables, research papers), recommend extracting it"
   - "Only recommend extraction for URLs where the snippet indicates valuable detail you cannot get from the snippet alone"
   - "Limit extraction recommendations to 2 URLs per iteration"
-- [ ] **3.6** Update ReAct loop to support extraction
+- [x] **3.6** Update ReAct loop to support extraction
   - After reflection, if `urls_to_extract` is non-empty and extract enabled:
     - Call `_topic_extract()` with recommended URLs
     - Add extracted sources to state (with dedup)
     - Count extraction as 1 tool call toward `max_tool_calls` budget
   - Continue to next iteration (search or reflect) after extraction
-- [ ] **3.7** Add config fields
+- [x] **3.7** Add config fields
   - `deep_research_enable_extract: bool = True`
   - `deep_research_extract_max_per_iteration: int = 2`
   - Add `from_toml_dict()` parsing
-- [ ] **3.8** Add tests for iteration budget and extract
+- [x] **3.8** Add tests for iteration budget and extract
   - Test: higher iteration budget allows deeper research on complex queries
   - Test: early-exit heuristic still fires on simple queries (no regression)
   - Test: extract tool fetches and summarizes URL content

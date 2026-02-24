@@ -1000,13 +1000,18 @@ class TestTopicAgentConfig:
     """Tests for topic agent configuration keys."""
 
     def test_default_config_topic_agents_enabled(self) -> None:
-        """Topic agents are disabled by default."""
+        """Topic agents are enabled by default with correct budget defaults."""
         from foundry_mcp.config.research import ResearchConfig
 
         config = ResearchConfig()
         assert config.deep_research_enable_topic_agents is True
-        assert config.deep_research_topic_max_searches == 5
+        assert config.deep_research_topic_max_tool_calls == 10
+        # Backward-compat alias
+        assert config.deep_research_topic_max_searches == 10
         assert config.deep_research_topic_reflection_provider is None
+        # Extract defaults
+        assert config.deep_research_enable_extract is True
+        assert config.deep_research_extract_max_per_iteration == 2
 
     def test_from_toml_dict_parses_topic_keys(self) -> None:
         """from_toml_dict correctly parses topic agent config."""
@@ -1014,14 +1019,26 @@ class TestTopicAgentConfig:
 
         data = {
             "deep_research_enable_topic_agents": True,
-            "deep_research_topic_max_searches": 5,
+            "deep_research_topic_max_tool_calls": 8,
             "deep_research_topic_reflection_provider": "[cli]gemini:flash",
         }
         config = ResearchConfig.from_toml_dict(data)
 
         assert config.deep_research_enable_topic_agents is True
-        assert config.deep_research_topic_max_searches == 5
+        assert config.deep_research_topic_max_tool_calls == 8
+        assert config.deep_research_topic_max_searches == 8  # backward-compat alias
         assert config.deep_research_topic_reflection_provider == "[cli]gemini:flash"
+
+    def test_from_toml_dict_backward_compat_old_key(self) -> None:
+        """from_toml_dict accepts old key name deep_research_topic_max_searches."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        data = {
+            "deep_research_topic_max_searches": 7,
+        }
+        config = ResearchConfig.from_toml_dict(data)
+        assert config.deep_research_topic_max_tool_calls == 7
+        assert config.deep_research_topic_max_searches == 7
 
     def test_from_toml_dict_string_bool(self) -> None:
         """String 'true' is parsed as boolean True."""
@@ -2319,12 +2336,13 @@ class TestPhase5ContentDedup:
 class TestPhase5ConfigIntegration:
     """Tests for Phase 5 config keys."""
 
-    def test_default_max_searches_is_5(self) -> None:
-        """Default topic_max_searches is 5 (increased from 3)."""
+    def test_default_max_tool_calls_is_10(self) -> None:
+        """Default topic_max_tool_calls is 10 (increased from 5)."""
         from foundry_mcp.config.research import ResearchConfig
 
         config = ResearchConfig()
-        assert config.deep_research_topic_max_searches == 5
+        assert config.deep_research_topic_max_tool_calls == 10
+        assert config.deep_research_topic_max_searches == 10  # backward-compat alias
 
     def test_default_content_dedup_enabled(self) -> None:
         """Content dedup is enabled by default."""
@@ -2350,7 +2368,7 @@ class TestPhase5ConfigIntegration:
         from foundry_mcp.config.research_sub_configs import DeepResearchConfig
 
         dc = DeepResearchConfig()
-        assert dc.topic_max_searches == 5
+        assert dc.topic_max_searches == 10
         assert dc.enable_content_dedup is True
         assert dc.content_dedup_threshold == 0.8
 
@@ -2365,3 +2383,327 @@ class TestPhase5ConfigIntegration:
         dc = config.deep_research_config
         assert dc.enable_content_dedup is False
         assert dc.content_dedup_threshold == 0.6
+
+
+# =============================================================================
+# Phase 3 PLAN: Iteration Budget + Extract Tool for Researchers
+# =============================================================================
+
+
+class TestPhase3IterationBudget:
+    """Tests for Phase 3: raised iteration budgets."""
+
+    def test_default_supervision_rounds_is_6(self) -> None:
+        """Default max_supervision_rounds raised to 6."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        config = ResearchConfig()
+        assert config.deep_research_max_supervision_rounds == 6
+
+    def test_default_topic_max_tool_calls_is_10(self) -> None:
+        """Default topic_max_tool_calls raised to 10."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        config = ResearchConfig()
+        assert config.deep_research_topic_max_tool_calls == 10
+
+    @pytest.mark.asyncio
+    async def test_early_exit_still_fires(self) -> None:
+        """Early-exit heuristic still triggers on simple queries with enough sources."""
+        stub = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        # Add 3 sources from 2 domains with a HIGH quality source
+        sources = [
+            _make_source("s1", "https://a.com/1", "A1", SourceQuality.HIGH),
+            _make_source("s2", "https://b.com/1", "B1", SourceQuality.MEDIUM),
+            _make_source("s3", "https://a.com/2", "A2", SourceQuality.MEDIUM),
+        ]
+        for s in sources:
+            state.append_source(s)
+            sq.source_ids.append(s.id)
+
+        result = await stub._check_early_exit(
+            sub_query=sq,
+            state=state,
+            state_lock=asyncio.Lock(),
+        )
+        assert result is True
+
+
+class TestPhase3ReflectionDecisionExtract:
+    """Tests for urls_to_extract field in TopicReflectionDecision."""
+
+    def test_parse_reflection_with_urls_to_extract(self) -> None:
+        """parse_reflection_decision extracts urls_to_extract from JSON."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            parse_reflection_decision,
+        )
+
+        text = json.dumps({
+            "continue_searching": True,
+            "refined_query": "next query",
+            "research_complete": False,
+            "rationale": "Need more data",
+            "urls_to_extract": [
+                "https://example.com/docs",
+                "https://other.com/paper.pdf",
+            ],
+        })
+        decision = parse_reflection_decision(text)
+        assert decision.continue_searching is True
+        assert decision.urls_to_extract is not None
+        assert len(decision.urls_to_extract) == 2
+        assert "https://example.com/docs" in decision.urls_to_extract
+
+    def test_parse_reflection_without_urls_to_extract(self) -> None:
+        """urls_to_extract defaults to None when not present in JSON."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            parse_reflection_decision,
+        )
+
+        text = json.dumps({
+            "continue_searching": False,
+            "research_complete": True,
+            "rationale": "Done",
+        })
+        decision = parse_reflection_decision(text)
+        assert decision.urls_to_extract is None
+
+    def test_parse_reflection_urls_to_extract_filters_invalid(self) -> None:
+        """Invalid URLs (non-http) are filtered out."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            parse_reflection_decision,
+        )
+
+        text = json.dumps({
+            "continue_searching": True,
+            "research_complete": False,
+            "rationale": "Extract needed",
+            "urls_to_extract": [
+                "https://valid.com/page",
+                "not-a-url",
+                "",
+                123,
+                "https://also-valid.com/doc",
+            ],
+        })
+        decision = parse_reflection_decision(text)
+        assert decision.urls_to_extract is not None
+        assert len(decision.urls_to_extract) == 2
+        assert decision.urls_to_extract[0] == "https://valid.com/page"
+        assert decision.urls_to_extract[1] == "https://also-valid.com/doc"
+
+    def test_parse_reflection_empty_urls_list_becomes_none(self) -> None:
+        """Empty urls_to_extract list becomes None."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            parse_reflection_decision,
+        )
+
+        text = json.dumps({
+            "continue_searching": False,
+            "research_complete": True,
+            "rationale": "Done",
+            "urls_to_extract": [],
+        })
+        decision = parse_reflection_decision(text)
+        assert decision.urls_to_extract is None
+
+    def test_to_dict_includes_urls_to_extract(self) -> None:
+        """TopicReflectionDecision.to_dict() includes urls_to_extract."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            TopicReflectionDecision,
+        )
+
+        decision = TopicReflectionDecision(
+            continue_searching=True,
+            rationale="test",
+            urls_to_extract=["https://example.com"],
+        )
+        d = decision.to_dict()
+        assert "urls_to_extract" in d
+        assert d["urls_to_extract"] == ["https://example.com"]
+
+
+class TestPhase3TopicExtract:
+    """Tests for _topic_extract() method."""
+
+    @pytest.mark.asyncio
+    async def test_topic_extract_adds_sources(self) -> None:
+        """_topic_extract adds extracted sources to state."""
+        from unittest.mock import patch
+
+        stub = StubTopicResearch()
+        stub.config.tavily_api_key = "test-key"
+        stub.config.tavily_extract_depth = "basic"
+        stub.config.deep_research_enable_extract = True
+
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+        seen_urls: set[str] = set()
+        seen_titles: dict[str, str] = {}
+
+        mock_source = _make_source("ext-1", "https://docs.example.com/api", "API Docs")
+        mock_source.sub_query_id = None
+        mock_source.metadata = {}
+
+        mock_provider = MagicMock()
+        mock_provider.extract = AsyncMock(return_value=[mock_source])
+
+        with patch(
+            "foundry_mcp.core.research.providers.tavily_extract.TavilyExtractProvider",
+            return_value=mock_provider,
+        ):
+            added = await stub._topic_extract(
+                urls=["https://docs.example.com/api"],
+                sub_query=sq,
+                state=state,
+                seen_urls=seen_urls,
+                seen_titles=seen_titles,
+                state_lock=asyncio.Lock(),
+                semaphore=asyncio.Semaphore(3),
+            )
+
+        assert added == 1
+        assert "https://docs.example.com/api" in seen_urls
+        assert any(s.id == "ext-1" for s in state.sources)
+
+    @pytest.mark.asyncio
+    async def test_topic_extract_deduplicates_urls(self) -> None:
+        """_topic_extract skips URLs already in seen_urls."""
+        from unittest.mock import patch
+
+        stub = StubTopicResearch()
+        stub.config.tavily_api_key = "test-key"
+        stub.config.tavily_extract_depth = "basic"
+
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+        seen_urls: set[str] = {"https://already-seen.com/page"}
+        seen_titles: dict[str, str] = {}
+
+        mock_source = _make_source("ext-dup", "https://already-seen.com/page", "Dup")
+        mock_source.sub_query_id = None
+        mock_source.metadata = {}
+
+        mock_provider = MagicMock()
+        mock_provider.extract = AsyncMock(return_value=[mock_source])
+
+        with patch(
+            "foundry_mcp.core.research.providers.tavily_extract.TavilyExtractProvider",
+            return_value=mock_provider,
+        ):
+            added = await stub._topic_extract(
+                urls=["https://already-seen.com/page"],
+                sub_query=sq,
+                state=state,
+                seen_urls=seen_urls,
+                seen_titles=seen_titles,
+                state_lock=asyncio.Lock(),
+                semaphore=asyncio.Semaphore(3),
+            )
+
+        assert added == 0
+
+    @pytest.mark.asyncio
+    async def test_topic_extract_non_fatal_on_failure(self) -> None:
+        """_topic_extract returns 0 on provider failure, doesn't raise."""
+        from unittest.mock import patch
+
+        stub = StubTopicResearch()
+        stub.config.tavily_api_key = "test-key"
+        stub.config.tavily_extract_depth = "basic"
+
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        mock_provider = MagicMock()
+        mock_provider.extract = AsyncMock(side_effect=RuntimeError("API down"))
+
+        with patch(
+            "foundry_mcp.core.research.providers.tavily_extract.TavilyExtractProvider",
+            return_value=mock_provider,
+        ):
+            added = await stub._topic_extract(
+                urls=["https://example.com"],
+                sub_query=sq,
+                state=state,
+                seen_urls=set(),
+                seen_titles={},
+                state_lock=asyncio.Lock(),
+                semaphore=asyncio.Semaphore(3),
+            )
+
+        assert added == 0
+
+    @pytest.mark.asyncio
+    async def test_topic_extract_no_api_key_returns_0(self) -> None:
+        """_topic_extract returns 0 when no Tavily API key available."""
+        import os
+        from unittest.mock import patch
+
+        stub = StubTopicResearch()
+        stub.config.tavily_api_key = None
+
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        with patch.dict(os.environ, {}, clear=True):
+            # Ensure TAVILY_API_KEY is not in env
+            os.environ.pop("TAVILY_API_KEY", None)
+            added = await stub._topic_extract(
+                urls=["https://example.com"],
+                sub_query=sq,
+                state=state,
+                seen_urls=set(),
+                seen_titles={},
+                state_lock=asyncio.Lock(),
+                semaphore=asyncio.Semaphore(3),
+            )
+
+        assert added == 0
+
+
+class TestPhase3ExtractConfig:
+    """Tests for extract-related config fields."""
+
+    def test_extract_config_defaults(self) -> None:
+        """Extract config fields have correct defaults."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        config = ResearchConfig()
+        assert config.deep_research_enable_extract is True
+        assert config.deep_research_extract_max_per_iteration == 2
+
+    def test_from_toml_dict_parses_extract_fields(self) -> None:
+        """from_toml_dict correctly parses extract config."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        data = {
+            "deep_research_enable_extract": False,
+            "deep_research_extract_max_per_iteration": 3,
+        }
+        config = ResearchConfig.from_toml_dict(data)
+        assert config.deep_research_enable_extract is False
+        assert config.deep_research_extract_max_per_iteration == 3
+
+    def test_backward_compat_old_key_in_toml(self) -> None:
+        """from_toml_dict accepts old deep_research_topic_max_searches key."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        data = {"deep_research_topic_max_searches": 7}
+        config = ResearchConfig.from_toml_dict(data)
+        assert config.deep_research_topic_max_tool_calls == 7
+        assert config.deep_research_topic_max_searches == 7
+
+    def test_new_key_takes_precedence_over_old(self) -> None:
+        """New key takes precedence when both old and new are present."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        data = {
+            "deep_research_topic_max_tool_calls": 12,
+            "deep_research_topic_max_searches": 7,
+        }
+        config = ResearchConfig.from_toml_dict(data)
+        assert config.deep_research_topic_max_tool_calls == 12

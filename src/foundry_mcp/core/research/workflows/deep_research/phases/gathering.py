@@ -428,7 +428,7 @@ class GatheringPhaseMixin(CompressionMixin):
         # When topic agents are enabled, each sub-query runs its own ReAct
         # loop (search → reflect → refine → search) instead of flat parallel search.
         if getattr(self.config, "deep_research_enable_topic_agents", False):
-            topic_max_searches = getattr(self.config, "deep_research_topic_max_searches", 5)
+            topic_max_searches = getattr(self.config, "deep_research_topic_max_tool_calls", 10)
 
             # Budget splitting: divide max_sources_per_query across topic agents
             # so the aggregate source count stays within a reasonable bound.

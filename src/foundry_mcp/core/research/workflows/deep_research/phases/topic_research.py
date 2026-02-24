@@ -109,8 +109,24 @@ class TopicResearchMixin:
         # Accumulate tokens locally and merge under lock after the loop
         # to avoid a race on state.total_tokens_used from concurrent topics.
         local_tokens_used = 0
+        # Track total tool calls (search + extract) toward budget
+        tool_calls_used = 0
         async with state_lock:
             sub_query.status = "executing"
+
+        # Resolve extract config once for the loop
+        import os as _os
+
+        extract_enabled = (
+            getattr(self.config, "deep_research_enable_extract", True)
+            and bool(
+                getattr(self.config, "tavily_api_key", None)
+                or _os.environ.get("TAVILY_API_KEY")
+            )
+        )
+        extract_max_per_iter = getattr(
+            self.config, "deep_research_extract_max_per_iteration", 2
+        )
 
         for iteration in range(max_searches):
             self._check_cancellation(state)
@@ -129,6 +145,7 @@ class TopicResearchMixin:
                 semaphore=semaphore,
             )
             result.searches_performed += 1
+            tool_calls_used += 1
             result.sources_found += sources_added
 
             # --- Cost-aware early-exit heuristic ---
@@ -156,11 +173,11 @@ class TopicResearchMixin:
 
             # If this is the last allowed iteration, skip reflection
             # (max_searches is the hard cap regardless of reflection)
-            if iteration >= max_searches - 1:
+            if tool_calls_used >= max_searches:
                 logger.info(
-                    "Topic %r hit max_searches cap (%d/%d), stopping regardless of reflection",
+                    "Topic %r hit max_tool_calls cap (%d/%d), stopping regardless of reflection",
                     sub_query.id,
-                    iteration + 1,
+                    tool_calls_used,
                     max_searches,
                 )
                 break
@@ -186,14 +203,41 @@ class TopicResearchMixin:
 
             # Log every reflection decision for observability
             logger.info(
-                "Topic %r reflection [iter %d/%d]: complete=%s, continue=%s, rationale=%s",
+                "Topic %r reflection [iter %d/%d]: complete=%s, continue=%s, extract=%d urls, rationale=%s",
                 sub_query.id,
                 iteration + 1,
                 max_searches,
                 decision.research_complete,
                 decision.continue_searching,
+                len(decision.urls_to_extract or []),
                 rationale[:120] if rationale else "(empty)",
             )
+
+            # --- Optional extraction step ---
+            # If reflection recommends URLs for extraction and we have budget,
+            # extract full content before deciding whether to continue.
+            if (
+                extract_enabled
+                and decision.urls_to_extract
+                and tool_calls_used < max_searches
+            ):
+                urls_to_fetch = decision.urls_to_extract[:extract_max_per_iter]
+                extract_added = await self._topic_extract(
+                    urls=urls_to_fetch,
+                    sub_query=sub_query,
+                    state=state,
+                    seen_urls=seen_urls,
+                    seen_titles=seen_titles,
+                    state_lock=state_lock,
+                    semaphore=semaphore,
+                    timeout=timeout,
+                )
+                tool_calls_used += 1  # count extraction batch as 1 tool call
+                result.sources_found += extract_added
+                if extract_added > 0:
+                    result.reflection_notes.append(
+                        f"[extract] Fetched {extract_added} source(s) from {len(urls_to_fetch)} URL(s)"
+                    )
 
             # Check for explicit research completion signal
             if decision.research_complete:
@@ -205,6 +249,16 @@ class TopicResearchMixin:
             if not decision.continue_searching:
                 result.completion_rationale = (
                     rationale or "Reflection decided to stop searching"
+                )
+                break
+
+            # Check budget after extraction
+            if tool_calls_used >= max_searches:
+                logger.info(
+                    "Topic %r hit max_tool_calls cap after extraction (%d/%d)",
+                    sub_query.id,
+                    tool_calls_used,
+                    max_searches,
                 )
                 break
 
@@ -310,12 +364,14 @@ class TopicResearchMixin:
                 "sub_query_id": sub_query.id,
                 "sub_query": sub_query.query,
                 "searches_performed": result.searches_performed,
+                "tool_calls_used": tool_calls_used,
                 "sources_found": result.sources_found,
                 "refined_queries": result.refined_queries,
                 "reflection_notes": result.reflection_notes,
                 "early_completion": result.early_completion,
                 "completion_rationale": result.completion_rationale,
                 "inline_compressed": result.compressed_findings is not None,
+                "extract_enabled": extract_enabled,
             },
         )
 
@@ -549,7 +605,8 @@ class TopicResearchMixin:
             '  "continue_searching": true/false,\n'
             '  "refined_query": "new search query if continuing" or null,\n'
             '  "research_complete": true/false,\n'
-            '  "rationale": "explain your assessment and what specific gap remains if continuing"\n'
+            '  "rationale": "explain your assessment and what specific gap remains if continuing",\n'
+            '  "urls_to_extract": ["url1", "url2"] or null\n'
             "}\n\n"
             "Decision rules (follow strictly, in priority order):\n"
             "1. STOP IMMEDIATELY — set research_complete=true when you have 3+ sources "
@@ -567,6 +624,13 @@ class TopicResearchMixin:
             "provide a broader or alternative refined_query.\n"
             "6. The rationale field is REQUIRED and must never be empty. It must explain "
             "your reasoning, not just restate the decision.\n\n"
+            "URL extraction (urls_to_extract):\n"
+            "- If a search result snippet suggests rich content behind a URL (e.g., detailed "
+            "technical documentation, comparison tables, research papers, API specs), recommend "
+            "extracting it by including the URL in urls_to_extract.\n"
+            "- Only recommend extraction for URLs where the snippet indicates valuable detail "
+            "you cannot get from the snippet alone.\n"
+            "- Limit to at most 2 URLs per reflection. Set to null if no extraction is needed.\n\n"
             "IMPORTANT: Err on the side of stopping early. Each additional search iteration "
             "has diminishing returns. If you already have diverse, relevant sources, STOP.\n"
             "- Keep refined queries focused on the original research topic.\n"
@@ -685,6 +749,121 @@ class TopicResearchMixin:
                 has_high_quality = True
 
         return len(distinct_domains) >= 2 and has_high_quality
+
+    # ------------------------------------------------------------------
+    # Extract step (fetch full content from promising URLs)
+    # ------------------------------------------------------------------
+
+    async def _topic_extract(
+        self,
+        urls: list[str],
+        sub_query: SubQuery,
+        state: DeepResearchState,
+        seen_urls: set[str],
+        seen_titles: dict[str, str],
+        state_lock: asyncio.Lock,
+        semaphore: asyncio.Semaphore,
+        timeout: float = 60.0,
+    ) -> int:
+        """Extract full content from promising URLs found in search results.
+
+        Uses Tavily Extract API to fetch and parse page content. Extracted
+        sources are deduplicated against existing sources and added to state.
+
+        Args:
+            urls: URLs to extract (pre-validated, max per config)
+            sub_query: The sub-query being researched (for source association)
+            state: Current research state
+            seen_urls: Shared URL dedup set
+            seen_titles: Shared title dedup dict
+            state_lock: Lock for thread-safe state mutations
+            semaphore: Semaphore for concurrency control
+            timeout: Per-extraction timeout
+
+        Returns:
+            Number of new sources added from extraction
+        """
+        import os
+
+        from foundry_mcp.core.research.providers.tavily_extract import (
+            TavilyExtractProvider,
+        )
+
+        if not urls:
+            return 0
+
+        api_key = getattr(self.config, "tavily_api_key", None) or os.environ.get(
+            "TAVILY_API_KEY"
+        )
+        if not api_key:
+            logger.debug("Tavily API key not available for topic extract")
+            return 0
+
+        added = 0
+        async with semaphore:
+            try:
+                provider = TavilyExtractProvider(api_key=api_key)
+                extract_depth = getattr(self.config, "tavily_extract_depth", "basic")
+
+                extracted_sources = await asyncio.wait_for(
+                    provider.extract(
+                        urls=urls,
+                        extract_depth=extract_depth,
+                        format="markdown",
+                        query=sub_query.query,
+                    ),
+                    timeout=timeout,
+                )
+
+                for source in extracted_sources:
+                    async with state_lock:
+                        # URL dedup
+                        if source.url and source.url in seen_urls:
+                            continue
+
+                        # Title dedup
+                        normalized_title = _normalize_title(source.title)
+                        if normalized_title and len(normalized_title) > 20:
+                            if normalized_title in seen_titles:
+                                continue
+                            seen_titles[normalized_title] = source.url or ""
+
+                        if source.url:
+                            seen_urls.add(source.url)
+                            if source.quality == SourceQuality.UNKNOWN:
+                                source.quality = get_domain_quality(
+                                    source.url, state.research_mode
+                                )
+
+                        # Tag as extracted source
+                        source.sub_query_id = sub_query.id
+                        source.metadata["extract_source"] = True
+
+                        state.append_source(source)
+                        sub_query.source_ids.append(source.id)
+                        added += 1
+
+                logger.info(
+                    "Topic extract for %r: %d/%d URLs yielded new sources",
+                    sub_query.id,
+                    added,
+                    len(urls),
+                )
+
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Topic extract timed out for %r after %.1fs",
+                    sub_query.id,
+                    timeout,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Topic extract failed for %r: %s. Non-fatal, continuing.",
+                    sub_query.id,
+                    exc,
+                )
+
+        return added
 
     # ------------------------------------------------------------------
     # Think step (within-loop deliberation)

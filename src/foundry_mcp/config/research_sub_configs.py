@@ -117,7 +117,7 @@ class DeepResearchConfig:
     fetch_time_summarization: bool = True
 
     # Supervision settings
-    max_supervision_rounds: int = 3
+    max_supervision_rounds: int = 6
     supervision_min_sources_per_query: int = 2
 
     # Core workflow settings
@@ -131,7 +131,7 @@ class DeepResearchConfig:
     audit_artifacts: bool = True
 
     # Topic agent settings
-    topic_max_searches: int = 5
+    topic_max_searches: int = 10  # backward-compat alias for topic_max_tool_calls
     enable_content_dedup: bool = True
     content_dedup_threshold: float = 0.8
 
