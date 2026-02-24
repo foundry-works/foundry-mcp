@@ -191,10 +191,27 @@ class WorkflowExecutionMixin:
                 if err:
                     return err
 
-            # After BRIEF, jump directly to SUPERVISION (supervisor-owned decomposition)
+            # After BRIEF, jump directly to SUPERVISION (supervisor-owned decomposition).
+            # PLANNING and GATHERING are legacy-resume-only phases — new workflows
+            # never enter them.  The supervisor handles both decomposition (round 0)
+            # and gap-driven follow-up (rounds 1+).
             if state.phase == DeepResearchPhase.GATHERING:
                 # Legacy saved states may resume at GATHERING; let it proceed
-                pass
+                # but log a deprecation warning.
+                logger.warning(
+                    "GATHERING phase running from legacy saved state (research %s) "
+                    "— new workflows use supervisor-owned decomposition via SUPERVISION phase",
+                    state.id,
+                )
+                self._write_audit_event(
+                    state,
+                    "legacy_phase_resume",
+                    data={
+                        "phase": "gathering",
+                        "message": "Legacy saved state resumed at GATHERING phase",
+                    },
+                    level="warning",
+                )
             elif state.phase not in (DeepResearchPhase.SUPERVISION, DeepResearchPhase.SYNTHESIS):
                 state.phase = DeepResearchPhase.SUPERVISION
 

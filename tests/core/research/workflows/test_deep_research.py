@@ -557,7 +557,25 @@ class TestDeepResearchWorkflow:
                 "semantic_scholar": scholar_provider,
             }.get(name)
 
-        with patch.object(workflow, "_get_search_provider", side_effect=provider_lookup):
+        # Mock the LLM provider for the ReAct researcher loop:
+        # Turn 1 = web_search, Turn 2 = research_complete
+        _llm_call_count = 0
+
+        async def _mock_llm_provider(**kwargs):
+            nonlocal _llm_call_count
+            _llm_call_count += 1
+            r = MagicMock()
+            r.success = True
+            r.tokens_used = 30
+            r.error = None
+            if _llm_call_count % 2 == 1:
+                r.content = json.dumps({"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]})
+            else:
+                r.content = json.dumps({"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]})
+            return r
+
+        with patch.object(workflow, "_get_search_provider", side_effect=provider_lookup), \
+             patch.object(workflow, "_execute_provider_async", side_effect=_mock_llm_provider):
             result = await workflow._execute_gathering_async(
                 state=state,
                 provider_id=None,
@@ -622,7 +640,24 @@ class TestDeepResearchWorkflow:
                 "semantic_scholar": arxiv_provider,
             }.get(name)
 
-        with patch.object(workflow, "_get_search_provider", side_effect=provider_lookup):
+        # Mock the LLM provider for the ReAct researcher loop
+        _llm_call_count = 0
+
+        async def _mock_llm_provider(**kwargs):
+            nonlocal _llm_call_count
+            _llm_call_count += 1
+            r = MagicMock()
+            r.success = True
+            r.tokens_used = 30
+            r.error = None
+            if _llm_call_count % 2 == 1:
+                r.content = json.dumps({"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]})
+            else:
+                r.content = json.dumps({"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]})
+            return r
+
+        with patch.object(workflow, "_get_search_provider", side_effect=provider_lookup), \
+             patch.object(workflow, "_execute_provider_async", side_effect=_mock_llm_provider):
             result = await workflow._execute_gathering_async(
                 state=state,
                 provider_id=None,
@@ -1920,6 +1955,22 @@ class TestDeepResearchProviderFailover:
             )
         ]
 
+        # Mock the LLM provider for the ReAct researcher loop
+        _llm_call_count = 0
+
+        async def _mock_llm_provider(**kwargs):
+            nonlocal _llm_call_count
+            _llm_call_count += 1
+            r = MagicMock()
+            r.success = True
+            r.tokens_used = 30
+            r.error = None
+            if _llm_call_count % 2 == 1:
+                r.content = json.dumps({"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]})
+            else:
+                r.content = json.dumps({"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]})
+            return r
+
         with patch.object(
             workflow_with_providers,
             "_get_search_provider",
@@ -1928,6 +1979,10 @@ class TestDeepResearchProviderFailover:
                 if name == "google"
                 else self._create_mock_provider(name, [])
             ),
+        ), patch.object(
+            workflow_with_providers,
+            "_execute_provider_async",
+            side_effect=_mock_llm_provider,
         ):
             result = await workflow_with_providers._execute_gathering_async(
                 state=state_with_pending_queries,
@@ -1978,10 +2033,30 @@ class TestDeepResearchProviderFailover:
             )
         ]
 
+        # Mock the LLM provider for the ReAct researcher loop
+        _llm_call_count = 0
+
+        async def _mock_llm_provider(**kwargs):
+            nonlocal _llm_call_count
+            _llm_call_count += 1
+            r = MagicMock()
+            r.success = True
+            r.tokens_used = 30
+            r.error = None
+            if _llm_call_count % 2 == 1:
+                r.content = json.dumps({"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]})
+            else:
+                r.content = json.dumps({"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]})
+            return r
+
         with patch.object(
             workflow_with_providers,
             "_get_search_provider",
             side_effect=lambda name: self._create_mock_provider(name, mock_sources),
+        ), patch.object(
+            workflow_with_providers,
+            "_execute_provider_async",
+            side_effect=_mock_llm_provider,
         ):
             result = await workflow_with_providers._execute_gathering_async(
                 state=state_with_pending_queries,
@@ -2082,10 +2157,30 @@ class TestDeepResearchProviderFailover:
                 mock_provider.search = AsyncMock(side_effect=google_search)
             return mock_provider
 
+        # Mock the LLM provider for the ReAct researcher loop
+        _llm_call_count = 0
+
+        async def _mock_llm_provider(**kwargs):
+            nonlocal _llm_call_count
+            _llm_call_count += 1
+            r = MagicMock()
+            r.success = True
+            r.tokens_used = 30
+            r.error = None
+            if _llm_call_count % 2 == 1:
+                r.content = json.dumps({"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]})
+            else:
+                r.content = json.dumps({"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]})
+            return r
+
         with patch.object(
             workflow_with_providers,
             "_get_search_provider",
             side_effect=create_provider,
+        ), patch.object(
+            workflow_with_providers,
+            "_execute_provider_async",
+            side_effect=_mock_llm_provider,
         ):
             result = await workflow_with_providers._execute_gathering_async(
                 state=state_with_pending_queries,
@@ -2150,10 +2245,30 @@ class TestDeepResearchProviderFailover:
             )
         ]
 
+        # Mock the LLM provider for the ReAct researcher loop
+        _llm_call_count = 0
+
+        async def _mock_llm_provider(**kwargs):
+            nonlocal _llm_call_count
+            _llm_call_count += 1
+            r = MagicMock()
+            r.success = True
+            r.tokens_used = 30
+            r.error = None
+            if _llm_call_count % 2 == 1:
+                r.content = json.dumps({"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]})
+            else:
+                r.content = json.dumps({"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]})
+            return r
+
         with patch.object(
             workflow_with_providers,
             "_get_search_provider",
             side_effect=lambda name: self._create_mock_provider(name, mock_sources),
+        ), patch.object(
+            workflow_with_providers,
+            "_execute_provider_async",
+            side_effect=_mock_llm_provider,
         ):
             result = await workflow_with_providers._execute_gathering_async(
                 state=state_with_pending_queries,
@@ -2262,10 +2377,30 @@ class TestDeepResearchProviderFailoverEdgeCases:
                 return mock_provider
             return None
 
+        # Mock the LLM provider for the ReAct researcher loop
+        _llm_call_count = 0
+
+        async def _mock_llm_provider(**kwargs):
+            nonlocal _llm_call_count
+            _llm_call_count += 1
+            r = MagicMock()
+            r.success = True
+            r.tokens_used = 30
+            r.error = None
+            if _llm_call_count % 2 == 1:
+                r.content = json.dumps({"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]})
+            else:
+                r.content = json.dumps({"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]})
+            return r
+
         with patch.object(
             workflow_three_providers,
             "_get_search_provider",
             side_effect=create_provider,
+        ), patch.object(
+            workflow_three_providers,
+            "_execute_provider_async",
+            side_effect=_mock_llm_provider,
         ):
             result = await workflow_three_providers._execute_gathering_async(
                 state=state_single_query,

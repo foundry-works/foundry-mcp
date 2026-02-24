@@ -1,231 +1,167 @@
-# PLAN-CHECKLIST: Deep Research — Config Consolidation & Tool-Calling Researchers
+# PLAN-CHECKLIST: Deep Research — Supervisor Orchestration, Compression & Synthesis Alignment
 
 **Branch:** `tyler/foundry-mcp-20260223-0747`
 **Date:** 2026-02-24
 
 ---
 
-## Phase 1: Collapse Config Flags (Delete Dead Paths) ✅ COMPLETE
+## Phase 1: Unify Supervision as the Research Orchestrator
 
-### 1.1 — Audit and catalog all flag references ✅
-
-- [x] **1.1.1** Grep codebase for each flag name; record every file that references it
-- [x] **1.1.2** Catalog which code paths each flag gates (production path vs dead path)
-- [x] **1.1.3** Identify tests that exercise dead paths (will be deleted or rewritten)
-
-### 1.2 — Delete dead phase code ✅
-
-- [x] **1.2.1** Remove ANALYSIS phase (enum, transitions, flags, phase code)
-- [x] **1.2.2** Remove global COMPRESSION phase (keep per-topic `_compress_single_topic_async`)
-- [x] **1.2.3** Remove REFINEMENT phase (loop, transitions, enum, flags)
-- [x] **1.2.4** Remove per-phase reflection pauses (`async_think_pause()` calls, flag, prompts)
-- [x] **1.2.5** Remove legacy query-generation delegation model
-- [x] **1.2.6** Remove standalone PLANNING phase from default path
-- [x] **1.2.7** Remove post-gathering Tavily extract (`tavily_extract_in_deep_research` flag)
-- [x] **1.2.8** Remove `deep_research_enable_topic_agents` flag and gated code
-- [x] **1.2.9** Remove `deep_research_digest_policy` flag and proactive/lazy branching
-
-### 1.3 — Hardwire always-on behavior ✅
-
-- [x] **1.3.1** Remove `deep_research_enable_brief` flag — brief phase always runs
-- [x] **1.3.2** Remove `deep_research_fetch_time_summarization` flag — summarization always active
-
-### 1.4 — Simplify workflow_execution.py ✅
-
-- [x] **1.4.1** Rewrite `_determine_next_phase()` as linear sequence: CLARIFICATION → BRIEF → SUPERVISION → SYNTHESIS → COMPLETE
-- [x] **1.4.2** Remove iteration loop (was for REFINEMENT)
-- [x] **1.4.3** Remove dead phase transitions and state checks
-
-### 1.5 — Clean up config and models ✅
-
-- [x] **1.5.1** Remove all deleted flags from `research.py` config class
-- [x] **1.5.2** Remove deleted flags from `from_toml_dict()` parsing
-- [x] **1.5.3** Clean up `DeepResearchPhase` enum — remove dead phase values
-- [x] **1.5.4** Remove any config validation referencing deleted flags
-- [x] **1.5.5** Clean up orchestration.py — remove dead AgentRole values, dead PHASE_TO_AGENT entries, dead elif branches
-
-### 1.6 — Update tests ✅
-
-- [x] **1.6.1** Delete tests for removed phases (6 test files, ~4,500 lines):
-  - `test_global_compression.py` — global compression phase
-  - `test_planning_critique.py` — planning self-critique
-  - `test_contradiction_detection.py` — analysis contradiction detection
-  - `test_reflection.py` — per-phase reflection pauses
-  - `test_deep_research_digest.py` — analysis digest pipeline
-  - `test_proactive_digest.py` — proactive digest policy
-- [x] **1.6.2** Fix 22 test files — replace dead phase refs (PLANNING→BRIEF, ANALYSIS→SYNTHESIS, etc.), remove dead config attr refs, delete test methods for removed features
-- [x] **1.6.3** Verify production pipeline tests pass
-
-### 1.7 — Final verification ✅
-
-- [x] **1.7.1** Grep entire codebase for each deleted phase name — zero references remain in tests
-- [x] **1.7.2** Run full test suite — 6107 passed, 0 failures, 48 skipped
-- [x] **1.7.3** Committed in two commits: `3f67676` (source changes) + `a1a1640` (cleanup)
+- [x] **1.1** Remove `deep_research_supervisor_owned_decomposition` config flag
+  - Delete field from `research.py` config class *(already removed in prior phases)*
+  - Remove from `from_toml_dict()` parsing *(already removed in prior phases)*
+  - Remove any default value assignments *(already removed in prior phases)*
+  - Ensure old config files with this key don't cause runtime errors (ignore unknown keys) *(verified: `data.get()` silently ignores unknown keys)*
+- [x] **1.2** Make BRIEF → SUPERVISION the sole default transition in `workflow_execution.py`
+  - Verify lines 194-199 unconditionally skip PLANNING/GATHERING for new workflows *(confirmed)*
+  - Remove any remaining conditional checks on the deleted config flag *(none found — flag only in PLAN docs)*
+  - Add comment: "PLANNING and GATHERING are legacy-resume-only phases" *(added)*
+- [x] **1.3** Guard PLANNING phase as legacy-resume-only
+  - PLANNING removed from DeepResearchPhase enum entirely — no legacy resume possible
+  - planning.py code retained for backward compat but unreachable from workflow_execution.py
+- [x] **1.4** Guard GATHERING phase as legacy-resume-only
+  - GATHERING block only executes if `state.phase == DeepResearchPhase.GATHERING` on workflow entry *(confirmed)*
+  - Added deprecation warning log and audit event when legacy GATHERING phase runs
+  - gathering.py code retained for backward compat
+- [x] **1.5** Review and harden first-round decomposition prompts
+  - Verified first-round think prompt includes open_deep_research guidance:
+    - "Bias toward single researcher for simple queries" *(present in think system prompt)*
+    - "Parallelize for explicit comparisons (one per comparison element)" *(present in delegation system prompt)*
+    - "2-5 directives for typical queries" *(present in delegation system prompt)*
+  - Verified first-round delegate prompt includes:
+    - Priority assignment (1=critical, 2=important, 3=nice-to-have) *(present)*
+    - Specificity guidance: each directive yields targeted results *(present)*
+    - Self-critique: "Verify no redundant directives and no missing perspectives" *(present)*
+- [x] **1.6** Verify round 0 → round 1 handoff
+  - After round 0 directives execute, round 1 heuristic (`_assess_coverage_heuristic`) assesses decomposition results *(confirmed — heuristic early-exit only runs at round > 0)*
+  - Heuristic sees round 0's topic_research_results and sources *(confirmed via test)*
+  - Round 0 counted toward `max_supervision_rounds` *(confirmed)*
+- [x] **1.7** Clean up dead references to config flag
+  - Searched codebase for `supervisor_owned_decomposition` — only found in PLAN docs (expected)
+  - No conditionals, comments, or test fixtures reference the flag in source code
+- [x] **1.8** Add tests for unified supervisor orchestration
+  - Test: new workflow goes BRIEF → SUPERVISION → SYNTHESIS (no PLANNING/GATHERING) *(TestUnifiedSupervisorOrchestration)*
+  - Test: PLANNING phase not in enum (never executes for new or legacy workflows) *(test_planning_phase_not_in_enum)*
+  - Test: GATHERING phase never executes for new workflows *(test_gathering_only_runs_from_legacy_resume)*
+  - Test: legacy saved state at GATHERING resumes correctly *(test_legacy_gathering_resume_enters_gathering_block)*
+  - Test: round 0 always delegates, round 1 assesses results *(test_round_zero_always_delegates, test_round_one_assesses_round_zero_results)*
+  - Test: round 0 results visible to round 1 heuristic *(test_coverage_data_includes_round_zero_results)*
+  - Test: deprecation log emitted when legacy phase runs *(test_deprecation_log_emitted_for_legacy_gathering)*
+  - Test: old config files with `supervisor_owned_decomposition` key don't crash *(test_old_config_key_supervisor_owned_decomposition_ignored)*
+- [x] **1.9** Verify existing deep research tests still pass *(348 passed, 0 failures)*
 
 ---
 
-## Phase 2: Tool-Calling Researchers (Merge Reflect + Think into ReAct Agent)
+## Phase 2: Pass Full Message History to Compression
 
-### 2.1 — Define researcher tool schemas
+- [ ] **2.1** Add `message_history` field to `TopicResearchResult`
+  - Field: `message_history: list[dict[str, str]] = Field(default_factory=list)`
+  - Exclude from compact repr / summary views (can be large)
+  - Ensure Pydantic serialization backward-compat (default empty list)
+- [ ] **2.2** Store message history on result in `topic_research.py`
+  - At end of ReAct loop (after line ~540), copy `message_history` to `result.message_history`
+  - Include all entries: assistant responses, tool results, system messages
+  - Cap at reasonable size if needed (e.g., last 50 entries)
+- [ ] **2.3** Update compression prompt to use message history when available
+  - In `_compress_single_topic_async()` (compression.py):
+    - Check `topic_result.message_history` — if non-empty, build prompt from message history
+    - Format: chronological tool calls and AI responses (role + content)
+    - Apply `max_content_length` cap to total message history block
+    - Truncate oldest messages first (preserve most recent reasoning)
+  - When `message_history` is empty: fall back to existing structured metadata prompt (no breaking change)
+- [ ] **2.4** Align compression system prompt with open_deep_research structure
+  - Adopt `compress_research_system_prompt` structure:
+    - `<Task>`: Clean up findings, preserve ALL relevant information verbatim
+    - `<Guidelines>`: 6 rules — comprehensive, include ALL sources, inline citations, Sources section, preserve all sources, don't lose sources
+    - `<Output Format>`: "Queries and Tool Calls Made" → "Fully Comprehensive Findings" → "Sources list"
+    - `<Citation Rules>`: Sequential numbering `[1] Title: URL`, no gaps
+    - Critical reminder: "preserve verbatim — don't rewrite, summarize, or paraphrase"
+  - Keep existing structured metadata as supplementary context (query text, iteration count, reflection notes)
+- [ ] **2.5** Add tests for message-history-based compression
+  - Test: message history stored on TopicResearchResult after ReAct loop
+  - Test: compression prompt includes raw message history when available
+  - Test: compression prompt falls back to structured metadata when message_history empty
+  - Test: message history truncated to max_content_length (oldest dropped first)
+  - Test: compression output includes `[N] Title: URL` citation format
+  - Test: compression output includes "Queries and Tool Calls Made" section
+  - Test: existing compression tests pass with new prompt structure (backward compat)
+- [ ] **2.6** Verify existing deep research tests still pass
 
-- [ ] **2.1.1** Add `WebSearchTool` schema to `models/deep_research.py`:
-  ```python
-  class WebSearchTool(BaseModel):
-      query: str
-      max_results: int = 5
-  ```
-- [ ] **2.1.2** Add `ExtractContentTool` schema:
-  ```python
-  class ExtractContentTool(BaseModel):
-      urls: list[str]  # max 2 URLs per call
-  ```
-- [ ] **2.1.3** Add `ThinkTool` schema:
-  ```python
-  class ThinkTool(BaseModel):
-      reasoning: str
-  ```
-- [ ] **2.1.4** Add `ResearchCompleteTool` schema:
-  ```python
-  class ResearchCompleteTool(BaseModel):
-      summary: str
-  ```
-- [ ] **2.1.5** Create tool registry mapping tool names to schemas and dispatch functions
+---
 
-### 2.2 — Create researcher system prompt
+## Phase 3: Align Synthesis Prompt with open_deep_research
 
-- [ ] **2.2.1** Write system prompt adapted from open_deep_research's `research_system_prompt`:
-  - Role: "You are a focused research agent assigned to investigate: {topic}"
-  - Strategy guidance: "Start with broader searches, then narrow based on findings"
-  - Think guidance: "Use Think to pause and assess before deciding next steps"
-  - Completion guidance: "Call ResearchComplete when findings address the research question"
-  - Budget visibility: "You have {remaining} of {total} tool calls remaining"
-  - Scaling guidance: "Simple queries: 2-3 searches. Complex topics: up to budget limit"
-  - Date context: "Today's date is {date}"
-- [ ] **2.2.2** Include source quality expectations:
-  - "Prefer primary sources, official documentation, and peer-reviewed content"
-  - "Seek diverse perspectives — multiple domains and viewpoints"
-- [ ] **2.2.3** Include search result format documentation:
-  - Explain that search results are pre-summarized with `<summary>` and `<key_excerpts>` tags
-  - Explain that ExtractContent returns full page content in markdown
+- [ ] **3.1** Add section verbosity expectation to synthesis system prompt
+  - Add: "Each section should be as long as necessary to deeply answer the question with the information gathered. Sections are expected to be thorough and detailed. You are writing a deep research report and users expect comprehensive answers."
+  - Place after the "Writing Quality" section
+- [ ] **3.2** Soften structure prescriptiveness
+  - Add after structure guidance: "These are suggestions. Section is a fluid concept — you can structure your report however you think is best, including in ways not listed above. Make sure sections are cohesive and make sense for the reader."
+  - Keep query-type hints as starting points, not rigid templates
+- [ ] **3.3** Make Analysis subsections optional
+  - Change mandatory "Analysis" section with "Supporting Evidence", "Conflicting Information", and "Limitations" subsections
+  - Replace with: "Include analysis of conflicting information and limitations where they exist, but integrate them naturally into the relevant sections rather than forcing separate subsections."
+- [ ] **3.4** Add citation importance emphasis
+  - Add to Citations section: "Citations are extremely important. Pay careful attention to getting these right. Users will often use citations to find more information on specific points."
+- [ ] **3.5** Strengthen language matching
+  - Add a second language-matching instruction at the end of the system prompt:
+    - "REMEMBER: The research and brief may be in English, but the final report MUST be written in the same language as the user's original query. This is critical — the user will only understand the answer if it matches their input language."
+- [ ] **3.6** Add per-section writing rules
+  - "Use ## for each section title (Markdown format)"
+  - "Write in paragraph form by default; use bullet points only when listing discrete items"
+  - "Do not refer to yourself or comment on the report itself — just write the report"
+- [ ] **3.7** Add tests for synthesis prompt changes
+  - Test: system prompt includes verbosity expectation ("thorough", "detailed", "comprehensive")
+  - Test: system prompt includes structure flexibility ("however you think is best")
+  - Test: "Supporting Evidence" / "Conflicting Information" / "Limitations" NOT mandatory
+  - Test: citation section includes importance emphasis
+  - Test: language matching instruction appears at least twice
+  - Test: per-section writing rules present (## headers, paragraph form, no self-reference)
+  - Test: query-type classification still works (comparison, enumeration, howto, explanation)
+- [ ] **3.8** Verify existing synthesis tests still pass
 
-### 2.3 — Implement ReAct loop
+---
 
-- [ ] **2.3.1** Refactor `_execute_topic_research_async()`:
-  - Initialize message history: `[system_prompt, user_assignment]`
-  - Enter ReAct loop: `while tool_calls_remaining > 0`
-  - Each iteration: one LLM call with tools → process tool calls → append results
-  - Exit conditions: `ResearchComplete` called, no tool calls returned, budget exhausted
-- [ ] **2.3.2** Implement tool call dispatch:
-  - Parse tool calls from LLM response (provider-specific format)
-  - Route to handler by tool name:
-    - `WebSearch` → `_topic_search()` with query from tool call
-    - `ExtractContent` → `_topic_extract()` with URLs from tool call
-    - `Think` → log reasoning, return acknowledgment
-    - `ResearchComplete` → record summary, set `early_completion=True`, break
-  - Format tool results as tool response messages
-- [ ] **2.3.3** Implement Think constraint:
-  - If Think and other tools called in same turn: execute Think first
-  - Log Think reasoning before executing action tools
-- [ ] **2.3.4** Implement tool call budget tracking:
-  - Each tool call (WebSearch, ExtractContent) decrements budget by 1
-  - Think calls do NOT count against budget (same as open_deep_research)
-  - ResearchComplete does NOT count against budget
-  - When budget reaches 0: stop loop, log "budget exhausted"
-- [ ] **2.3.5** Implement message history management:
-  - Append each tool call + result to history
-  - Cap history at reasonable token limit (truncate oldest tool results if needed)
-  - Each researcher has independent history (no cross-contamination)
+## Phase 4: Message-Aware Token Limit Recovery
 
-### 2.4 — Wire tool calls to existing infrastructure
-
-- [ ] **2.4.1** `WebSearch` dispatch:
-  - Call existing `_topic_search()` with tool call's query
-  - Return formatted search results (already summarized via fetch-time summarization)
-  - Format: `Found {N} sources:\n\n--- SOURCE 1: {title} ---\nURL: ...\nSUMMARY: ...`
-  - Add sources to shared state under `state_lock` (existing dedup logic)
-- [ ] **2.4.2** `ExtractContent` dispatch:
-  - Call existing `_topic_extract()` with tool call's URLs
-  - Return extracted markdown content
-  - Add extracted sources to shared state under `state_lock`
-  - Gate on `deep_research_enable_extract` config (preserved tuning knob)
-- [ ] **2.4.3** `Think` dispatch:
-  - Log reasoning at INFO level with topic context
-  - Return simple acknowledgment: "Reflection recorded."
-  - Track think step content for inline compression context
-- [ ] **2.4.4** `ResearchComplete` dispatch:
-  - Record summary in `TopicResearchResult.completion_rationale`
-  - Set `early_completion = True`
-  - Return confirmation: "Research complete. Findings recorded."
-
-### 2.5 — Update LLM provider integration
-
-- [ ] **2.5.1** Add tool-calling support to provider request:
-  - Extend `ProviderRequest` (or create specialized request) with tools list
-  - Map Pydantic tool schemas to provider-specific tool format:
-    - Anthropic: `tool_use` blocks
-    - OpenAI: `function` definitions
-    - Other providers: provider-specific adaptation
-- [ ] **2.5.2** Parse tool calls from provider response:
-  - Extract tool call name, arguments, and ID from response
-  - Handle multiple tool calls per response
-  - Handle responses with both text and tool calls
-- [ ] **2.5.3** Add provider capability check:
-  - `provider.supports_tool_calling() -> bool`
-  - Gate ReAct loop on this check
-  - Fall back to structured-JSON approach when not supported
-
-### 2.6 — Delete merged code
-
-- [ ] **2.6.1** Delete `_topic_reflect()` method from `topic_research.py`
-- [ ] **2.6.2** Delete `_topic_think()` method from `topic_research.py`
-- [ ] **2.6.3** Delete `_parse_reflection_decision()` and related parsing functions
-- [ ] **2.6.4** Delete `_format_topic_sources_for_reflection()` method
-- [ ] **2.6.5** Delete rigid threshold rules from any remaining prompt code:
-  - "STOP IMMEDIATELY if 3+ sources FROM 2+ DISTINCT DOMAINS"
-  - "ADEQUATE if 2+ sources but same domain"
-  - Source-count / domain-count injection logic
-- [ ] **2.6.6** Clean up imports referencing deleted functions
-
-### 2.7 — Preserve existing behavior
-
-- [ ] **2.7.1** Inline per-topic compression still runs after ReAct loop completes
-  - `_compress_single_topic_async()` unchanged
-  - Input: accumulated sources from researcher's tool calls
-  - Output: `compressed_findings` on `TopicResearchResult`
-- [ ] **2.7.2** Source deduplication unchanged:
-  - URL dedup, title normalization, content similarity — all preserved
-  - Applied when `WebSearch` results are added to state
-- [ ] **2.7.3** Concurrent execution unchanged:
-  - Multiple topic researchers run in parallel (semaphore-bounded)
-  - Each has independent message history and state lock
-- [ ] **2.7.4** `TopicResearchResult` fields still populated:
-  - `sources_found`, `searches_performed`, `refined_queries`
-  - `early_completion`, `completion_rationale`
-  - `compressed_findings` (from post-loop compression)
-
-### 2.8 — Add provider fallback for non-tool-calling providers
-
-- [ ] **2.8.1** Detect provider capability before entering ReAct loop
-- [ ] **2.8.2** When provider lacks tool calling: fall back to structured-JSON loop
-  - Use simplified version of existing reflect approach
-  - Single LLM call per iteration with JSON output: `{action, query, reasoning, complete}`
-  - No separate think step (merged into single call)
-- [ ] **2.8.3** Log when fallback path is used
-
-### 2.9 — Tests
-
-- [ ] **2.9.1** Test: researcher makes WebSearch tool calls and receives summarized results
-- [ ] **2.9.2** Test: researcher makes ExtractContent tool calls and receives markdown content
-- [ ] **2.9.3** Test: Think tool logs reasoning and returns acknowledgment
-- [ ] **2.9.4** Test: ResearchComplete terminates ReAct loop and records summary
-- [ ] **2.9.5** Test: tool call budget enforced (WebSearch + ExtractContent decrement, Think does not)
-- [ ] **2.9.6** Test: multiple tool calls per turn processed correctly
-- [ ] **2.9.7** Test: Think constraint — Think executed before action tools in same turn
-- [ ] **2.9.8** Test: message history accumulates across turns
-- [ ] **2.9.9** Test: concurrent researchers have independent histories
-- [ ] **2.9.10** Test: source deduplication works through WebSearch tool path
-- [ ] **2.9.11** Test: inline compression runs after ReAct loop completes
-- [ ] **2.9.12** Test: fallback to structured-JSON loop when provider lacks tool calling
-- [ ] **2.9.13** Test: LLM call count is 1 per turn (not 2 per iteration)
-- [ ] **2.9.14** Test: "no tool calls" response terminates loop gracefully
-- [ ] **2.9.15** Test: budget exhaustion terminates loop with appropriate log message
+- [ ] **4.1** Add `truncate_prompt_for_retry()` helper to `_lifecycle.py`
+  - Signature: `truncate_prompt_for_retry(prompt: str, attempt: int, max_attempts: int = 3) -> str`
+  - Attempt 1: remove first 20% of content (preserve tail)
+  - Attempt 2: remove first 30% of content
+  - Attempt 3: remove first 40% of content
+  - Never truncate below a minimum threshold (e.g., 1000 chars)
+  - Returns the truncated prompt string
+- [ ] **4.2** Add retry loop to `_compress_single_topic_async`
+  - Wrap the `execute_llm_call` in a retry loop (max 3 attempts)
+  - On token limit error (ContextWindowError):
+    - Apply `truncate_prompt_for_retry()` to user prompt
+    - Log: `"Compression retry %d/%d: truncating prompt by %d%%"`
+    - Retry the LLM call
+  - On success: break out of retry loop
+  - After 3 failures: return `(0, 0, False)` — non-fatal, skip compression for this topic
+  - Record retry count in audit event
+- [ ] **4.3** Add retry loop to `_execute_synthesis_async`
+  - Wrap the `execute_llm_call` in a retry loop (max 3 attempts)
+  - On token limit error:
+    - Apply `truncate_prompt_for_retry()` to user prompt
+    - For synthesis specifically: drop lowest-priority topics' findings first, then truncate remaining
+    - Log each retry with truncation percentage
+  - After 3 failures: generate partial report with whatever content fit
+  - Record retry count in audit event
+- [ ] **4.4** Verify provider-specific token limit error detection
+  - OpenAI: `BadRequestError` + "maximum context length" / "too many tokens" / "token"
+  - Anthropic: `BadRequestError` + "prompt is too long" / "too many tokens"
+  - Google: `ResourceExhausted` / `InvalidArgument` with "token" keyword
+  - Verify existing `ContextWindowError` classification covers these patterns
+  - Add any missing patterns
+- [ ] **4.5** Add tests for token limit recovery
+  - Test: compression retries on simulated token limit error
+  - Test: synthesis retries on simulated token limit error
+  - Test: progressive truncation (20% → 30% → 40%)
+  - Test: system prompt never truncated (only user prompt content)
+  - Test: most recent content preserved (oldest content truncated first)
+  - Test: max 3 retries, then graceful fallback
+  - Test: non-token-limit errors NOT retried (e.g., auth errors, rate limits)
+  - Test: retry metadata recorded in audit events
+  - Test: provider-specific error detection for OpenAI, Anthropic, Google
+  - Test: `truncate_prompt_for_retry()` unit tests (boundary cases, minimum threshold)
+- [ ] **4.6** Verify existing deep research tests still pass

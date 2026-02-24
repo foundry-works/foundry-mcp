@@ -144,6 +144,9 @@ class ProviderRequest:
         metadata: Arbitrary request metadata (tracing IDs, feature flags, etc.)
         stream: Whether to request streaming response
         attachments: File paths or URIs for multimodal inputs
+        tools: Optional tool definitions for function-calling capable providers.
+            Each dict should follow the provider's tool schema format.
+            When None, no tools are offered to the model.
     """
 
     prompt: str
@@ -155,6 +158,7 @@ class ProviderRequest:
     metadata: Dict[str, Any] = field(default_factory=dict)
     stream: bool = False
     attachments: Sequence[str] = field(default_factory=list)
+    tools: Optional[Sequence[Dict[str, Any]]] = None
 
 
 @dataclass(frozen=True)
@@ -195,6 +199,9 @@ class ProviderResult:
         duration_ms: Execution duration in milliseconds
         stderr: Captured stderr/log output for debugging
         raw_payload: Provider-specific metadata (traces, debug info, etc.)
+        tool_calls: Optional list of tool calls from function-calling responses.
+            Each dict contains tool name and arguments. None when the model
+            did not invoke any tools.
     """
 
     content: str
@@ -205,6 +212,7 @@ class ProviderResult:
     duration_ms: Optional[float] = None
     stderr: Optional[str] = None
     raw_payload: Dict[str, Any] = field(default_factory=dict)
+    tool_calls: Optional[Sequence[Dict[str, Any]]] = None
 
 
 @dataclass(frozen=True)

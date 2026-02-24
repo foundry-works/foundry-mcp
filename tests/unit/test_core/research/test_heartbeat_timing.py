@@ -57,6 +57,17 @@ def mock_config():
     config.deep_research_archive_content = False
     config.deep_research_digest_provider = None
     config.deep_research_digest_providers = []
+    # Topic researcher config (ReAct loop)
+    config.deep_research_topic_max_tool_calls = 3
+    config.deep_research_topic_reflection_provider = None
+    config.deep_research_reflection_provider = None
+    config.deep_research_reflection_timeout = 60.0
+    config.deep_research_enable_extract = False
+    config.deep_research_inline_compression = False
+    config.deep_research_enable_content_dedup = True
+    config.deep_research_content_dedup_threshold = 0.8
+    config.deep_research_clarification_provider = None
+    config.deep_research_stale_task_seconds = 300.0
 
     def get_phase_timeout(phase: str) -> float:
         mapping = {
@@ -265,14 +276,32 @@ class TestHeartbeatTiming:
                 return mock_search_provider
             return None
 
-        with patch.object(workflow, "_get_search_provider", side_effect=get_search_provider):
-            with patch.object(workflow, "_check_cancellation"):
-                await workflow._execute_gathering_async(
-                    state=state,
-                    provider_id=None,
-                    timeout=30.0,
-                    max_concurrent=1,
-                )
+        # Mock the LLM provider for the ReAct researcher loop
+        import json as _json
+        _llm_cc = 0
+
+        async def _mock_llm(**kw):
+            nonlocal _llm_cc
+            _llm_cc += 1
+            r = MagicMock()
+            r.success = True
+            r.tokens_used = 10
+            r.error = None
+            if _llm_cc % 2 == 1:
+                r.content = _json.dumps({"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]})
+            else:
+                r.content = _json.dumps({"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]})
+            return r
+
+        with patch.object(workflow, "_get_search_provider", side_effect=get_search_provider), \
+             patch.object(workflow, "_execute_provider_async", side_effect=_mock_llm), \
+             patch.object(workflow, "_check_cancellation"):
+            await workflow._execute_gathering_async(
+                state=state,
+                provider_id=None,
+                timeout=30.0,
+                max_concurrent=1,
+            )
 
         assert search_called, "Search provider should have been called"
         assert heartbeat_before_search is not None, (

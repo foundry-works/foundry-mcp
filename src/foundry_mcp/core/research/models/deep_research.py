@@ -325,6 +325,155 @@ def parse_brief_output(content: str) -> ResearchBriefOutput:
     return ResearchBriefOutput(research_brief=content.strip())
 
 
+# =========================================================================
+# Researcher tool schemas (Phase 2 PLAN: Tool-Calling Researchers)
+# =========================================================================
+
+
+class WebSearchTool(BaseModel):
+    """Tool schema for web search.
+
+    The researcher calls this to search the web for information on a topic.
+    Dispatched to configured search providers (Tavily, Perplexity, etc.).
+    """
+
+    query: str = Field(..., description="Search query string")
+    max_results: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maximum number of results to return",
+    )
+
+
+class ExtractContentTool(BaseModel):
+    """Tool schema for extracting full page content from URLs.
+
+    The researcher calls this when a search result snippet suggests
+    rich content that warrants full extraction (technical docs, papers, etc.).
+    """
+
+    urls: list[str] = Field(
+        ...,
+        description="URLs to extract full content from (max 2 per call)",
+    )
+
+    @field_validator("urls", mode="before")
+    @classmethod
+    def _cap_urls(cls, v: Any) -> list[str]:
+        """Cap at 2 URLs per extraction call."""
+        if not isinstance(v, list):
+            return []
+        return [str(u).strip() for u in v if isinstance(u, str) and u.strip().startswith("http")][:2]
+
+
+class ThinkTool(BaseModel):
+    """Tool schema for strategic reflection.
+
+    The researcher calls this to pause and assess findings, identify gaps,
+    and plan next steps. Does NOT count against the tool call budget.
+    """
+
+    reasoning: str = Field(
+        ...,
+        description="Strategic reasoning about research progress, gaps, and next steps",
+    )
+
+
+class ResearchCompleteTool(BaseModel):
+    """Tool schema for signaling research completion.
+
+    The researcher calls this when confident that findings adequately
+    address the research question. Terminates the ReAct loop.
+    """
+
+    summary: str = Field(
+        ...,
+        description="Summary of findings that address the research question",
+    )
+
+
+class ResearcherToolCall(BaseModel):
+    """A single tool call from the researcher LLM.
+
+    The researcher responds with a list of these to indicate which
+    tools to execute in a given turn.
+    """
+
+    tool: str = Field(
+        ...,
+        description="Tool name: web_search, extract_content, think, research_complete",
+    )
+    arguments: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Tool arguments matching the tool's schema",
+    )
+
+
+class ResearcherResponse(BaseModel):
+    """Structured response from the researcher LLM in a ReAct turn.
+
+    The researcher responds with tool calls indicating what actions to take.
+    Optionally includes brief reasoning before the tool calls.
+    """
+
+    tool_calls: list[ResearcherToolCall] = Field(
+        default_factory=list,
+        description="Tools to execute this turn",
+    )
+    reasoning: Optional[str] = Field(
+        default=None,
+        description="Optional brief reasoning before tool calls",
+    )
+
+
+#: Registry mapping tool names to their Pydantic schema classes.
+RESEARCHER_TOOL_SCHEMAS: dict[str, type[BaseModel]] = {
+    "web_search": WebSearchTool,
+    "extract_content": ExtractContentTool,
+    "think": ThinkTool,
+    "research_complete": ResearchCompleteTool,
+}
+
+#: Tools that do NOT count against the researcher's budget.
+BUDGET_EXEMPT_TOOLS: frozenset[str] = frozenset({"think", "research_complete"})
+
+
+def parse_researcher_response(content: str) -> ResearcherResponse:
+    """Parse raw LLM content into a validated ResearcherResponse.
+
+    Extracts JSON from the LLM response (handling markdown code blocks
+    and surrounding text), then validates against the ResearcherResponse
+    schema. Returns an empty-tool-calls response on parse failure (signals
+    the loop to stop gracefully).
+
+    Args:
+        content: Raw LLM response text
+
+    Returns:
+        Validated ResearcherResponse instance. On parse failure, returns
+        a response with no tool calls (graceful stop).
+    """
+    import json as _json
+
+    from foundry_mcp.core.research.workflows.deep_research._helpers import (
+        extract_json,
+    )
+
+    if not content or not content.strip():
+        return ResearcherResponse()
+
+    json_str = extract_json(content)
+    if not json_str:
+        return ResearcherResponse()
+
+    try:
+        data = _json.loads(json_str)
+        return ResearcherResponse.model_validate(data)
+    except (_json.JSONDecodeError, ValueError, TypeError):
+        return ResearcherResponse()
+
+
 class Contradiction(BaseModel):
     """A contradiction detected between research findings.
 

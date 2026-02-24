@@ -1,31 +1,32 @@
 """Per-topic ReAct research mixin for DeepResearchWorkflow.
 
 Implements parallel sub-topic researcher agents that each run an
-independent search → reflect → refine cycle for a single sub-query.
-When enabled, the gathering phase delegates to these topic researchers
-instead of flat parallel search.
+independent tool-calling ReAct loop for a single sub-query. The
+researcher LLM decides which tools to call (web_search, extract_content,
+think, research_complete) via structured JSON responses, replacing the
+prior fixed search → reflect → think → refine sequence.
+
+This merges the separate reflect and think LLM calls into a single
+call per turn, reducing LLM calls from 2 per iteration to 1 per turn.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
-    ReflectionDecision,
+    ExtractContentTool,
+    ResearcherToolCall,
+    ThinkTool,
     TopicResearchResult,
-    parse_reflection_decision as parse_reflection_structured,
+    WebSearchTool,
+    parse_researcher_response,
 )
 from foundry_mcp.core.research.models.sources import SourceQuality, SubQuery
-from foundry_mcp.core.research.workflows.deep_research._helpers import (
-    TopicReflectionDecision,
-    content_similarity,
-    extract_json,
-    parse_reflection_decision as parse_reflection_legacy,
-)
 from foundry_mcp.core.research.workflows.deep_research.source_quality import (
     _normalize_title,
     get_domain_quality,
@@ -34,12 +35,164 @@ from foundry_mcp.core.research.workflows.deep_research.source_quality import (
 logger = logging.getLogger(__name__)
 
 
+# ------------------------------------------------------------------
+# Researcher system prompt template
+# ------------------------------------------------------------------
+
+_RESEARCHER_SYSTEM_PROMPT = """\
+You are a focused research agent. Your task is to thoroughly research a specific topic by using the tools available to you.
+
+## Available Tools
+
+### web_search
+Search the web for information.
+Arguments: {{"query": "search query string", "max_results": 5}}
+Returns: Search results with titles, URLs, and content summaries.
+
+### extract_content
+Extract full page content from promising URLs found in search results.
+Arguments: {{"urls": ["url1", "url2"]}}  (max 2 URLs per call)
+Returns: Full page content in markdown format.
+Only available when extraction is enabled. If unavailable, focus on web_search.
+
+### think
+Pause and reflect on your research progress. Use this to assess what you've found, identify gaps, and plan your next steps.
+Arguments: {{"reasoning": "your analysis of findings and gaps"}}
+Returns: Acknowledgment. Does NOT count against your tool call budget.
+
+### research_complete
+Signal that your research is complete and summarize your findings.
+Arguments: {{"summary": "comprehensive summary addressing the research question"}}
+Returns: Confirmation. Call this when you are confident your findings address the research question.
+
+## Response Format
+
+Respond with a JSON object containing your tool calls for this turn:
+
+```json
+{{
+  "tool_calls": [
+    {{"tool": "web_search", "arguments": {{"query": "...", "max_results": 5}}}},
+    {{"tool": "think", "arguments": {{"reasoning": "..."}}}}
+  ]
+}}
+```
+
+You may include multiple tool calls per turn. When calling think alongside other tools, think will be executed first.
+
+## Research Strategy
+
+- Start with broader searches, then narrow based on what you find.
+- Use think to pause and assess your findings before deciding next steps.
+- Prefer primary sources, official documentation, and peer-reviewed content.
+- Seek diverse perspectives — multiple domains and viewpoints.
+- Call research_complete when you are confident the findings address the research question, or when additional searches yield diminishing returns.
+- Simple factual queries: 2-3 searches are usually sufficient.
+- Complex multi-dimensional topics: use up to your budget limit.
+
+## Budget
+
+You have {remaining} of {total} tool calls remaining (web_search and extract_content count against budget; think and research_complete do not).
+
+## Context
+
+Today's date is {date}.
+"""
+
+
+def _build_researcher_system_prompt(
+    *,
+    budget_total: int,
+    budget_remaining: int,
+    extract_enabled: bool,
+    date_str: str | None = None,
+) -> str:
+    """Build the researcher system prompt with budget and context.
+
+    Args:
+        budget_total: Total tool call budget for this researcher.
+        budget_remaining: Remaining tool calls.
+        extract_enabled: Whether extract_content tool is available.
+        date_str: Today's date string. Defaults to UTC today.
+
+    Returns:
+        Formatted system prompt string.
+    """
+    if date_str is None:
+        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    prompt = _RESEARCHER_SYSTEM_PROMPT.format(
+        remaining=budget_remaining,
+        total=budget_total,
+        date=date_str,
+    )
+
+    if not extract_enabled:
+        # Remove extract_content tool documentation
+        prompt = prompt.replace(
+            "### extract_content\n"
+            "Extract full page content from promising URLs found in search results.\n"
+            'Arguments: {"urls": ["url1", "url2"]}  (max 2 URLs per call)\n'
+            "Returns: Full page content in markdown format.\n"
+            "Only available when extraction is enabled. If unavailable, focus on web_search.\n\n",
+            "",
+        )
+
+    return prompt
+
+
+def _build_react_user_prompt(
+    topic: str,
+    message_history: list[dict[str, str]],
+    budget_remaining: int,
+    budget_total: int,
+) -> str:
+    """Build the user prompt for a ReAct turn from message history.
+
+    Encodes the conversation history (previous tool calls and results)
+    into a structured prompt for the next LLM call.
+
+    Args:
+        topic: The research topic/question.
+        message_history: List of message dicts with role/content keys.
+        budget_remaining: Remaining tool call budget.
+        budget_total: Total tool call budget.
+
+    Returns:
+        Formatted user prompt string.
+    """
+    parts: list[str] = [f"<research_topic>\n{topic}\n</research_topic>"]
+
+    if message_history:
+        parts.append("\n<conversation_history>")
+        for i, msg in enumerate(message_history):
+            role = msg.get("role", "unknown")
+            content = msg.get("content", "")
+            if role == "assistant":
+                parts.append(f"\n<turn number=\"{i + 1}\" role=\"assistant\">\n{content}\n</turn>")
+            elif role == "tool":
+                tool_name = msg.get("tool", "unknown")
+                parts.append(f"\n<turn number=\"{i + 1}\" role=\"tool\" tool=\"{tool_name}\">\n{content}\n</turn>")
+        parts.append("\n</conversation_history>")
+
+    parts.append(
+        f"\n<budget>You have {budget_remaining} of {budget_total} tool calls remaining.</budget>"
+    )
+    parts.append(
+        "\nRespond with your next action as a JSON object containing tool_calls. "
+        "Return ONLY valid JSON, no additional text."
+    )
+
+    return "\n".join(parts)
+
+
 class TopicResearchMixin:
     """Per-topic ReAct research methods. Mixed into DeepResearchWorkflow.
 
-    Provides ``_execute_topic_research_async`` which runs a mini ReAct loop
-    for a single sub-query: search → reflect → (refine query → search)* →
-    compile summary.
+    Provides ``_execute_topic_research_async`` which runs a tool-calling
+    ReAct loop for a single sub-query: the LLM decides which tools to
+    call (web_search, extract_content, think, research_complete) and the
+    loop dispatches them to existing infrastructure.
 
     At runtime, ``self`` is a DeepResearchWorkflow instance providing:
     - config, memory, hooks, orchestrator (instance attributes)
@@ -65,7 +218,7 @@ class TopicResearchMixin:
         async def _compress_single_topic_async(self, *args: Any, **kwargs: Any) -> tuple[int, int, bool]: ...
 
     # ------------------------------------------------------------------
-    # Single-topic ReAct loop
+    # Single-topic ReAct loop (tool-calling researcher)
     # ------------------------------------------------------------------
 
     async def _execute_topic_research_async(
@@ -82,38 +235,37 @@ class TopicResearchMixin:
         state_lock: asyncio.Lock,
         semaphore: asyncio.Semaphore,
     ) -> TopicResearchResult:
-        """Execute a single-topic ReAct research loop with mandatory reflection.
+        """Execute a single-topic tool-calling ReAct research loop.
 
-        The loop runs: search → mandatory reflect → (refine query → search)*
-        → compile summary. Reflection is always performed after each search
-        iteration (not conditional on source count). The reflection step
-        produces a structured decision that can signal early completion,
-        request continued searching with a refined query, or stop.
+        The researcher LLM decides which tools to call each turn:
+        web_search, extract_content, think, or research_complete.
+        This replaces the prior fixed search → reflect → think → refine
+        sequence, reducing LLM calls from 2 per iteration to 1 per turn.
 
         Args:
-            sub_query: The sub-query to research
-            state: Current research state (for config access and source storage)
-            available_providers: List of initialized search providers
-            max_searches: Maximum search iterations for this topic (hard cap)
+            sub_query: The sub-query to research.
+            state: Current research state (for config access and source storage).
+            available_providers: List of initialized search providers.
+            max_searches: Maximum tool call budget for this topic (hard cap).
+                Only web_search and extract_content count against this.
             max_sources_per_provider: Max results to request from each provider
                 per search call. When None, falls back to state.max_sources_per_query.
-                Used for budget splitting across parallel topic researchers.
-            timeout: Timeout per search operation
-            seen_urls: Shared set of already-seen URLs (for deduplication)
-            seen_titles: Shared dict of normalized titles (for deduplication)
-            state_lock: Lock for thread-safe state mutations
-            semaphore: Semaphore for concurrency control
+            timeout: Timeout per search operation.
+            seen_urls: Shared set of already-seen URLs (for deduplication).
+            seen_titles: Shared dict of normalized titles (for deduplication).
+            state_lock: Lock for thread-safe state mutations.
+            semaphore: Semaphore for concurrency control.
 
         Returns:
-            TopicResearchResult with per-topic findings
+            TopicResearchResult with per-topic findings.
         """
         result = TopicResearchResult(sub_query_id=sub_query.id)
-        current_query = sub_query.query
         # Accumulate tokens locally and merge under lock after the loop
-        # to avoid a race on state.total_tokens_used from concurrent topics.
         local_tokens_used = 0
-        # Track total tool calls (search + extract) toward budget
+        # Track tool calls (web_search + extract_content) toward budget
         tool_calls_used = 0
+        budget_remaining = max_searches
+
         async with state_lock:
             sub_query.status = "executing"
 
@@ -131,170 +283,220 @@ class TopicResearchMixin:
             self.config, "deep_research_extract_max_per_iteration", 2
         )
 
-        for iteration in range(max_searches):
+        # Resolve provider and model for the researcher LLM
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            resolve_phase_provider,
+            safe_resolve_model_for_role,
+        )
+
+        provider_id, researcher_model = safe_resolve_model_for_role(
+            self.config, "topic_reflection"
+        )
+        if provider_id is None:
+            provider_id = resolve_phase_provider(
+                self.config, "topic_reflection", "reflection"
+            )
+
+        # Build researcher system prompt
+        system_prompt = _build_researcher_system_prompt(
+            budget_total=max_searches,
+            budget_remaining=budget_remaining,
+            extract_enabled=extract_enabled,
+        )
+
+        # Message history for multi-turn conversation
+        message_history: list[dict[str, str]] = []
+
+        # Maximum turns to prevent infinite loops (safety net)
+        max_turns = max_searches * 3  # generous: 3x budget allows think steps
+
+        for turn in range(max_turns):
             self._check_cancellation(state)
 
-            # --- Search step ---
-            sources_added = await self._topic_search(
-                query=current_query,
-                sub_query=sub_query,
-                state=state,
-                available_providers=available_providers,
-                max_sources_per_provider=max_sources_per_provider,
-                timeout=timeout,
-                seen_urls=seen_urls,
-                seen_titles=seen_titles,
-                state_lock=state_lock,
-                semaphore=semaphore,
-            )
-            result.searches_performed += 1
-            tool_calls_used += 1
-            result.sources_found += sources_added
-
-            # If this is the last allowed iteration, skip reflection
-            # (max_searches is the hard cap regardless of reflection)
-            if tool_calls_used >= max_searches:
+            if budget_remaining <= 0:
                 logger.info(
-                    "Topic %r hit max_tool_calls cap (%d/%d), stopping regardless of reflection",
+                    "Topic %r budget exhausted (%d/%d tool calls used), stopping",
                     sub_query.id,
                     tool_calls_used,
                     max_searches,
                 )
                 break
 
-            # --- Mandatory reflection step ---
-            # Always reflect after every search, not just when sources > 0
-            reflection = await self._topic_reflect(
-                original_query=sub_query.query,
-                current_query=current_query,
-                sources_found=result.sources_found,
-                iteration=iteration + 1,
-                max_iterations=max_searches,
-                state=state,
-                sub_query=sub_query,
+            # Build user prompt with conversation history
+            user_prompt = _build_react_user_prompt(
+                topic=sub_query.query,
+                message_history=message_history,
+                budget_remaining=budget_remaining,
+                budget_total=max_searches,
             )
-            local_tokens_used += reflection.get("tokens_used", 0)
 
-            # Parse structured reflection decision — try Pydantic schema first,
-            # fall back to legacy regex-based parser on failure.
-            raw_response = reflection.get("raw_response", "")
+            # One LLM call per turn
             try:
-                decision = parse_reflection_structured(raw_response)
-            except (ValueError, Exception):
-                decision = parse_reflection_legacy(raw_response)
-            rationale = decision.rationale or reflection.get("assessment", "")
-            result.reflection_notes.append(rationale)
-
-            # Log every reflection decision for observability
-            logger.info(
-                "Topic %r reflection [iter %d/%d]: complete=%s, continue=%s, extract=%d urls, rationale=%s",
-                sub_query.id,
-                iteration + 1,
-                max_searches,
-                decision.research_complete,
-                decision.continue_searching,
-                len(decision.urls_to_extract or []),
-                rationale[:120] if rationale else "(empty)",
-            )
-
-            # --- Optional extraction step ---
-            # If reflection recommends URLs for extraction and we have budget,
-            # extract full content before deciding whether to continue.
-            if (
-                extract_enabled
-                and decision.urls_to_extract
-                and tool_calls_used < max_searches
-            ):
-                urls_to_fetch = decision.urls_to_extract[:extract_max_per_iter]
-                extract_added = await self._topic_extract(
-                    urls=urls_to_fetch,
-                    sub_query=sub_query,
-                    state=state,
-                    seen_urls=seen_urls,
-                    seen_titles=seen_titles,
-                    state_lock=state_lock,
-                    semaphore=semaphore,
-                    timeout=timeout,
+                llm_result = await self._execute_provider_async(
+                    prompt=user_prompt,
+                    provider_id=provider_id,
+                    model=researcher_model,
+                    system_prompt=system_prompt,
+                    timeout=self.config.deep_research_reflection_timeout,
+                    temperature=0.3,
+                    phase="topic_research",
+                    fallback_providers=[],
+                    max_retries=1,
+                    retry_delay=2.0,
                 )
-                tool_calls_used += 1  # count extraction batch as 1 tool call
-                result.sources_found += extract_added
-                if extract_added > 0:
-                    result.reflection_notes.append(
-                        f"[extract] Fetched {extract_added} source(s) from {len(urls_to_fetch)} URL(s)"
+
+                if not llm_result.success:
+                    logger.warning(
+                        "Topic %r researcher LLM call failed on turn %d: %s",
+                        sub_query.id,
+                        turn + 1,
+                        llm_result.error,
+                    )
+                    break
+
+                local_tokens_used += llm_result.tokens_used or 0
+
+            except (asyncio.TimeoutError, OSError, ValueError, RuntimeError) as exc:
+                logger.warning(
+                    "Topic %r researcher LLM call exception on turn %d: %s",
+                    sub_query.id,
+                    turn + 1,
+                    exc,
+                )
+                break
+
+            # Parse tool calls from LLM response
+            raw_content = llm_result.content or ""
+            response = parse_researcher_response(raw_content)
+
+            # No tool calls = model chose to stop
+            if not response.tool_calls:
+                logger.info(
+                    "Topic %r researcher returned no tool calls on turn %d, stopping",
+                    sub_query.id,
+                    turn + 1,
+                )
+                break
+
+            # Record the assistant's response in message history
+            message_history.append({"role": "assistant", "content": raw_content})
+
+            # Sort tool calls: Think first (before action tools), then others
+            think_calls = [tc for tc in response.tool_calls if tc.tool == "think"]
+            action_calls = [tc for tc in response.tool_calls if tc.tool != "think"]
+            ordered_calls = think_calls + action_calls
+
+            # Process each tool call
+            loop_should_break = False
+            for tool_call in ordered_calls:
+                if tool_call.tool == "think":
+                    tool_result_text = self._handle_think_tool(
+                        tool_call=tool_call,
+                        sub_query=sub_query,
+                        result=result,
+                    )
+                    message_history.append({
+                        "role": "tool",
+                        "tool": "think",
+                        "content": tool_result_text,
+                    })
+
+                elif tool_call.tool == "web_search":
+                    if budget_remaining <= 0:
+                        message_history.append({
+                            "role": "tool",
+                            "tool": "web_search",
+                            "content": "Budget exhausted. No more searches allowed.",
+                        })
+                        continue
+
+                    tool_result_text = await self._handle_web_search_tool(
+                        tool_call=tool_call,
+                        sub_query=sub_query,
+                        state=state,
+                        result=result,
+                        available_providers=available_providers,
+                        max_sources_per_provider=max_sources_per_provider,
+                        timeout=timeout,
+                        seen_urls=seen_urls,
+                        seen_titles=seen_titles,
+                        state_lock=state_lock,
+                        semaphore=semaphore,
+                    )
+                    tool_calls_used += 1
+                    budget_remaining -= 1
+                    result.searches_performed += 1
+                    message_history.append({
+                        "role": "tool",
+                        "tool": "web_search",
+                        "content": tool_result_text,
+                    })
+
+                elif tool_call.tool == "extract_content":
+                    if not extract_enabled:
+                        message_history.append({
+                            "role": "tool",
+                            "tool": "extract_content",
+                            "content": "Content extraction is not available.",
+                        })
+                        continue
+
+                    if budget_remaining <= 0:
+                        message_history.append({
+                            "role": "tool",
+                            "tool": "extract_content",
+                            "content": "Budget exhausted. No more extractions allowed.",
+                        })
+                        continue
+
+                    tool_result_text = await self._handle_extract_tool(
+                        tool_call=tool_call,
+                        sub_query=sub_query,
+                        state=state,
+                        result=result,
+                        seen_urls=seen_urls,
+                        seen_titles=seen_titles,
+                        state_lock=state_lock,
+                        semaphore=semaphore,
+                        timeout=timeout,
+                        extract_max=extract_max_per_iter,
+                    )
+                    tool_calls_used += 1
+                    budget_remaining -= 1
+                    message_history.append({
+                        "role": "tool",
+                        "tool": "extract_content",
+                        "content": tool_result_text,
+                    })
+
+                elif tool_call.tool == "research_complete":
+                    summary = tool_call.arguments.get("summary", "")
+                    result.early_completion = True
+                    result.completion_rationale = summary
+                    message_history.append({
+                        "role": "tool",
+                        "tool": "research_complete",
+                        "content": "Research complete. Findings recorded.",
+                    })
+                    loop_should_break = True
+                    break
+
+                else:
+                    logger.warning(
+                        "Topic %r researcher called unknown tool %r, ignoring",
+                        sub_query.id,
+                        tool_call.tool,
                     )
 
-            # Check for explicit research completion signal
-            if decision.research_complete:
-                result.early_completion = True
-                result.completion_rationale = rationale
-                break
-
-            # Check if reflection says to stop searching
-            if not decision.continue_searching:
-                result.completion_rationale = (
-                    rationale or "Reflection decided to stop searching"
-                )
-                break
-
-            # Check budget after extraction
-            if tool_calls_used >= max_searches:
-                logger.info(
-                    "Topic %r hit max_tool_calls cap after extraction (%d/%d)",
-                    sub_query.id,
-                    tool_calls_used,
-                    max_searches,
-                )
-                break
-
-            # --- Think step (between reflect and next search) ---
-            # Articulates: what was found, what angle to try next, why it
-            # matters.  Grounds the query refinement in explicit reasoning.
-            think_output = await self._topic_think(
-                original_query=sub_query.query,
-                current_query=current_query,
-                reflection_rationale=rationale,
-                refined_query_suggestion=decision.refined_query,
-                sources_found=result.sources_found,
-                iteration=iteration + 1,
-                state=state,
-            )
-            local_tokens_used += think_output.get("tokens_used", 0)
-            if think_output.get("reasoning"):
-                result.reflection_notes.append(
-                    f"[think] {think_output['reasoning']}"
-                )
-
-            # --- Refine step ---
-            # Prefer the think step's refined query (more grounded in explicit
-            # gap analysis) over the reflection's suggestion.
-            think_refined = think_output.get("next_query")
-            refined_query = think_refined or decision.refined_query
-            if refined_query and refined_query != current_query:
-                current_query = refined_query
-                result.refined_queries.append(refined_query)
-            elif sources_added == 0 and iteration == 0:
-                # Fallback: strip quotes if present, otherwise broaden
-                broadened = sub_query.query.replace('"', "").strip()
-                if broadened != current_query:
-                    current_query = broadened
-                    result.refined_queries.append(broadened)
-                else:
-                    # No refinement possible and no sources — stop
-                    break
-            else:
-                # No meaningful refinement possible, stop
+            if loop_should_break:
                 break
 
         # --- Compile per-topic summary ---
-        # Merge accumulated tokens under lock (avoids race on state.total_tokens_used)
+        # Merge accumulated tokens under lock
         async with state_lock:
             state.total_tokens_used += local_tokens_used
             result.source_ids = list(sub_query.source_ids)
 
-        # mark_completed/mark_failed are called outside the lock. This is safe
-        # because each sub_query is owned by exactly one topic coroutine — no
-        # other coroutine reads or writes to this sub_query instance. The lock
-        # above only protects shared state (total_tokens_used, source_ids list).
         if result.sources_found > 0:
             sub_query.mark_completed(
                 findings=f"Topic research found {result.sources_found} sources "
@@ -304,9 +506,6 @@ class TopicResearchMixin:
             sub_query.mark_failed("No sources found after topic research loop")
 
         # --- Inline per-topic compression ---
-        # Compress this topic's findings immediately so the supervision phase
-        # can assess actual content coverage (not just source counts).
-        # Gated by config flag; non-fatal on failure.
         inline_compression_enabled = getattr(
             self.config, "deep_research_inline_compression", True
         )
@@ -356,10 +555,191 @@ class TopicResearchMixin:
                 "completion_rationale": result.completion_rationale,
                 "inline_compressed": result.compressed_findings is not None,
                 "extract_enabled": extract_enabled,
+                "turns_used": len([m for m in message_history if m.get("role") == "assistant"]),
             },
         )
 
         return result
+
+    # ------------------------------------------------------------------
+    # Tool dispatch handlers
+    # ------------------------------------------------------------------
+
+    def _handle_think_tool(
+        self,
+        tool_call: ResearcherToolCall,
+        sub_query: SubQuery,
+        result: TopicResearchResult,
+    ) -> str:
+        """Handle a Think tool call: log reasoning, return acknowledgment.
+
+        Args:
+            tool_call: The think tool call with reasoning argument.
+            sub_query: The sub-query being researched (for logging).
+            result: TopicResearchResult to update with reflection notes.
+
+        Returns:
+            Tool result string.
+        """
+        try:
+            think_args = ThinkTool.model_validate(tool_call.arguments)
+            reasoning = think_args.reasoning
+        except Exception:
+            reasoning = tool_call.arguments.get("reasoning", "")
+
+        logger.info(
+            "Topic %r think: %s",
+            sub_query.id,
+            reasoning[:200] if reasoning else "(empty)",
+        )
+        result.reflection_notes.append(f"[think] {reasoning}")
+        return "Reflection recorded."
+
+    async def _handle_web_search_tool(
+        self,
+        tool_call: ResearcherToolCall,
+        sub_query: SubQuery,
+        state: DeepResearchState,
+        result: TopicResearchResult,
+        available_providers: list[Any],
+        max_sources_per_provider: int | None,
+        timeout: float,
+        seen_urls: set[str],
+        seen_titles: dict[str, str],
+        state_lock: asyncio.Lock,
+        semaphore: asyncio.Semaphore,
+    ) -> str:
+        """Handle a WebSearch tool call: dispatch to search providers.
+
+        Args:
+            tool_call: The web_search tool call with query argument.
+            sub_query: The sub-query being researched.
+            state: Current research state.
+            result: TopicResearchResult to update.
+            available_providers: Search provider instances.
+            max_sources_per_provider: Per-provider result cap.
+            timeout: Search timeout.
+            seen_urls: Shared URL dedup set.
+            seen_titles: Shared title dedup dict.
+            state_lock: Lock for thread-safe state mutations.
+            semaphore: Semaphore for concurrency control.
+
+        Returns:
+            Formatted tool result string with search results.
+        """
+        try:
+            search_args = WebSearchTool.model_validate(tool_call.arguments)
+            query = search_args.query
+        except Exception:
+            query = tool_call.arguments.get("query", sub_query.query)
+
+        # Track refined queries
+        if query != sub_query.query:
+            result.refined_queries.append(query)
+
+        sources_added = await self._topic_search(
+            query=query,
+            sub_query=sub_query,
+            state=state,
+            available_providers=available_providers,
+            max_sources_per_provider=max_sources_per_provider,
+            timeout=timeout,
+            seen_urls=seen_urls,
+            seen_titles=seen_titles,
+            state_lock=state_lock,
+            semaphore=semaphore,
+        )
+        result.sources_found += sources_added
+
+        # Format search results for message history
+        if sources_added == 0:
+            return f'Search for "{query}" returned no new sources.'
+
+        # Build formatted source listing from this search
+        topic_source_ids = set(sub_query.source_ids)
+        topic_sources = [s for s in state.sources if s.id in topic_source_ids]
+        # Show the most recent sources (from this search)
+        recent_sources = topic_sources[-sources_added:]
+
+        lines: list[str] = [f"Found {sources_added} new source(s):"]
+        for idx, src in enumerate(recent_sources, 1):
+            lines.append(f"\n--- SOURCE {idx}: {src.title} ---")
+            if src.url:
+                lines.append(f"URL: {src.url}")
+            if src.metadata.get("summarized") and src.content:
+                lines.append(f"\nSUMMARY:\n{src.content}")
+            elif src.snippet:
+                lines.append(f"\nSNIPPET:\n{src.snippet}")
+            elif src.content:
+                truncated = src.content[:500]
+                if len(src.content) > 500:
+                    truncated += "..."
+                lines.append(f"\nCONTENT:\n{truncated}")
+
+        return "\n".join(lines)
+
+    async def _handle_extract_tool(
+        self,
+        tool_call: ResearcherToolCall,
+        sub_query: SubQuery,
+        state: DeepResearchState,
+        result: TopicResearchResult,
+        seen_urls: set[str],
+        seen_titles: dict[str, str],
+        state_lock: asyncio.Lock,
+        semaphore: asyncio.Semaphore,
+        timeout: float,
+        extract_max: int = 2,
+    ) -> str:
+        """Handle an ExtractContent tool call: fetch full page content.
+
+        Args:
+            tool_call: The extract_content tool call with URLs argument.
+            sub_query: The sub-query being researched.
+            state: Current research state.
+            result: TopicResearchResult to update.
+            seen_urls: Shared URL dedup set.
+            seen_titles: Shared title dedup dict.
+            state_lock: Lock for thread-safe state mutations.
+            semaphore: Semaphore for concurrency control.
+            timeout: Extraction timeout.
+            extract_max: Maximum URLs per extraction call.
+
+        Returns:
+            Formatted tool result string with extracted content.
+        """
+        try:
+            extract_args = ExtractContentTool.model_validate(tool_call.arguments)
+            urls = extract_args.urls[:extract_max]
+        except Exception:
+            raw_urls = tool_call.arguments.get("urls", [])
+            if isinstance(raw_urls, list):
+                urls = [str(u) for u in raw_urls if isinstance(u, str)][:extract_max]
+            else:
+                return "Invalid URLs argument."
+
+        if not urls:
+            return "No valid URLs provided for extraction."
+
+        extract_added = await self._topic_extract(
+            urls=urls,
+            sub_query=sub_query,
+            state=state,
+            seen_urls=seen_urls,
+            seen_titles=seen_titles,
+            state_lock=state_lock,
+            semaphore=semaphore,
+            timeout=timeout,
+        )
+        result.sources_found += extract_added
+
+        if extract_added > 0:
+            result.reflection_notes.append(
+                f"[extract] Fetched {extract_added} source(s) from {len(urls)} URL(s)"
+            )
+            return f"Extracted content from {extract_added} of {len(urls)} URL(s)."
+        else:
+            return f"Extraction from {len(urls)} URL(s) yielded no new content."
 
     # ------------------------------------------------------------------
     # Search step (scoped to one sub-query)
@@ -396,6 +776,9 @@ class TopicResearchMixin:
         Returns the number of new (deduplicated) sources added to state.
         """
         from foundry_mcp.core.research.providers import SearchProviderError
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            content_similarity,
+        )
 
         effective_max_results = (
             max_sources_per_provider if max_sources_per_provider is not None else state.max_sources_per_query
@@ -445,9 +828,7 @@ class TopicResearchMixin:
                                     continue
                                 seen_titles[normalized_title] = source.url or ""
 
-                            # Content-similarity deduplication (Phase 5.3)
-                            # Check if this source's content is substantially
-                            # similar to an existing source (mirror/syndicated).
+                            # Content-similarity deduplication
                             content_dedup_enabled = getattr(
                                 self.config, "deep_research_enable_content_dedup", True
                             )
@@ -518,222 +899,6 @@ class TopicResearchMixin:
                     )
 
         return added
-
-    # ------------------------------------------------------------------
-    # Reflect step (fast LLM evaluates search results)
-    # ------------------------------------------------------------------
-
-    async def _topic_reflect(
-        self,
-        original_query: str,
-        current_query: str,
-        sources_found: int,
-        iteration: int,
-        max_iterations: int,
-        state: DeepResearchState,
-        sub_query: "SubQuery | None" = None,
-    ) -> dict[str, Any]:
-        """Mandatory LLM reflection on topic search results.
-
-        Called after every search iteration to evaluate research progress
-        and produce a structured decision about next steps. The response
-        includes the raw LLM text (``raw_response``) for structured
-        parsing via ``parse_reflection_decision()``.
-
-        Args:
-            original_query: The original sub-topic query.
-            current_query: The current (possibly refined) search query.
-            sources_found: Total source count for this topic.
-            iteration: Current iteration number (1-indexed).
-            max_iterations: Maximum iterations allowed.
-            state: Current research state (for source access).
-            sub_query: The SubQuery being researched (for per-topic source
-                retrieval). When provided, source summaries are included
-                in the reflection context.
-
-        Returns:
-            Dict with keys: assessment (str), raw_response (str),
-            tokens_used (int). The caller uses ``parse_reflection_decision``
-            on ``raw_response`` to get the structured decision.
-        """
-        # Resolve provider and model via role-based hierarchy (Phase 6).
-        # Falls back to phase-specific config, then global default.
-        from foundry_mcp.core.research.workflows.deep_research._helpers import (
-            resolve_phase_provider,
-            safe_resolve_model_for_role,
-        )
-
-        provider_id, reflection_model = safe_resolve_model_for_role(self.config, "topic_reflection")
-        if provider_id is None:
-            provider_id = resolve_phase_provider(self.config, "topic_reflection", "reflection")
-
-        # Build per-source summaries for this topic so the researcher LLM
-        # can reason about actual content, not just metadata counts.
-        source_context = self._format_topic_sources_for_reflection(
-            state, sub_query
-        )
-
-        system_prompt = (
-            "You are a research assistant evaluating search results for a specific sub-topic. "
-            "After each search iteration, assess whether the findings substantively answer "
-            "the research question and decide the next action.\n\n"
-            "Respond with valid JSON using this exact schema:\n"
-            "{\n"
-            '  "continue_searching": true/false,\n'
-            '  "refined_query": "new search query if continuing" or null,\n'
-            '  "research_complete": true/false,\n'
-            '  "rationale": "explain your assessment and what specific gap remains if continuing",\n'
-            '  "urls_to_extract": ["url1", "url2"] or null\n'
-            "}\n\n"
-            "Guidance for deciding when to stop:\n"
-            "- Assess whether the accumulated sources substantively answer the research question.\n"
-            "- Simple factual queries: 2-3 searches are usually sufficient.\n"
-            "- Comparative analysis or multi-perspective topics: 4-6 searches to cover "
-            "multiple viewpoints.\n"
-            "- Complex multi-dimensional topics: use up to your budget limit.\n"
-            "- Stop when you are confident the findings address the research question, "
-            "or when additional searches yield diminishing returns.\n"
-            "- If zero sources were found, set continue_searching=true and provide a broader "
-            "or alternative refined_query.\n"
-            "- When continuing, you MUST provide a refined_query and your rationale MUST "
-            "identify the specific information gap that another search would fill.\n"
-            "- The rationale field is REQUIRED and must never be empty. It must explain "
-            "your reasoning, not just restate the decision.\n\n"
-            "URL extraction (urls_to_extract):\n"
-            "- If a search result snippet suggests rich content behind a URL (e.g., detailed "
-            "technical documentation, comparison tables, research papers, API specs), recommend "
-            "extracting it by including the URL in urls_to_extract.\n"
-            "- Only recommend extraction for URLs where the snippet indicates valuable detail "
-            "you cannot get from the snippet alone.\n"
-            "- Limit to at most 2 URLs per reflection. Set to null if no extraction is needed.\n\n"
-            "- Keep refined queries focused on the original research topic.\n"
-            "- Return ONLY valid JSON, no additional text."
-        )
-
-        user_prompt = (
-            f"Original research sub-topic: {original_query}\n"
-            f"Current search query: {current_query}\n"
-            f"Sources found so far: {sources_found}\n"
-            f"Search iteration: {iteration}/{max_iterations}\n"
-        )
-        if source_context:
-            user_prompt += f"\n{source_context}\n"
-        user_prompt += (
-            "\nAssess the research progress for this sub-topic and decide the next action."
-        )
-
-        try:
-            result = await self._execute_provider_async(
-                prompt=user_prompt,
-                provider_id=provider_id,
-                model=reflection_model,
-                system_prompt=system_prompt,
-                timeout=self.config.deep_research_reflection_timeout,
-                temperature=0.2,
-                phase="topic_reflection",
-                fallback_providers=[],
-                max_retries=1,
-                retry_delay=2.0,
-            )
-
-            if not result.success:
-                return {
-                    "assessment": "Reflection call failed, proceeding",
-                    "raw_response": json.dumps({
-                        "continue_searching": False,
-                        "research_complete": False,
-                        "rationale": "Reflection call failed",
-                    }),
-                    "tokens_used": 0,
-                }
-
-            tokens_used = result.tokens_used or 0
-            raw_content = result.content or ""
-
-            # Extract assessment from the raw response for backward compat
-            assessment = ""
-            json_str = extract_json(raw_content)
-            if json_str:
-                try:
-                    data = json.loads(json_str)
-                    assessment = str(data.get("rationale", ""))
-                except (json.JSONDecodeError, TypeError):
-                    assessment = "Reflection JSON parse warning"
-
-            return {
-                "assessment": assessment,
-                "raw_response": raw_content,
-                "tokens_used": tokens_used,
-            }
-
-        except (asyncio.TimeoutError, OSError, ValueError, RuntimeError) as exc:
-            logger.warning("Topic reflection failed: %s. Treating as stop.", exc)
-
-        return {
-            "assessment": "Reflection unavailable",
-            "raw_response": json.dumps({
-                "continue_searching": False,
-                "research_complete": False,
-                "rationale": "Reflection unavailable due to error",
-            }),
-            "tokens_used": 0,
-        }
-
-    # ------------------------------------------------------------------
-    # Source formatting for reflection context
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _format_topic_sources_for_reflection(
-        state: DeepResearchState,
-        sub_query: "SubQuery | None",
-    ) -> str:
-        """Format this topic's sources for the reflection LLM context.
-
-        Produces a ``--- SOURCE N: title ---`` block for each source
-        belonging to the sub-query, using the summarized content when
-        available (``metadata["summarized"]=True``), falling back to
-        snippet or truncated content.
-
-        Args:
-            state: Current research state (contains all sources).
-            sub_query: The sub-query being researched.  When ``None``,
-                returns an empty string.
-
-        Returns:
-            Formatted source listing string, or empty string if no
-            sources are available.
-        """
-        if sub_query is None:
-            return ""
-
-        topic_source_ids = set(sub_query.source_ids)
-        if not topic_source_ids:
-            return ""
-
-        topic_sources = [s for s in state.sources if s.id in topic_source_ids]
-        if not topic_sources:
-            return ""
-
-        lines: list[str] = ["Sources found for this topic:"]
-        for idx, src in enumerate(topic_sources, 1):
-            lines.append(f"\n--- SOURCE {idx}: {src.title} ---")
-            if src.url:
-                lines.append(f"URL: {src.url}")
-
-            # Prefer summarized content, fall back to snippet/truncated raw
-            if src.metadata.get("summarized") and src.content:
-                lines.append(f"\nSUMMARY:\n{src.content}")
-            elif src.snippet:
-                lines.append(f"\nSNIPPET:\n{src.snippet}")
-            elif src.content:
-                # Truncate long raw content for reflection context
-                truncated = src.content[:500]
-                if len(src.content) > 500:
-                    truncated += "..."
-                lines.append(f"\nCONTENT:\n{truncated}")
-
-        return "\n".join(lines)
 
     # ------------------------------------------------------------------
     # Extract step (fetch full content from promising URLs)
@@ -849,126 +1014,3 @@ class TopicResearchMixin:
                 )
 
         return added
-
-    # ------------------------------------------------------------------
-    # Think step (within-loop deliberation)
-    # ------------------------------------------------------------------
-
-    async def _topic_think(
-        self,
-        original_query: str,
-        current_query: str,
-        reflection_rationale: str,
-        refined_query_suggestion: str | None,
-        sources_found: int,
-        iteration: int,
-        state: DeepResearchState,
-    ) -> dict[str, Any]:
-        """Deliberate about what was found and what angle to try next.
-
-        This is the "think-tool" equivalent for per-topic research — a
-        lightweight LLM call that articulates explicit reasoning about:
-        1. What information has been gathered so far
-        2. What specific gap remains
-        3. What search angle would best fill that gap
-        4. A refined query targeting that angle
-
-        Uses the reflection (cheap) model to minimize cost.
-
-        Returns:
-            Dict with keys: reasoning (str), next_query (str or None),
-            tokens_used (int).
-        """
-        from foundry_mcp.core.research.workflows.deep_research._helpers import (
-            resolve_phase_provider,
-            safe_resolve_model_for_role,
-        )
-
-        provider_id, think_model = safe_resolve_model_for_role(
-            self.config, "topic_reflection"
-        )
-        if provider_id is None:
-            provider_id = resolve_phase_provider(
-                self.config, "topic_reflection", "reflection"
-            )
-
-        system_prompt = (
-            "You are a research strategist. Given the current state of a "
-            "topic investigation, think through what has been found and what "
-            "specific angle would most improve coverage.\n\n"
-            "Respond with valid JSON:\n"
-            "{\n"
-            '  "reasoning": "Your analysis of what was found, what gap '
-            'remains, and why the next query would help",\n'
-            '  "next_query": "A specific, targeted search query to fill '
-            'the identified gap" or null\n'
-            "}\n\n"
-            "Guidelines:\n"
-            "- Focus on WHAT IS MISSING, not what was already found\n"
-            "- The next_query should target a different angle, perspective, "
-            "or information type than previous searches\n"
-            "- If the reflection's suggested query is good, you may refine "
-            "it further or return null to accept it as-is\n"
-            "- Keep reasoning concise (2-3 sentences)\n"
-            "- Return ONLY valid JSON, no additional text."
-        )
-
-        user_prompt = (
-            f"Original research topic: {original_query}\n"
-            f"Current search query: {current_query}\n"
-            f"Sources found so far: {sources_found}\n"
-            f"Search iteration: {iteration}\n"
-            f"Reflection assessment: {reflection_rationale}\n"
-        )
-        if refined_query_suggestion:
-            user_prompt += (
-                f"Reflection's suggested next query: {refined_query_suggestion}\n"
-            )
-        user_prompt += (
-            "\nThink about what specific information gap remains and what "
-            "search angle would best address it."
-        )
-
-        try:
-            result = await self._execute_provider_async(
-                prompt=user_prompt,
-                provider_id=provider_id,
-                model=think_model,
-                system_prompt=system_prompt,
-                timeout=self.config.deep_research_reflection_timeout,
-                temperature=0.3,
-                phase="topic_think",
-                fallback_providers=[],
-                max_retries=1,
-                retry_delay=2.0,
-            )
-
-            if not result.success:
-                return {"reasoning": "", "next_query": None, "tokens_used": 0}
-
-            tokens_used = result.tokens_used or 0
-            raw_content = result.content or ""
-
-            # Parse JSON response
-            json_str = extract_json(raw_content)
-            if json_str:
-                try:
-                    data = json.loads(json_str)
-                    return {
-                        "reasoning": str(data.get("reasoning", "")),
-                        "next_query": data.get("next_query"),
-                        "tokens_used": tokens_used,
-                    }
-                except (json.JSONDecodeError, TypeError):
-                    pass
-
-            return {
-                "reasoning": raw_content[:200],
-                "next_query": None,
-                "tokens_used": tokens_used,
-            }
-
-        except (asyncio.TimeoutError, OSError, ValueError, RuntimeError) as exc:
-            logger.warning("Topic think step failed: %s. Continuing without.", exc)
-
-        return {"reasoning": "", "next_query": None, "tokens_used": 0}
