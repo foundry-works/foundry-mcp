@@ -222,7 +222,7 @@
 
 ## Phase 5: Simplify Researcher Reflection
 
-- [ ] **5.1** Update reflection system prompt in `topic_research.py`
+- [x] **5.1** Update reflection system prompt in `topic_research.py`
   - Remove rigid threshold rules:
     - ~~"STOP IMMEDIATELY if 3+ sources FROM 2+ DISTINCT DOMAINS AND ≥1 HIGH quality"~~
     - ~~"STOP if 3+ relevant sources from distinct domains"~~
@@ -235,16 +235,16 @@
     - "Complex multi-dimensional topics: use up to your budget limit"
     - "Stop when you are confident the findings address the research question, or when additional searches yield diminishing returns"
   - Preserve `urls_to_extract` recommendation guidance (unchanged)
-- [ ] **5.2** Remove source-count/domain-count injection into reflection context
+- [x] **5.2** Remove source-count/domain-count injection into reflection context
   - Current: reflection receives `sources_found: N, quality_distribution: {HIGH: X, ...}, distinct_domains: Y`
   - Change: the researcher can see its own accumulated sources; it doesn't need metadata pre-computed
   - Keep: total `tool_calls_used` / `max_tool_calls` budget visibility (so researcher knows its remaining budget)
-- [ ] **5.3** Update early-exit heuristic in ReAct loop
+- [x] **5.3** Update early-exit heuristic in ReAct loop
   - Keep: budget hard cap (`max_tool_calls`) — always enforced
   - Keep: "no new sources found" exit — prevents infinite loops on exhausted topics
   - Remove: metadata-threshold early exit (3+ sources, 2+ domains, HIGH quality)
   - The LLM's own `continue_searching=False` / `research_complete=True` is the primary exit signal
-- [ ] **5.4** Add tests for simplified reflection
+- [x] **5.4** Add tests for simplified reflection
   - Test: researcher continues beyond 3 sources on complex topics
   - Test: researcher stops early on simple topics (fewer than 3 searches)
   - Test: budget hard cap still enforced (max_tool_calls)

@@ -151,29 +151,6 @@ class TopicResearchMixin:
             tool_calls_used += 1
             result.sources_found += sources_added
 
-            # --- Cost-aware early-exit heuristic ---
-            # If sources are high-quality and diverse, stop regardless of
-            # remaining iterations.  This saves reflection + think + search
-            # costs when coverage is already sufficient.
-            if result.sources_found >= 3 and iteration > 0:
-                early_exit = await self._check_early_exit(
-                    sub_query=sub_query,
-                    state=state,
-                    state_lock=state_lock,
-                )
-                if early_exit:
-                    result.early_completion = True
-                    result.completion_rationale = (
-                        "Early exit: sufficient high-quality diverse sources found"
-                    )
-                    logger.info(
-                        "Topic %r early exit at iteration %d/%d: quality heuristic met",
-                        sub_query.id,
-                        iteration + 1,
-                        max_searches,
-                    )
-                    break
-
             # If this is the last allowed iteration, skip reflection
             # (max_searches is the hard cap regardless of reflection)
             if tool_calls_used >= max_searches:
@@ -590,31 +567,6 @@ class TopicResearchMixin:
         if provider_id is None:
             provider_id = resolve_phase_provider(self.config, "topic_reflection", "reflection")
 
-        # Collect source quality distribution for context
-        source_qualities: dict[str, int] = {}
-        for src in state.sources:
-            if hasattr(src, "quality") and src.quality:
-                quality_name = str(src.quality.value) if hasattr(src.quality, "value") else str(src.quality)
-                source_qualities[quality_name] = source_qualities.get(quality_name, 0) + 1
-        quality_summary = ", ".join(f"{k}={v}" for k, v in sorted(source_qualities.items())) or "none yet"
-
-        # Collect distinct domains for coverage assessment
-        distinct_domains: set[str] = set()
-        for src in state.sources:
-            if src.url:
-                try:
-                    from urllib.parse import urlparse
-
-                    domain = urlparse(src.url).netloc.lower()
-                    # Strip www. prefix for cleaner domain grouping
-                    if domain.startswith("www."):
-                        domain = domain[4:]
-                    if domain:
-                        distinct_domains.add(domain)
-                except Exception:
-                    pass
-        domain_count = len(distinct_domains)
-
         # Build per-source summaries for this topic so the researcher LLM
         # can reason about actual content, not just metadata counts.
         source_context = self._format_topic_sources_for_reflection(
@@ -623,8 +575,8 @@ class TopicResearchMixin:
 
         system_prompt = (
             "You are a research assistant evaluating search results for a specific sub-topic. "
-            "After each search iteration, you MUST assess whether the research is sufficient "
-            "and decide the next action.\n\n"
+            "After each search iteration, assess whether the findings substantively answer "
+            "the research question and decide the next action.\n\n"
             "Respond with valid JSON using this exact schema:\n"
             "{\n"
             '  "continue_searching": true/false,\n'
@@ -633,21 +585,19 @@ class TopicResearchMixin:
             '  "rationale": "explain your assessment and what specific gap remains if continuing",\n'
             '  "urls_to_extract": ["url1", "url2"] or null\n'
             "}\n\n"
-            "Decision rules (follow strictly, in priority order):\n"
-            "1. STOP IMMEDIATELY — set research_complete=true when you have 3+ sources "
-            "from 2+ distinct domains AND at least one high-quality source. "
-            "This is a hard stop; additional searches will not meaningfully improve coverage.\n"
-            "2. STOP — set research_complete=true when you have 3+ relevant sources "
-            "from distinct domains, even if none are explicitly high-quality.\n"
-            "3. ADEQUATE — set continue_searching=false (without research_complete) if you "
-            "have 2+ sources but they are from the same domain or cover only one perspective. "
-            "This stops the loop without signalling full completion.\n"
-            "4. CONTINUE — set continue_searching=true ONLY if fewer than 2 relevant sources "
-            "have been found. You MUST provide a refined_query and your rationale MUST "
+            "Guidance for deciding when to stop:\n"
+            "- Assess whether the accumulated sources substantively answer the research question.\n"
+            "- Simple factual queries: 2-3 searches are usually sufficient.\n"
+            "- Comparative analysis or multi-perspective topics: 4-6 searches to cover "
+            "multiple viewpoints.\n"
+            "- Complex multi-dimensional topics: use up to your budget limit.\n"
+            "- Stop when you are confident the findings address the research question, "
+            "or when additional searches yield diminishing returns.\n"
+            "- If zero sources were found, set continue_searching=true and provide a broader "
+            "or alternative refined_query.\n"
+            "- When continuing, you MUST provide a refined_query and your rationale MUST "
             "identify the specific information gap that another search would fill.\n"
-            "5. NO RESULTS — if zero sources were found, set continue_searching=true and "
-            "provide a broader or alternative refined_query.\n"
-            "6. The rationale field is REQUIRED and must never be empty. It must explain "
+            "- The rationale field is REQUIRED and must never be empty. It must explain "
             "your reasoning, not just restate the decision.\n\n"
             "URL extraction (urls_to_extract):\n"
             "- If a search result snippet suggests rich content behind a URL (e.g., detailed "
@@ -656,8 +606,6 @@ class TopicResearchMixin:
             "- Only recommend extraction for URLs where the snippet indicates valuable detail "
             "you cannot get from the snippet alone.\n"
             "- Limit to at most 2 URLs per reflection. Set to null if no extraction is needed.\n\n"
-            "IMPORTANT: Err on the side of stopping early. Each additional search iteration "
-            "has diminishing returns. If you already have diverse, relevant sources, STOP.\n"
             "- Keep refined queries focused on the original research topic.\n"
             "- Return ONLY valid JSON, no additional text."
         )
@@ -666,8 +614,6 @@ class TopicResearchMixin:
             f"Original research sub-topic: {original_query}\n"
             f"Current search query: {current_query}\n"
             f"Sources found so far: {sources_found}\n"
-            f"Distinct source domains: {domain_count}\n"
-            f"Source quality distribution: {quality_summary}\n"
             f"Search iteration: {iteration}/{max_iterations}\n"
         )
         if source_context:
@@ -788,52 +734,6 @@ class TopicResearchMixin:
                 lines.append(f"\nCONTENT:\n{truncated}")
 
         return "\n".join(lines)
-
-    # ------------------------------------------------------------------
-    # Cost-aware early-exit heuristic
-    # ------------------------------------------------------------------
-
-    async def _check_early_exit(
-        self,
-        sub_query: SubQuery,
-        state: DeepResearchState,
-        state_lock: asyncio.Lock,
-    ) -> bool:
-        """Check if this topic has sufficient high-quality diverse sources.
-
-        Returns True when: sources_found >= 3 AND distinct_domains >= 2
-        AND at least one HIGH quality source among this sub-query's sources.
-
-        This is a cheap heuristic check (no LLM call) that allows skipping
-        both the reflection and any subsequent search iterations.
-        """
-        async with state_lock:
-            # Collect sources belonging to this sub-query
-            topic_source_ids = set(sub_query.source_ids)
-            topic_sources = [s for s in state.sources if s.id in topic_source_ids]
-
-        if len(topic_sources) < 3:
-            return False
-
-        # Count distinct domains
-        distinct_domains: set[str] = set()
-        has_high_quality = False
-        for src in topic_sources:
-            if src.url:
-                try:
-                    from urllib.parse import urlparse
-
-                    domain = urlparse(src.url).netloc.lower()
-                    if domain.startswith("www."):
-                        domain = domain[4:]
-                    if domain:
-                        distinct_domains.add(domain)
-                except Exception:
-                    pass
-            if hasattr(src, "quality") and src.quality == SourceQuality.HIGH:
-                has_high_quality = True
-
-        return len(distinct_domains) >= 2 and has_high_quality
 
     # ------------------------------------------------------------------
     # Extract step (fetch full content from promising URLs)

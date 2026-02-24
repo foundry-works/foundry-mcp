@@ -309,8 +309,8 @@ class TestUpdatedTopicReflect:
         assert "tokens_used" in reflection
 
     @pytest.mark.asyncio
-    async def test_prompt_includes_source_quality(self) -> None:
-        """Reflection prompt includes source quality distribution."""
+    async def test_prompt_excludes_quality_metadata(self) -> None:
+        """Reflection prompt no longer includes quality distribution (simplified reflection)."""
         mixin = StubTopicResearch()
         state = _make_state()
         # Add sources with different quality levels
@@ -344,7 +344,11 @@ class TestUpdatedTopicReflect:
         )
 
         assert captured_prompt is not None
-        assert "Source quality distribution:" in captured_prompt
+        # Quality and domain metadata no longer injected (simplified reflection)
+        assert "Source quality distribution:" not in captured_prompt
+        assert "Distinct source domains:" not in captured_prompt
+        # Basic context is still present
+        assert "Sources found so far: 2" in captured_prompt
 
     @pytest.mark.asyncio
     async def test_prompt_includes_source_count(self) -> None:
@@ -383,21 +387,16 @@ class TestUpdatedTopicReflect:
         assert "Search iteration: 2/3" in captured_prompt
 
     @pytest.mark.asyncio
-    async def test_prompt_includes_quality_distribution_counts(self) -> None:
-        """Reflection prompt includes actual quality counts by level."""
+    async def test_prompt_uses_adaptive_guidance(self) -> None:
+        """Reflection system prompt uses adaptive guidance, not rigid thresholds."""
         mixin = StubTopicResearch()
         state = _make_state()
-        # Add sources with known quality distribution
-        state.sources.append(_make_source("src-h1", quality=SourceQuality.HIGH))
-        state.sources.append(_make_source("src-h2", quality=SourceQuality.HIGH))
-        state.sources.append(_make_source("src-m1", quality=SourceQuality.MEDIUM))
-        state.sources.append(_make_source("src-l1", quality=SourceQuality.LOW))
 
-        captured_prompt = None
+        captured_system = None
 
-        async def capture_prompt(**kwargs):
-            nonlocal captured_prompt
-            captured_prompt = kwargs.get("prompt", "")
+        async def capture_system(**kwargs):
+            nonlocal captured_system
+            captured_system = kwargs.get("system_prompt", "")
             result = MagicMock()
             result.success = True
             result.content = json.dumps({
@@ -408,7 +407,7 @@ class TestUpdatedTopicReflect:
             result.tokens_used = 40
             return result
 
-        mixin._provider_async_fn = capture_prompt
+        mixin._provider_async_fn = capture_system
 
         await mixin._topic_reflect(
             original_query="test",
@@ -419,11 +418,14 @@ class TestUpdatedTopicReflect:
             state=state,
         )
 
-        assert captured_prompt is not None
-        assert "Source quality distribution:" in captured_prompt
-        # Should contain the quality level names and their counts
-        assert "HIGH" in captured_prompt.upper() or "high" in captured_prompt
-        assert "MEDIUM" in captured_prompt.upper() or "medium" in captured_prompt
+        assert captured_system is not None
+        # Adaptive guidance present
+        assert "substantively answer the research question" in captured_system
+        assert "Simple factual queries" in captured_system
+        assert "diminishing returns" in captured_system
+        # Rigid threshold rules removed
+        assert "STOP IMMEDIATELY" not in captured_system
+        assert "3+ sources" not in captured_system
 
     @pytest.mark.asyncio
     async def test_prompt_includes_original_and_current_query(self) -> None:

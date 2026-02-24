@@ -1155,17 +1155,19 @@ class TestTopicAgentIntegration:
 
 
 class TestReflectionEnforcement:
-    """Tests for Phase 5: tighter reflection decision boundaries.
+    """Tests for simplified reflection (adaptive guidance, no rigid thresholds).
 
     Covers:
-    - 5.4: reflection prompt includes domain diversity and hard-stop rules
-    - 5.5: max_searches is enforced regardless of reflection decision
-    - 5.6: rationale field is always non-empty in reflection notes
+    - Reflection prompt uses adaptive guidance (not rigid threshold rules)
+    - Reflection user prompt excludes domain/quality metadata
+    - max_searches is enforced regardless of reflection decision
+    - rationale field is always non-empty in reflection notes
+    - research_complete signal terminates loop
     """
 
     @pytest.mark.asyncio
-    async def test_reflection_prompt_includes_domain_count(self) -> None:
-        """Reflection user prompt includes distinct domain count from state sources."""
+    async def test_reflection_prompt_excludes_domain_count(self) -> None:
+        """Reflection user prompt no longer includes distinct domain count."""
         mixin = StubTopicResearch()
         state = _make_state(num_sub_queries=1)
 
@@ -1187,7 +1189,7 @@ class TestReflectionEnforcement:
             result.content = json.dumps({
                 "continue_searching": False,
                 "research_complete": True,
-                "rationale": "3 sources from 3 distinct domains",
+                "rationale": "Sufficient coverage of research question",
             })
             result.tokens_used = 40
             return result
@@ -1205,11 +1207,16 @@ class TestReflectionEnforcement:
 
         assert len(captured_prompts) == 1
         prompt = captured_prompts[0]
-        assert "Distinct source domains: 3" in prompt
+        # Domain count and quality distribution no longer injected
+        assert "Distinct source domains:" not in prompt
+        assert "Source quality distribution:" not in prompt
+        # But sources_found and iteration budget are still present
+        assert "Sources found so far: 3" in prompt
+        assert "Search iteration: 1/3" in prompt
 
     @pytest.mark.asyncio
-    async def test_reflection_prompt_includes_hard_stop_rules(self) -> None:
-        """Reflection system prompt includes numbered hard-stop decision rules."""
+    async def test_reflection_prompt_uses_adaptive_guidance(self) -> None:
+        """Reflection system prompt uses adaptive guidance, not rigid thresholds."""
         mixin = StubTopicResearch()
         state = _make_state(num_sub_queries=1)
 
@@ -1240,63 +1247,74 @@ class TestReflectionEnforcement:
 
         assert len(captured_system) == 1
         sys_prompt = captured_system[0]
-        # Verify hard-stop rules (updated in Phase 5)
-        assert "STOP" in sys_prompt
-        assert "3+" in sys_prompt or "3 or more" in sys_prompt
-        assert "distinct domains" in sys_prompt
-        # Verify continue-only-if-<2 rule
-        assert "fewer than 2 relevant sources" in sys_prompt
-        # Verify rationale requirement
+        # Verify adaptive guidance (no rigid threshold rules)
+        assert "substantively answer the research question" in sys_prompt
+        assert "Simple factual queries: 2-3 searches" in sys_prompt
+        assert "Comparative analysis" in sys_prompt
+        assert "diminishing returns" in sys_prompt
+        # Verify rigid threshold rules are GONE
+        assert "STOP IMMEDIATELY" not in sys_prompt
+        assert "3+ sources" not in sys_prompt
+        assert "2+ distinct domains" not in sys_prompt
+        assert "fewer than 2 relevant sources" not in sys_prompt
+        # Verify rationale requirement still present
         assert "rationale field is REQUIRED" in sys_prompt
         assert "must never be empty" in sys_prompt
-        # Verify aggressive early stopping guidance (Phase 5)
-        assert "diminishing returns" in sys_prompt
 
     @pytest.mark.asyncio
-    async def test_research_complete_after_distinct_domain_sources(self) -> None:
-        """Reflection with 3+ sources from distinct domains signals research_complete."""
+    async def test_research_complete_signal_terminates_loop(self) -> None:
+        """research_complete=true from reflection terminates the ReAct loop."""
         from foundry_mcp.core.research.workflows.deep_research._helpers import (
             parse_reflection_decision,
         )
 
         mixin = StubTopicResearch()
         state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
 
-        # Add 3 sources from 3 distinct domains
-        for i, domain in enumerate(["arxiv.org", "nature.com", "ieee.org"]):
-            src = _make_source(
-                f"src-d{i}",
-                f"https://{domain}/paper{i}",
-                f"Paper from {domain}",
-            )
-            state.sources.append(src)
+        search_count = 0
 
-        # LLM returns research_complete=true (following the hard-stop rule)
+        async def counting_search(**kwargs):
+            nonlocal search_count
+            search_count += 1
+            return [_make_source(f"src-{search_count}", f"https://domain{search_count}.com/p")]
+
+        provider = MagicMock()
+        provider.get_provider_name.return_value = "tavily"
+        provider.search = counting_search
+
+        # Reflection signals completion on first call
         async def mock_complete(**kwargs):
             result = MagicMock()
             result.success = True
             result.content = json.dumps({
                 "continue_searching": False,
                 "research_complete": True,
-                "rationale": "3 relevant sources from distinct domains (arxiv.org, nature.com, ieee.org)",
+                "rationale": "Findings substantively answer the research question",
             })
             result.tokens_used = 40
             return result
 
         mixin._provider_async_fn = mock_complete
 
-        reflection = await mixin._topic_reflect(
-            original_query="deep learning",
-            current_query="deep learning",
-            sources_found=3,
-            iteration=1,
-            max_iterations=3,
+        semaphore = asyncio.Semaphore(3)
+        state_lock = asyncio.Lock()
+
+        result = await mixin._execute_topic_research_async(
+            sub_query=sq,
             state=state,
+            available_providers=[provider],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=state_lock,
+            semaphore=semaphore,
         )
 
-        decision = parse_reflection_decision(reflection["raw_response"])
-        assert decision.research_complete is True
-        assert decision.continue_searching is False
+        # Only 1 search, then reflection stops the loop
+        assert result.searches_performed == 1
+        assert result.early_completion is True
 
     @pytest.mark.asyncio
     async def test_max_searches_enforced_regardless_of_reflection(self) -> None:
@@ -1514,14 +1532,18 @@ class TestReflectionEnforcement:
         assert len(decision.rationale) > 0
 
     @pytest.mark.asyncio
-    async def test_domain_dedup_strips_www(self) -> None:
-        """Domain counting strips www. prefix for consistent dedup."""
+    async def test_reflection_includes_per_source_summaries(self) -> None:
+        """Reflection user prompt includes per-source summaries for LLM reasoning."""
         mixin = StubTopicResearch()
         state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
 
-        # Same domain with and without www.
-        state.sources.append(_make_source("s1", "https://www.example.com/a", "A"))
-        state.sources.append(_make_source("s2", "https://example.com/b", "B"))
+        # Add source belonging to the sub-query
+        src = _make_source("src-1", "https://arxiv.org/paper1", "ML Paper")
+        src.metadata = {"summarized": True}
+        src.content = "<summary>Machine learning overview</summary>"
+        state.sources.append(src)
+        sq.source_ids = ["src-1"]
 
         captured_prompts: list[str] = []
 
@@ -1542,181 +1564,124 @@ class TestReflectionEnforcement:
         await mixin._topic_reflect(
             original_query="test",
             current_query="test",
-            sources_found=2,
+            sources_found=1,
             iteration=1,
             max_iterations=3,
             state=state,
+            sub_query=sq,
         )
 
-        # www.example.com and example.com should count as 1 domain
-        assert "Distinct source domains: 1" in captured_prompts[0]
+        # Per-source summaries should be included
+        assert len(captured_prompts) == 1
+        assert "--- SOURCE 1: ML Paper ---" in captured_prompts[0]
+        assert "Machine learning overview" in captured_prompts[0]
 
 
 # =============================================================================
-# Phase 5 tests: Enhanced Per-Researcher Tool Autonomy
+# Phase 5 tests: Simplified Reflection (Adaptive Guidance)
 # =============================================================================
 
 
-class TestPhase5EarlyExitHeuristic:
-    """Tests for Phase 5.1: cost-aware early-exit heuristic."""
+class TestSimplifiedReflection:
+    """Tests for simplified researcher reflection (no rigid thresholds).
+
+    Verifies that the ReAct loop relies on LLM judgment rather than
+    metadata-threshold early exits.
+    """
 
     @pytest.mark.asyncio
-    async def test_early_exit_triggers_with_high_quality_diverse_sources(self) -> None:
-        """Early exit triggers when sources >= 3, domains >= 2, has HIGH quality."""
+    async def test_researcher_continues_beyond_3_sources_on_complex_topic(self) -> None:
+        """Researcher can continue searching beyond 3 sources when reflection says continue."""
         mixin = StubTopicResearch()
         state = _make_state(num_sub_queries=1)
         sq = state.sub_queries[0]
 
-        # Add 3 sources from 2 domains with at least one HIGH quality
-        state.sources.append(
-            _make_source("s1", "https://arxiv.org/paper1", "Paper 1", SourceQuality.HIGH)
-        )
-        state.sources.append(
-            _make_source("s2", "https://arxiv.org/paper2", "Paper 2", SourceQuality.MEDIUM)
-        )
-        state.sources.append(
-            _make_source("s3", "https://nature.com/article1", "Article 1", SourceQuality.MEDIUM)
-        )
-        sq.source_ids = ["s1", "s2", "s3"]
+        search_count = 0
 
+        async def mock_search(**kwargs):
+            nonlocal search_count
+            search_count += 1
+            return [_make_source(
+                f"src-{search_count}",
+                f"https://domain{search_count}.com/p",
+                f"Source {search_count}",
+                SourceQuality.HIGH,
+            )]
+
+        provider = MagicMock()
+        provider.get_provider_name.return_value = "tavily"
+        provider.search = mock_search
+
+        # _provider_async_fn is shared between reflection and think calls.
+        # Use search_count (set by the search mock) to decide when to stop.
+        async def mock_provider(**kwargs):
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 30
+            if search_count < 5:
+                # Continue searching — complex topic needs more coverage
+                result.content = json.dumps({
+                    "continue_searching": True,
+                    "refined_query": f"aspect {search_count + 1} of topic",
+                    "research_complete": False,
+                    "rationale": f"Only {search_count} perspective(s) covered, need more angles",
+                })
+            else:
+                result.content = json.dumps({
+                    "continue_searching": False,
+                    "research_complete": True,
+                    "rationale": "Comprehensive coverage across multiple perspectives achieved",
+                })
+            return result
+
+        mixin._provider_async_fn = mock_provider
+
+        semaphore = asyncio.Semaphore(3)
         state_lock = asyncio.Lock()
-        result = await mixin._check_early_exit(sq, state, state_lock)
-        assert result is True
+
+        result = await mixin._execute_topic_research_async(
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=7,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=state_lock,
+            semaphore=semaphore,
+        )
+
+        # Should have done more than 3 searches (no rigid 3-source cutoff)
+        assert result.searches_performed > 3
+        assert result.sources_found > 3
+        assert result.early_completion is True
 
     @pytest.mark.asyncio
-    async def test_early_exit_does_not_trigger_insufficient_sources(self) -> None:
-        """Early exit does not trigger with fewer than 3 sources."""
+    async def test_researcher_stops_early_on_simple_topic(self) -> None:
+        """Researcher stops after 1 search when reflection decides coverage is sufficient."""
         mixin = StubTopicResearch()
         state = _make_state(num_sub_queries=1)
         sq = state.sub_queries[0]
 
-        state.sources.append(
-            _make_source("s1", "https://arxiv.org/p1", "P1", SourceQuality.HIGH)
-        )
-        state.sources.append(
-            _make_source("s2", "https://nature.com/p2", "P2", SourceQuality.HIGH)
-        )
-        sq.source_ids = ["s1", "s2"]
-
-        state_lock = asyncio.Lock()
-        result = await mixin._check_early_exit(sq, state, state_lock)
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_early_exit_does_not_trigger_single_domain(self) -> None:
-        """Early exit does not trigger when all sources from same domain."""
-        mixin = StubTopicResearch()
-        state = _make_state(num_sub_queries=1)
-        sq = state.sub_queries[0]
-
-        for i in range(4):
-            state.sources.append(
-                _make_source(f"s{i}", f"https://arxiv.org/p{i}", f"P{i}", SourceQuality.HIGH)
-            )
-            sq.source_ids.append(f"s{i}")
-
-        state_lock = asyncio.Lock()
-        result = await mixin._check_early_exit(sq, state, state_lock)
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_early_exit_does_not_trigger_no_high_quality(self) -> None:
-        """Early exit does not trigger without at least one HIGH quality source."""
-        mixin = StubTopicResearch()
-        state = _make_state(num_sub_queries=1)
-        sq = state.sub_queries[0]
-
-        state.sources.append(
-            _make_source("s1", "https://arxiv.org/p1", "P1", SourceQuality.MEDIUM)
-        )
-        state.sources.append(
-            _make_source("s2", "https://nature.com/p2", "P2", SourceQuality.MEDIUM)
-        )
-        state.sources.append(
-            _make_source("s3", "https://ieee.org/p3", "P3", SourceQuality.MEDIUM)
-        )
-        sq.source_ids = ["s1", "s2", "s3"]
-
-        state_lock = asyncio.Lock()
-        result = await mixin._check_early_exit(sq, state, state_lock)
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_early_exit_only_considers_topic_sources(self) -> None:
-        """Early exit only checks sources belonging to this sub-query."""
-        mixin = StubTopicResearch()
-        state = _make_state(num_sub_queries=2)
-        sq = state.sub_queries[0]
-
-        # Sources from OTHER topic (not sq's)
-        state.sources.append(
-            _make_source("other1", "https://arxiv.org/o1", "O1", SourceQuality.HIGH)
-        )
-        state.sources.append(
-            _make_source("other2", "https://nature.com/o2", "O2", SourceQuality.HIGH)
-        )
-        state.sources.append(
-            _make_source("other3", "https://ieee.org/o3", "O3", SourceQuality.HIGH)
-        )
-
-        # Only 1 source for this topic
-        state.sources.append(
-            _make_source("mine1", "https://arxiv.org/m1", "M1", SourceQuality.HIGH)
-        )
-        sq.source_ids = ["mine1"]
-
-        state_lock = asyncio.Lock()
-        result = await mixin._check_early_exit(sq, state, state_lock)
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_early_exit_integrates_in_react_loop(self) -> None:
-        """Early exit short-circuits the ReAct loop when conditions are met."""
-        mixin = StubTopicResearch()
-        state = _make_state(num_sub_queries=1)
-        sq = state.sub_queries[0]
-
-        search_calls = 0
-
-        async def mock_search(**search_kwargs):
-            nonlocal search_calls
-            search_calls += 1
+        async def mock_search(**kwargs):
             return [
-                ResearchSource(
-                    id=f"src-{search_calls}-1",
-                    title=f"Source {search_calls}-1",
-                    url=f"https://domain{search_calls}a.com/p",
-                    content="Test content",
-                    quality=SourceQuality.HIGH,
-                ),
-                ResearchSource(
-                    id=f"src-{search_calls}-2",
-                    title=f"Source {search_calls}-2",
-                    url=f"https://domain{search_calls}b.com/p",
-                    content="Test content 2",
-                    quality=SourceQuality.HIGH,
-                ),
+                _make_source("s1", "https://example.com/a", "Simple Answer"),
+                _make_source("s2", "https://other.com/b", "Another Answer"),
             ]
 
         provider = MagicMock()
         provider.get_provider_name.return_value = "tavily"
         provider.search = mock_search
 
-        # Reflection should not be called if early exit triggers
-        reflection_called = False
-
         async def mock_reflect(**kwargs):
-            nonlocal reflection_called
-            reflection_called = True
             result = MagicMock()
             result.success = True
+            result.tokens_used = 20
             result.content = json.dumps({
-                "continue_searching": True,
-                "refined_query": "more stuff",
-                "research_complete": False,
-                "rationale": "Should not reach here",
+                "continue_searching": False,
+                "research_complete": True,
+                "rationale": "Simple factual query answered with 2 clear sources",
             })
-            result.tokens_used = 30
             return result
 
         mixin._provider_async_fn = mock_reflect
@@ -1736,11 +1701,63 @@ class TestPhase5EarlyExitHeuristic:
             semaphore=semaphore,
         )
 
-        # Should have done 2 searches (first iteration + second with enough sources)
-        # but NOT 5, because early exit triggers on iteration 1 (after search_calls >= 2)
-        assert result.searches_performed <= 3
+        # Stops after just 1 search
+        assert result.searches_performed == 1
         assert result.early_completion is True
-        assert "Early exit" in result.completion_rationale
+
+    @pytest.mark.asyncio
+    async def test_no_metadata_threshold_early_exit(self) -> None:
+        """ReAct loop does not have metadata-threshold early exit; relies on LLM decision."""
+        # Verify _check_early_exit is no longer on the mixin
+        mixin = StubTopicResearch()
+        assert not hasattr(mixin, "_check_early_exit"), (
+            "_check_early_exit should be removed — LLM reflection is the primary exit signal"
+        )
+
+    @pytest.mark.asyncio
+    async def test_no_new_sources_exit_still_works(self) -> None:
+        """Loop exits when no refinement is possible (no new sources scenario)."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        # Search returns no sources
+        provider = MagicMock()
+        provider.get_provider_name.return_value = "tavily"
+        provider.search = AsyncMock(return_value=[])
+
+        # Reflection says continue but provides same query
+        async def mock_reflect(**kwargs):
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 20
+            result.content = json.dumps({
+                "continue_searching": True,
+                "refined_query": None,
+                "research_complete": False,
+                "rationale": "No sources found, need to broaden search",
+            })
+            return result
+
+        mixin._provider_async_fn = mock_reflect
+
+        semaphore = asyncio.Semaphore(3)
+        state_lock = asyncio.Lock()
+
+        result = await mixin._execute_topic_research_async(
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=state_lock,
+            semaphore=semaphore,
+        )
+
+        # Loop should terminate early (no refinement possible)
+        assert result.searches_performed < 5
 
 
 class TestPhase5TopicThink:
@@ -2407,29 +2424,12 @@ class TestPhase3IterationBudget:
         config = ResearchConfig()
         assert config.deep_research_topic_max_tool_calls == 10
 
-    @pytest.mark.asyncio
-    async def test_early_exit_still_fires(self) -> None:
-        """Early-exit heuristic still triggers on simple queries with enough sources."""
+    def test_early_exit_heuristic_removed(self) -> None:
+        """Metadata-threshold early exit removed — LLM reflection is primary signal."""
         stub = StubTopicResearch()
-        state = _make_state(num_sub_queries=1)
-        sq = state.sub_queries[0]
-
-        # Add 3 sources from 2 domains with a HIGH quality source
-        sources = [
-            _make_source("s1", "https://a.com/1", "A1", SourceQuality.HIGH),
-            _make_source("s2", "https://b.com/1", "B1", SourceQuality.MEDIUM),
-            _make_source("s3", "https://a.com/2", "A2", SourceQuality.MEDIUM),
-        ]
-        for s in sources:
-            state.append_source(s)
-            sq.source_ids.append(s.id)
-
-        result = await stub._check_early_exit(
-            sub_query=sq,
-            state=state,
-            state_lock=asyncio.Lock(),
+        assert not hasattr(stub, "_check_early_exit"), (
+            "_check_early_exit removed; LLM reflection is the primary exit signal"
         )
-        assert result is True
 
 
 class TestPhase3ReflectionDecisionExtract:
