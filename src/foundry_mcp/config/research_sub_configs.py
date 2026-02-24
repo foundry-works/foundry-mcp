@@ -85,6 +85,8 @@ class ModelRoleConfig:
     report_model: Optional[str] = None
     reflection_provider: Optional[str] = None
     reflection_model: Optional[str] = None
+    supervision_provider: Optional[str] = None
+    supervision_model: Optional[str] = None
     topic_reflection_provider: Optional[str] = None
     topic_reflection_model: Optional[str] = None
     clarification_provider: Optional[str] = None
@@ -110,7 +112,12 @@ class DeepResearchConfig:
     enable_reflection: bool = True
     enable_contradiction_detection: bool = True
     enable_topic_agents: bool = True
+    enable_supervision: bool = True
     fetch_time_summarization: bool = True
+
+    # Supervision settings
+    max_supervision_rounds: int = 3
+    supervision_min_sources_per_query: int = 2
 
     # Core workflow settings
     max_iterations: int = 3

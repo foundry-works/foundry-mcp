@@ -17,12 +17,12 @@
 
 ## Sub-Phase 6.2: Configuration
 
-- [ ] **6.2.1** Add `deep_research_enable_supervision` (bool, default True) to `ResearchConfig`
-- [ ] **6.2.2** Add `deep_research_max_supervision_rounds` (int, default 3) to `ResearchConfig`
-- [ ] **6.2.3** Add `deep_research_supervision_min_sources_per_query` (int, default 2) to `ResearchConfig`
-- [ ] **6.2.4** Add `"supervision"` to `_ROLE_RESOLUTION_CHAIN` (falls back to `"reflection"`)
-- [ ] **6.2.5** Add `"supervision"` to `get_phase_timeout()` (reuse planning timeout)
-- [ ] **6.2.6** Wire `max_supervision_rounds` into `DeepResearchConfig` dataclass and state initialization
+- [x] **6.2.1** Add `deep_research_enable_supervision` (bool, default True) to `ResearchConfig`
+- [x] **6.2.2** Add `deep_research_max_supervision_rounds` (int, default 3) to `ResearchConfig`
+- [x] **6.2.3** Add `deep_research_supervision_min_sources_per_query` (int, default 2) to `ResearchConfig`
+- [x] **6.2.4** Add `"supervision"` to `_ROLE_RESOLUTION_CHAIN` (falls back to `"reflection"`)
+- [x] **6.2.5** Add `"supervision"` to `get_phase_timeout()` (reuse planning timeout)
+- [x] **6.2.6** Wire `max_supervision_rounds` into `DeepResearchConfig` dataclass and state initialization
 
 ---
 

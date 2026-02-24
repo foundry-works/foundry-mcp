@@ -95,6 +95,15 @@ class ResearchConfig:
     deep_research_reflection_provider: Optional[str] = None  # Uses default_provider if not set
     deep_research_reflection_timeout: float = 60.0  # Timeout per reflection call (seconds)
 
+    # Deep research iterative supervision (coverage gap assessment between gathering rounds)
+    deep_research_enable_supervision: bool = True  # Master switch for iterative supervision loop
+    deep_research_max_supervision_rounds: int = 3  # Max assess-delegate rounds per iteration
+    deep_research_supervision_min_sources_per_query: int = 2  # Minimum sources for "sufficient" coverage
+
+    # Supervision LLM provider/model (uses reflection fallback if not set)
+    deep_research_supervision_provider: Optional[str] = None
+    deep_research_supervision_model: Optional[str] = None
+
     # Deep research contradiction detection in analysis phase
     deep_research_enable_contradiction_detection: bool = True  # LLM-based contradiction detection between findings
 
@@ -315,6 +324,14 @@ class ResearchConfig:
             deep_research_enable_reflection=_parse_bool(data.get("deep_research_enable_reflection", True)),
             deep_research_reflection_provider=data.get("deep_research_reflection_provider"),
             deep_research_reflection_timeout=float(data.get("deep_research_reflection_timeout", 60.0)),
+            # Deep research iterative supervision
+            deep_research_enable_supervision=_parse_bool(data.get("deep_research_enable_supervision", True)),
+            deep_research_max_supervision_rounds=int(data.get("deep_research_max_supervision_rounds", 3)),
+            deep_research_supervision_min_sources_per_query=int(
+                data.get("deep_research_supervision_min_sources_per_query", 2)
+            ),
+            deep_research_supervision_provider=data.get("deep_research_supervision_provider"),
+            deep_research_supervision_model=data.get("deep_research_supervision_model"),
             # Deep research contradiction detection
             deep_research_enable_contradiction_detection=_parse_bool(
                 data.get("deep_research_enable_contradiction_detection", True)
@@ -721,7 +738,8 @@ class ResearchConfig:
         falls back to deep_research_timeout.
 
         Args:
-            phase: Phase name ("planning", "analysis", "synthesis", "refinement", "gathering")
+            phase: Phase name ("planning", "analysis", "synthesis", "refinement",
+                   "gathering", "supervision")
 
         Returns:
             Timeout in seconds for the phase
@@ -729,10 +747,11 @@ class ResearchConfig:
         phase_timeouts = {
             "clarification": self.deep_research_planning_timeout,  # Reuse planning timeout
             "planning": self.deep_research_planning_timeout,
+            "gathering": self.deep_research_timeout,  # Gathering uses default
+            "supervision": self.deep_research_planning_timeout,  # Lightweight LLM call, reuse planning timeout
             "analysis": self.deep_research_analysis_timeout,
             "synthesis": self.deep_research_synthesis_timeout,
             "refinement": self.deep_research_refinement_timeout,
-            "gathering": self.deep_research_timeout,  # Gathering uses default
         }
         return phase_timeouts.get(phase.lower(), self.deep_research_timeout)
 
@@ -917,6 +936,7 @@ class ResearchConfig:
         "research": ["research", "analysis"],
         "report": ["report", "synthesis"],
         "reflection": ["reflection"],
+        "supervision": ["supervision", "reflection"],
         "topic_reflection": ["topic_reflection", "reflection"],
         "summarization": ["summarization"],
         "compression": ["compression"],
@@ -1251,6 +1271,8 @@ class ResearchConfig:
             report_model=self.deep_research_report_model,
             reflection_provider=self.deep_research_reflection_provider,
             reflection_model=self.deep_research_reflection_model,
+            supervision_provider=self.deep_research_supervision_provider,
+            supervision_model=self.deep_research_supervision_model,
             topic_reflection_provider=self.deep_research_topic_reflection_provider,
             topic_reflection_model=self.deep_research_topic_reflection_model,
             clarification_provider=self.deep_research_clarification_provider,
@@ -1273,7 +1295,10 @@ class ResearchConfig:
             enable_reflection=self.deep_research_enable_reflection,
             enable_contradiction_detection=self.deep_research_enable_contradiction_detection,
             enable_topic_agents=self.deep_research_enable_topic_agents,
+            enable_supervision=self.deep_research_enable_supervision,
             fetch_time_summarization=self.deep_research_fetch_time_summarization,
+            max_supervision_rounds=self.deep_research_max_supervision_rounds,
+            supervision_min_sources_per_query=self.deep_research_supervision_min_sources_per_query,
             max_iterations=self.deep_research_max_iterations,
             max_sub_queries=self.deep_research_max_sub_queries,
             max_sources=self.deep_research_max_sources,

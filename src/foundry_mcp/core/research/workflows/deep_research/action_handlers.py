@@ -134,6 +134,8 @@ class ActionHandlersMixin:
             analysis_model=None if provider_id else analysis_model,
             synthesis_model=None if provider_id else synthesis_model,
             refinement_model=None if provider_id else refinement_model,
+            # Supervision configuration
+            max_supervision_rounds=getattr(self.config, "deep_research_max_supervision_rounds", 3),
         )
 
         # Save initial state
