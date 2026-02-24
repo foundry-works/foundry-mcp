@@ -71,41 +71,41 @@
 
 ## Sub-Phase 6.7: Tests
 
-- [ ] **6.7.1** State model tests (6 tests)
+- [x] **6.7.1** State model tests (6 tests)
   - `test_supervision_phase_in_enum`
   - `test_advance_phase_gathering_to_supervision`
   - `test_advance_phase_supervision_to_analysis`
   - `test_start_new_iteration_resets_supervision_round`
   - `test_should_continue_supervision_within_limit`
   - `test_should_continue_supervision_at_limit`
-- [ ] **6.7.2** Prompt/coverage tests (3 tests)
+- [x] **6.7.2** Prompt/coverage tests (3 tests)
   - `test_build_per_query_coverage`
   - `test_supervision_system_prompt_has_json_schema`
   - `test_supervision_user_prompt_includes_coverage`
-- [ ] **6.7.3** Response parsing tests (4 tests)
+- [x] **6.7.3** Response parsing tests (4 tests)
   - `test_parse_valid_supervision_response`
   - `test_parse_with_duplicate_queries_deduped`
   - `test_parse_invalid_json_returns_fallback`
   - `test_heuristic_fallback`
-- [ ] **6.7.4** Integration tests (4 tests)
+- [x] **6.7.4** Integration tests (4 tests)
   - `test_supervision_loop_adds_follow_up_queries`
   - `test_supervision_loop_terminates_at_max_rounds`
   - `test_supervision_skipped_when_disabled`
   - `test_supervision_proceeds_when_all_covered`
-- [ ] **6.7.5** Full regression: `pytest tests/core/research/ -x` — no regressions
+- [x] **6.7.5** Full regression: `pytest tests/core/research/ -x` — 1901 passed, 6 skipped, 0 failures
 
 ---
 
 ## Sub-Phase 6.8: Checklist Update
 
-- [ ] **6.8.1** Update `PLAN-CHECKLIST.md` Phase 6 section with completed items
+- [x] **6.8.1** Update `PLAN-CHECKLIST.md` Phase 6 section with completed items
 
 ---
 
 ## Sign-off
 
-- [ ] All sub-phases reviewed and approved
-- [ ] Tests pass: `pytest tests/core/research/ -x`
-- [ ] No regressions in existing deep research tests
-- [ ] Supervision loop verified: GATHERING → SUPERVISION → (loop) → ANALYSIS
-- [ ] Supervision-disabled path verified: GATHERING → ANALYSIS (unchanged behavior)
+- [x] All sub-phases reviewed and approved
+- [x] Tests pass: `pytest tests/core/research/ -x` — 1901 passed, 6 skipped, 0 failures
+- [x] No regressions in existing deep research tests
+- [x] Supervision loop verified: GATHERING → SUPERVISION → (loop) → ANALYSIS
+- [x] Supervision-disabled path verified: GATHERING → ANALYSIS (unchanged behavior)

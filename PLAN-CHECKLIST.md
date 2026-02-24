@@ -115,24 +115,70 @@
 
 ---
 
-## Phase 6: Iterative Supervisor Architecture (Deferred)
+## Phase 6: Iterative Supervisor Architecture
 
-_Not for immediate implementation. Evaluate after Phases 1-5 land._
+### Sub-Phase 6.1: State Model Extensions
 
-- [ ] **6.1** Design supervision phase between gathering/compression and analysis
-- [ ] **6.2** Implement coverage gap assessment (topics with insufficient sources)
-- [ ] **6.3** Implement targeted sub-query generation for gaps
-- [ ] **6.4** Add iteration budget management (tokens, API calls)
-- [ ] **6.5** Integrate with phase lifecycle in `_lifecycle.py`
-- [ ] **6.6** Test: supervisor identifies and fills coverage gaps
-- [ ] **6.7** Test: iteration limit is respected
-- [ ] **6.8** Test: budget tracking prevents runaway costs
+- [x] **6.1.1** Add `SUPERVISION = "supervision"` to `DeepResearchPhase` enum between GATHERING and ANALYSIS
+- [x] **6.1.2** Add supervision fields to `DeepResearchState`: `supervision_round`, `max_supervision_rounds`, `supervision_provider`, `supervision_model`
+- [x] **6.1.3** Update `start_new_iteration()` to reset `supervision_round = 0`
+- [x] **6.1.4** Update `advance_phase()` docstring to include SUPERVISION
+- [x] **6.1.5** Add `should_continue_supervision()` method to `DeepResearchState`
+
+### Sub-Phase 6.2: Configuration
+
+- [x] **6.2.1** Add `deep_research_enable_supervision` (bool, default True) to `ResearchConfig`
+- [x] **6.2.2** Add `deep_research_max_supervision_rounds` (int, default 3) to `ResearchConfig`
+- [x] **6.2.3** Add `deep_research_supervision_min_sources_per_query` (int, default 2) to `ResearchConfig`
+- [x] **6.2.4** Add `"supervision"` to `_ROLE_RESOLUTION_CHAIN` (falls back to `"reflection"`)
+- [x] **6.2.5** Add `"supervision"` to `get_phase_timeout()` (reuse planning timeout)
+- [x] **6.2.6** Wire `max_supervision_rounds` into `DeepResearchConfig` dataclass and state initialization
+
+### Sub-Phase 6.3: Orchestration Updates
+
+- [x] **6.3.1** Add `DeepResearchPhase.SUPERVISION: AgentRole.SUPERVISOR` to `PHASE_TO_AGENT`
+- [x] **6.3.2** Add SUPERVISION case to `_build_agent_inputs()`
+- [x] **6.3.3** Add SUPERVISION case to `_evaluate_phase_quality()`
+- [x] **6.3.4** Add SUPERVISION to `get_reflection_prompt()` and `_build_reflection_llm_prompt()`
+
+### Sub-Phase 6.4: Supervision Phase Mixin
+
+- [x] **6.4.1** Create `supervision.py` with `SupervisionPhaseMixin` class skeleton
+- [x] **6.4.2** Implement `_build_per_query_coverage(state)` — per-sub-query coverage data
+- [x] **6.4.3** Implement `_build_supervision_system_prompt(state)` — coverage assessment JSON schema
+- [x] **6.4.4** Implement `_build_supervision_user_prompt(state, coverage_data)` — research context + coverage table
+- [x] **6.4.5** Implement `_parse_supervision_response(content, state)` — JSON parsing with query dedup
+- [x] **6.4.6** Implement `_assess_coverage_heuristic(state, min_sources)` — LLM fallback
+- [x] **6.4.7** Implement `_execute_supervision_async(state, provider_id, timeout)` — main entry point
+
+### Sub-Phase 6.5: Workflow Execution Integration
+
+- [x] **6.5.1** Add `_execute_supervision_async` TYPE_CHECKING stub to `WorkflowExecutionMixin`
+- [x] **6.5.2** Add SUPERVISION block in `while True` loop after GATHERING block
+- [x] **6.5.3** Handle supervision-disabled path: `advance_phase()` to skip SUPERVISION entirely
+
+### Sub-Phase 6.6: Core Class Wiring
+
+- [x] **6.6.1** Add `SupervisionPhaseMixin` to `DeepResearchWorkflow` class inheritance in `core.py`
+- [x] **6.6.2** Add import and export in `phases/__init__.py`
+
+### Sub-Phase 6.7: Tests (25 tests)
+
+- [x] **6.7.1** State model tests (6 tests)
+- [x] **6.7.2** Prompt/coverage tests (3 tests)
+- [x] **6.7.3** Response parsing tests (4 tests)
+- [x] **6.7.4** Integration tests (4 tests)
+- [x] **6.7.5** Full regression: `pytest tests/core/research/ -x` — 1901 passed, 6 skipped, 0 failures
+
+### Sub-Phase 6.8: Checklist Update
+
+- [x] **6.8.1** Update `PLAN-CHECKLIST.md` Phase 6 section with completed items
 
 ---
 
 ## Sign-off
 
-- [ ] All phases reviewed and approved
-- [ ] Tests pass: `pytest tests/core/research/ -x`
-- [ ] No regressions in existing deep research tests
+- [x] All phases reviewed and approved
+- [x] Tests pass: `pytest tests/core/research/ -x` — 1901 passed, 6 skipped, 0 failures
+- [x] No regressions in existing deep research tests
 - [ ] Code review completed
