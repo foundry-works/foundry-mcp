@@ -1,14 +1,14 @@
 # PLAN CHECKLIST: Deep Research Workflow — ODR Alignment & Efficiency Improvements
 
 ## Phase 1 — Per-Result Summarization at Search Time
-- [ ] 1.1 Add `_summarize_search_result` async helper to `TopicResearchMixin`
-- [ ] 1.2 Wire summarization into `_handle_web_search_tool` after source addition, with `asyncio.gather` and per-result timeout (30s)
-- [ ] 1.3 Store summary in `src.content`, set `src.metadata["summarized"] = True`, preserve raw in `src.metadata["raw_content"]`
-- [ ] 1.4 Fall back to raw snippet/truncation on summarization timeout or failure
-- [ ] 1.5 Add `summarization_model` config field if not present (or reuse compression model)
-- [ ] 1.6 Test: verify researcher message history contains `SUMMARY:` blocks after search
-- [ ] 1.7 Test: verify fallback to raw content on summarization timeout
-- [ ] 1.8 Test: verify raw content preserved in metadata for compression phase
+- [x] 1.1 Add `_summarize_search_result` async helper to `TopicResearchMixin`
+- [x] 1.2 Wire summarization into `_handle_web_search_tool` after source addition, with `asyncio.gather` and per-result timeout (30s)
+- [x] 1.3 Store summary in `src.content`, set `src.metadata["summarized"] = True`, preserve raw in `src.metadata["raw_content"]`
+- [x] 1.4 Fall back to raw snippet/truncation on summarization timeout or failure
+- [x] 1.5 Add `summarization_model` config field if not present (or reuse compression model)
+- [x] 1.6 Test: verify researcher message history contains `SUMMARY:` blocks after search
+- [x] 1.7 Test: verify fallback to raw content on summarization timeout
+- [x] 1.8 Test: verify raw content preserved in metadata for compression phase
 
 ## Phase 2 — Inline Compression of Supervision Directive Results
 - [ ] 2.1 After `_execute_directives_async`, invoke `_compress_single_topic_async` for results without `compressed_findings`

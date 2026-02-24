@@ -1497,3 +1497,390 @@ class TestResearcherStopHeuristics:
         think_notes = [n for n in topic_result.reflection_notes if n.startswith("[think]")]
         assert len(think_notes) == 2
         assert "diminishing returns" in think_notes[1].lower() or "similar" in think_notes[1].lower()
+
+
+# =============================================================================
+# Phase 1: Per-Result Summarization at Search Time
+# =============================================================================
+
+
+class TestPerResultSummarization:
+    """Tests for Phase 1: per-result summarization in _handle_web_search_tool."""
+
+    @pytest.mark.asyncio
+    async def test_summarized_sources_show_summary_block(self) -> None:
+        """After search, sources with long content are summarized and message
+        history contains SUMMARY: blocks instead of raw content."""
+        from unittest.mock import patch
+
+        from foundry_mcp.core.research.providers.shared import SourceSummarizationResult
+
+        mixin = StubTopicResearch()
+        # Set config fields for summarization
+        mixin.config.deep_research_summarization_min_content_length = 300
+        mixin.config.deep_research_summarization_timeout = 30
+        mixin.config.deep_research_max_content_length = 50000
+
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        # Create a source with long content that should trigger summarization
+        long_content = "A" * 500
+        source = ResearchSource(
+            id="src-long-1",
+            title="Long Source",
+            url="https://example.com/long",
+            content=long_content,
+            quality=SourceQuality.MEDIUM,
+        )
+        provider = _make_mock_provider("tavily", [source])
+
+        # Mock the SourceSummarizer to return a known summary
+        mock_summary_result = SourceSummarizationResult(
+            executive_summary="This is the executive summary.",
+            key_excerpts=["Key excerpt one", "Key excerpt two"],
+            input_tokens=100,
+            output_tokens=50,
+        )
+
+        with patch(
+            "foundry_mcp.core.research.providers.shared.SourceSummarizer"
+        ) as MockSummarizer:
+            mock_instance = AsyncMock()
+            mock_instance.summarize_sources = AsyncMock(
+                return_value={"src-long-1": mock_summary_result}
+            )
+            MockSummarizer.return_value = mock_instance
+            MockSummarizer.format_summarized_content = (
+                lambda summary, excerpts: f"<summary>{summary}</summary>"
+            )
+
+            tool_call = ResearcherToolCall(
+                tool="web_search",
+                arguments={"query": sq.query, "max_results": 5},
+            )
+            result_text = await mixin._handle_web_search_tool(
+                tool_call=tool_call,
+                sub_query=sq,
+                state=state,
+                result=TopicResearchResult(sub_query_id=sq.id),
+                available_providers=[provider],
+                max_sources_per_provider=5,
+                timeout=30.0,
+                seen_urls=set(),
+                seen_titles={},
+                state_lock=asyncio.Lock(),
+                semaphore=asyncio.Semaphore(3),
+            )
+
+        # The formatted output should contain SUMMARY: block
+        assert "SUMMARY:" in result_text
+        assert "executive summary" in result_text
+
+        # Source in state should be marked as summarized
+        summarized_src = next(s for s in state.sources if s.id == "src-long-1")
+        assert summarized_src.metadata.get("summarized") is True
+        assert summarized_src.raw_content == long_content
+
+    @pytest.mark.asyncio
+    async def test_fallback_to_raw_on_summarization_failure(self) -> None:
+        """When summarization fails entirely, raw content is used as fallback."""
+        from unittest.mock import patch
+
+        mixin = StubTopicResearch()
+        mixin.config.deep_research_summarization_min_content_length = 300
+        mixin.config.deep_research_summarization_timeout = 30
+        mixin.config.deep_research_max_content_length = 50000
+
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        long_content = "B" * 600
+        source = ResearchSource(
+            id="src-fail-1",
+            title="Fail Source",
+            url="https://example.com/fail",
+            content=long_content,
+            quality=SourceQuality.MEDIUM,
+        )
+        provider = _make_mock_provider("tavily", [source])
+
+        with patch(
+            "foundry_mcp.core.research.providers.shared.SourceSummarizer"
+        ) as MockSummarizer:
+            # Summarizer raises an exception
+            mock_instance = AsyncMock()
+            mock_instance.summarize_sources = AsyncMock(
+                side_effect=RuntimeError("Summarization provider unavailable")
+            )
+            MockSummarizer.return_value = mock_instance
+
+            tool_call = ResearcherToolCall(
+                tool="web_search",
+                arguments={"query": sq.query, "max_results": 5},
+            )
+            result_text = await mixin._handle_web_search_tool(
+                tool_call=tool_call,
+                sub_query=sq,
+                state=state,
+                result=TopicResearchResult(sub_query_id=sq.id),
+                available_providers=[provider],
+                max_sources_per_provider=5,
+                timeout=30.0,
+                seen_urls=set(),
+                seen_titles={},
+                state_lock=asyncio.Lock(),
+                semaphore=asyncio.Semaphore(3),
+            )
+
+        # Raw content should be used (truncated to 500 chars)
+        assert "CONTENT:" in result_text
+        assert "SUMMARY:" not in result_text
+        # Source should NOT be marked as summarized
+        src = next(s for s in state.sources if s.id == "src-fail-1")
+        assert not src.metadata.get("summarized")
+
+    @pytest.mark.asyncio
+    async def test_short_content_not_summarized(self) -> None:
+        """Sources with content below the threshold are not summarized."""
+        from unittest.mock import patch
+
+        mixin = StubTopicResearch()
+        mixin.config.deep_research_summarization_min_content_length = 300
+        mixin.config.deep_research_summarization_timeout = 30
+        mixin.config.deep_research_max_content_length = 50000
+
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        # Short content below 300 chars
+        short_content = "Short result content"
+        source = ResearchSource(
+            id="src-short-1",
+            title="Short Source",
+            url="https://example.com/short",
+            content=short_content,
+            quality=SourceQuality.MEDIUM,
+        )
+        provider = _make_mock_provider("tavily", [source])
+
+        with patch(
+            "foundry_mcp.core.research.providers.shared.SourceSummarizer"
+        ) as MockSummarizer:
+            mock_instance = AsyncMock()
+            mock_instance.summarize_sources = AsyncMock(return_value={})
+            MockSummarizer.return_value = mock_instance
+
+            tool_call = ResearcherToolCall(
+                tool="web_search",
+                arguments={"query": sq.query, "max_results": 5},
+            )
+            result_text = await mixin._handle_web_search_tool(
+                tool_call=tool_call,
+                sub_query=sq,
+                state=state,
+                result=TopicResearchResult(sub_query_id=sq.id),
+                available_providers=[provider],
+                max_sources_per_provider=5,
+                timeout=30.0,
+                seen_urls=set(),
+                seen_titles={},
+                state_lock=asyncio.Lock(),
+                semaphore=asyncio.Semaphore(3),
+            )
+
+        # Short content should NOT be summarized — shown as CONTENT:
+        assert "SUMMARY:" not in result_text
+        # Source not marked as summarized
+        src = next(s for s in state.sources if s.id == "src-short-1")
+        assert not src.metadata.get("summarized")
+
+    @pytest.mark.asyncio
+    async def test_already_summarized_sources_skipped(self) -> None:
+        """Sources already summarized by the provider layer are not re-summarized."""
+        from unittest.mock import patch
+
+        mixin = StubTopicResearch()
+        mixin.config.deep_research_summarization_min_content_length = 300
+        mixin.config.deep_research_summarization_timeout = 30
+        mixin.config.deep_research_max_content_length = 50000
+
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        # Source already summarized by provider
+        source = ResearchSource(
+            id="src-presumm-1",
+            title="Pre-Summarized Source",
+            url="https://example.com/presumm",
+            content="<summary>Already summarized</summary>",
+            quality=SourceQuality.MEDIUM,
+            metadata={"summarized": True},
+        )
+        provider = _make_mock_provider("tavily", [source])
+
+        with patch(
+            "foundry_mcp.core.research.providers.shared.SourceSummarizer"
+        ) as MockSummarizer:
+            mock_instance = AsyncMock()
+            # Should return empty because the source is already summarized
+            mock_instance.summarize_sources = AsyncMock(return_value={})
+            MockSummarizer.return_value = mock_instance
+
+            tool_call = ResearcherToolCall(
+                tool="web_search",
+                arguments={"query": sq.query, "max_results": 5},
+            )
+            result_text = await mixin._handle_web_search_tool(
+                tool_call=tool_call,
+                sub_query=sq,
+                state=state,
+                result=TopicResearchResult(sub_query_id=sq.id),
+                available_providers=[provider],
+                max_sources_per_provider=5,
+                timeout=30.0,
+                seen_urls=set(),
+                seen_titles={},
+                state_lock=asyncio.Lock(),
+                semaphore=asyncio.Semaphore(3),
+            )
+
+        # SUMMARY: block shown because metadata["summarized"] is True
+        assert "SUMMARY:" in result_text
+        assert "Already summarized" in result_text
+
+    @pytest.mark.asyncio
+    async def test_raw_content_preserved_in_metadata(self) -> None:
+        """Summarized sources preserve original content in raw_content field."""
+        from unittest.mock import patch
+
+        from foundry_mcp.core.research.providers.shared import SourceSummarizationResult
+
+        mixin = StubTopicResearch()
+        mixin.config.deep_research_summarization_min_content_length = 100
+        mixin.config.deep_research_summarization_timeout = 30
+        mixin.config.deep_research_max_content_length = 50000
+
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        original_content = "Original detailed content " * 20  # > 100 chars
+        source = ResearchSource(
+            id="src-raw-1",
+            title="Raw Preserved",
+            url="https://example.com/raw",
+            content=original_content,
+            quality=SourceQuality.MEDIUM,
+        )
+        provider = _make_mock_provider("tavily", [source])
+
+        mock_summary = SourceSummarizationResult(
+            executive_summary="Compressed summary.",
+            key_excerpts=["Quote A"],
+            input_tokens=80,
+            output_tokens=30,
+        )
+
+        with patch(
+            "foundry_mcp.core.research.providers.shared.SourceSummarizer"
+        ) as MockSummarizer:
+            mock_instance = AsyncMock()
+            mock_instance.summarize_sources = AsyncMock(
+                return_value={"src-raw-1": mock_summary}
+            )
+            MockSummarizer.return_value = mock_instance
+            MockSummarizer.format_summarized_content = (
+                lambda summary, excerpts: f"<summary>{summary}</summary>"
+            )
+
+            tool_call = ResearcherToolCall(
+                tool="web_search",
+                arguments={"query": sq.query, "max_results": 5},
+            )
+            await mixin._handle_web_search_tool(
+                tool_call=tool_call,
+                sub_query=sq,
+                state=state,
+                result=TopicResearchResult(sub_query_id=sq.id),
+                available_providers=[provider],
+                max_sources_per_provider=5,
+                timeout=30.0,
+                seen_urls=set(),
+                seen_titles={},
+                state_lock=asyncio.Lock(),
+                semaphore=asyncio.Semaphore(3),
+            )
+
+        # Verify raw content preserved
+        src = next(s for s in state.sources if s.id == "src-raw-1")
+        assert src.raw_content == original_content
+        assert src.content == "<summary>Compressed summary.</summary>"
+        assert src.metadata["summarized"] is True
+        assert src.metadata["excerpts"] == ["Quote A"]
+        assert src.metadata["summarization_input_tokens"] == 80
+        assert src.metadata["summarization_output_tokens"] == 30
+
+    @pytest.mark.asyncio
+    async def test_summarization_tokens_tracked(self) -> None:
+        """Token usage from summarization is added to state.total_tokens_used."""
+        from unittest.mock import patch
+
+        from foundry_mcp.core.research.providers.shared import SourceSummarizationResult
+
+        mixin = StubTopicResearch()
+        mixin.config.deep_research_summarization_min_content_length = 100
+        mixin.config.deep_research_summarization_timeout = 30
+        mixin.config.deep_research_max_content_length = 50000
+
+        state = _make_state(num_sub_queries=1)
+        state.total_tokens_used = 0
+        sq = state.sub_queries[0]
+
+        source = ResearchSource(
+            id="src-tok-1",
+            title="Token Source",
+            url="https://example.com/tok",
+            content="C" * 500,
+            quality=SourceQuality.MEDIUM,
+        )
+        provider = _make_mock_provider("tavily", [source])
+
+        mock_summary = SourceSummarizationResult(
+            executive_summary="Summary.",
+            key_excerpts=[],
+            input_tokens=200,
+            output_tokens=100,
+        )
+
+        with patch(
+            "foundry_mcp.core.research.providers.shared.SourceSummarizer"
+        ) as MockSummarizer:
+            mock_instance = AsyncMock()
+            mock_instance.summarize_sources = AsyncMock(
+                return_value={"src-tok-1": mock_summary}
+            )
+            MockSummarizer.return_value = mock_instance
+            MockSummarizer.format_summarized_content = (
+                lambda summary, excerpts: f"<summary>{summary}</summary>"
+            )
+
+            tool_call = ResearcherToolCall(
+                tool="web_search",
+                arguments={"query": sq.query, "max_results": 5},
+            )
+            await mixin._handle_web_search_tool(
+                tool_call=tool_call,
+                sub_query=sq,
+                state=state,
+                result=TopicResearchResult(sub_query_id=sq.id),
+                available_providers=[provider],
+                max_sources_per_provider=5,
+                timeout=30.0,
+                seen_urls=set(),
+                seen_titles={},
+                state_lock=asyncio.Lock(),
+                semaphore=asyncio.Semaphore(3),
+            )
+
+        # 200 input + 100 output = 300 tokens tracked
+        assert state.total_tokens_used == 300

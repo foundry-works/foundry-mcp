@@ -676,6 +676,100 @@ class TopicResearchMixin:
             "If YES to any, call research_complete instead of searching again."
         )
 
+    async def _summarize_search_results(
+        self,
+        sources: list[Any],
+        state: DeepResearchState,
+        state_lock: asyncio.Lock,
+    ) -> None:
+        """Summarize newly added search results that have long raw content.
+
+        Uses SourceSummarizer to produce structured summaries at fetch time,
+        reducing context consumption in the researcher's message history by
+        60-70%.  Sources already summarized (e.g. by the provider layer) are
+        skipped.
+
+        On timeout or failure, the source retains its raw content — matching
+        ODR's fallback pattern (utils.py:175-213).
+
+        Args:
+            sources: List of ResearchSource objects to consider for summarization.
+            state: Current research state (for token accounting).
+            state_lock: Lock for thread-safe state mutations.
+        """
+        from foundry_mcp.core.research.providers.shared import SourceSummarizer
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            resolve_phase_provider,
+            safe_resolve_model_for_role,
+        )
+
+        min_content_length = int(
+            getattr(self.config, "deep_research_summarization_min_content_length", 300)
+        )
+        per_result_timeout = float(
+            getattr(self.config, "deep_research_summarization_timeout", 60)
+        )
+        # Cap per-result timeout for inline summarization (30s default)
+        per_result_timeout = min(per_result_timeout, 30.0)
+
+        # Filter to sources that need summarization
+        candidates = [
+            src for src in sources
+            if not src.metadata.get("summarized")
+            and src.content
+            and len(src.content) > min_content_length
+        ]
+        if not candidates:
+            return
+
+        # Resolve summarization provider/model
+        role_provider, role_model = safe_resolve_model_for_role(
+            self.config, "summarization"
+        )
+        provider_id = role_provider or resolve_phase_provider(
+            self.config, "summarization"
+        )
+
+        summarizer = SourceSummarizer(
+            provider_id=provider_id,
+            model=role_model,
+            timeout=per_result_timeout,
+            max_concurrent=3,
+            max_content_length=getattr(
+                self.config, "deep_research_max_content_length", 50_000
+            ),
+        )
+
+        results = await summarizer.summarize_sources(candidates)
+
+        tokens_used = 0
+        for src in candidates:
+            if src.id in results:
+                summary_result = results[src.id]
+                # Preserve original content for downstream compression fidelity
+                src.raw_content = src.content
+                # Replace with structured summary
+                src.content = SourceSummarizer.format_summarized_content(
+                    summary_result.executive_summary,
+                    summary_result.key_excerpts,
+                )
+                src.metadata["summarized"] = True
+                src.metadata["excerpts"] = summary_result.key_excerpts
+                src.metadata["summarization_input_tokens"] = summary_result.input_tokens
+                src.metadata["summarization_output_tokens"] = summary_result.output_tokens
+                tokens_used += (summary_result.input_tokens + summary_result.output_tokens)
+
+        if tokens_used > 0:
+            async with state_lock:
+                state.total_tokens_used += tokens_used
+
+        logger.info(
+            "Inline summarization: %d/%d sources summarized (%d tokens)",
+            len(results),
+            len(candidates),
+            tokens_used,
+        )
+
     async def _handle_web_search_tool(
         self,
         tool_call: ResearcherToolCall,
@@ -741,6 +835,22 @@ class TopicResearchMixin:
         topic_sources = [s for s in state.sources if s.id in topic_source_ids]
         # Show the most recent sources (from this search)
         recent_sources = topic_sources[-sources_added:]
+
+        # Per-result summarization at search time (Phase 1 ODR alignment).
+        # Summarize sources with long raw content to reduce context consumption.
+        # Sources already summarized by the provider layer are skipped.
+        try:
+            await self._summarize_search_results(
+                sources=recent_sources,
+                state=state,
+                state_lock=state_lock,
+            )
+        except Exception as summ_exc:
+            logger.warning(
+                "Batch summarization failed for query %r: %s. Using raw content.",
+                query,
+                summ_exc,
+            )
 
         lines: list[str] = [f"Found {sources_added} new source(s):"]
         for idx, src in enumerate(recent_sources, 1):
