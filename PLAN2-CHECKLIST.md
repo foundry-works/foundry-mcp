@@ -37,13 +37,13 @@
 
 ## Sub-Phase 6.4: Supervision Phase Mixin
 
-- [ ] **6.4.1** Create `supervision.py` with `SupervisionPhaseMixin` class skeleton
-- [ ] **6.4.2** Implement `_build_per_query_coverage(state)` — per-sub-query coverage data
-- [ ] **6.4.3** Implement `_build_supervision_system_prompt(state)` — coverage assessment JSON schema
-- [ ] **6.4.4** Implement `_build_supervision_user_prompt(state, coverage_data)` — research context + coverage table
-- [ ] **6.4.5** Implement `_parse_supervision_response(content, state)` — JSON parsing with query dedup
-- [ ] **6.4.6** Implement `_assess_coverage_heuristic(state, min_sources)` — LLM fallback
-- [ ] **6.4.7** Implement `_execute_supervision_async(state, provider_id, timeout)` — main entry point
+- [x] **6.4.1** Create `supervision.py` with `SupervisionPhaseMixin` class skeleton
+- [x] **6.4.2** Implement `_build_per_query_coverage(state)` — per-sub-query coverage data
+- [x] **6.4.3** Implement `_build_supervision_system_prompt(state)` — coverage assessment JSON schema
+- [x] **6.4.4** Implement `_build_supervision_user_prompt(state, coverage_data)` — research context + coverage table
+- [x] **6.4.5** Implement `_parse_supervision_response(content, state)` — JSON parsing with query dedup
+- [x] **6.4.6** Implement `_assess_coverage_heuristic(state, min_sources)` — LLM fallback
+- [x] **6.4.7** Implement `_execute_supervision_async(state, provider_id, timeout)` — main entry point
   - Heuristic early-exit when all queries sufficiently covered
   - LLM call via `execute_llm_call()` with `role="supervision"`
   - Follow-up query dedup and sub-query budget cap
@@ -65,7 +65,7 @@
 ## Sub-Phase 6.6: Core Class Wiring
 
 - [ ] **6.6.1** Add `SupervisionPhaseMixin` to `DeepResearchWorkflow` class inheritance in `core.py`
-- [ ] **6.6.2** Add import and export in `phases/__init__.py`
+- [x] **6.6.2** Add import and export in `phases/__init__.py`
 
 ---
 
