@@ -341,6 +341,30 @@ class SupervisionPhaseMixin:
         )
 
     # ------------------------------------------------------------------
+    # First-round decomposition detection
+    # ------------------------------------------------------------------
+
+    def _is_first_round_decomposition(self, state: DeepResearchState) -> bool:
+        """Check if this is a first-round supervisor-owned decomposition.
+
+        Returns True when the supervisor should perform initial query
+        decomposition (replacing the PLANNING phase) rather than gap-driven
+        delegation.
+
+        Conditions:
+        - ``deep_research_supervisor_owned_decomposition`` config is True
+        - ``state.supervision_round == 0``
+        - No prior topic research results exist
+        """
+        if not getattr(self.config, "deep_research_supervisor_owned_decomposition", True):
+            return False
+        if state.supervision_round != 0:
+            return False
+        if state.topic_research_results:
+            return False
+        return True
+
+    # ------------------------------------------------------------------
     # Delegation sub-steps
     # ------------------------------------------------------------------
 
@@ -350,7 +374,11 @@ class SupervisionPhaseMixin:
         coverage_data: list[dict[str, Any]],
         timeout: float,
     ) -> Optional[str]:
-        """Run the think step: gap analysis before delegation.
+        """Run the think step: gap analysis or first-round decomposition strategy.
+
+        For first-round supervisor-owned decomposition (round 0, no prior
+        research), produces a decomposition strategy. For subsequent rounds,
+        produces gap analysis.
 
         Args:
             state: Current research state
@@ -360,8 +388,13 @@ class SupervisionPhaseMixin:
         Returns:
             Think output text, or None if the step failed
         """
-        think_prompt = self._build_think_prompt(state, coverage_data)
-        think_system = self._build_think_system_prompt()
+        is_first_round = self._is_first_round_decomposition(state)
+        if is_first_round:
+            think_prompt = self._build_first_round_think_prompt(state)
+            think_system = self._build_first_round_think_system_prompt()
+        else:
+            think_prompt = self._build_think_prompt(state, coverage_data)
+            think_system = self._build_think_system_prompt()
 
         self._check_cancellation(state)
 
@@ -400,22 +433,33 @@ class SupervisionPhaseMixin:
         provider_id: Optional[str],
         timeout: float,
     ) -> tuple[list[ResearchDirective], bool]:
-        """Generate research directives from gap analysis.
+        """Generate research directives from gap or decomposition analysis.
+
+        For first-round supervisor-owned decomposition, generates initial
+        research directives that decompose the query (replacing PLANNING).
+        For subsequent rounds, generates gap-driven follow-up directives.
 
         Args:
             state: Current research state
             coverage_data: Per-sub-query coverage data
-            think_output: Gap analysis from think step
+            think_output: Gap analysis or decomposition strategy from think step
             provider_id: LLM provider to use
             timeout: Request timeout
 
         Returns:
             Tuple of (directives list, research_complete flag)
         """
-        system_prompt = self._build_delegation_system_prompt()
-        user_prompt = self._build_delegation_user_prompt(
-            state, coverage_data, think_output,
-        )
+        is_first_round = self._is_first_round_decomposition(state)
+        if is_first_round:
+            system_prompt = self._build_first_round_delegation_system_prompt()
+            user_prompt = self._build_first_round_delegation_user_prompt(
+                state, think_output,
+            )
+        else:
+            system_prompt = self._build_delegation_system_prompt()
+            user_prompt = self._build_delegation_user_prompt(
+                state, coverage_data, think_output,
+            )
 
         call_result = await execute_llm_call(
             workflow=self,
@@ -451,6 +495,7 @@ class SupervisionPhaseMixin:
                 "directives_generated": len(directives),
                 "research_complete": research_complete,
                 "directive_topics": [d.research_topic[:100] for d in directives],
+                "is_first_round_decomposition": is_first_round,
             },
         )
 
@@ -792,6 +837,213 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             ))
 
         return directives, False
+
+    # ==================================================================
+    # First-round decomposition prompts (supervisor-owned decomposition)
+    # ==================================================================
+
+    def _build_first_round_think_system_prompt(self) -> str:
+        """Build system prompt for the first-round decomposition think step.
+
+        On the first supervision round (round 0) when supervisor-owned
+        decomposition is active, the think step produces a decomposition
+        strategy rather than gap analysis.
+
+        Returns:
+            System prompt instructing decomposition strategy generation
+        """
+        return (
+            "You are a research strategist. Your task is to analyze a research "
+            "brief and determine the best decomposition strategy for parallel "
+            "research. You decide how many parallel researchers to launch, what "
+            "angles they should cover, and what priorities to assign.\n\n"
+            "Be strategic: simple factual queries may need only 1-2 researchers. "
+            "Comparative analyses need one researcher per element being compared. "
+            "Complex multi-dimensional topics need 3-5 researchers covering "
+            "different facets.\n\n"
+            "Before finalizing your strategy, verify:\n"
+            "- No two researchers would cover substantially the same ground\n"
+            "- No critical perspective is missing for the query type\n"
+            "- Each researcher has a specific, actionable focus\n\n"
+            "Respond in plain text with clear section headings."
+        )
+
+    def _build_first_round_think_prompt(self, state: DeepResearchState) -> str:
+        """Build think prompt for first-round decomposition strategy.
+
+        Presents the research brief and asks for a decomposition plan
+        before generating directives.
+
+        Args:
+            state: Current research state with research_brief
+
+        Returns:
+            Think prompt string for decomposition strategy
+        """
+        from datetime import datetime, timezone
+
+        parts = [
+            "# Research Decomposition Strategy\n",
+            f"**Research Query:** {state.original_query}\n",
+        ]
+
+        if state.research_brief and state.research_brief != state.original_query:
+            parts.append(f"**Research Brief:**\n{state.research_brief}\n")
+
+        if state.clarification_constraints:
+            parts.append("**Clarification Constraints:**")
+            for key, value in state.clarification_constraints.items():
+                parts.append(f"- {key}: {value}")
+            parts.append("")
+
+        if state.system_prompt:
+            parts.append(f"**Additional Context:** {state.system_prompt}\n")
+
+        parts.append(f"**Date:** {datetime.now(timezone.utc).strftime('%Y-%m-%d')}\n")
+
+        parts.extend([
+            "## Instructions\n",
+            "You are given a research brief. Determine how to decompose this "
+            "into parallel research tasks.\n",
+            "Analyze the query and decide:",
+            "1. **Query type**: Is this a simple factual query, a comparison, "
+            "a list/ranking, or a complex multi-dimensional topic?",
+            "2. **Decomposition strategy**: How many parallel researchers are "
+            "needed and what angle should each cover?",
+            "3. **Priorities**: Which research angles are critical (must-have) "
+            "vs. important (improves comprehensiveness) vs. nice-to-have?",
+            "4. **Self-critique**: Verify no redundant directives and no "
+            "missing perspectives for this query type.\n",
+            "Guidelines for researcher count:",
+            "- Simple factual queries: 1-2 researchers",
+            "- Comparisons: one researcher per comparison element",
+            "- Lists/rankings: single researcher if straightforward, or one per "
+            "category if complex",
+            "- Complex multi-dimensional topics: 3-5 researchers covering "
+            "different facets\n",
+            "Output your decomposition strategy as structured analysis with "
+            "clear headings.",
+        ])
+
+        return "\n".join(parts)
+
+    def _build_first_round_delegation_system_prompt(self) -> str:
+        """Build system prompt for first-round decomposition delegation.
+
+        Combines the standard delegation format with planning-quality
+        decomposition guidance. This replaces the PLANNING phase's
+        decomposition rules.
+
+        Returns:
+            System prompt instructing initial query decomposition via directives
+        """
+        return """You are a research lead performing initial query decomposition. Your task is to break down a research query into focused, parallel research directives — each assigned to a specialized researcher.
+
+Your response MUST be valid JSON with this exact structure:
+{
+    "research_complete": false,
+    "directives": [
+        {
+            "research_topic": "Detailed paragraph-length description of what to investigate...",
+            "perspective": "What angle or perspective to approach from",
+            "evidence_needed": "What specific evidence, data, or sources to seek",
+            "priority": 1
+        }
+    ],
+    "rationale": "Why this decomposition strategy was chosen"
+}
+
+Decomposition Guidelines:
+- Generate 2-5 directives (aim for 3-4 typically for most queries)
+- Bias toward FEWER researchers for simple queries (1-2 directives for straightforward factual questions)
+- For COMPARISONS: create one directive per comparison element (e.g., "Product A vs Product B" → one directive for each product)
+- For LISTS/RANKINGS: single directive if straightforward; one per category if the list spans diverse domains
+- For COMPLEX multi-dimensional topics: 3-5 directives covering different facets (technical, economic, regulatory, user impact, etc.)
+
+Quality Guidelines:
+- Each directive's "research_topic" MUST be a detailed paragraph (2-4 sentences) specifying:
+  - The specific topic or facet to investigate
+  - The research approach (compare, investigate, validate, survey, etc.)
+  - What the researcher should focus on and what to exclude
+- Each directive should be SPECIFIC enough to yield targeted search results
+- Directives must cover DISTINCT aspects — no two should investigate substantially the same ground
+- "perspective" should specify the angle: technical, comparative, historical, regulatory, user-focused, economic, etc.
+- "evidence_needed" should name concrete evidence types: statistics, case studies, expert opinions, benchmarks, official documentation, etc.
+- "priority": 1=critical (core to answering the query), 2=important (improves comprehensiveness), 3=nice-to-have (supplementary context)
+
+Self-Critique Checklist (verify before responding):
+- Are any directives redundant? If so, merge them.
+- Is any critical perspective missing for this type of query?
+- Are directives specific enough, or are they too broad/vague?
+
+IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
+
+    def _build_first_round_delegation_user_prompt(
+        self,
+        state: DeepResearchState,
+        think_output: Optional[str] = None,
+    ) -> str:
+        """Build user prompt for first-round decomposition delegation.
+
+        Args:
+            state: Current research state with research_brief
+            think_output: Decomposition strategy from think step
+
+        Returns:
+            User prompt string
+        """
+        parts = [
+            f"# Research Query\n{state.original_query}",
+            "",
+        ]
+
+        if state.research_brief and state.research_brief != state.original_query:
+            parts.extend([
+                "## Research Brief",
+                state.research_brief,
+                "",
+            ])
+
+        if state.clarification_constraints:
+            parts.append("## Clarification Constraints")
+            for key, value in state.clarification_constraints.items():
+                parts.append(f"- {key}: {value}")
+            parts.append("")
+
+        if state.system_prompt:
+            parts.extend([
+                "## Additional Context",
+                state.system_prompt,
+                "",
+            ])
+
+        # Decomposition strategy from think step
+        if think_output:
+            parts.extend([
+                "## Decomposition Strategy",
+                "",
+                "<decomposition_strategy>",
+                think_output.strip(),
+                "</decomposition_strategy>",
+                "",
+                "Generate research directives that implement the decomposition "
+                "strategy above. Each directive should be a detailed, self-contained "
+                "research assignment for a specialized researcher.",
+                "",
+            ])
+
+        parts.extend([
+            "## Instructions",
+            "1. Decompose the research query into 2-5 focused research directives",
+            "2. Each directive should target a distinct aspect of the query",
+            "3. Each directive should be specific enough to yield targeted results",
+            "4. Prioritize: 1=critical to the core question, 2=important for comprehensiveness, 3=supplementary",
+            "5. Verify no redundant directives and no missing critical perspectives",
+            "",
+            "Return your response as JSON.",
+        ])
+
+        return "\n".join(parts)
 
     # ==================================================================
     # Query-generation model (legacy fallback)

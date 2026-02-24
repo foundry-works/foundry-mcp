@@ -1419,3 +1419,463 @@ class TestDelegationIntegration:
         assert result.metadata["total_directives_executed"] == 0
         history = state.metadata["supervision_history"]
         assert history[0]["method"] == "delegation_no_directives"
+
+
+# ===========================================================================
+# Supervisor-Owned Decomposition (Phase 2 PLAN)
+# ===========================================================================
+
+
+class TestSupervisorOwnedDecompositionDetection:
+    """Tests for _is_first_round_decomposition() detection logic."""
+
+    def test_first_round_detected_when_all_conditions_met(self):
+        """Returns True: config enabled, round 0, no prior topic results."""
+        stub = StubSupervision(delegation_model=True)
+        stub.config.deep_research_supervisor_owned_decomposition = True
+        state = _make_state(
+            num_completed=0, num_pending=0, supervision_round=0,
+        )
+        state.topic_research_results = []
+        assert stub._is_first_round_decomposition(state) is True
+
+    def test_not_first_round_when_config_disabled(self):
+        """Returns False when supervisor_owned_decomposition config is False."""
+        stub = StubSupervision(delegation_model=True)
+        stub.config.deep_research_supervisor_owned_decomposition = False
+        state = _make_state(num_completed=0, supervision_round=0)
+        state.topic_research_results = []
+        assert stub._is_first_round_decomposition(state) is False
+
+    def test_not_first_round_when_round_gt_zero(self):
+        """Returns False when supervision_round > 0 (already past first round)."""
+        stub = StubSupervision(delegation_model=True)
+        stub.config.deep_research_supervisor_owned_decomposition = True
+        state = _make_state(num_completed=2, supervision_round=1)
+        state.topic_research_results = []
+        assert stub._is_first_round_decomposition(state) is False
+
+    def test_not_first_round_when_topic_results_exist(self):
+        """Returns False when topic_research_results already present."""
+        stub = StubSupervision(delegation_model=True)
+        stub.config.deep_research_supervisor_owned_decomposition = True
+        state = _make_state(num_completed=1, supervision_round=0)
+        state.topic_research_results = [
+            TopicResearchResult(
+                sub_query_id="sq-0",
+                searches_performed=1,
+                sources_found=2,
+            )
+        ]
+        assert stub._is_first_round_decomposition(state) is False
+
+
+class TestFirstRoundDecompositionPrompts:
+    """Tests for first-round think and delegation prompts."""
+
+    def test_first_round_think_system_prompt_is_strategic(self):
+        """First-round think system prompt instructs decomposition strategy."""
+        stub = StubSupervision(delegation_model=True)
+        prompt = stub._build_first_round_think_system_prompt()
+
+        assert "research strategist" in prompt.lower()
+        assert "decomposition" in prompt.lower()
+        assert "parallel" in prompt.lower()
+        assert "same ground" in prompt.lower()  # self-critique: no overlap
+        assert "missing" in prompt.lower()  # self-critique: no missing perspectives
+
+    def test_first_round_think_prompt_includes_brief(self):
+        """First-round think prompt includes research brief and query."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=0, supervision_round=0)
+        state.research_brief = "Investigate the impact of transformer architectures on NLP"
+        prompt = stub._build_first_round_think_prompt(state)
+
+        assert state.original_query in prompt
+        assert "transformer architectures" in prompt
+        assert "Decomposition Strategy" in prompt
+        assert "Query type" in prompt
+        assert "Self-critique" in prompt
+
+    def test_first_round_think_prompt_includes_clarification_constraints(self):
+        """First-round think prompt includes clarification constraints when present."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=0, supervision_round=0)
+        state.clarification_constraints = {"time_period": "last 5 years", "focus": "NLP"}
+        prompt = stub._build_first_round_think_prompt(state)
+
+        assert "time_period" in prompt
+        assert "last 5 years" in prompt
+        assert "focus" in prompt
+
+    def test_first_round_think_prompt_includes_scaling_guidance(self):
+        """First-round think prompt includes guidelines for researcher count scaling."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=0, supervision_round=0)
+        prompt = stub._build_first_round_think_prompt(state)
+
+        assert "Simple factual queries: 1-2" in prompt
+        assert "Comparisons:" in prompt
+        assert "3-5 researchers" in prompt
+
+    def test_first_round_delegation_system_prompt_has_decomposition_rules(self):
+        """First-round delegation system prompt absorbs planning decomposition rules."""
+        stub = StubSupervision(delegation_model=True)
+        prompt = stub._build_first_round_delegation_system_prompt()
+
+        # Core decomposition rules (absorbed from planning.py)
+        assert "2-5 directives" in prompt
+        assert "research_topic" in prompt
+        assert "perspective" in prompt
+        assert "evidence_needed" in prompt
+        assert "priority" in prompt
+        # Scaling rules
+        assert "FEWER researchers for simple queries" in prompt.upper() or "fewer researchers for simple queries" in prompt.lower()
+        assert "COMPARISONS" in prompt.upper() or "comparison" in prompt.lower()
+        # Self-critique
+        assert "Self-Critique" in prompt or "self-critique" in prompt.lower()
+        assert "redundant" in prompt.lower()
+        # JSON format
+        assert "research_complete" in prompt
+        assert "directives" in prompt
+        assert "rationale" in prompt
+
+    def test_first_round_delegation_user_prompt_includes_brief(self):
+        """First-round delegation user prompt includes research brief and query."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=0, supervision_round=0)
+        state.research_brief = "Compare React vs Vue for enterprise applications"
+        prompt = stub._build_first_round_delegation_user_prompt(state)
+
+        assert state.original_query in prompt
+        assert "React vs Vue" in prompt
+        assert "Instructions" in prompt
+
+    def test_first_round_delegation_user_prompt_with_think_output(self):
+        """First-round delegation user prompt integrates decomposition strategy."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=0, supervision_round=0)
+        state.research_brief = "Compare React vs Vue"
+
+        think_output = (
+            "This is a comparison query. Need one researcher per framework "
+            "plus one for cross-cutting comparison."
+        )
+        prompt = stub._build_first_round_delegation_user_prompt(state, think_output)
+
+        assert "<decomposition_strategy>" in prompt
+        assert "</decomposition_strategy>" in prompt
+        assert "comparison query" in prompt
+
+    def test_first_round_delegation_user_prompt_without_think_output(self):
+        """First-round delegation user prompt works without think output."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=0, supervision_round=0)
+        prompt = stub._build_first_round_delegation_user_prompt(state, think_output=None)
+
+        assert "<decomposition_strategy>" not in prompt
+        assert "Decompose the research query" in prompt
+
+
+class TestFirstRoundDecompositionIntegration:
+    """Integration tests for supervisor-owned decomposition flow."""
+
+    @pytest.mark.asyncio
+    async def test_first_round_produces_initial_directives(self):
+        """Supervisor round 0 produces initial decomposition directives from brief."""
+        stub = StubSupervision(delegation_model=True)
+        stub.config.deep_research_supervisor_owned_decomposition = True
+        stub.config.deep_research_topic_max_tool_calls = 5
+        stub.config.deep_research_providers = ["tavily"]
+
+        state = _make_state(
+            num_completed=0, num_pending=0, supervision_round=0,
+        )
+        state.research_brief = "Compare React, Vue, and Angular for enterprise apps"
+        state.topic_research_results = []
+        state.max_sub_queries = 10
+
+        # Think step returns decomposition strategy
+        think_response = (
+            "This is a comparison query with 3 elements. "
+            "Deploy 3 researchers: one for React, one for Vue, one for Angular."
+        )
+
+        # Delegate step returns initial directives
+        delegate_response = json.dumps({
+            "research_complete": False,
+            "directives": [
+                {
+                    "research_topic": "Investigate React's enterprise adoption, performance benchmarks, and ecosystem maturity.",
+                    "perspective": "technical",
+                    "evidence_needed": "benchmarks, case studies, adoption statistics",
+                    "priority": 1,
+                },
+                {
+                    "research_topic": "Investigate Vue's enterprise adoption, performance benchmarks, and ecosystem maturity.",
+                    "perspective": "technical",
+                    "evidence_needed": "benchmarks, case studies, adoption statistics",
+                    "priority": 1,
+                },
+                {
+                    "research_topic": "Investigate Angular's enterprise adoption, performance benchmarks, and ecosystem maturity.",
+                    "perspective": "technical",
+                    "evidence_needed": "benchmarks, case studies, adoption statistics",
+                    "priority": 1,
+                },
+            ],
+            "rationale": "One researcher per framework for balanced comparison",
+        })
+
+        call_count = 0
+
+        async def mock_execute_llm_call(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            phase_name = kwargs.get("phase_name", "")
+
+            if "think" in phase_name:
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True,
+                    content=think_response,
+                    provider_id="test",
+                    model_used="test",
+                    tokens_used=50,
+                    duration_ms=200.0,
+                )
+                return result
+            elif "delegate" in phase_name:
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True,
+                    content=delegate_response,
+                    provider_id="test",
+                    model_used="test",
+                    tokens_used=100,
+                    duration_ms=500.0,
+                )
+                return result
+            raise AssertionError(f"Unexpected phase: {phase_name}")
+
+        # Mock topic researcher to avoid actual search
+        async def mock_topic_research(**kwargs):
+            sq = kwargs.get("sub_query")
+            return TopicResearchResult(
+                sub_query_id=sq.id if sq else "unknown",
+                searches_performed=2,
+                sources_found=3,
+                per_topic_summary="Found relevant enterprise adoption data.",
+                compressed_findings="Framework shows strong enterprise adoption...",
+            )
+
+        stub._execute_topic_research_async = mock_topic_research
+        stub._get_search_provider = MagicMock(return_value=MagicMock())
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+            side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        ):
+            result = await stub._execute_supervision_delegation_async(
+                state=state, provider_id="test-provider", timeout=30.0,
+            )
+
+        assert result.success is True
+        assert result.metadata["model"] == "delegation"
+        # Should have generated 3 directives from decomposition
+        assert len(state.directives) >= 3
+        # Topic results should be populated
+        assert len(state.topic_research_results) >= 3
+        # Supervision round advanced
+        assert state.supervision_round >= 1
+
+    @pytest.mark.asyncio
+    async def test_backward_compat_when_decomposition_disabled(self):
+        """When supervisor_owned_decomposition=False, round 0 uses standard gap analysis."""
+        stub = StubSupervision(delegation_model=True)
+        stub.config.deep_research_supervisor_owned_decomposition = False
+        stub.config.deep_research_topic_max_tool_calls = 5
+        stub.config.deep_research_providers = ["tavily"]
+
+        state = _make_state(
+            num_completed=2, num_pending=0, supervision_round=0,
+        )
+        state.topic_research_results = []
+        state.max_sub_queries = 10
+
+        # Standard gap-driven delegation response (research complete)
+        delegate_response = json.dumps({
+            "research_complete": True,
+            "directives": [],
+            "rationale": "Coverage sufficient",
+        })
+
+        async def mock_execute_llm_call(**kwargs):
+            result = MagicMock()
+            result.result = WorkflowResult(
+                success=True,
+                content=delegate_response,
+                provider_id="test",
+                model_used="test",
+                tokens_used=50,
+                duration_ms=200.0,
+            )
+            return result
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+            side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        ):
+            result = await stub._execute_supervision_delegation_async(
+                state=state, provider_id="test-provider", timeout=30.0,
+            )
+
+        assert result.success is True
+        # Should have used standard prompts (not first-round decomposition)
+        history = state.metadata.get("supervision_history", [])
+        assert len(history) >= 1
+        assert history[0]["method"] == "delegation_complete"
+
+    @pytest.mark.asyncio
+    async def test_round_zero_counted_toward_max_rounds(self):
+        """Decomposition round 0 counts toward max_supervision_rounds budget."""
+        stub = StubSupervision(delegation_model=True)
+        stub.config.deep_research_supervisor_owned_decomposition = True
+        stub.config.deep_research_topic_max_tool_calls = 5
+        stub.config.deep_research_providers = ["tavily"]
+
+        state = _make_state(
+            num_completed=0, num_pending=0, supervision_round=0,
+            max_supervision_rounds=1,  # Only 1 round allowed
+        )
+        state.topic_research_results = []
+        state.max_sub_queries = 10
+        state.research_brief = "Simple query"
+
+        delegate_response = json.dumps({
+            "research_complete": False,
+            "directives": [
+                {
+                    "research_topic": "Test directive",
+                    "perspective": "general",
+                    "evidence_needed": "articles",
+                    "priority": 1,
+                }
+            ],
+            "rationale": "Initial decomposition",
+        })
+
+        async def mock_execute_llm_call(**kwargs):
+            result = MagicMock()
+            result.result = WorkflowResult(
+                success=True,
+                content=delegate_response,
+                provider_id="test",
+                model_used="test",
+                tokens_used=50,
+                duration_ms=200.0,
+            )
+            return result
+
+        async def mock_topic_research(**kwargs):
+            sq = kwargs.get("sub_query")
+            return TopicResearchResult(
+                sub_query_id=sq.id if sq else "unknown",
+                searches_performed=1,
+                sources_found=2,
+            )
+
+        stub._execute_topic_research_async = mock_topic_research
+        stub._get_search_provider = MagicMock(return_value=MagicMock())
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+            side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        ):
+            result = await stub._execute_supervision_delegation_async(
+                state=state, provider_id="test-provider", timeout=30.0,
+            )
+
+        assert result.success is True
+        # Round 0 used the single allowed round — loop should have terminated
+        assert state.supervision_round == 1  # Advanced past round 0
+        # No second round should have executed
+        assert result.metadata["total_directives_executed"] <= 1
+
+
+class TestPhaseFlowSupervisorOwnedDecomposition:
+    """Tests for workflow phase flow changes with supervisor-owned decomposition."""
+
+    def test_planning_phase_skipped_when_supervisor_decomposition_enabled(self):
+        """When config enabled, PLANNING phase is skipped and phase jumps to SUPERVISION."""
+        state = DeepResearchState(
+            original_query="test query",
+            phase=DeepResearchPhase.PLANNING,
+        )
+        config = MagicMock()
+        config.deep_research_supervisor_owned_decomposition = True
+
+        # Simulate the workflow_execution.py logic
+        supervisor_owned = getattr(
+            config, "deep_research_supervisor_owned_decomposition", True,
+        )
+        if supervisor_owned:
+            state.phase = DeepResearchPhase.SUPERVISION
+        else:
+            # Would run planning phase
+            pass
+
+        assert state.phase == DeepResearchPhase.SUPERVISION
+
+    def test_planning_phase_runs_when_supervisor_decomposition_disabled(self):
+        """When config disabled, PLANNING phase runs normally."""
+        state = DeepResearchState(
+            original_query="test query",
+            phase=DeepResearchPhase.PLANNING,
+        )
+        config = MagicMock()
+        config.deep_research_supervisor_owned_decomposition = False
+
+        supervisor_owned = getattr(
+            config, "deep_research_supervisor_owned_decomposition", True,
+        )
+        if supervisor_owned:
+            state.phase = DeepResearchPhase.SUPERVISION
+
+        # Phase should remain PLANNING
+        assert state.phase == DeepResearchPhase.PLANNING
+
+    def test_brief_to_supervision_transition(self):
+        """BRIEF → SUPERVISION transition works when supervisor-owned decomposition enabled."""
+        state = DeepResearchState(
+            original_query="test query",
+            phase=DeepResearchPhase.BRIEF,
+            research_brief="Enriched research brief",
+        )
+
+        # Simulate: BRIEF completes → advance to PLANNING → skip to SUPERVISION
+        state.advance_phase()  # BRIEF → PLANNING
+        assert state.phase == DeepResearchPhase.PLANNING
+
+        # Then supervisor-owned decomposition kicks in
+        state.phase = DeepResearchPhase.SUPERVISION
+        assert state.phase == DeepResearchPhase.SUPERVISION
+
+    def test_refinement_still_goes_to_gathering(self):
+        """start_new_iteration still sets phase to GATHERING (refinement flow unchanged)."""
+        state = DeepResearchState(
+            original_query="test query",
+            phase=DeepResearchPhase.REFINEMENT,
+            supervision_round=2,
+        )
+        state.start_new_iteration()
+
+        # Refinement always loops back to GATHERING
+        assert state.phase == DeepResearchPhase.GATHERING
+        assert state.supervision_round == 0

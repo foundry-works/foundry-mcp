@@ -65,16 +65,16 @@
 
 ## Phase 2: Supervisor-Owned Decomposition
 
-- [ ] **2.1** Add first-round detection to supervision delegation loop
+- [x] **2.1** Add first-round detection to supervision delegation loop
   - In `_execute_supervision_delegation_async()`: detect `state.supervision_round == 0` with no prior topic results
   - Branch to first-round-specific think + delegate prompts
   - Subsequent rounds: unchanged gap-driven delegation
-- [ ] **2.2** Create first-round think prompt
+- [x] **2.2** Create first-round think prompt
   - "You are given a research brief. Determine how to decompose this into parallel research tasks."
   - Include brief text, clarification constraints, date context
   - Output: decomposition strategy (how many researchers, what angles, what priorities)
   - Include self-critique: "Verify no redundant directives and no missing perspectives"
-- [ ] **2.3** Create first-round delegate prompt
+- [x] **2.3** Create first-round delegate prompt
   - Absorb planning.py decomposition rules:
     - Bias toward single agent for simple queries
     - Parallelize for comparisons (one per comparison element)
@@ -82,26 +82,26 @@
     - 2-5 directives for typical queries
   - Include priority assignment guidance (1=critical, 2=important, 3=nice-to-have)
   - Include query specificity guidance: each directive should be specific enough to yield targeted results
-- [ ] **2.4** Update `workflow_execution.py` phase flow
+- [x] **2.4** Update `workflow_execution.py` phase flow
   - When `deep_research_supervisor_owned_decomposition=True`:
     - After BRIEF phase → skip PLANNING and GATHERING → enter SUPERVISION directly
     - Supervision round 0 handles decomposition + initial research execution
   - When `deep_research_supervisor_owned_decomposition=False`:
     - Preserve existing flow: BRIEF → PLANNING → GATHERING → SUPERVISION
   - Update `_determine_next_phase()` logic for new transitions
-- [ ] **2.5** Update `DeepResearchPhase` transitions
+- [x] **2.5** Update `DeepResearchPhase` transitions
   - Add BRIEF → SUPERVISION transition (when supervisor-owned decomposition enabled)
   - Keep BRIEF → PLANNING transition (backward compat)
   - Ensure phase advancement logic handles both paths
-- [ ] **2.6** Add config: `deep_research_supervisor_owned_decomposition: bool = True`
+- [x] **2.6** Add config: `deep_research_supervisor_owned_decomposition: bool = True`
   - Default True (new behavior)
   - Add `from_toml_dict()` parsing
   - Add deprecation log when PLANNING phase runs in supervisor-owned mode (should be skipped)
-- [ ] **2.7** Add deprecation notice to planning phase
+- [x] **2.7** Add deprecation notice to planning phase
   - Log info message when planning phase is skipped: "Planning phase skipped — decomposition handled by supervisor (round 0)"
   - Keep planning.py code intact for backward compat
   - Do NOT delete planning phase code
-- [ ] **2.8** Add tests for supervisor-owned decomposition
+- [x] **2.8** Add tests for supervisor-owned decomposition
   - Test: supervisor's first round produces initial decomposition from research brief
   - Test: first-round directives match planning-quality (coverage, specificity, priority)
   - Test: supervisor adapts decomposition after first-round results

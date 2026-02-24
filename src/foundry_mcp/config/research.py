@@ -118,6 +118,9 @@ class ResearchConfig:
     deep_research_delegation_provider: Optional[str] = None  # LLM provider for delegation prompt (uses supervision fallback)
     deep_research_delegation_model_name: Optional[str] = None  # Model override for delegation prompt
 
+    # Supervisor-owned decomposition (Phase 2 PLAN — merge planning into supervision)
+    deep_research_supervisor_owned_decomposition: bool = True  # Skip PLANNING/GATHERING, supervisor decomposes in round 0
+
     # Deep research contradiction detection in analysis phase
     deep_research_enable_contradiction_detection: bool = True  # LLM-based contradiction detection between findings
 
@@ -380,6 +383,10 @@ class ResearchConfig:
             ),
             deep_research_delegation_provider=data.get("deep_research_delegation_provider"),
             deep_research_delegation_model_name=data.get("deep_research_delegation_model_name"),
+            # Supervisor-owned decomposition (Phase 2 PLAN)
+            deep_research_supervisor_owned_decomposition=_parse_bool(
+                data.get("deep_research_supervisor_owned_decomposition", True)
+            ),
             # Deep research contradiction detection
             deep_research_enable_contradiction_detection=_parse_bool(
                 data.get("deep_research_enable_contradiction_detection", True)

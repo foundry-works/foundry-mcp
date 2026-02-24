@@ -275,18 +275,31 @@ class WorkflowExecutionMixin:
                     await self._maybe_reflect(state, DeepResearchPhase.BRIEF)
 
             if state.phase == DeepResearchPhase.PLANNING:
-                err = await self._run_phase(
-                    state,
-                    DeepResearchPhase.PLANNING,
-                    self._execute_planning_async(
-                        state=state,
-                        provider_id=state.planning_provider,
-                        timeout=self.config.get_phase_timeout("planning"),
-                    ),
+                supervisor_owned = getattr(
+                    self.config, "deep_research_supervisor_owned_decomposition", True,
                 )
-                if err:
-                    return err
-                await self._maybe_reflect(state, DeepResearchPhase.PLANNING)
+                if supervisor_owned:
+                    # Skip PLANNING and GATHERING — supervisor handles
+                    # decomposition in round 0.
+                    logger.info(
+                        "Planning phase skipped — decomposition handled by "
+                        "supervisor (round 0) for research %s",
+                        state.id,
+                    )
+                    state.phase = DeepResearchPhase.SUPERVISION
+                else:
+                    err = await self._run_phase(
+                        state,
+                        DeepResearchPhase.PLANNING,
+                        self._execute_planning_async(
+                            state=state,
+                            provider_id=state.planning_provider,
+                            timeout=self.config.get_phase_timeout("planning"),
+                        ),
+                    )
+                    if err:
+                        return err
+                    await self._maybe_reflect(state, DeepResearchPhase.PLANNING)
 
             # Iterative loop for GATHERING → ANALYSIS → SYNTHESIS → REFINEMENT.
             # Replaces the previous recursive call to _execute_workflow_async so
@@ -354,6 +367,12 @@ class WorkflowExecutionMixin:
                         self.memory.save_deep_research(state)
 
                 if state.phase == DeepResearchPhase.SUPERVISION:
+                    # Mark iteration as in progress if not already marked
+                    # (normally set by GATHERING, but supervisor-owned
+                    # decomposition may skip GATHERING on the first iteration)
+                    if not state.metadata.get("iteration_in_progress"):
+                        state.metadata["iteration_in_progress"] = True
+
                     if not getattr(self.config, "deep_research_enable_supervision", True):
                         state.advance_phase()  # Skip directly to ANALYSIS
                     else:
