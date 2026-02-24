@@ -11,14 +11,14 @@
 - [x] 1.8 Test: token truncation preserves most recent rounds
 
 ## Phase 2 — Researcher Forced Reflection
-- [ ] 2.1 Update `_build_researcher_system_prompt`: after each `web_search`/`extract_content`, researcher MUST call `think` before next search
-- [ ] 2.2 Add rule: `think` may NOT be called in parallel with search tools
-- [ ] 2.3 Allow multiple `web_search` calls in first turn only (initial broadening)
-- [ ] 2.4 Add soft validation in ReAct loop: if previous turn had search and current turn doesn't start with `think`, inject synthetic reflection prompt
-- [ ] 2.5 Log warning when reflection is injected (not hard-block)
-- [ ] 2.6 Test: researcher alternates search → think → search pattern
-- [ ] 2.7 Test: first-turn parallel searches are allowed
-- [ ] 2.8 Test: synthetic reflection injection works when researcher skips think
+- [x] 2.1 Update `_build_researcher_system_prompt`: after each `web_search`/`extract_content`, researcher MUST call `think` before next search
+- [x] 2.2 Add rule: `think` may NOT be called in parallel with search tools
+- [x] 2.3 Allow multiple `web_search` calls in first turn only (initial broadening)
+- [x] 2.4 Add soft validation in ReAct loop: if previous turn had search and current turn doesn't start with `think`, inject synthetic reflection prompt
+- [x] 2.5 Log warning when reflection is injected (not hard-block)
+- [x] 2.6 Test: researcher alternates search → think → search pattern
+- [x] 2.7 Test: first-turn parallel searches are allowed
+- [x] 2.8 Test: synthetic reflection injection works when researcher skips think
 
 ## Phase 3 — Synthesis Source Format Alignment
 - [ ] 3.1 Update `_build_synthesis_system_prompt`: first reference to source uses `[Title](URL) [N]`, subsequent uses `[N]`

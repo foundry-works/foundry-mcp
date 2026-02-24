@@ -56,14 +56,28 @@ Returns: Full page content in markdown format.
 Only available when extraction is enabled. If unavailable, focus on web_search.
 
 ### think
-Pause and reflect on your research progress. Use this to assess what you've found, identify gaps, and plan your next steps.
+Pause and reflect on your research progress. Assess what you've found, identify gaps, and plan your next steps.
 Arguments: {{"reasoning": "your analysis of findings and gaps"}}
 Returns: Acknowledgment. Does NOT count against your tool call budget.
+CRITICAL: You MUST call think after every web_search or extract_content before doing anything else.
 
 ### research_complete
 Signal that your research is complete and summarize your findings.
 Arguments: {{"summary": "comprehensive summary addressing the research question"}}
 Returns: Confirmation. Call this when you are confident your findings address the research question.
+
+## CRITICAL: Reflection Protocol
+
+After EVERY `web_search` or `extract_content` call, you MUST call `think` as your very next action before issuing another search or extraction.
+
+Rules:
+1. After any `web_search` or `extract_content`, your next response MUST contain ONLY a `think` call.
+2. Do NOT call `think` in the same turn as `web_search` or `extract_content`.
+3. Exception: On your FIRST turn only, you may issue multiple `web_search` calls for initial broad coverage.
+
+Correct pattern: search → think → search → think → ... → research_complete
+Incorrect: search → search (missing reflection between searches)
+Incorrect: search + think in same turn (think must be a separate turn)
 
 ## Response Format
 
@@ -72,18 +86,17 @@ Respond with a JSON object containing your tool calls for this turn:
 ```json
 {{
   "tool_calls": [
-    {{"tool": "web_search", "arguments": {{"query": "...", "max_results": 5}}}},
-    {{"tool": "think", "arguments": {{"reasoning": "..."}}}}
+    {{"tool": "web_search", "arguments": {{"query": "...", "max_results": 5}}}}
   ]
 }}
 ```
 
-You may include multiple tool calls per turn. When calling think alongside other tools, think will be executed first.
+Generally include one tool call per turn. On your first turn, you may include multiple `web_search` calls for initial broad coverage.
 
 ## Research Strategy
 
 - Start with broader searches, then narrow based on what you find.
-- Use think to pause and assess your findings before deciding next steps.
+- You MUST use think after every search to assess your findings before deciding next steps.
 - Prefer primary sources, official documentation, and peer-reviewed content.
 - Seek diverse perspectives — multiple domains and viewpoints.
 - Call research_complete when you are confident the findings address the research question, or when additional searches yield diminishing returns.
@@ -310,6 +323,11 @@ class TopicResearchMixin:
         # Maximum turns to prevent infinite loops (safety net)
         max_turns = max_searches * 3  # generous: 3x budget allows think steps
 
+        # Reflection enforcement tracking (Phase 2)
+        previous_turn_had_search = False
+        search_turn_count = 0  # for first-turn exception
+        reflection_injections = 0  # count of synthetic reflection prompts
+
         for turn in range(max_turns):
             self._check_cancellation(state)
 
@@ -377,6 +395,42 @@ class TopicResearchMixin:
                     turn + 1,
                 )
                 break
+
+            # --- Reflection enforcement (Phase 2) ---
+            # After the first search turn, require think between searches.
+            current_has_search = any(
+                tc.tool in ("web_search", "extract_content")
+                for tc in response.tool_calls
+            )
+            current_has_think = any(
+                tc.tool == "think" for tc in response.tool_calls
+            )
+
+            if (
+                previous_turn_had_search
+                and current_has_search
+                and not current_has_think
+                and search_turn_count > 0  # first search turn is exempt
+            ):
+                logger.warning(
+                    "Topic %r: researcher skipped reflection after search on turn %d, "
+                    "injecting synthetic think prompt",
+                    sub_query.id,
+                    turn + 1,
+                )
+                reflection_injections += 1
+                message_history.append({"role": "assistant", "content": raw_content})
+                message_history.append({
+                    "role": "tool",
+                    "tool": "system",
+                    "content": (
+                        "REFLECTION REQUIRED: You must call `think` to reflect on your "
+                        "previous search results before issuing another search. Assess "
+                        "what you found, identify gaps, and plan your next step. "
+                        "Respond with ONLY a `think` tool call."
+                    ),
+                })
+                continue
 
             # Record the assistant's response in message history
             message_history.append({"role": "assistant", "content": raw_content})
@@ -488,6 +542,11 @@ class TopicResearchMixin:
                         tool_call.tool,
                     )
 
+            # Update reflection tracking
+            if current_has_search:
+                search_turn_count += 1
+            previous_turn_had_search = current_has_search
+
             if loop_should_break:
                 break
 
@@ -562,6 +621,7 @@ class TopicResearchMixin:
                 "inline_compressed": result.compressed_findings is not None,
                 "extract_enabled": extract_enabled,
                 "turns_used": len([m for m in message_history if m.get("role") == "assistant"]),
+                "reflection_injections": reflection_injections,
             },
         )
 

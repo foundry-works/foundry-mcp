@@ -619,10 +619,15 @@ class TestReActLoop:
             result.success = True
             result.tokens_used = 30
             result.error = None
-            # Always request another search
-            result.content = _react_response(
-                _web_search_call(f"query iteration {call_count}")
-            )
+            # Alternate search → think → search → think to follow reflection protocol
+            if call_count % 2 == 1:
+                result.content = _react_response(
+                    _web_search_call(f"query iteration {call_count}")
+                )
+            else:
+                result.content = _react_response(
+                    _think_call(f"Reflecting on iteration {call_count}...")
+                )
             return result
 
         mixin._provider_async_fn = mock_llm
@@ -1050,3 +1055,245 @@ class TestToolSchemas:
         assert "extract_content" in RESEARCHER_TOOL_SCHEMAS
         assert "think" in RESEARCHER_TOOL_SCHEMAS
         assert "research_complete" in RESEARCHER_TOOL_SCHEMAS
+
+
+# =============================================================================
+# Unit tests: forced reflection (Phase 2)
+# =============================================================================
+
+
+class TestForcedReflection:
+    """Tests for Phase 2 forced reflection enforcement."""
+
+    def test_prompt_contains_reflection_protocol(self) -> None:
+        """System prompt includes the CRITICAL Reflection Protocol section."""
+        prompt = _build_researcher_system_prompt(
+            budget_total=5, budget_remaining=5, extract_enabled=True
+        )
+        assert "CRITICAL: Reflection Protocol" in prompt
+        assert "search → think → search → think" in prompt
+        assert "MUST call think after every web_search" in prompt
+
+    @pytest.mark.asyncio
+    async def test_search_think_search_pattern(self) -> None:
+        """Researcher alternates search → think → search correctly."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+        provider = _make_mock_provider("tavily")
+
+        call_count = 0
+
+        async def mock_llm(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 30
+            result.error = None
+            if call_count == 1:
+                # First turn: search (first search turn, exempt from reflection)
+                result.content = _react_response(_web_search_call("query 1"))
+            elif call_count == 2:
+                # Second turn: think (correct — reflecting after search)
+                result.content = _react_response(
+                    _think_call("Analyzing first search results...")
+                )
+            elif call_count == 3:
+                # Third turn: search (allowed — think was done)
+                result.content = _react_response(_web_search_call("query 2"))
+            elif call_count == 4:
+                # Fourth turn: think (correct — reflecting after search)
+                result.content = _react_response(
+                    _think_call("Analyzing second search results...")
+                )
+            else:
+                result.content = _react_response(_complete_call("Done"))
+            return result
+
+        mixin._provider_async_fn = mock_llm
+
+        topic_result = await mixin._execute_topic_research_async(
+            sub_query=sq, state=state, available_providers=[provider],
+            max_searches=5, timeout=30.0,
+            seen_urls=set(), seen_titles={},
+            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+        )
+
+        assert topic_result.searches_performed == 2
+        assert topic_result.early_completion is True
+        # No reflections should have been injected — pattern was correct
+        audit_data = mixin._audit_events[-1][1]["data"]
+        assert audit_data["reflection_injections"] == 0
+
+    @pytest.mark.asyncio
+    async def test_first_turn_parallel_searches_allowed(self) -> None:
+        """Multiple web_search calls on first turn are allowed (initial broadening)."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        # Provider returning different sources for each call
+        call_idx = 0
+        original_search = AsyncMock()
+
+        async def multi_source_search(**kwargs):
+            nonlocal call_idx
+            call_idx += 1
+            return [
+                _make_source(
+                    f"src-broad-{call_idx}",
+                    f"https://broad{call_idx}.com",
+                    f"Broad result {call_idx}",
+                )
+            ]
+
+        provider = MagicMock()
+        provider.get_provider_name.return_value = "tavily"
+        provider.search = multi_source_search
+
+        llm_call_count = 0
+
+        async def mock_llm(**kwargs):
+            nonlocal llm_call_count
+            llm_call_count += 1
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 30
+            result.error = None
+            if llm_call_count == 1:
+                # First turn: two parallel searches (initial broadening)
+                result.content = _react_response(
+                    _web_search_call("broad query A"),
+                    _web_search_call("broad query B"),
+                )
+            elif llm_call_count == 2:
+                # Second turn: think (reflecting on broadening)
+                result.content = _react_response(
+                    _think_call("Got broad coverage from initial searches...")
+                )
+            else:
+                result.content = _react_response(_complete_call("Done"))
+            return result
+
+        mixin._provider_async_fn = mock_llm
+
+        topic_result = await mixin._execute_topic_research_async(
+            sub_query=sq, state=state, available_providers=[provider],
+            max_searches=5, timeout=30.0,
+            seen_urls=set(), seen_titles={},
+            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+        )
+
+        # Both searches on the first turn should have executed
+        assert topic_result.searches_performed == 2
+        # No reflection injections — first turn is exempt
+        audit_data = mixin._audit_events[-1][1]["data"]
+        assert audit_data["reflection_injections"] == 0
+
+    @pytest.mark.asyncio
+    async def test_synthetic_reflection_injection(self) -> None:
+        """When researcher skips think after search, synthetic reflection is injected."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+        provider = _make_mock_provider("tavily")
+
+        llm_call_count = 0
+
+        async def mock_llm(**kwargs):
+            nonlocal llm_call_count
+            llm_call_count += 1
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 30
+            result.error = None
+            if llm_call_count == 1:
+                # Turn 1: search (first search turn, exempt)
+                result.content = _react_response(_web_search_call("query 1"))
+            elif llm_call_count == 2:
+                # Turn 2: search without think (violation! should trigger injection)
+                result.content = _react_response(_web_search_call("query 2"))
+            elif llm_call_count == 3:
+                # Turn 3: after injection, model should think
+                result.content = _react_response(
+                    _think_call("Reflecting after being prompted...")
+                )
+            elif llm_call_count == 4:
+                # Turn 4: now can search
+                result.content = _react_response(_web_search_call("query 3"))
+            else:
+                result.content = _react_response(_complete_call("Done"))
+            return result
+
+        mixin._provider_async_fn = mock_llm
+
+        topic_result = await mixin._execute_topic_research_async(
+            sub_query=sq, state=state, available_providers=[provider],
+            max_searches=5, timeout=30.0,
+            seen_urls=set(), seen_titles={},
+            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+        )
+
+        # Reflection was injected once (turn 2 skipped think)
+        audit_data = mixin._audit_events[-1][1]["data"]
+        assert audit_data["reflection_injections"] == 1
+
+        # The injected turn's search was NOT executed (only turns 1, 4 executed)
+        # Turn 1: search (executed, 1 search)
+        # Turn 2: search (rejected, injection, 0 searches)
+        # Turn 3: think (no search)
+        # Turn 4: search (executed, 1 search) -- previous turn was think, allowed
+        # Turn 5: complete
+        assert topic_result.searches_performed == 2
+
+        # Message history should contain the injection
+        injection_msgs = [
+            m for m in topic_result.message_history
+            if m.get("tool") == "system" and "REFLECTION REQUIRED" in m.get("content", "")
+        ]
+        assert len(injection_msgs) == 1
+
+    @pytest.mark.asyncio
+    async def test_reflection_not_needed_when_think_present(self) -> None:
+        """When researcher includes think with search, no injection needed."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+        provider = _make_mock_provider("tavily")
+
+        llm_call_count = 0
+
+        async def mock_llm(**kwargs):
+            nonlocal llm_call_count
+            llm_call_count += 1
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 30
+            result.error = None
+            if llm_call_count == 1:
+                # Turn 1: search (first turn)
+                result.content = _react_response(_web_search_call("query 1"))
+            elif llm_call_count == 2:
+                # Turn 2: search + think together (think present, no injection needed)
+                result.content = _react_response(
+                    _web_search_call("query 2"),
+                    _think_call("Reflecting on results..."),
+                )
+            else:
+                result.content = _react_response(_complete_call("Done"))
+            return result
+
+        mixin._provider_async_fn = mock_llm
+
+        topic_result = await mixin._execute_topic_research_async(
+            sub_query=sq, state=state, available_providers=[provider],
+            max_searches=5, timeout=30.0,
+            seen_urls=set(), seen_titles={},
+            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+        )
+
+        # No reflection injections — think was present
+        audit_data = mixin._audit_events[-1][1]["data"]
+        assert audit_data["reflection_injections"] == 0
+        assert topic_result.searches_performed == 2
