@@ -243,26 +243,94 @@ class SynthesisPhaseMixin:
         # Check for cancellation before making provider call
         self._check_cancellation(state)
 
-        # Execute LLM call with lifecycle instrumentation
-        call_result = await execute_llm_call(
-            workflow=self,
-            state=state,
-            phase_name="synthesis",
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            provider_id=provider_id or state.synthesis_provider,
-            model=state.synthesis_model,
-            temperature=0.5,  # Balanced for coherent but varied writing
-            timeout=timeout,
-            error_metadata={
-                "finding_count": len(state.findings),
-                "guidance": "Try reducing the number of findings or source content included",
-            },
-            role="report",
+        # ---------------------------------------------------------
+        # LLM call with phase-specific outer retry on token-limit
+        # errors.  Each outer retry pre-truncates the user prompt
+        # (oldest content first) before handing it back to
+        # execute_llm_call (which has its own inner structural
+        # retries).
+        # ---------------------------------------------------------
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            MAX_PHASE_TOKEN_RETRIES,
+            _is_context_window_exceeded,
+            truncate_prompt_for_retry,
         )
-        if isinstance(call_result, WorkflowResult):
-            return call_result  # Error path
-        result = call_result.result
+
+        current_user_prompt = user_prompt
+        outer_retries = 0
+        result = None
+
+        for outer_attempt in range(MAX_PHASE_TOKEN_RETRIES + 1):  # 0 = initial
+            call_result = await execute_llm_call(
+                workflow=self,
+                state=state,
+                phase_name="synthesis",
+                system_prompt=system_prompt,
+                user_prompt=current_user_prompt,
+                provider_id=provider_id or state.synthesis_provider,
+                model=state.synthesis_model,
+                temperature=0.5,
+                timeout=timeout,
+                error_metadata={
+                    "finding_count": len(state.findings),
+                    "guidance": "Try reducing the number of findings or source content included",
+                    "outer_retries": outer_retries,
+                },
+                role="report",
+            )
+
+            if isinstance(call_result, WorkflowResult):
+                if (
+                    _is_context_window_exceeded(call_result)
+                    and outer_attempt < MAX_PHASE_TOKEN_RETRIES
+                ):
+                    outer_retries += 1
+                    current_user_prompt = truncate_prompt_for_retry(
+                        user_prompt, outer_retries, MAX_PHASE_TOKEN_RETRIES,
+                    )
+                    logger.warning(
+                        "Synthesis outer retry %d/%d: pre-truncating user "
+                        "prompt by %d%%",
+                        outer_retries,
+                        MAX_PHASE_TOKEN_RETRIES,
+                        int((0.1 + outer_retries * 0.1) * 100),
+                    )
+                    continue
+
+                # Non-retryable error or retries exhausted
+                if outer_retries > 0:
+                    self._write_audit_event(
+                        state,
+                        "synthesis_retry_exhausted",
+                        data={
+                            "outer_retries": outer_retries,
+                            "error": call_result.error,
+                        },
+                        level="warning",
+                    )
+                return call_result
+
+            # Success — record retry metadata if retries were needed
+            if outer_retries > 0:
+                self._write_audit_event(
+                    state,
+                    "synthesis_retry_succeeded",
+                    data={"outer_retries": outer_retries},
+                )
+            result = call_result.result
+            break
+
+        if result is None:
+            # All outer retries exhausted — should be caught above, safety net
+            return WorkflowResult(
+                success=False,
+                content="",
+                error="Synthesis failed: all token-limit retries exhausted",
+                metadata={
+                    "research_id": state.id,
+                    "outer_retries": outer_retries,
+                },
+            )
 
         # Extract the markdown report from the response
         report = self._extract_markdown_report(result.content)

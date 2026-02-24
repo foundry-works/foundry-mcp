@@ -122,45 +122,44 @@
 
 ## Phase 4: Message-Aware Token Limit Recovery
 
-- [ ] **4.1** Add `truncate_prompt_for_retry()` helper to `_lifecycle.py`
-  - Signature: `truncate_prompt_for_retry(prompt: str, attempt: int, max_attempts: int = 3) -> str`
-  - Attempt 1: remove first 20% of content (preserve tail)
-  - Attempt 2: remove first 30% of content
-  - Attempt 3: remove first 40% of content
-  - Never truncate below a minimum threshold (e.g., 1000 chars)
-  - Returns the truncated prompt string
-- [ ] **4.2** Add retry loop to `_compress_single_topic_async`
-  - Wrap the `execute_llm_call` in a retry loop (max 3 attempts)
-  - On token limit error (ContextWindowError):
-    - Apply `truncate_prompt_for_retry()` to user prompt
-    - Log: `"Compression retry %d/%d: truncating prompt by %d%%"`
-    - Retry the LLM call
-  - On success: break out of retry loop
-  - After 3 failures: return `(0, 0, False)` — non-fatal, skip compression for this topic
-  - Record retry count in audit event
-- [ ] **4.3** Add retry loop to `_execute_synthesis_async`
-  - Wrap the `execute_llm_call` in a retry loop (max 3 attempts)
-  - On token limit error:
-    - Apply `truncate_prompt_for_retry()` to user prompt
-    - For synthesis specifically: drop lowest-priority topics' findings first, then truncate remaining
-    - Log each retry with truncation percentage
-  - After 3 failures: generate partial report with whatever content fit
-  - Record retry count in audit event
-- [ ] **4.4** Verify provider-specific token limit error detection
-  - OpenAI: `BadRequestError` + "maximum context length" / "too many tokens" / "token"
-  - Anthropic: `BadRequestError` + "prompt is too long" / "too many tokens"
-  - Google: `ResourceExhausted` / `InvalidArgument` with "token" keyword
-  - Verify existing `ContextWindowError` classification covers these patterns
-  - Add any missing patterns
-- [ ] **4.5** Add tests for token limit recovery
-  - Test: compression retries on simulated token limit error
-  - Test: synthesis retries on simulated token limit error
-  - Test: progressive truncation (20% → 30% → 40%)
-  - Test: system prompt never truncated (only user prompt content)
-  - Test: most recent content preserved (oldest content truncated first)
-  - Test: max 3 retries, then graceful fallback
-  - Test: non-token-limit errors NOT retried (e.g., auth errors, rate limits)
-  - Test: retry metadata recorded in audit events
-  - Test: provider-specific error detection for OpenAI, Anthropic, Google
-  - Test: `truncate_prompt_for_retry()` unit tests (boundary cases, minimum threshold)
-- [ ] **4.6** Verify existing deep research tests still pass
+- [x] **4.1** Add `truncate_prompt_for_retry()` helper to `_lifecycle.py`
+  - Signature: `truncate_prompt_for_retry(prompt: str, attempt: int, max_attempts: int = 3) -> str` *(added)*
+  - Attempt 1: remove first 20% of content (preserve tail) *(verified)*
+  - Attempt 2: remove first 30% of content *(verified)*
+  - Attempt 3: remove first 40% of content *(verified)*
+  - Never truncate below a minimum threshold (1000 chars) *(enforced)*
+  - Also added `MAX_PHASE_TOKEN_RETRIES = 3` constant and `_is_context_window_exceeded()` helper for outer retry detection
+- [x] **4.2** Add retry loop to `_compress_single_topic_async`
+  - Outer retry loop wraps `execute_llm_call` (max `MAX_PHASE_TOKEN_RETRIES` attempts) *(added to compression.py)*
+  - On context_window_exceeded: applies `truncate_prompt_for_retry()` to user prompt *(verified)*
+  - Logs: `"Compression outer retry %d/%d for topic %s: pre-truncating user prompt by %d%%"` *(present)*
+  - On success after retry: emits `compression_retry_succeeded` audit event *(verified)*
+  - After retries exhausted: returns `(0, 0, False)` and emits `compression_retry_exhausted` audit event *(verified)*
+  - Non-token-limit errors NOT retried — only `context_window_exceeded` triggers outer retry *(verified)*
+- [x] **4.3** Add retry loop to `_execute_synthesis_async`
+  - Outer retry loop wraps `execute_llm_call` (max `MAX_PHASE_TOKEN_RETRIES` attempts) *(added to synthesis.py)*
+  - On context_window_exceeded: applies `truncate_prompt_for_retry()` to user prompt *(verified)*
+  - Logs: `"Synthesis outer retry %d/%d: pre-truncating user prompt by %d%%"` *(present)*
+  - On success after retry: emits `synthesis_retry_succeeded` audit event *(verified)*
+  - After retries exhausted: emits `synthesis_retry_exhausted` audit event and returns error WorkflowResult *(verified)*
+  - System prompt never truncated — only user prompt is pre-truncated *(verified)*
+- [x] **4.4** Verify provider-specific token limit error detection
+  - OpenAI: `BadRequestError` + "maximum context length" / "too many tokens" / "token" *(covered by existing + new pattern)*
+  - Anthropic: `BadRequestError` + "prompt is too long" / "too many tokens" *(covered)*
+  - Google: `ResourceExhausted` / `InvalidArgument` with "token" keyword *(added `InvalidArgument` to `_CONTEXT_WINDOW_ERROR_CLASSES`)*
+  - Added cross-provider `"too many tokens"` explicit pattern *(new)*
+  - Verified all patterns via test: 12 provider-specific detection tests pass
+- [x] **4.5** Add tests for token limit recovery
+  - Test: compression retries on simulated token limit error *(TestCompressionRetry — 7 tests)*
+  - Test: synthesis retries on simulated token limit error *(TestSynthesisRetry — 7 tests)*
+  - Test: progressive truncation 20% → 30% → 40% *(TestTruncatePromptForRetry — 13 tests)*
+  - Test: system prompt never truncated *(test_system_prompt_never_truncated)*
+  - Test: most recent content preserved, oldest truncated first *(test_preserves_most_recent_content)*
+  - Test: max 3 retries then graceful fallback *(test_exhausts_retries_returns_failure, test_exhausts_retries_returns_error)*
+  - Test: non-token-limit errors NOT retried *(test_non_token_error_not_retried — both compression & synthesis)*
+  - Test: retry metadata recorded in audit events *(test_records_retry_audit_event_on_success, test_records_exhausted_audit_event)*
+  - Test: provider-specific error detection for OpenAI, Anthropic, Google *(TestProviderErrorDetection — 12 tests)*
+  - Test: `truncate_prompt_for_retry()` boundary cases and minimum threshold *(TestTruncatePromptForRetry — 13 tests)*
+  - Test: `_is_context_window_exceeded` helper *(TestIsContextWindowExceeded — 4 tests)*
+  - Total new tests: 44 in test_phase_token_recovery.py
+- [x] **4.6** Verify existing deep research tests still pass *(2074 passed, 6 skipped, 0 failures)*

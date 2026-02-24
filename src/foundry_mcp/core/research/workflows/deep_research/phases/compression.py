@@ -350,33 +350,93 @@ class CompressionMixin:
                 max_content_length=max_content_length,
             )
 
-        # Use execute_llm_call for progressive token-limit recovery
-        call_result = await execute_llm_call(
-            workflow=self,
-            state=state,
-            phase_name="compression",
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            provider_id=compression_provider,
-            model=compression_model,
-            temperature=0.2,
-            timeout=timeout,
-            role="compression",
+        # ---------------------------------------------------------
+        # LLM call with phase-specific outer retry on token-limit
+        # errors.  Each outer retry pre-truncates the user prompt
+        # (oldest content first) before handing it back to
+        # execute_llm_call (which has its own inner structural
+        # retries).
+        # ---------------------------------------------------------
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            MAX_PHASE_TOKEN_RETRIES,
+            _is_context_window_exceeded,
+            truncate_prompt_for_retry,
         )
 
-        if isinstance(call_result, WorkflowResult):
-            # Error path (context window exhausted, timeout, etc.)
-            logger.error(
-                "Compression failed for topic %s: %s",
-                topic_result.sub_query_id,
-                call_result.error,
+        current_user_prompt = user_prompt
+        outer_retries = 0
+
+        for outer_attempt in range(MAX_PHASE_TOKEN_RETRIES + 1):  # 0 = initial
+            call_result = await execute_llm_call(
+                workflow=self,
+                state=state,
+                phase_name="compression",
+                system_prompt=system_prompt,
+                user_prompt=current_user_prompt,
+                provider_id=compression_provider,
+                model=compression_model,
+                temperature=0.2,
+                timeout=timeout,
+                role="compression",
             )
+
+            if isinstance(call_result, WorkflowResult):
+                # Check if this is a context-window error we can retry
+                if (
+                    _is_context_window_exceeded(call_result)
+                    and outer_attempt < MAX_PHASE_TOKEN_RETRIES
+                ):
+                    outer_retries += 1
+                    current_user_prompt = truncate_prompt_for_retry(
+                        user_prompt, outer_retries, MAX_PHASE_TOKEN_RETRIES,
+                    )
+                    logger.warning(
+                        "Compression outer retry %d/%d for topic %s: "
+                        "pre-truncating user prompt by %d%%",
+                        outer_retries,
+                        MAX_PHASE_TOKEN_RETRIES,
+                        topic_result.sub_query_id,
+                        int((0.1 + outer_retries * 0.1) * 100),
+                    )
+                    continue
+
+                # Non-retryable error or retries exhausted
+                logger.error(
+                    "Compression failed for topic %s (outer_retries=%d): %s",
+                    topic_result.sub_query_id,
+                    outer_retries,
+                    call_result.error,
+                )
+                if outer_retries > 0:
+                    self._write_audit_event(
+                        state,
+                        "compression_retry_exhausted",
+                        data={
+                            "sub_query_id": topic_result.sub_query_id,
+                            "outer_retries": outer_retries,
+                            "error": call_result.error,
+                        },
+                        level="warning",
+                    )
+                return (0, 0, False)
+
+            # Success path
+            result = call_result.result
+            if result.success and result.content:
+                topic_result.compressed_findings = result.content
+                if outer_retries > 0:
+                    self._write_audit_event(
+                        state,
+                        "compression_retry_succeeded",
+                        data={
+                            "sub_query_id": topic_result.sub_query_id,
+                            "outer_retries": outer_retries,
+                        },
+                    )
+                return (result.input_tokens or 0, result.output_tokens or 0, True)
             return (0, 0, False)
 
-        result = call_result.result
-        if result.success and result.content:
-            topic_result.compressed_findings = result.content
-            return (result.input_tokens or 0, result.output_tokens or 0, True)
+        # Should not reach here, but safety fallback
         return (0, 0, False)
 
     # ------------------------------------------------------------------

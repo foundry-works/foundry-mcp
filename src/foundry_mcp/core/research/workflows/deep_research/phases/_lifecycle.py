@@ -116,14 +116,17 @@ _CONTEXT_WINDOW_ERROR_PATTERNS: list[str] = [
     r"(?i)\b(?:token|context|length|maximum.*context)\b",
     # Anthropic: BadRequestError with "prompt is too long"
     r"(?i)prompt\s+is\s+too\s+long",
-    # Google: ResourceExhausted exception type (matched by class name)
+    # Google: ResourceExhausted / InvalidArgument with token keywords
     r"(?i)\b(?:resource\s*exhausted|context\s*length|token\s*limit)\b",
+    # Cross-provider: explicit "too many tokens" phrasing
+    r"(?i)too\s+many\s+tokens",
 ]
 
 #: Exception class names that are known context-window indicators for
 #: specific providers, regardless of message content.
 _CONTEXT_WINDOW_ERROR_CLASSES: set[str] = {
     "ResourceExhausted",  # Google / gRPC
+    "InvalidArgument",  # Google / gRPC (token-related)
 }
 
 
@@ -264,6 +267,81 @@ def _apply_truncation_strategy(
 
     # Retry 3 or fallback when structured strategies don't reduce enough
     return truncate_to_token_estimate(user_prompt, budget)
+
+
+def truncate_prompt_for_retry(
+    prompt: str,
+    attempt: int,
+    max_attempts: int = 3,
+) -> str:
+    """Truncate a prompt by removing the oldest content for a retry attempt.
+
+    Removes the first *X%* of ``prompt``, preserving the tail (most recent
+    context).  The removal percentage grows with each attempt:
+
+    - Attempt 1: remove first 20%
+    - Attempt 2: remove first 30%
+    - Attempt 3: remove first 40%
+
+    This complements the structural truncation strategies in
+    :func:`_apply_truncation_strategy` by providing a simple content-level
+    oldest-first removal — useful when the phase-specific outer retry loop
+    pre-truncates the prompt before handing it back to
+    :func:`execute_llm_call`.
+
+    Args:
+        prompt: The prompt string to truncate.
+        attempt: The current retry attempt (1-based).  Values outside
+            ``[1, max_attempts]`` return the original prompt unchanged.
+        max_attempts: Maximum number of retry attempts (default 3).
+
+    Returns:
+        The truncated prompt string, or the original if truncation is
+        not applicable or the prompt is already at or below the minimum
+        threshold.
+    """
+    _MIN_PROMPT_CHARS = 1000
+
+    if attempt < 1 or attempt > max_attempts:
+        return prompt
+    if len(prompt) <= _MIN_PROMPT_CHARS:
+        return prompt
+
+    # Progressive removal: 20%, 30%, 40% for attempts 1, 2, 3
+    removal_pct = 0.1 + (attempt * 0.1)
+
+    chars_to_remove = int(len(prompt) * removal_pct)
+    remaining = prompt[chars_to_remove:]
+
+    # Never truncate below minimum threshold
+    if len(remaining) < _MIN_PROMPT_CHARS:
+        remaining = prompt[-_MIN_PROMPT_CHARS:]
+
+    return remaining
+
+
+# Maximum outer retry attempts for phase-specific token-limit recovery.
+# Each outer retry pre-truncates the prompt before handing it back to
+# execute_llm_call (which has its own 3 internal structural retries).
+MAX_PHASE_TOKEN_RETRIES: int = 3
+
+
+def _is_context_window_exceeded(result: Any) -> bool:
+    """Check whether a WorkflowResult represents a context-window error.
+
+    Used by phase-specific outer retry loops to detect when
+    ``execute_llm_call`` exhausted its internal retries due to
+    context-window overflow.
+
+    Args:
+        result: A ``WorkflowResult`` returned by ``execute_llm_call``.
+
+    Returns:
+        ``True`` if the result's metadata indicates a context-window error.
+    """
+    if not hasattr(result, "metadata") or not result.metadata:
+        return False
+    return result.metadata.get("error_type") == "context_window_exceeded"
 
 
 async def execute_llm_call(
