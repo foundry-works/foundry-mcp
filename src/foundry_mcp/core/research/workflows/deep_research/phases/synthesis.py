@@ -442,7 +442,8 @@ Include analysis of Conflicting Information and Limitations where they exist, bu
 
 ## Citations
 
-- Use inline numbered citations [N] when referencing specific information (e.g. [1], [3]).
+- For the **first reference** to each source, use an inline markdown link followed by its citation number: `[Title](URL) [N]`. This makes sources immediately navigable in rendered markdown.
+- For **subsequent references** to the same source, use just the citation number: `[N]`.
 - The citation numbers correspond to the numbered sources provided in the input.
 - Do NOT generate a Sources or References section — it will be appended automatically.
 - Distinguish between high-confidence findings (well-supported) and lower-confidence insights.

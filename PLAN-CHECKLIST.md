@@ -21,11 +21,11 @@
 - [x] 2.8 Test: synthetic reflection injection works when researcher skips think
 
 ## Phase 3 — Synthesis Source Format Alignment
-- [ ] 3.1 Update `_build_synthesis_system_prompt`: first reference to source uses `[Title](URL) [N]`, subsequent uses `[N]`
-- [ ] 3.2 Verify `postprocess_citations` regex preserves `[Title](URL) [N]` patterns
-- [ ] 3.3 Fix regex if `[N]` adjacent to `)` is incorrectly stripped
-- [ ] 3.4 Test: inline markdown links survive post-processing
-- [ ] 3.5 Test: auto-appended Sources section still correct with inline links present
+- [x] 3.1 Update `_build_synthesis_system_prompt`: first reference to source uses `[Title](URL) [N]`, subsequent uses `[N]`
+- [x] 3.2 Verify `postprocess_citations` regex preserves `[Title](URL) [N]` patterns
+- [x] 3.3 Fix regex if `[N]` adjacent to `)` is incorrectly stripped
+- [x] 3.4 Test: inline markdown links survive post-processing
+- [x] 3.5 Test: auto-appended Sources section still correct with inline links present
 
 ## Phase 4 — Token Limit Recovery in Report Generation
 - [ ] 4.1 Add try/except around synthesis LLM call for token-limit errors

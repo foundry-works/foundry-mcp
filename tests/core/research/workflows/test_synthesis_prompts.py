@@ -287,6 +287,16 @@ class TestCitationFormat:
         assert "[N]" in prompt
         assert "inline" in prompt.lower()
 
+    def test_system_prompt_specifies_inline_markdown_link_format(self) -> None:
+        """System prompt instructs [Title](URL) [N] format for first references."""
+        stub = StubSynthesis()
+        state = _make_state()
+        prompt = stub._build_synthesis_system_prompt(state)
+
+        assert "[Title](URL) [N]" in prompt
+        assert "first reference" in prompt.lower()
+        assert "subsequent" in prompt.lower()
+
     def test_system_prompt_prohibits_sources_section(self) -> None:
         """System prompt tells LLM NOT to generate Sources section."""
         stub = StubSynthesis()
