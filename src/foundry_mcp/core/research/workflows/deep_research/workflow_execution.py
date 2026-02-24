@@ -63,6 +63,7 @@ class WorkflowExecutionMixin:
         def _record_workflow_error(self, *args: Any, **kwargs: Any) -> None: ...
         def _safe_orchestrator_transition(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_clarification_async(self, *args: Any, **kwargs: Any) -> Any: ...
+        async def _execute_brief_async(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_planning_async(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_gathering_async(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_analysis_async(self, *args: Any, **kwargs: Any) -> Any: ...
@@ -255,6 +256,23 @@ class WorkflowExecutionMixin:
                 if err:
                     return err
                 await self._maybe_reflect(state, DeepResearchPhase.CLARIFICATION)
+
+            if state.phase == DeepResearchPhase.BRIEF:
+                if not getattr(self.config, "deep_research_enable_brief", True):
+                    state.advance_phase()  # Skip BRIEF → PLANNING
+                else:
+                    err = await self._run_phase(
+                        state,
+                        DeepResearchPhase.BRIEF,
+                        self._execute_brief_async(
+                            state=state,
+                            provider_id=resolve_phase_provider(self.config, "brief"),
+                            timeout=self.config.get_phase_timeout("brief"),
+                        ),
+                    )
+                    if err:
+                        return err
+                    await self._maybe_reflect(state, DeepResearchPhase.BRIEF)
 
             if state.phase == DeepResearchPhase.PLANNING:
                 err = await self._run_phase(

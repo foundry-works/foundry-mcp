@@ -90,6 +90,11 @@ class ResearchConfig:
     deep_research_allow_clarification: bool = True
     deep_research_clarification_provider: Optional[str] = None  # Uses default_provider if not set
 
+    # Deep research brief phase (query enrichment before planning)
+    deep_research_enable_brief: bool = True  # Master switch for dedicated research brief generation
+    deep_research_brief_provider: Optional[str] = None  # Uses research-tier if not set
+    deep_research_brief_model: Optional[str] = None  # Uses research-tier model if not set
+
     # Deep research LLM-driven supervisor reflection
     deep_research_enable_reflection: bool = True  # Master switch for LLM reflection at phase boundaries
     deep_research_reflection_provider: Optional[str] = None  # Uses default_provider if not set
@@ -336,6 +341,10 @@ class ResearchConfig:
             # Deep research clarification phase
             deep_research_allow_clarification=_parse_bool(data.get("deep_research_allow_clarification", True)),
             deep_research_clarification_provider=data.get("deep_research_clarification_provider"),
+            # Deep research brief phase (query enrichment)
+            deep_research_enable_brief=_parse_bool(data.get("deep_research_enable_brief", True)),
+            deep_research_brief_provider=data.get("deep_research_brief_provider"),
+            deep_research_brief_model=data.get("deep_research_brief_model"),
             # Deep research LLM-driven reflection
             deep_research_enable_reflection=_parse_bool(data.get("deep_research_enable_reflection", True)),
             deep_research_reflection_provider=data.get("deep_research_reflection_provider"),
@@ -781,6 +790,7 @@ class ResearchConfig:
         """
         phase_timeouts = {
             "clarification": self.deep_research_planning_timeout,  # Reuse planning timeout
+            "brief": self.deep_research_planning_timeout,  # Brief uses planning-tier timeout
             "planning": self.deep_research_planning_timeout,
             "gathering": self.deep_research_timeout,  # Gathering uses default
             "supervision": self.deep_research_planning_timeout,  # Lightweight LLM call, reuse planning timeout
@@ -979,6 +989,7 @@ class ResearchConfig:
         "global_compression": ["global_compression", "compression", "research"],
         "clarification": ["clarification", "research", "analysis"],
         "evaluation": ["evaluation", "research", "analysis"],
+        "brief": ["brief", "research", "analysis"],
     }
 
     def resolve_model_for_role(self, role: str) -> Tuple[str, Optional[str]]:

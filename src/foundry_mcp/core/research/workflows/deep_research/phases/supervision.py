@@ -529,9 +529,9 @@ Your response MUST be valid JSON with this exact structure:
 }
 
 Guidelines:
-- "sufficient" coverage = 2+ quality sources from diverse domains with relevant findings
-- "partial" coverage = some sources but missing key aspects or lacking diversity
-- "insufficient" coverage = too few sources, low quality, or missing critical information
+- "sufficient" coverage = 2+ quality sources from diverse domains with relevant findings addressing the research brief's dimensions
+- "partial" coverage = some sources but missing key aspects, lacking diversity, or leaving dimensions from the research brief unaddressed
+- "insufficient" coverage = too few sources, low quality, or missing critical information needed by the research brief
 - Follow-up queries must be MORE SPECIFIC than original sub-queries (drill down, not repeat)
 - Maximum 3 follow-up queries per round
 - Do NOT generate queries that duplicate existing sub-queries (check the list provided)
@@ -565,6 +565,17 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         prompt_parts = [
             f"# Research Query\n{state.original_query}",
             "",
+        ]
+
+        # Include research brief scope for coverage assessment
+        if state.research_brief and state.research_brief != state.original_query:
+            prompt_parts.extend([
+                "## Research Brief (scope boundaries for coverage assessment)",
+                state.research_brief,
+                "",
+            ])
+
+        prompt_parts.extend([
             "## Research Status",
             f"- Iteration: {state.iteration}/{state.max_iterations}",
             f"- Supervision round: {state.supervision_round + 1}/{state.max_supervision_rounds}",
@@ -573,7 +584,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             f"- Pending sub-queries: {len(state.pending_sub_queries())}",
             f"- Total sources: {len(state.sources)}",
             "",
-        ]
+        ])
 
         # Per-query coverage table
         if coverage_data:

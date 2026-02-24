@@ -48,6 +48,7 @@ class AgentRole(str, Enum):
 
     SUPERVISOR = "supervisor"
     CLARIFIER = "clarifier"
+    BRIEFER = "briefer"
     PLANNER = "planner"
     GATHERER = "gatherer"
     ANALYZER = "analyzer"
@@ -59,6 +60,7 @@ class AgentRole(str, Enum):
 # Mapping from workflow phases to specialist agents
 PHASE_TO_AGENT: dict[DeepResearchPhase, AgentRole] = {
     DeepResearchPhase.CLARIFICATION: AgentRole.CLARIFIER,
+    DeepResearchPhase.BRIEF: AgentRole.BRIEFER,
     DeepResearchPhase.PLANNING: AgentRole.PLANNER,
     DeepResearchPhase.GATHERING: AgentRole.GATHERER,
     DeepResearchPhase.SUPERVISION: AgentRole.SUPERVISOR,

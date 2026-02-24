@@ -78,39 +78,47 @@ class PlanningPhaseMixin:
 
         # ---------------------------------------------------------------
         # Step 1: Refine the raw query into a structured research brief
+        # (skipped when the dedicated BRIEF phase already produced one)
         # ---------------------------------------------------------------
-        brief_prompt = self._build_brief_refinement_prompt(state)
-        self._check_cancellation(state)
-
-        brief_call_result = await execute_llm_call(
-            workflow=self,
-            state=state,
-            phase_name="planning",
-            system_prompt=(
-                "You are a research brief writer. Rewrite the user's research "
-                "request into a single, precise research brief paragraph."
-            ),
-            user_prompt=brief_prompt,
-            provider_id=provider_id or state.planning_provider,
-            model=state.planning_model,
-            temperature=0.3,  # Low creativity — faithful rewrite
-            timeout=timeout,
-            role="summarization",  # Cheap model for lightweight rewrite
-        )
-
-        if isinstance(brief_call_result, WorkflowResult):
-            # Brief refinement failed — fall back to using the raw query
-            logger.warning(
-                "Brief refinement LLM call failed, using raw query as brief"
-            )
-            state.research_brief = state.original_query
-        else:
-            refined_brief = (brief_call_result.result.content or "").strip()
-            state.research_brief = refined_brief or state.original_query
+        if state.research_brief:
             logger.info(
-                "Brief refinement complete (%d chars)",
+                "Research brief already set by BRIEF phase (%d chars), "
+                "skipping inline refinement",
                 len(state.research_brief),
             )
+        else:
+            brief_prompt = self._build_brief_refinement_prompt(state)
+            self._check_cancellation(state)
+
+            brief_call_result = await execute_llm_call(
+                workflow=self,
+                state=state,
+                phase_name="planning",
+                system_prompt=(
+                    "You are a research brief writer. Rewrite the user's research "
+                    "request into a single, precise research brief paragraph."
+                ),
+                user_prompt=brief_prompt,
+                provider_id=provider_id or state.planning_provider,
+                model=state.planning_model,
+                temperature=0.3,  # Low creativity — faithful rewrite
+                timeout=timeout,
+                role="summarization",  # Cheap model for lightweight rewrite
+            )
+
+            if isinstance(brief_call_result, WorkflowResult):
+                # Brief refinement failed — fall back to using the raw query
+                logger.warning(
+                    "Brief refinement LLM call failed, using raw query as brief"
+                )
+                state.research_brief = state.original_query
+            else:
+                refined_brief = (brief_call_result.result.content or "").strip()
+                state.research_brief = refined_brief or state.original_query
+                logger.info(
+                    "Brief refinement complete (%d chars)",
+                    len(state.research_brief),
+                )
 
         # ---------------------------------------------------------------
         # Step 2: Decompose the (refined) brief into sub-queries

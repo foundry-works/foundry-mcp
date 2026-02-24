@@ -5,6 +5,7 @@ They are combined via multiple inheritance in the main DeepResearchWorkflow clas
 """
 
 from .analysis import AnalysisPhaseMixin
+from .brief import BriefPhaseMixin
 from .clarification import ClarificationPhaseMixin
 from .compression import CompressionMixin
 from .gathering import GatheringPhaseMixin
@@ -15,6 +16,7 @@ from .synthesis import SynthesisPhaseMixin
 from .topic_research import TopicResearchMixin
 
 __all__ = [
+    "BriefPhaseMixin",
     "ClarificationPhaseMixin",
     "PlanningPhaseMixin",
     "CompressionMixin",

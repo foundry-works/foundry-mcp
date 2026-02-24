@@ -60,6 +60,9 @@ from foundry_mcp.core.research.workflows.deep_research.persistence import (
 from foundry_mcp.core.research.workflows.deep_research.phases.analysis import (
     AnalysisPhaseMixin,
 )
+from foundry_mcp.core.research.workflows.deep_research.phases.brief import (
+    BriefPhaseMixin,
+)
 from foundry_mcp.core.research.workflows.deep_research.phases.clarification import (
     ClarificationPhaseMixin,
 )
@@ -108,6 +111,7 @@ class DeepResearchWorkflow(
     ActionHandlersMixin,
     WorkflowExecutionMixin,
     ClarificationPhaseMixin,
+    BriefPhaseMixin,
     PlanningPhaseMixin,
     GatheringPhaseMixin,
     TopicResearchMixin,

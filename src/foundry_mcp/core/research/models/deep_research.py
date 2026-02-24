@@ -176,21 +176,23 @@ class DeepResearchConfig(BaseModel):
 class DeepResearchPhase(str, Enum):
     """Phases of the DEEP_RESEARCH workflow.
 
-    The deep research workflow progresses through eight sequential phases:
+    The deep research workflow progresses through nine sequential phases:
     0. CLARIFICATION - (Optional) Analyze query specificity and ask clarifying questions
-    1. PLANNING - Analyze the query and decompose into focused sub-queries
-    2. GATHERING - Execute sub-queries in parallel and collect sources
-    3. SUPERVISION - Assess coverage gaps and generate follow-up queries
-    4. ANALYSIS - Extract findings and assess source quality
-    5. COMPRESSION - Global cross-topic deduplication and digest before synthesis
-    6. SYNTHESIS - Combine findings into a comprehensive report
-    7. REFINEMENT - Identify gaps and potentially loop back for more research
+    1. BRIEF - (Optional) Enrich the raw query into a structured research brief
+    2. PLANNING - Analyze the query and decompose into focused sub-queries
+    3. GATHERING - Execute sub-queries in parallel and collect sources
+    4. SUPERVISION - Assess coverage gaps and generate follow-up queries
+    5. ANALYSIS - Extract findings and assess source quality
+    6. COMPRESSION - Global cross-topic deduplication and digest before synthesis
+    7. SYNTHESIS - Combine findings into a comprehensive report
+    8. REFINEMENT - Identify gaps and potentially loop back for more research
 
     The ordering of these enum values is significant - it defines the
     progression through advance_phase() method.
     """
 
     CLARIFICATION = "clarification"
+    BRIEF = "brief"
     PLANNING = "planning"
     GATHERING = "gathering"
     SUPERVISION = "supervision"
@@ -220,7 +222,7 @@ class DeepResearchState(BaseModel):
     )
     research_brief: Optional[str] = Field(
         default=None,
-        description="Expanded research plan generated in PLANNING phase",
+        description="Enriched research brief generated in BRIEF phase (or PLANNING fallback)",
     )
     phase: DeepResearchPhase = Field(
         default=DeepResearchPhase.PLANNING,
@@ -634,8 +636,9 @@ class DeepResearchState(BaseModel):
     def advance_phase(self) -> DeepResearchPhase:
         """Advance to the next research phase.
 
-        Phases advance in order: CLARIFICATION -> PLANNING -> GATHERING ->
-        SUPERVISION -> ANALYSIS -> COMPRESSION -> SYNTHESIS -> REFINEMENT.
+        Phases advance in order: CLARIFICATION -> BRIEF -> PLANNING ->
+        GATHERING -> SUPERVISION -> ANALYSIS -> COMPRESSION -> SYNTHESIS ->
+        REFINEMENT.
         Does nothing if already at REFINEMENT. The phase order is derived
         from the DeepResearchPhase enum definition order.
 
