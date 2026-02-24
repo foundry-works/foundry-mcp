@@ -2504,3 +2504,496 @@ class TestSupervisionMessageTruncation:
 
         result = truncate_supervision_messages([], model=None)
         assert result == []
+
+
+# ===========================================================================
+# Phase 6: Supervisor think_tool as Conversation
+# ===========================================================================
+
+
+class TestPhase6ThinkAsConversation:
+    """Tests for Phase 6: making supervisor gap analysis conversational.
+
+    Covers PLAN checklist items:
+    - 6.1: Think output injected into supervision_messages before delegation
+    - 6.5: Supervisor references prior gap analysis in delegation rationale
+    """
+
+    def test_think_output_in_delegation_prompt_via_messages(self):
+        """6.1/6.5: When think output is in supervision_messages, the
+        delegation prompt includes it in the Prior Supervisor Conversation
+        section, and the Gap Analysis section references history instead
+        of duplicating the full text."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=2, sources_per_query=2, supervision_round=1)
+
+        # Simulate Phase 6 flow: think output already injected into messages
+        think_text = "Gap: Missing regulatory analysis for EU markets."
+        state.supervision_messages = [
+            {
+                "role": "assistant", "type": "think", "round": 1,
+                "content": think_text,
+            },
+        ]
+
+        coverage = stub._build_per_query_coverage(state)
+        prompt = stub._build_delegation_user_prompt(state, coverage, think_output=think_text)
+
+        # Think output should be in Prior Supervisor Conversation
+        assert "Prior Supervisor Conversation" in prompt
+        assert "regulatory analysis for EU markets" in prompt
+        assert "[Round 1] Your Gap Analysis" in prompt
+
+        # Gap Analysis section should be a lightweight reference, not full text
+        assert "conversation history above" in prompt
+        # The full think text should NOT be duplicated in a <gap_analysis> tag
+        assert "<gap_analysis>" not in prompt
+
+    def test_think_output_fallback_when_no_messages(self):
+        """6.1: If supervision_messages is empty (shouldn't happen), the Gap
+        Analysis section falls back to embedding the full think text."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=2, sources_per_query=2, supervision_round=0)
+        state.supervision_messages = []
+
+        coverage = stub._build_per_query_coverage(state)
+        prompt = stub._build_delegation_user_prompt(
+            state, coverage, think_output="Full gap analysis text here",
+        )
+
+        # Full text should be embedded in <gap_analysis> tags
+        assert "<gap_analysis>" in prompt
+        assert "Full gap analysis text here" in prompt
+
+    @pytest.mark.asyncio
+    async def test_think_injected_before_delegate_in_loop(self):
+        """6.1: During the delegation loop, think output is appended to
+        supervision_messages BEFORE the delegate step runs, so the
+        delegation prompt can reference it."""
+        stub = StubSupervision(delegation_model=True)
+        stub.config.deep_research_topic_max_tool_calls = 5
+        stub.config.deep_research_providers = ["tavily"]
+        stub.config.deep_research_supervision_single_call = False
+
+        state = _make_state(
+            num_completed=0, num_pending=0, supervision_round=0,
+            max_supervision_rounds=1,
+        )
+        state.research_brief = "Test research"
+        state.topic_research_results = []
+        state.max_sub_queries = 10
+
+        # Track the order of operations
+        call_order: list[str] = []
+        messages_at_delegate_time: list[dict] = []
+
+        async def mock_execute_llm_call(**kwargs):
+            phase_name = kwargs.get("phase_name", "")
+            if "think" in phase_name:
+                call_order.append("think")
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True, content="Gap: need more data", tokens_used=50,
+                )
+                return result
+            raise AssertionError(f"Unexpected phase: {phase_name}")
+
+        async def mock_execute_structured_llm_call(**kwargs):
+            phase_name = kwargs.get("phase_name", "")
+            if "delegate" in phase_name:
+                call_order.append("delegate")
+                # Capture supervision_messages at the time delegation runs
+                messages_at_delegate_time.extend(list(state.supervision_messages))
+
+                content = json.dumps({
+                    "research_complete": True,
+                    "directives": [],
+                    "rationale": "All covered",
+                })
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True, content=content,
+                    provider_id="test", model_used="test",
+                    tokens_used=80, duration_ms=400.0,
+                )
+                parsed = DelegationResponse(
+                    research_complete=True, directives=[], rationale="All covered",
+                )
+                return StructuredLLMCallResult(
+                    result=result.result, llm_call_duration_ms=0.0,
+                    parsed=parsed, parse_retries=0,
+                )
+            raise AssertionError(f"Unexpected structured phase: {phase_name}")
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+            side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+            side_effect=mock_execute_structured_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.truncate_supervision_messages",
+            side_effect=lambda messages, model: messages,
+        ):
+            result = await stub._execute_supervision_async(
+                state=state, provider_id="test", timeout=30.0,
+            )
+
+        assert result.success is True
+        # Think should have been called before delegate
+        assert call_order == ["think", "delegate"]
+        # At the time delegation ran, think output should already be in messages
+        think_msgs = [m for m in messages_at_delegate_time if m.get("type") == "think"]
+        assert len(think_msgs) >= 1, "Think should be in messages before delegate runs"
+        assert "need more data" in think_msgs[0]["content"]
+
+    @pytest.mark.asyncio
+    async def test_post_think_output_injected_into_messages(self):
+        """6.1: Post-execution think output (Step 4) is also injected into
+        supervision_messages for subsequent rounds."""
+        stub = StubSupervision(delegation_model=True)
+        stub.config.deep_research_topic_max_tool_calls = 5
+        stub.config.deep_research_providers = ["tavily"]
+        stub.config.deep_research_supervision_single_call = False
+
+        state = _make_state(
+            num_completed=0, num_pending=0, supervision_round=0,
+            max_supervision_rounds=1,
+        )
+        state.research_brief = "Test research"
+        state.topic_research_results = []
+        state.max_sub_queries = 10
+
+        think_call_count = {"value": 0}
+
+        async def mock_execute_llm_call(**kwargs):
+            phase_name = kwargs.get("phase_name", "")
+            if "think" in phase_name:
+                think_call_count["value"] += 1
+                content = (
+                    "Pre-delegation gap analysis"
+                    if think_call_count["value"] == 1
+                    else "Post-execution: alignment coverage improved"
+                )
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True, content=content, tokens_used=50,
+                )
+                return result
+            raise AssertionError(f"Unexpected phase: {phase_name}")
+
+        delegate_response = json.dumps({
+            "research_complete": False,
+            "directives": [
+                {"research_topic": "Investigate AI safety metrics", "priority": 1},
+            ],
+            "rationale": "Need safety data",
+        })
+
+        async def mock_execute_structured_llm_call(**kwargs):
+            phase_name = kwargs.get("phase_name", "")
+            if "delegate" in phase_name:
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True, content=delegate_response,
+                    provider_id="test", model_used="test",
+                    tokens_used=80, duration_ms=400.0,
+                )
+                parsed = DelegationResponse(
+                    research_complete=False,
+                    directives=[
+                        ResearchDirective(
+                            research_topic="Investigate AI safety metrics",
+                            priority=1,
+                        ),
+                    ],
+                    rationale="Need safety data",
+                )
+                return StructuredLLMCallResult(
+                    result=result.result, llm_call_duration_ms=0.0,
+                    parsed=parsed, parse_retries=0,
+                )
+            raise AssertionError(f"Unexpected structured phase: {phase_name}")
+
+        async def mock_topic_research(**kwargs):
+            sq = kwargs.get("sub_query")
+            return TopicResearchResult(
+                sub_query_id=sq.id if sq else "unknown",
+                searches_performed=2,
+                sources_found=3,
+                compressed_findings="Safety metrics show RLHF effectiveness...",
+            )
+
+        stub._execute_topic_research_async = mock_topic_research
+        stub._get_search_provider = MagicMock(return_value=MagicMock())
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+            side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+            side_effect=mock_execute_structured_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.truncate_supervision_messages",
+            side_effect=lambda messages, model: messages,
+        ):
+            result = await stub._execute_supervision_async(
+                state=state, provider_id="test", timeout=30.0,
+            )
+
+        assert result.success is True
+
+        # Should have 2 think messages: pre-delegation + post-execution
+        think_msgs = [m for m in state.supervision_messages if m.get("type") == "think"]
+        assert len(think_msgs) >= 2, f"Expected >= 2 think messages, got {len(think_msgs)}"
+        assert "Pre-delegation" in think_msgs[0]["content"]
+        assert "Post-execution" in think_msgs[1]["content"]
+
+
+class TestPhase6SingleCallMode:
+    """Tests for Phase 6: single-call think+delegate option.
+
+    Covers PLAN checklist items:
+    - 6.2: Single-call approach evaluation
+    - 6.3: Merged think+delegate in one LLM call
+    - 6.6: Latency reduction (one call instead of two)
+    """
+
+    def test_parse_combined_response_valid(self):
+        """6.3: Combined response with gap_analysis + JSON parses correctly."""
+        content = """<gap_analysis>
+The research has significant gaps in regulatory coverage.
+European AI regulation (EU AI Act) is completely missing.
+</gap_analysis>
+
+```json
+{
+    "research_complete": false,
+    "directives": [
+        {
+            "research_topic": "Investigate EU AI Act implications for high-risk systems",
+            "perspective": "regulatory",
+            "evidence_needed": "legislative text, compliance frameworks",
+            "priority": 1
+        }
+    ],
+    "rationale": "Need regulatory coverage as identified in gap analysis"
+}
+```"""
+        think_output, delegation = SupervisionPhaseMixin._parse_combined_response(content)
+
+        assert think_output is not None
+        assert "regulatory coverage" in think_output
+        assert "EU AI Act" in think_output
+        assert delegation.research_complete is False
+        assert len(delegation.directives) == 1
+        assert "EU AI Act" in delegation.directives[0].research_topic
+
+    def test_parse_combined_response_no_gap_analysis(self):
+        """6.3: Combined response without gap_analysis tags still parses JSON."""
+        content = json.dumps({
+            "research_complete": True,
+            "directives": [],
+            "rationale": "All covered",
+        })
+        think_output, delegation = SupervisionPhaseMixin._parse_combined_response(content)
+
+        assert think_output is None
+        assert delegation.research_complete is True
+
+    def test_parse_combined_response_no_json(self):
+        """6.3: Combined response without JSON raises ValueError."""
+        content = """<gap_analysis>
+Some analysis here.
+</gap_analysis>
+
+No JSON in this response."""
+        with pytest.raises(ValueError, match="No JSON found"):
+            SupervisionPhaseMixin._parse_combined_response(content)
+
+    def test_extract_gap_analysis_section(self):
+        """Helper correctly extracts gap analysis from tags."""
+        content = "Preamble\n<gap_analysis>\nAnalysis text\n</gap_analysis>\nPostamble"
+        result = SupervisionPhaseMixin._extract_gap_analysis_section(content)
+        assert result == "Analysis text"
+
+    def test_extract_gap_analysis_section_missing(self):
+        """Helper returns None when no gap_analysis tags present."""
+        result = SupervisionPhaseMixin._extract_gap_analysis_section("No tags here")
+        assert result is None
+
+    def test_combined_prompt_includes_conversation_history(self):
+        """6.3: Combined user prompt includes prior conversation and coverage."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=2, sources_per_query=2, supervision_round=1)
+        state.supervision_messages = [
+            {
+                "role": "assistant", "type": "think", "round": 0,
+                "content": "Prior round gap analysis about safety.",
+            },
+        ]
+
+        coverage = stub._build_per_query_coverage(state)
+        prompt = stub._build_combined_think_delegate_user_prompt(state, coverage)
+
+        assert "Prior Supervisor Conversation" in prompt
+        assert "Prior round gap analysis about safety" in prompt
+        assert "Current Research Coverage" in prompt
+        assert "gap analysis inside <gap_analysis> tags" in prompt
+
+    @pytest.mark.asyncio
+    async def test_single_call_makes_one_llm_call(self):
+        """6.6: Single-call mode makes one LLM call instead of two separate
+        think + delegate calls, reducing latency."""
+        stub = StubSupervision(delegation_model=True)
+        stub.config.deep_research_topic_max_tool_calls = 5
+        stub.config.deep_research_providers = ["tavily"]
+        stub.config.deep_research_supervision_single_call = True
+
+        # Use supervision_round=0 with existing topic_research_results to
+        # avoid both first-round decomposition and the round>0 heuristic
+        # early exit (which always returns should_continue_gathering=False).
+        state = _make_state(
+            num_completed=2, num_pending=0, supervision_round=0,
+            max_supervision_rounds=1, sources_per_query=1,
+        )
+        state.research_brief = "Test research"
+        state.topic_research_results = [
+            TopicResearchResult(sub_query_id="sq-0", searches_performed=2, sources_found=2),
+        ]
+        state.max_sub_queries = 10
+
+        llm_calls: list[str] = []
+
+        combined_response = (
+            "<gap_analysis>\nAll topics well covered.\n</gap_analysis>\n\n"
+            + json.dumps({
+                "research_complete": True,
+                "directives": [],
+                "rationale": "Sufficient coverage across all dimensions",
+            })
+        )
+
+        async def mock_execute_llm_call(**kwargs):
+            phase_name = kwargs.get("phase_name", "")
+            llm_calls.append(phase_name)
+            result = MagicMock()
+            result.result = WorkflowResult(
+                success=True, content="Think output", tokens_used=50,
+            )
+            return result
+
+        async def mock_execute_structured_llm_call(**kwargs):
+            phase_name = kwargs.get("phase_name", "")
+            llm_calls.append(phase_name)
+
+            result = MagicMock()
+            result.result = WorkflowResult(
+                success=True, content=combined_response,
+                provider_id="test", model_used="test",
+                tokens_used=150, duration_ms=600.0,
+            )
+
+            # Parse the combined response
+            think_output, delegation = SupervisionPhaseMixin._parse_combined_response(
+                combined_response,
+            )
+            return StructuredLLMCallResult(
+                result=result.result, llm_call_duration_ms=0.0,
+                parsed=(think_output, delegation), parse_retries=0,
+            )
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+            side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+            side_effect=mock_execute_structured_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.truncate_supervision_messages",
+            side_effect=lambda messages, model: messages,
+        ):
+            result = await stub._execute_supervision_async(
+                state=state, provider_id="test", timeout=30.0,
+            )
+
+        assert result.success is True
+
+        # Should have made exactly one combined call (not separate think + delegate)
+        combined_calls = [c for c in llm_calls if "combined" in c]
+        think_calls = [c for c in llm_calls if c == "supervision_think"]
+        delegate_calls = [c for c in llm_calls if c == "supervision_delegate"]
+
+        assert len(combined_calls) == 1, f"Expected 1 combined call, got {len(combined_calls)}: {llm_calls}"
+        assert len(think_calls) == 0, f"Should not have separate think calls: {llm_calls}"
+        assert len(delegate_calls) == 0, f"Should not have separate delegate calls: {llm_calls}"
+
+    @pytest.mark.asyncio
+    async def test_single_call_injects_think_into_messages(self):
+        """6.3: Single-call mode still injects think output into
+        supervision_messages for conversation continuity."""
+        stub = StubSupervision(delegation_model=True)
+        stub.config.deep_research_topic_max_tool_calls = 5
+        stub.config.deep_research_providers = ["tavily"]
+        stub.config.deep_research_supervision_single_call = True
+
+        # Use supervision_round=0 with existing topic_research_results
+        state = _make_state(
+            num_completed=2, num_pending=0, supervision_round=0,
+            max_supervision_rounds=1, sources_per_query=1,
+        )
+        state.research_brief = "Test research"
+        state.topic_research_results = [
+            TopicResearchResult(sub_query_id="sq-0", searches_performed=2, sources_found=2),
+        ]
+        state.max_sub_queries = 10
+
+        combined_response = (
+            "<gap_analysis>\nRegulatory gap identified in EU coverage.\n</gap_analysis>\n\n"
+            + json.dumps({
+                "research_complete": True,
+                "directives": [],
+                "rationale": "Sufficient",
+            })
+        )
+
+        async def mock_execute_structured_llm_call(**kwargs):
+            result = MagicMock()
+            result.result = WorkflowResult(
+                success=True, content=combined_response,
+                provider_id="test", model_used="test",
+                tokens_used=150, duration_ms=600.0,
+            )
+            think_output, delegation = SupervisionPhaseMixin._parse_combined_response(
+                combined_response,
+            )
+            return StructuredLLMCallResult(
+                result=result.result, llm_call_duration_ms=0.0,
+                parsed=(think_output, delegation), parse_retries=0,
+            )
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+            side_effect=mock_execute_structured_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.truncate_supervision_messages",
+            side_effect=lambda messages, model: messages,
+        ):
+            result = await stub._execute_supervision_async(
+                state=state, provider_id="test", timeout=30.0,
+            )
+
+        assert result.success is True
+        think_msgs = [m for m in state.supervision_messages if m.get("type") == "think"]
+        assert len(think_msgs) >= 1
+        assert "Regulatory gap" in think_msgs[0]["content"]

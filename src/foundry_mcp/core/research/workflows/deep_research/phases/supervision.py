@@ -205,34 +205,70 @@ class SupervisionPhaseMixin:
                     state.supervision_round += 1
                     break
 
-            # --- Step 1: Think (gap analysis) ---
-            think_output = await self._supervision_think_step(
-                state, coverage_data, timeout,
+            # --- Steps 1+2: Think (gap analysis) + Delegate (directives) ---
+            # Phase 6: single-call mode merges think+delegate into one LLM
+            # call for lower latency. Two-call mode (default) keeps them
+            # separate but injects think into message history before delegate.
+            use_single_call = getattr(
+                self.config, "deep_research_supervision_single_call", False,
             )
+            is_first_round = self._is_first_round_decomposition(state)
 
-            # --- Step 2: Delegate (generate directives) ---
-            self._check_cancellation(state)
-            directives, research_complete, delegation_content = await self._supervision_delegate_step(
-                state, coverage_data, think_output, provider_id, timeout,
-            )
+            if use_single_call and not is_first_round:
+                # --- Single-call path (Phase 6, option 6.3) ---
+                (
+                    think_output, directives, research_complete, delegation_content,
+                ) = await self._supervision_combined_think_delegate_step(
+                    state, coverage_data, provider_id, timeout,
+                )
 
-            # --- Accumulate supervisor messages ---
-            # Capture think output as assistant message
-            if think_output:
-                state.supervision_messages.append({
-                    "role": "assistant",
-                    "type": "think",
-                    "round": state.supervision_round,
-                    "content": think_output,
-                })
-            # Capture delegation response as assistant message
-            if delegation_content:
-                state.supervision_messages.append({
-                    "role": "assistant",
-                    "type": "delegation",
-                    "round": state.supervision_round,
-                    "content": delegation_content,
-                })
+                # Inject think and delegation into conversation
+                if think_output:
+                    state.supervision_messages.append({
+                        "role": "assistant",
+                        "type": "think",
+                        "round": state.supervision_round,
+                        "content": think_output,
+                    })
+                if delegation_content:
+                    state.supervision_messages.append({
+                        "role": "assistant",
+                        "type": "delegation",
+                        "round": state.supervision_round,
+                        "content": delegation_content,
+                    })
+            else:
+                # --- Two-call path (Phase 6, option 6.4 — default) ---
+                think_output = await self._supervision_think_step(
+                    state, coverage_data, timeout,
+                )
+
+                # Inject think into conversation BEFORE delegation so the
+                # delegation LLM sees the supervisor's gap reasoning as part
+                # of the accumulated conversation.
+                if think_output:
+                    state.supervision_messages.append({
+                        "role": "assistant",
+                        "type": "think",
+                        "round": state.supervision_round,
+                        "content": think_output,
+                    })
+
+                self._check_cancellation(state)
+                directives, research_complete, delegation_content = (
+                    await self._supervision_delegate_step(
+                        state, coverage_data, think_output, provider_id, timeout,
+                    )
+                )
+
+                # Capture delegation response as assistant message
+                if delegation_content:
+                    state.supervision_messages.append({
+                        "role": "assistant",
+                        "type": "delegation",
+                        "round": state.supervision_round,
+                        "content": delegation_content,
+                    })
 
             # Check for ResearchComplete signal
             if research_complete:
@@ -300,6 +336,15 @@ class SupervisionPhaseMixin:
                 post_think_output = await self._supervision_think_step(
                     state, post_coverage_data, timeout,
                 )
+                # Phase 6: Post-execution assessment flows into conversation
+                # history so the next round's delegation sees what was learned.
+                if post_think_output:
+                    state.supervision_messages.append({
+                        "role": "assistant",
+                        "type": "think",
+                        "round": state.supervision_round,
+                        "content": post_think_output,
+                    })
 
             # --- Step 5: Record history and advance round ---
             history = state.metadata.setdefault("supervision_history", [])
@@ -540,6 +585,263 @@ class SupervisionPhaseMixin:
         # Return raw LLM response content for message accumulation
         raw_content = call_result.result.content
         return directives, research_complete, raw_content
+
+    async def _supervision_combined_think_delegate_step(
+        self,
+        state: DeepResearchState,
+        coverage_data: list[dict[str, Any]],
+        provider_id: Optional[str],
+        timeout: float,
+    ) -> tuple[Optional[str], list[ResearchDirective], bool, Optional[str]]:
+        """Combined think+delegate in a single LLM call (Phase 6).
+
+        Merges gap analysis and directive generation into one conversation
+        turn, reducing latency while keeping the think output as an
+        explicit section in the response. The LLM first reasons about gaps,
+        then produces structured JSON directives.
+
+        This is the single-call alternative to the two-step think → delegate
+        flow. Enable via ``deep_research_supervision_single_call`` config.
+
+        Args:
+            state: Current research state
+            coverage_data: Per-sub-query coverage data
+            provider_id: LLM provider to use
+            timeout: Request timeout
+
+        Returns:
+            Tuple of (think_output, directives, research_complete, raw_content)
+        """
+        system_prompt = self._build_combined_think_delegate_system_prompt()
+        user_prompt = self._build_combined_think_delegate_user_prompt(
+            state, coverage_data,
+        )
+
+        call_result = await execute_structured_llm_call(
+            workflow=self,
+            state=state,
+            phase_name="supervision_combined_think_delegate",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            provider_id=provider_id or state.supervision_provider,
+            model=state.supervision_model,
+            temperature=0.3,
+            timeout=timeout,
+            parse_fn=self._parse_combined_response,
+            role="delegation",
+        )
+
+        if isinstance(call_result, WorkflowResult):
+            logger.warning(
+                "Combined think+delegate call failed: %s",
+                call_result.error,
+            )
+            return None, [], False, None
+
+        raw_content = call_result.result.content or ""
+
+        if call_result.parsed is not None:
+            think_output, delegation = call_result.parsed
+            research_complete = delegation.research_complete
+            directives = self._apply_directive_caps(delegation.directives, state)
+        else:
+            # Parse failed — extract what we can
+            logger.warning(
+                "Combined response parse failed, attempting fallback extraction",
+            )
+            think_output = self._extract_gap_analysis_section(raw_content)
+            directives, research_complete = self._parse_delegation_response(
+                raw_content, state,
+            )
+
+        self._write_audit_event(
+            state,
+            "supervision_combined_think_delegate",
+            data={
+                "provider_id": call_result.result.provider_id,
+                "model_used": call_result.result.model_used,
+                "tokens_used": call_result.result.tokens_used,
+                "directives_generated": len(directives),
+                "research_complete": research_complete,
+                "has_think_output": think_output is not None,
+                "structured_parse": call_result.parsed is not None,
+                "parse_retries": call_result.parse_retries,
+            },
+        )
+
+        return think_output, directives, research_complete, raw_content
+
+    def _build_combined_think_delegate_system_prompt(self) -> str:
+        """Build system prompt for the combined think+delegate step."""
+        return """You are a research lead. Your task has two parts:
+
+**Part 1 — Gap Analysis:** Analyze the research coverage and identify specific information gaps. Articulate:
+- What was found per sub-query
+- What domains and perspectives are represented
+- What specific information gaps exist
+- What types of sources or angles would fill those gaps
+
+**Part 2 — Directive Generation:** Based on your gap analysis, generate research directives targeting the identified gaps.
+
+Your response MUST follow this exact format:
+
+<gap_analysis>
+[Your detailed gap analysis here — plain text with section headings]
+</gap_analysis>
+
+```json
+{
+    "research_complete": false,
+    "directives": [
+        {
+            "research_topic": "Detailed paragraph-length description of what to investigate...",
+            "perspective": "What angle or perspective to approach from",
+            "evidence_needed": "What specific evidence, data, or sources to seek",
+            "priority": 1
+        }
+    ],
+    "rationale": "Why these directives were chosen, referencing your gap analysis"
+}
+```
+
+Guidelines:
+- Set "research_complete" to true ONLY when existing coverage is sufficient across all dimensions
+- Each directive's "research_topic" MUST be a detailed paragraph (2-4 sentences)
+- "priority": 1=critical gap, 2=important, 3=nice-to-have
+- Maximum 5 directives per round
+- Do NOT duplicate research already covered
+- Your directives MUST directly address gaps from your analysis — do not generate unrelated directives
+- The gap_analysis section MUST come FIRST, before the JSON"""
+
+    def _build_combined_think_delegate_user_prompt(
+        self,
+        state: DeepResearchState,
+        coverage_data: list[dict[str, Any]],
+    ) -> str:
+        """Build user prompt for the combined think+delegate step."""
+        parts = [
+            f"# Research Query\n{state.original_query}",
+            "",
+        ]
+
+        if state.research_brief and state.research_brief != state.original_query:
+            parts.extend([
+                "## Research Brief",
+                state.research_brief,
+                "",
+            ])
+
+        parts.extend([
+            "## Research Status",
+            f"- Iteration: {state.iteration}/{state.max_iterations}",
+            f"- Supervision round: {state.supervision_round + 1}/{state.max_supervision_rounds}",
+            f"- Completed sub-queries: {len(state.completed_sub_queries())}",
+            f"- Total sources: {len(state.sources)}",
+            "",
+        ])
+
+        # Prior supervisor conversation
+        if state.supervision_messages:
+            parts.append("## Prior Supervisor Conversation")
+            parts.append(
+                "Below is your conversation history from previous rounds. "
+                "Reference your prior reasoning and research findings."
+            )
+            parts.append("")
+            for msg in state.supervision_messages:
+                msg_round = msg.get("round", "?")
+                msg_type = msg.get("type", "unknown")
+                msg_content = msg.get("content", "")
+                if msg.get("role") == "assistant" and msg_type == "think":
+                    parts.append(f"### [Round {msg_round}] Your Gap Analysis")
+                    parts.append(msg_content)
+                    parts.append("")
+                elif msg.get("role") == "assistant" and msg_type == "delegation":
+                    parts.append(f"### [Round {msg_round}] Your Delegation Response")
+                    parts.append(msg_content)
+                    parts.append("")
+                elif msg.get("role") == "tool_result":
+                    directive_id = msg.get("directive_id", "unknown")
+                    parts.append(f"### [Round {msg_round}] Research Findings (directive {directive_id})")
+                    parts.append(msg_content)
+                    parts.append("")
+            parts.append("---")
+            parts.append("")
+
+        # Per-query coverage
+        if coverage_data:
+            parts.append("## Current Research Coverage")
+            for entry in coverage_data:
+                parts.append(f"\n### {entry['query']}")
+                parts.append(f"**Sources:** {entry['source_count']} | **Domains:** {entry['unique_domains']}")
+                if entry.get("compressed_findings_excerpt"):
+                    parts.append(f"**Key findings:**\n{entry['compressed_findings_excerpt']}")
+                elif entry.get("findings_summary"):
+                    parts.append(f"**Summary:** {entry['findings_summary']}")
+            parts.append("")
+
+        # Previously executed directives
+        if state.directives:
+            parts.append("## Previously Executed Directives (DO NOT repeat)")
+            for d in state.directives[-10:]:
+                parts.append(f"- [P{d.priority}] {d.research_topic[:120]}")
+            parts.append("")
+
+        parts.extend([
+            "## Instructions",
+            "1. First, write your gap analysis inside <gap_analysis> tags",
+            "2. Then, if coverage is sufficient, return JSON with research_complete=true",
+            "3. Otherwise, generate 1-5 detailed research directives as JSON",
+            "4. Your directives must directly address gaps from your analysis",
+            "",
+        ])
+
+        return "\n".join(parts)
+
+    @staticmethod
+    def _parse_combined_response(content: str) -> tuple[Optional[str], DelegationResponse]:
+        """Parse a combined think+delegate response.
+
+        Extracts the gap analysis from ``<gap_analysis>`` tags and the JSON
+        directive payload from the remainder.
+
+        Args:
+            content: Raw LLM response with gap_analysis + JSON
+
+        Returns:
+            Tuple of (gap_analysis_text, DelegationResponse)
+
+        Raises:
+            ValueError: If JSON cannot be parsed
+        """
+        import re
+
+        # Extract gap analysis
+        gap_match = re.search(
+            r"<gap_analysis>\s*(.*?)\s*</gap_analysis>",
+            content,
+            re.DOTALL,
+        )
+        think_output = gap_match.group(1).strip() if gap_match else None
+
+        # Extract JSON (after gap_analysis section or anywhere in content)
+        json_str = extract_json(content)
+        if not json_str:
+            raise ValueError("No JSON found in combined response")
+
+        delegation = parse_delegation_response(json_str)
+        return think_output, delegation
+
+    @staticmethod
+    def _extract_gap_analysis_section(content: str) -> Optional[str]:
+        """Extract gap analysis from <gap_analysis> tags (fallback helper)."""
+        import re
+        match = re.search(
+            r"<gap_analysis>\s*(.*?)\s*</gap_analysis>",
+            content,
+            re.DOTALL,
+        )
+        return match.group(1).strip() if match else None
 
     async def _execute_directives_async(
         self,
@@ -805,19 +1107,37 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                     parts.append(f"**Summary:** {entry['findings_summary']}")
             parts.append("")
 
-        # Gap analysis from think step
+        # Gap analysis reference — the full think output is already in the
+        # "Prior Supervisor Conversation" section above (Phase 6: think flows
+        # through message history).  We include a lightweight instruction
+        # rather than duplicating the full analysis text.
         if think_output:
-            parts.extend([
-                "## Gap Analysis",
-                "",
-                "<gap_analysis>",
-                think_output.strip(),
-                "</gap_analysis>",
-                "",
-                "Generate research directives that DIRECTLY address the gaps identified above.",
-                "Each directive should target a specific gap with a detailed research plan.",
-                "",
-            ])
+            if state.supervision_messages:
+                parts.extend([
+                    "## Gap Analysis",
+                    "",
+                    "Your gap analysis from this round is in the conversation "
+                    "history above. Generate research directives that DIRECTLY "
+                    "address the gaps you identified.",
+                    "Each directive should target a specific gap with a detailed "
+                    "research plan.",
+                    "",
+                ])
+            else:
+                # Fallback: no conversation history (shouldn't happen, but safe)
+                parts.extend([
+                    "## Gap Analysis",
+                    "",
+                    "<gap_analysis>",
+                    think_output.strip(),
+                    "</gap_analysis>",
+                    "",
+                    "Generate research directives that DIRECTLY address the gaps "
+                    "identified above.",
+                    "Each directive should target a specific gap with a detailed "
+                    "research plan.",
+                    "",
+                ])
 
         # Previously executed directives (to avoid repetition)
         if state.directives:

@@ -48,9 +48,9 @@
 - [x] 5.4 Test: researcher stops after 2 overlapping searches
 
 ## Phase 6 — Supervisor think_tool as Conversation
-- [ ] 6.1 After think phase, inject gap analysis as assistant message in `supervision_messages` (depends on Phase 1)
-- [ ] 6.2 Evaluate single-call approach: system prompt + history + "analyze gaps then generate directives" — compare quality vs two-call
-- [ ] 6.3 If single-call quality matches: merge think + delegate into one LLM call
-- [ ] 6.4 If single-call quality worse: keep two calls but ensure think output flows through message history
-- [ ] 6.5 Test: supervisor references prior gap analysis in delegation rationale
-- [ ] 6.6 Test: latency reduction measured if single-call adopted
+- [x] 6.1 After think phase, inject gap analysis as assistant message in `supervision_messages` (depends on Phase 1)
+- [x] 6.2 Evaluate single-call approach: system prompt + history + "analyze gaps then generate directives" — compare quality vs two-call
+- [x] 6.3 If single-call quality matches: merge think + delegate into one LLM call
+- [x] 6.4 If single-call quality worse: keep two calls but ensure think output flows through message history
+- [x] 6.5 Test: supervisor references prior gap analysis in delegation rationale
+- [x] 6.6 Test: latency reduction measured if single-call adopted
