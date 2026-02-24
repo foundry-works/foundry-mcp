@@ -191,6 +191,7 @@ class TopicResearchMixin:
                 iteration=iteration + 1,
                 max_iterations=max_searches,
                 state=state,
+                sub_query=sub_query,
             )
             local_tokens_used += reflection.get("tokens_used", 0)
 
@@ -547,6 +548,7 @@ class TopicResearchMixin:
         iteration: int,
         max_iterations: int,
         state: DeepResearchState,
+        sub_query: "SubQuery | None" = None,
     ) -> dict[str, Any]:
         """Mandatory LLM reflection on topic search results.
 
@@ -554,6 +556,17 @@ class TopicResearchMixin:
         and produce a structured decision about next steps. The response
         includes the raw LLM text (``raw_response``) for structured
         parsing via ``parse_reflection_decision()``.
+
+        Args:
+            original_query: The original sub-topic query.
+            current_query: The current (possibly refined) search query.
+            sources_found: Total source count for this topic.
+            iteration: Current iteration number (1-indexed).
+            max_iterations: Maximum iterations allowed.
+            state: Current research state (for source access).
+            sub_query: The SubQuery being researched (for per-topic source
+                retrieval). When provided, source summaries are included
+                in the reflection context.
 
         Returns:
             Dict with keys: assessment (str), raw_response (str),
@@ -595,6 +608,12 @@ class TopicResearchMixin:
                 except Exception:
                     pass
         domain_count = len(distinct_domains)
+
+        # Build per-source summaries for this topic so the researcher LLM
+        # can reason about actual content, not just metadata counts.
+        source_context = self._format_topic_sources_for_reflection(
+            state, sub_query
+        )
 
         system_prompt = (
             "You are a research assistant evaluating search results for a specific sub-topic. "
@@ -643,8 +662,12 @@ class TopicResearchMixin:
             f"Sources found so far: {sources_found}\n"
             f"Distinct source domains: {domain_count}\n"
             f"Source quality distribution: {quality_summary}\n"
-            f"Search iteration: {iteration}/{max_iterations}\n\n"
-            "Assess the research progress for this sub-topic and decide the next action."
+            f"Search iteration: {iteration}/{max_iterations}\n"
+        )
+        if source_context:
+            user_prompt += f"\n{source_context}\n"
+        user_prompt += (
+            "\nAssess the research progress for this sub-topic and decide the next action."
         )
 
         try:
@@ -703,6 +726,62 @@ class TopicResearchMixin:
             }),
             "tokens_used": 0,
         }
+
+    # ------------------------------------------------------------------
+    # Source formatting for reflection context
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _format_topic_sources_for_reflection(
+        state: DeepResearchState,
+        sub_query: "SubQuery | None",
+    ) -> str:
+        """Format this topic's sources for the reflection LLM context.
+
+        Produces a ``--- SOURCE N: title ---`` block for each source
+        belonging to the sub-query, using the summarized content when
+        available (``metadata["summarized"]=True``), falling back to
+        snippet or truncated content.
+
+        Args:
+            state: Current research state (contains all sources).
+            sub_query: The sub-query being researched.  When ``None``,
+                returns an empty string.
+
+        Returns:
+            Formatted source listing string, or empty string if no
+            sources are available.
+        """
+        if sub_query is None:
+            return ""
+
+        topic_source_ids = set(sub_query.source_ids)
+        if not topic_source_ids:
+            return ""
+
+        topic_sources = [s for s in state.sources if s.id in topic_source_ids]
+        if not topic_sources:
+            return ""
+
+        lines: list[str] = ["Sources found for this topic:"]
+        for idx, src in enumerate(topic_sources, 1):
+            lines.append(f"\n--- SOURCE {idx}: {src.title} ---")
+            if src.url:
+                lines.append(f"URL: {src.url}")
+
+            # Prefer summarized content, fall back to snippet/truncated raw
+            if src.metadata.get("summarized") and src.content:
+                lines.append(f"\nSUMMARY:\n{src.content}")
+            elif src.snippet:
+                lines.append(f"\nSNIPPET:\n{src.snippet}")
+            elif src.content:
+                # Truncate long raw content for reflection context
+                truncated = src.content[:500]
+                if len(src.content) > 500:
+                    truncated += "..."
+                lines.append(f"\nCONTENT:\n{truncated}")
+
+        return "\n".join(lines)
 
     # ------------------------------------------------------------------
     # Cost-aware early-exit heuristic

@@ -263,10 +263,13 @@ class GatheringPhaseMixin(CompressionMixin):
         max_concurrent = getattr(self.config, "deep_research_max_concurrent", 3)
         max_content_length = getattr(self.config, "deep_research_max_content_length", 50000)
 
+        summarization_timeout = float(
+            getattr(self.config, "deep_research_summarization_timeout", 60)
+        )
         provider._source_summarizer = SourceSummarizer(
             provider_id=summarization_provider,
             model=summarization_model,
-            timeout=60.0,
+            timeout=summarization_timeout,
             max_concurrent=max_concurrent,
             max_content_length=max_content_length,
         )

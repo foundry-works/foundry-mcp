@@ -7,7 +7,7 @@
 
 ## Phase 1: Per-Result Summarization at Search Time
 
-- [ ] **1.1** Update `SourceSummarizer` prompt in `providers/shared.py`
+- [x] **1.1** Update `SourceSummarizer` prompt in `providers/shared.py`
   - Adapt from open_deep_research's `summarize_webpage_prompt` (prompts.py:311-367)
   - Structured output: `{"summary": str, "key_excerpts": list[str]}` (max 5 excerpts)
   - Content-type-aware guidance:
@@ -18,22 +18,22 @@
   - Target length: ~25-30% of original (unless already concise)
   - Preserve: key facts, statistics, data points, important quotes, dates, names, locations
   - Maintain chronological order for time-sensitive content
-- [ ] **1.2** Add 60-second per-result summarization timeout
+- [x] **1.2** Add 60-second per-result summarization timeout
   - Wrap each `SourceSummarizer` call with `asyncio.wait_for(timeout=60)`
   - On timeout: log warning, return original content unmodified
   - On any exception: log warning, return original content (non-fatal)
-- [ ] **1.3** Update `TavilySearchProvider._apply_source_summarization()`
+- [x] **1.3** Update `TavilySearchProvider._apply_source_summarization()`
   - Ensure parallel summarization via `asyncio.gather()` for all results
   - Deduplication by URL *before* summarization (no wasted calls)
   - Format output: `<summary>...</summary>\n\n<key_excerpts>...</key_excerpts>`
   - Preserve raw content in `ResearchSource.raw_content` field
   - Set `metadata["summarized"] = True` on summarized sources
   - Set `metadata["excerpts"]` with list of key excerpt strings
-- [ ] **1.4** Make fetch-time summarization the default for topic research
+- [x] **1.4** Make fetch-time summarization the default for topic research
   - Verify `deep_research_fetch_time_summarization: bool = True` is active default
   - Ensure `_apply_source_summarization()` is called in the topic research search path
   - Confirm summarization uses cheapest model tier (summarization role in provider hierarchy)
-- [ ] **1.5** Update researcher result formatting in `topic_research.py`
+- [x] **1.5** Update researcher result formatting in `topic_research.py`
   - Present search results to researcher LLM in structured format:
     ```
     --- SOURCE N: {title} ---
@@ -46,10 +46,10 @@
     ```
   - When source is summarized (`metadata["summarized"]=True`): use formatted summary
   - When not summarized: fall back to `snippet` or truncated `content`
-- [ ] **1.6** Add config field: `deep_research_summarization_timeout: int = 60`
+- [x] **1.6** Add config field: `deep_research_summarization_timeout: int = 60`
   - Per-result timeout in seconds
   - Add `from_toml_dict()` parsing
-- [ ] **1.7** Add tests for per-result summarization
+- [x] **1.7** Add tests for per-result summarization
   - Test: search results are summarized before researcher sees them
   - Test: summarization runs in parallel (mock confirms concurrent calls)
   - Test: 60-second timeout triggers raw-content fallback

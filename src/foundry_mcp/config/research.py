@@ -137,6 +137,7 @@ class ResearchConfig:
     deep_research_summarization_provider: Optional[str] = None  # LLM provider for fetch-time summarization (cheapest available)
     deep_research_summarization_model: Optional[str] = None  # Model override for fetch-time summarization
     deep_research_max_content_length: int = 50000  # Max chars per source before L1 summarization (matches open_deep_research)
+    deep_research_summarization_timeout: int = 60  # Per-result summarization timeout in seconds
 
     # Inline per-topic compression during gathering (Phase 2 PLAN)
     deep_research_inline_compression: bool = True  # Compress each topic's findings immediately after its ReAct loop (before supervision)
@@ -404,6 +405,7 @@ class ResearchConfig:
             deep_research_summarization_provider=data.get("deep_research_summarization_provider"),
             deep_research_summarization_model=data.get("deep_research_summarization_model"),
             deep_research_max_content_length=int(data.get("deep_research_max_content_length", 50000)),
+            deep_research_summarization_timeout=int(data.get("deep_research_summarization_timeout", 60)),
             # Inline per-topic compression during gathering
             deep_research_inline_compression=_parse_bool(data.get("deep_research_inline_compression", True)),
             # Per-topic compression (Phase 3)

@@ -140,27 +140,59 @@ class TestResearchSourceRawContent:
 class TestParseSummaryResponse:
     """Tests for SourceSummarizer response parsing."""
 
-    def test_parse_well_formatted_response(self):
-        """Parse a response with both Executive Summary and Key Excerpts sections."""
+    def test_parse_json_response(self):
+        """Parse a JSON response with summary + key_excerpts fields."""
+        import json
+
+        response = json.dumps({
+            "summary": "This article discusses the impact of AI on healthcare.",
+            "key_excerpts": [
+                "AI is transforming healthcare",
+                "Machine learning models can predict outcomes",
+                "Deep learning enables new applications",
+            ],
+        })
+        summary, excerpts = SourceSummarizer._parse_summary_response(response)
+        assert "impact of AI" in summary
+        assert len(excerpts) == 3
+        assert "AI is transforming healthcare" in excerpts[0]
+
+    def test_parse_json_with_code_fences(self):
+        """Parse JSON wrapped in markdown code fences."""
+        response = (
+            '```json\n'
+            '{"summary": "AI is changing the world.", '
+            '"key_excerpts": ["Quote one", "Quote two"]}\n'
+            '```'
+        )
+        summary, excerpts = SourceSummarizer._parse_summary_response(response)
+        assert "AI is changing the world" in summary
+        assert len(excerpts) == 2
+
+    def test_parse_json_max_five_excerpts(self):
+        """Parser limits to 5 excerpts even if more are provided in JSON."""
+        import json
+
+        response = json.dumps({
+            "summary": "Summary text.",
+            "key_excerpts": [f"Excerpt number {i}" for i in range(10)],
+        })
+        _, excerpts = SourceSummarizer._parse_summary_response(response)
+        assert len(excerpts) == 5
+
+    def test_parse_markdown_fallback(self):
+        """Falls back to markdown parsing when JSON parsing fails."""
         response = (
             "## Executive Summary\n"
             "This article discusses the impact of AI.\n\n"
             "## Key Excerpts\n"
             '- "AI is transforming healthcare"\n'
             '- "Machine learning models can predict outcomes"\n'
-            '- "Deep learning enables new applications"\n'
         )
         summary, excerpts = SourceSummarizer._parse_summary_response(response)
         assert "impact of AI" in summary
-        assert len(excerpts) == 3
+        assert len(excerpts) == 2
         assert "AI is transforming healthcare" in excerpts[0]
-
-    def test_parse_max_five_excerpts(self):
-        """Parser limits to 5 excerpts even if more are provided."""
-        lines = [f'- "Excerpt number {i}"' for i in range(10)]
-        response = "## Executive Summary\nSummary text.\n\n## Key Excerpts\n" + "\n".join(lines)
-        _, excerpts = SourceSummarizer._parse_summary_response(response)
-        assert len(excerpts) == 5
 
     def test_parse_no_sections(self):
         """Falls back to entire response as summary when no sections found."""
@@ -193,26 +225,44 @@ class TestParseSummaryResponse:
         _, excerpts = SourceSummarizer._parse_summary_response(response)
         assert len(excerpts) == 3
 
+    def test_parse_json_empty_excerpts(self):
+        """JSON response with empty key_excerpts list."""
+        import json
+
+        response = json.dumps({"summary": "Just a summary.", "key_excerpts": []})
+        summary, excerpts = SourceSummarizer._parse_summary_response(response)
+        assert summary == "Just a summary."
+        assert excerpts == []
+
+    def test_parse_json_missing_excerpts_field(self):
+        """JSON response without key_excerpts field defaults to empty list."""
+        import json
+
+        response = json.dumps({"summary": "Only summary."})
+        summary, excerpts = SourceSummarizer._parse_summary_response(response)
+        assert summary == "Only summary."
+        assert excerpts == []
+
 
 class TestFormatSummarizedContent:
     """Tests for SourceSummarizer.format_summarized_content."""
 
     def test_format_with_excerpts(self):
-        """Formats summary + excerpts into structured content."""
+        """Formats summary + excerpts into structured content with tags."""
         result = SourceSummarizer.format_summarized_content(
             "This is the summary.",
             ["Quote one", "Quote two"],
         )
-        assert "This is the summary." in result
-        assert "**Key Excerpts:**" in result
+        assert "<summary>This is the summary.</summary>" in result
+        assert "<key_excerpts>" in result
         assert '"Quote one"' in result
         assert '"Quote two"' in result
 
     def test_format_without_excerpts(self):
-        """Formats summary without excerpts section when list is empty."""
+        """Formats summary without key_excerpts tag when list is empty."""
         result = SourceSummarizer.format_summarized_content("Just a summary.", [])
-        assert result == "Just a summary."
-        assert "Key Excerpts" not in result
+        assert result == "<summary>Just a summary.</summary>"
+        assert "key_excerpts" not in result
 
 
 # ---------------------------------------------------------------------------
@@ -664,3 +714,246 @@ class TestTavilySourceSummarization:
 
         assert len(sources) == 1
         assert sources[0].raw_content is None  # No summarization applied
+
+
+# ---------------------------------------------------------------------------
+# Summarization timeout config tests
+# ---------------------------------------------------------------------------
+
+
+class TestSummarizationTimeoutConfig:
+    """Tests for deep_research_summarization_timeout config field."""
+
+    def test_config_default_sixty(self):
+        """deep_research_summarization_timeout defaults to 60."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        config = ResearchConfig()
+        assert config.deep_research_summarization_timeout == 60
+
+    def test_config_explicit_value(self):
+        """deep_research_summarization_timeout can be set explicitly."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        config = ResearchConfig(deep_research_summarization_timeout=30)
+        assert config.deep_research_summarization_timeout == 30
+
+    def test_config_from_toml(self):
+        """deep_research_summarization_timeout is parsed from TOML config."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        config = ResearchConfig.from_toml_dict({"deep_research_summarization_timeout": 90})
+        assert config.deep_research_summarization_timeout == 90
+
+    def test_config_from_toml_default(self):
+        """deep_research_summarization_timeout uses default when absent from TOML."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        config = ResearchConfig.from_toml_dict({})
+        assert config.deep_research_summarization_timeout == 60
+
+
+# ---------------------------------------------------------------------------
+# Source formatting for reflection context tests
+# ---------------------------------------------------------------------------
+
+
+class TestFormatTopicSourcesForReflection:
+    """Tests for _format_topic_sources_for_reflection in TopicResearchMixin."""
+
+    def _make_source(
+        self,
+        source_id: str,
+        title: str,
+        url: str = "https://example.com",
+        content: str | None = None,
+        snippet: str | None = None,
+        summarized: bool = False,
+    ) -> ResearchSource:
+        source = ResearchSource(
+            id=source_id,
+            title=title,
+            url=url,
+            content=content,
+            snippet=snippet,
+        )
+        if summarized:
+            source.metadata["summarized"] = True
+        return source
+
+    def test_returns_empty_when_no_sub_query(self):
+        """Returns empty string when sub_query is None."""
+        from foundry_mcp.core.research.models.deep_research import (
+            DeepResearchState,
+        )
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            TopicResearchMixin,
+        )
+
+        state = DeepResearchState(
+            id="test", original_query="test", phase="gathering",
+            iteration=1, max_iterations=1, max_sources_per_query=5,
+        )
+        result = TopicResearchMixin._format_topic_sources_for_reflection(state, None)
+        assert result == ""
+
+    def test_returns_empty_when_no_source_ids(self):
+        """Returns empty string when sub_query has no source_ids."""
+        from foundry_mcp.core.research.models.deep_research import (
+            DeepResearchState,
+        )
+        from foundry_mcp.core.research.models.sources import SubQuery
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            TopicResearchMixin,
+        )
+
+        state = DeepResearchState(
+            id="test", original_query="test", phase="gathering",
+            iteration=1, max_iterations=1, max_sources_per_query=5,
+        )
+        sq = SubQuery(id="sq-1", query="test", rationale="r", priority=1)
+        result = TopicResearchMixin._format_topic_sources_for_reflection(state, sq)
+        assert result == ""
+
+    def test_formats_summarized_source(self):
+        """Summarized sources use SUMMARY section with content."""
+        from foundry_mcp.core.research.models.deep_research import (
+            DeepResearchState,
+        )
+        from foundry_mcp.core.research.models.sources import SubQuery
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            TopicResearchMixin,
+        )
+
+        state = DeepResearchState(
+            id="test", original_query="test", phase="gathering",
+            iteration=1, max_iterations=1, max_sources_per_query=5,
+        )
+        source = self._make_source(
+            "src-1", "AI Article", "https://example.com/ai",
+            content="<summary>AI is transforming healthcare.</summary>",
+            summarized=True,
+        )
+        state.sources.append(source)
+        sq = SubQuery(id="sq-1", query="test", rationale="r", priority=1)
+        sq.source_ids.append("src-1")
+
+        result = TopicResearchMixin._format_topic_sources_for_reflection(state, sq)
+        assert "--- SOURCE 1: AI Article ---" in result
+        assert "URL: https://example.com/ai" in result
+        assert "SUMMARY:" in result
+        assert "<summary>AI is transforming healthcare.</summary>" in result
+
+    def test_formats_unsummarized_source_with_snippet(self):
+        """Non-summarized sources use SNIPPET section."""
+        from foundry_mcp.core.research.models.deep_research import (
+            DeepResearchState,
+        )
+        from foundry_mcp.core.research.models.sources import SubQuery
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            TopicResearchMixin,
+        )
+
+        state = DeepResearchState(
+            id="test", original_query="test", phase="gathering",
+            iteration=1, max_iterations=1, max_sources_per_query=5,
+        )
+        source = self._make_source(
+            "src-2", "Basic Article", snippet="A brief snippet about ML.",
+        )
+        state.sources.append(source)
+        sq = SubQuery(id="sq-2", query="test", rationale="r", priority=1)
+        sq.source_ids.append("src-2")
+
+        result = TopicResearchMixin._format_topic_sources_for_reflection(state, sq)
+        assert "--- SOURCE 1: Basic Article ---" in result
+        assert "SNIPPET:" in result
+        assert "A brief snippet about ML." in result
+
+    def test_truncates_long_raw_content(self):
+        """Raw content is truncated to 500 chars with ellipsis."""
+        from foundry_mcp.core.research.models.deep_research import (
+            DeepResearchState,
+        )
+        from foundry_mcp.core.research.models.sources import SubQuery
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            TopicResearchMixin,
+        )
+
+        state = DeepResearchState(
+            id="test", original_query="test", phase="gathering",
+            iteration=1, max_iterations=1, max_sources_per_query=5,
+        )
+        long_content = "A" * 1000
+        source = self._make_source("src-3", "Long Article", content=long_content)
+        state.sources.append(source)
+        sq = SubQuery(id="sq-3", query="test", rationale="r", priority=1)
+        sq.source_ids.append("src-3")
+
+        result = TopicResearchMixin._format_topic_sources_for_reflection(state, sq)
+        assert "CONTENT:" in result
+        assert "..." in result
+        # Should not contain the full 1000-char string
+        assert "A" * 1000 not in result
+
+    def test_formats_multiple_sources(self):
+        """Multiple sources are numbered sequentially."""
+        from foundry_mcp.core.research.models.deep_research import (
+            DeepResearchState,
+        )
+        from foundry_mcp.core.research.models.sources import SubQuery
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            TopicResearchMixin,
+        )
+
+        state = DeepResearchState(
+            id="test", original_query="test", phase="gathering",
+            iteration=1, max_iterations=1, max_sources_per_query=5,
+        )
+        for i in range(3):
+            src = self._make_source(
+                f"src-{i}", f"Source {i}",
+                content=f"<summary>Summary {i}</summary>",
+                summarized=True,
+            )
+            state.sources.append(src)
+
+        sq = SubQuery(id="sq-m", query="test", rationale="r", priority=1)
+        sq.source_ids.extend(["src-0", "src-1", "src-2"])
+
+        result = TopicResearchMixin._format_topic_sources_for_reflection(state, sq)
+        assert "--- SOURCE 1: Source 0 ---" in result
+        assert "--- SOURCE 2: Source 1 ---" in result
+        assert "--- SOURCE 3: Source 2 ---" in result
+
+
+# ---------------------------------------------------------------------------
+# Prompt content tests
+# ---------------------------------------------------------------------------
+
+
+class TestSummarizationPromptContent:
+    """Tests that the summarization prompt includes content-type-aware guidance."""
+
+    def test_prompt_includes_json_instruction(self):
+        """Prompt instructs LLM to produce JSON with summary + key_excerpts."""
+        from foundry_mcp.core.research.providers.shared import _SOURCE_SUMMARIZATION_PROMPT
+
+        assert '"summary"' in _SOURCE_SUMMARIZATION_PROMPT
+        assert '"key_excerpts"' in _SOURCE_SUMMARIZATION_PROMPT
+        assert "JSON" in _SOURCE_SUMMARIZATION_PROMPT
+
+    def test_prompt_includes_content_type_guidance(self):
+        """Prompt includes guidance for news, scientific, opinion, product content."""
+        from foundry_mcp.core.research.providers.shared import _SOURCE_SUMMARIZATION_PROMPT
+
+        assert "News articles" in _SOURCE_SUMMARIZATION_PROMPT
+        assert "Scientific" in _SOURCE_SUMMARIZATION_PROMPT
+        assert "Opinion" in _SOURCE_SUMMARIZATION_PROMPT
+        assert "Product" in _SOURCE_SUMMARIZATION_PROMPT
+
+    def test_prompt_includes_target_length(self):
+        """Prompt specifies 25-30% target length."""
+        from foundry_mcp.core.research.providers.shared import _SOURCE_SUMMARIZATION_PROMPT
+
+        assert "25-30%" in _SOURCE_SUMMARIZATION_PROMPT

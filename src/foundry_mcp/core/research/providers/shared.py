@@ -668,16 +668,34 @@ def resolve_provider_settings(
 # ---------------------------------------------------------------------------
 
 _SOURCE_SUMMARIZATION_PROMPT = """\
-You are a research assistant. Summarize the following web page content for a \
-research report. Produce TWO sections:
+You are a research assistant. Summarize the following web page content for \
+a researcher who needs to quickly assess relevance and extract key facts.
 
-## Executive Summary
-A concise narrative summary (roughly 25-30% of the original length) that \
-captures the main points, key arguments, and conclusions.
+Produce a JSON object with two fields:
 
-## Key Excerpts
-Up to 5 verbatim quotes from the original text that are most important for \
-research citation. Each excerpt should be a direct quote, prefixed with "- ".
+{{
+  "summary": "A concise narrative summary (roughly 25-30% of original length). \
+Capture main points, key arguments, conclusions, and important context.",
+  "key_excerpts": ["up to 5 verbatim quotes from the original text that are \
+most important for citation"]
+}}
+
+Content-type-specific guidance:
+- News articles: preserve who, what, when, where, why, how (5W1H)
+- Scientific/research: preserve methodology, key results, conclusions, and \
+sample sizes or confidence intervals
+- Opinion/analysis: preserve main arguments and supporting evidence
+- Product/technical: preserve key features, specifications, and unique \
+differentiators
+
+Rules:
+- Target ~25-30% of original length for the summary (unless content is \
+already concise)
+- Preserve: key facts, statistics, data points, important quotes, dates, \
+names, locations
+- Maintain chronological order for time-sensitive content
+- key_excerpts must be exact verbatim quotes from the original (max 5)
+- Return ONLY valid JSON, no additional text
 
 Content to summarize:
 {content}"""
@@ -852,9 +870,10 @@ class SourceSummarizer:
     def _parse_summary_response(response: str) -> tuple[str, list[str]]:
         """Parse LLM summary response into executive summary and excerpts.
 
-        Expects the response to contain "## Executive Summary" and
-        "## Key Excerpts" sections. Falls back gracefully if the format
-        is not followed exactly.
+        Tries JSON parsing first (new format with ``summary`` +
+        ``key_excerpts`` fields).  Falls back to markdown-section parsing
+        for backward compatibility with the old ``## Executive Summary`` /
+        ``## Key Excerpts`` format.
 
         Args:
             response: Raw LLM response text.
@@ -862,14 +881,44 @@ class SourceSummarizer:
         Returns:
             Tuple of (executive_summary, key_excerpts).
         """
+        import json as _json
+
+        # --- Primary path: JSON ---
+        # Strip markdown code fences if present
+        stripped = response.strip()
+        if stripped.startswith("```"):
+            # Remove opening fence (possibly ```json)
+            first_newline = stripped.find("\n")
+            if first_newline != -1:
+                stripped = stripped[first_newline + 1 :]
+            if stripped.rstrip().endswith("```"):
+                stripped = stripped.rstrip()[:-3].rstrip()
+
+        try:
+            data = _json.loads(stripped)
+            if isinstance(data, dict):
+                summary = str(data.get("summary", "")).strip()
+                raw_excerpts = data.get("key_excerpts", [])
+                if isinstance(raw_excerpts, list):
+                    excerpts = [
+                        str(e).strip().strip('"').strip("'")
+                        for e in raw_excerpts[:5]
+                        if e
+                    ]
+                else:
+                    excerpts = []
+                if summary:
+                    return summary, excerpts
+        except (_json.JSONDecodeError, TypeError, ValueError):
+            pass
+
+        # --- Fallback: markdown section parsing (backward compat) ---
         executive_summary = response.strip()
         key_excerpts: list[str] = []
 
-        # Try to split on Key Excerpts header
         excerpts_markers = ["## Key Excerpts", "## Key excerpts", "**Key Excerpts**"]
         summary_markers = ["## Executive Summary", "## Executive summary", "**Executive Summary**"]
 
-        # Find the position where the excerpts section starts (header included)
         excerpts_header_start = -1
         excerpts_start = -1
         for marker in excerpts_markers:
@@ -887,11 +936,9 @@ class SourceSummarizer:
                 break
 
         if summary_start != -1:
-            # Extract executive summary — ends at the excerpts header (or EOF)
             summary_end = excerpts_header_start if excerpts_header_start != -1 else len(response)
             executive_summary = response[summary_start:summary_end].strip()
         elif excerpts_header_start != -1:
-            # No summary header but excerpts header exists — everything before is summary
             executive_summary = response[:excerpts_header_start].strip()
 
         if excerpts_start != -1:
@@ -914,18 +961,19 @@ class SourceSummarizer:
     ) -> str:
         """Format summary + excerpts into a single content string.
 
-        Produces a structured text that replaces the original source content.
+        Produces structured ``<summary>`` and ``<key_excerpts>`` tags that
+        replace the original source content, matching the format used by
+        open_deep_research for researcher-facing source presentation.
 
         Args:
             executive_summary: The narrative summary.
             key_excerpts: List of verbatim quotes.
 
         Returns:
-            Formatted content string.
+            Formatted content string with XML-style tags.
         """
-        parts = [executive_summary]
+        parts = [f"<summary>{executive_summary}</summary>"]
         if key_excerpts:
-            parts.append("\n\n**Key Excerpts:**")
-            for excerpt in key_excerpts:
-                parts.append(f'- "{excerpt}"')
-        return "\n".join(parts)
+            excerpts_text = ", ".join(f'"{e}"' for e in key_excerpts)
+            parts.append(f"<key_excerpts>{excerpts_text}</key_excerpts>")
+        return "\n\n".join(parts)
