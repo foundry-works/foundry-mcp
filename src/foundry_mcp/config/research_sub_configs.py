@@ -131,7 +131,9 @@ class DeepResearchConfig:
     audit_artifacts: bool = True
 
     # Topic agent settings
-    topic_max_searches: int = 3
+    topic_max_searches: int = 5
+    enable_content_dedup: bool = True
+    content_dedup_threshold: float = 0.8
 
     # Reflection settings
     reflection_timeout: float = 60.0

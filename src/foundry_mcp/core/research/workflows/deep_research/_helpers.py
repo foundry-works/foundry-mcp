@@ -589,3 +589,86 @@ def resolve_phase_provider(config: "ResearchConfig", *phase_names: str) -> str:
         if value is not None:
             return value
     return config.default_provider
+
+
+# ---------------------------------------------------------------------------
+# Content similarity deduplication (Phase 5.3)
+# ---------------------------------------------------------------------------
+
+# N-gram size for shingling
+_SHINGLE_SIZE: int = 5
+
+
+def _char_ngrams(text: str, n: int = _SHINGLE_SIZE) -> set[str]:
+    """Generate character n-grams (shingles) from text.
+
+    Args:
+        text: Input text (should be pre-normalized)
+        n: N-gram size
+
+    Returns:
+        Set of character n-grams
+    """
+    if len(text) < n:
+        return {text} if text else set()
+    return {text[i : i + n] for i in range(len(text) - n + 1)}
+
+
+def _normalize_content_for_dedup(text: str) -> str:
+    """Normalize text for content similarity comparison.
+
+    Lowercases, removes extra whitespace, strips punctuation-heavy
+    boilerplate (e.g. navigation, footer text) by collapsing whitespace.
+
+    Args:
+        text: Raw source content
+
+    Returns:
+        Normalized text string
+    """
+    if not text:
+        return ""
+    normalized = text.lower()
+    # Remove common boilerplate markers before whitespace collapse
+    normalized = re.sub(r"copyright \d{4}.*?(?:all rights reserved\.?)?", "", normalized)
+    # Collapse all whitespace (including newlines) into single spaces
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
+
+
+def content_similarity(text_a: str, text_b: str) -> float:
+    """Compute Jaccard similarity between two texts using character n-grams.
+
+    Uses shingling (character n-grams) and Jaccard coefficient to estimate
+    content overlap.  This is fast, requires no external dependencies, and
+    works well for detecting mirror/syndicated content.
+
+    Args:
+        text_a: First text
+        text_b: Second text
+
+    Returns:
+        Similarity score between 0.0 (no overlap) and 1.0 (identical)
+    """
+    norm_a = _normalize_content_for_dedup(text_a)
+    norm_b = _normalize_content_for_dedup(text_b)
+
+    if not norm_a or not norm_b:
+        return 0.0
+
+    # Quick length-ratio check: if lengths differ by more than 3x,
+    # similarity will be low regardless — skip expensive shingling.
+    len_ratio = min(len(norm_a), len(norm_b)) / max(len(norm_a), len(norm_b))
+    if len_ratio < 0.3:
+        return 0.0
+
+    shingles_a = _char_ngrams(norm_a)
+    shingles_b = _char_ngrams(norm_b)
+
+    if not shingles_a or not shingles_b:
+        return 0.0
+
+    intersection = len(shingles_a & shingles_b)
+    union = len(shingles_a | shingles_b)
+
+    return intersection / union if union > 0 else 0.0

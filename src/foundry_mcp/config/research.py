@@ -112,8 +112,10 @@ class ResearchConfig:
 
     # Deep research parallel topic researcher agents
     deep_research_enable_topic_agents: bool = True  # Master switch for per-topic ReAct loops in gathering
-    deep_research_topic_max_searches: int = 3  # Max search iterations per topic (ReAct loop limit)
+    deep_research_topic_max_searches: int = 5  # Max search iterations per topic (ReAct loop limit)
     deep_research_topic_reflection_provider: Optional[str] = None  # Uses default_provider if not set
+    deep_research_enable_content_dedup: bool = True  # Cross-researcher content-similarity deduplication
+    deep_research_content_dedup_threshold: float = 0.8  # Jaccard similarity threshold for content dedup
 
     # Fetch-time source summarization (Phase 1)
     deep_research_fetch_time_summarization: bool = True  # Summarize raw search results at fetch time
@@ -354,8 +356,10 @@ class ResearchConfig:
             ),
             # Deep research parallel topic researcher agents
             deep_research_enable_topic_agents=_parse_bool(data.get("deep_research_enable_topic_agents", True)),
-            deep_research_topic_max_searches=int(data.get("deep_research_topic_max_searches", 3)),
+            deep_research_topic_max_searches=int(data.get("deep_research_topic_max_searches", 5)),
             deep_research_topic_reflection_provider=data.get("deep_research_topic_reflection_provider"),
+            deep_research_enable_content_dedup=_parse_bool(data.get("deep_research_enable_content_dedup", True)),
+            deep_research_content_dedup_threshold=float(data.get("deep_research_content_dedup_threshold", 0.8)),
             # Fetch-time source summarization
             deep_research_fetch_time_summarization=_parse_bool(
                 data.get("deep_research_fetch_time_summarization", True)
@@ -1343,6 +1347,8 @@ class ResearchConfig:
             mode=self.deep_research_mode,
             audit_artifacts=self.deep_research_audit_artifacts,
             topic_max_searches=self.deep_research_topic_max_searches,
+            enable_content_dedup=self.deep_research_enable_content_dedup,
+            content_dedup_threshold=self.deep_research_content_dedup_threshold,
             reflection_timeout=self.deep_research_reflection_timeout,
             planning_timeout=self.deep_research_planning_timeout,
             analysis_timeout=self.deep_research_analysis_timeout,

@@ -1005,7 +1005,7 @@ class TestTopicAgentConfig:
 
         config = ResearchConfig()
         assert config.deep_research_enable_topic_agents is True
-        assert config.deep_research_topic_max_searches == 3
+        assert config.deep_research_topic_max_searches == 5
         assert config.deep_research_topic_reflection_provider is None
 
     def test_from_toml_dict_parses_topic_keys(self) -> None:
@@ -1223,15 +1223,17 @@ class TestReflectionEnforcement:
 
         assert len(captured_system) == 1
         sys_prompt = captured_system[0]
-        # Verify hard-stop rule
+        # Verify hard-stop rules (updated in Phase 5)
         assert "STOP" in sys_prompt
-        assert "3 or more relevant sources" in sys_prompt
+        assert "3+" in sys_prompt or "3 or more" in sys_prompt
         assert "distinct domains" in sys_prompt
         # Verify continue-only-if-<2 rule
         assert "fewer than 2 relevant sources" in sys_prompt
         # Verify rationale requirement
         assert "rationale field is REQUIRED" in sys_prompt
         assert "must never be empty" in sys_prompt
+        # Verify aggressive early stopping guidance (Phase 5)
+        assert "diminishing returns" in sys_prompt
 
     @pytest.mark.asyncio
     async def test_research_complete_after_distinct_domain_sources(self) -> None:
@@ -1531,3 +1533,835 @@ class TestReflectionEnforcement:
 
         # www.example.com and example.com should count as 1 domain
         assert "Distinct source domains: 1" in captured_prompts[0]
+
+
+# =============================================================================
+# Phase 5 tests: Enhanced Per-Researcher Tool Autonomy
+# =============================================================================
+
+
+class TestPhase5EarlyExitHeuristic:
+    """Tests for Phase 5.1: cost-aware early-exit heuristic."""
+
+    @pytest.mark.asyncio
+    async def test_early_exit_triggers_with_high_quality_diverse_sources(self) -> None:
+        """Early exit triggers when sources >= 3, domains >= 2, has HIGH quality."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        # Add 3 sources from 2 domains with at least one HIGH quality
+        state.sources.append(
+            _make_source("s1", "https://arxiv.org/paper1", "Paper 1", SourceQuality.HIGH)
+        )
+        state.sources.append(
+            _make_source("s2", "https://arxiv.org/paper2", "Paper 2", SourceQuality.MEDIUM)
+        )
+        state.sources.append(
+            _make_source("s3", "https://nature.com/article1", "Article 1", SourceQuality.MEDIUM)
+        )
+        sq.source_ids = ["s1", "s2", "s3"]
+
+        state_lock = asyncio.Lock()
+        result = await mixin._check_early_exit(sq, state, state_lock)
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_early_exit_does_not_trigger_insufficient_sources(self) -> None:
+        """Early exit does not trigger with fewer than 3 sources."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        state.sources.append(
+            _make_source("s1", "https://arxiv.org/p1", "P1", SourceQuality.HIGH)
+        )
+        state.sources.append(
+            _make_source("s2", "https://nature.com/p2", "P2", SourceQuality.HIGH)
+        )
+        sq.source_ids = ["s1", "s2"]
+
+        state_lock = asyncio.Lock()
+        result = await mixin._check_early_exit(sq, state, state_lock)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_early_exit_does_not_trigger_single_domain(self) -> None:
+        """Early exit does not trigger when all sources from same domain."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        for i in range(4):
+            state.sources.append(
+                _make_source(f"s{i}", f"https://arxiv.org/p{i}", f"P{i}", SourceQuality.HIGH)
+            )
+            sq.source_ids.append(f"s{i}")
+
+        state_lock = asyncio.Lock()
+        result = await mixin._check_early_exit(sq, state, state_lock)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_early_exit_does_not_trigger_no_high_quality(self) -> None:
+        """Early exit does not trigger without at least one HIGH quality source."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        state.sources.append(
+            _make_source("s1", "https://arxiv.org/p1", "P1", SourceQuality.MEDIUM)
+        )
+        state.sources.append(
+            _make_source("s2", "https://nature.com/p2", "P2", SourceQuality.MEDIUM)
+        )
+        state.sources.append(
+            _make_source("s3", "https://ieee.org/p3", "P3", SourceQuality.MEDIUM)
+        )
+        sq.source_ids = ["s1", "s2", "s3"]
+
+        state_lock = asyncio.Lock()
+        result = await mixin._check_early_exit(sq, state, state_lock)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_early_exit_only_considers_topic_sources(self) -> None:
+        """Early exit only checks sources belonging to this sub-query."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=2)
+        sq = state.sub_queries[0]
+
+        # Sources from OTHER topic (not sq's)
+        state.sources.append(
+            _make_source("other1", "https://arxiv.org/o1", "O1", SourceQuality.HIGH)
+        )
+        state.sources.append(
+            _make_source("other2", "https://nature.com/o2", "O2", SourceQuality.HIGH)
+        )
+        state.sources.append(
+            _make_source("other3", "https://ieee.org/o3", "O3", SourceQuality.HIGH)
+        )
+
+        # Only 1 source for this topic
+        state.sources.append(
+            _make_source("mine1", "https://arxiv.org/m1", "M1", SourceQuality.HIGH)
+        )
+        sq.source_ids = ["mine1"]
+
+        state_lock = asyncio.Lock()
+        result = await mixin._check_early_exit(sq, state, state_lock)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_early_exit_integrates_in_react_loop(self) -> None:
+        """Early exit short-circuits the ReAct loop when conditions are met."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        search_calls = 0
+
+        async def mock_search(**search_kwargs):
+            nonlocal search_calls
+            search_calls += 1
+            return [
+                ResearchSource(
+                    id=f"src-{search_calls}-1",
+                    title=f"Source {search_calls}-1",
+                    url=f"https://domain{search_calls}a.com/p",
+                    content="Test content",
+                    quality=SourceQuality.HIGH,
+                ),
+                ResearchSource(
+                    id=f"src-{search_calls}-2",
+                    title=f"Source {search_calls}-2",
+                    url=f"https://domain{search_calls}b.com/p",
+                    content="Test content 2",
+                    quality=SourceQuality.HIGH,
+                ),
+            ]
+
+        provider = MagicMock()
+        provider.get_provider_name.return_value = "tavily"
+        provider.search = mock_search
+
+        # Reflection should not be called if early exit triggers
+        reflection_called = False
+
+        async def mock_reflect(**kwargs):
+            nonlocal reflection_called
+            reflection_called = True
+            result = MagicMock()
+            result.success = True
+            result.content = json.dumps({
+                "continue_searching": True,
+                "refined_query": "more stuff",
+                "research_complete": False,
+                "rationale": "Should not reach here",
+            })
+            result.tokens_used = 30
+            return result
+
+        mixin._provider_async_fn = mock_reflect
+
+        semaphore = asyncio.Semaphore(3)
+        state_lock = asyncio.Lock()
+
+        result = await mixin._execute_topic_research_async(
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=state_lock,
+            semaphore=semaphore,
+        )
+
+        # Should have done 2 searches (first iteration + second with enough sources)
+        # but NOT 5, because early exit triggers on iteration 1 (after search_calls >= 2)
+        assert result.searches_performed <= 3
+        assert result.early_completion is True
+        assert "Early exit" in result.completion_rationale
+
+
+class TestPhase5TopicThink:
+    """Tests for Phase 5.2: think-tool step within ReAct loop."""
+
+    @pytest.mark.asyncio
+    async def test_topic_think_returns_structured_response(self) -> None:
+        """Think step returns reasoning and next_query."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+
+        async def mock_think(**kwargs):
+            result = MagicMock()
+            result.success = True
+            result.content = json.dumps({
+                "reasoning": "Found basic overview but missing implementation details",
+                "next_query": "deep learning implementation techniques practical",
+            })
+            result.tokens_used = 40
+            return result
+
+        mixin._provider_async_fn = mock_think
+
+        output = await mixin._topic_think(
+            original_query="how does deep learning work",
+            current_query="deep learning basics",
+            reflection_rationale="Only found overview articles",
+            refined_query_suggestion="deep learning details",
+            sources_found=2,
+            iteration=1,
+            state=state,
+        )
+
+        assert output["reasoning"] == "Found basic overview but missing implementation details"
+        assert output["next_query"] == "deep learning implementation techniques practical"
+        assert output["tokens_used"] == 40
+
+    @pytest.mark.asyncio
+    async def test_topic_think_handles_failure_gracefully(self) -> None:
+        """Think step returns empty dict on failure without crashing."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+
+        async def mock_fail(**kwargs):
+            raise RuntimeError("Provider timeout")
+
+        mixin._provider_async_fn = mock_fail
+
+        output = await mixin._topic_think(
+            original_query="test",
+            current_query="test",
+            reflection_rationale="test",
+            refined_query_suggestion=None,
+            sources_found=1,
+            iteration=1,
+            state=state,
+        )
+
+        assert output["reasoning"] == ""
+        assert output["next_query"] is None
+        assert output["tokens_used"] == 0
+
+    @pytest.mark.asyncio
+    async def test_topic_think_handles_provider_failure(self) -> None:
+        """Think step handles non-success result."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+
+        async def mock_nonsuccess(**kwargs):
+            result = MagicMock()
+            result.success = False
+            return result
+
+        mixin._provider_async_fn = mock_nonsuccess
+
+        output = await mixin._topic_think(
+            original_query="test",
+            current_query="test",
+            reflection_rationale="test",
+            refined_query_suggestion=None,
+            sources_found=1,
+            iteration=1,
+            state=state,
+        )
+
+        assert output["reasoning"] == ""
+        assert output["next_query"] is None
+
+    @pytest.mark.asyncio
+    async def test_topic_think_handles_malformed_json(self) -> None:
+        """Think step handles non-JSON response gracefully."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+
+        async def mock_text(**kwargs):
+            result = MagicMock()
+            result.success = True
+            result.content = "The research so far covers basics but needs more depth."
+            result.tokens_used = 25
+            return result
+
+        mixin._provider_async_fn = mock_text
+
+        output = await mixin._topic_think(
+            original_query="test",
+            current_query="test",
+            reflection_rationale="test",
+            refined_query_suggestion=None,
+            sources_found=1,
+            iteration=1,
+            state=state,
+        )
+
+        # Should extract reasoning from raw content
+        assert len(output["reasoning"]) > 0
+        assert output["next_query"] is None
+        assert output["tokens_used"] == 25
+
+    @pytest.mark.asyncio
+    async def test_topic_think_prompt_includes_context(self) -> None:
+        """Think prompt includes original query, current state, and reflection info."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+
+        captured_prompts: list[str] = []
+        captured_system: list[str] = []
+
+        async def capture(**kwargs):
+            captured_prompts.append(kwargs.get("prompt", ""))
+            captured_system.append(kwargs.get("system_prompt", ""))
+            result = MagicMock()
+            result.success = True
+            result.content = json.dumps({"reasoning": "test", "next_query": None})
+            result.tokens_used = 10
+            return result
+
+        mixin._provider_async_fn = capture
+
+        await mixin._topic_think(
+            original_query="AI safety regulations",
+            current_query="AI governance policies",
+            reflection_rationale="Found only US-focused sources",
+            refined_query_suggestion="global AI regulations",
+            sources_found=2,
+            iteration=2,
+            state=state,
+        )
+
+        assert len(captured_prompts) == 1
+        prompt = captured_prompts[0]
+        assert "AI safety regulations" in prompt
+        assert "AI governance policies" in prompt
+        assert "Found only US-focused sources" in prompt
+        assert "global AI regulations" in prompt
+
+        sys = captured_system[0]
+        assert "MISSING" in sys or "missing" in sys.lower()
+
+    @pytest.mark.asyncio
+    async def test_think_step_integrates_in_react_loop(self) -> None:
+        """Think step is called between reflection and next search."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        call_sequence: list[str] = []
+
+        async def mock_search(**kwargs):
+            call_sequence.append("search")
+            return [_make_source(f"src-{len(call_sequence)}", f"https://d{len(call_sequence)}.com/p")]
+
+        provider = MagicMock()
+        provider.get_provider_name.return_value = "tavily"
+        provider.search = mock_search
+
+        call_count = 0
+
+        async def mock_provider(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            phase = kwargs.get("phase", "")
+            call_sequence.append(phase)
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 20
+
+            if phase == "topic_reflection":
+                if call_count == 1:
+                    result.content = json.dumps({
+                        "continue_searching": True,
+                        "refined_query": "reflection refined",
+                        "research_complete": False,
+                        "rationale": "Need more sources",
+                    })
+                else:
+                    result.content = json.dumps({
+                        "continue_searching": False,
+                        "research_complete": True,
+                        "rationale": "Enough now",
+                    })
+            elif phase == "topic_think":
+                result.content = json.dumps({
+                    "reasoning": "Missing economic perspective",
+                    "next_query": "think refined query",
+                })
+            else:
+                result.content = json.dumps({
+                    "continue_searching": False,
+                    "research_complete": True,
+                    "rationale": "Done",
+                })
+            return result
+
+        mixin._provider_async_fn = mock_provider
+
+        semaphore = asyncio.Semaphore(3)
+        state_lock = asyncio.Lock()
+
+        result = await mixin._execute_topic_research_async(
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=state_lock,
+            semaphore=semaphore,
+        )
+
+        # Verify the sequence: search → reflection → think → search → ...
+        assert "search" in call_sequence
+        assert "topic_reflection" in call_sequence
+        assert "topic_think" in call_sequence
+
+        # Think output should be recorded in reflection_notes
+        think_notes = [n for n in result.reflection_notes if "[think]" in n]
+        assert len(think_notes) >= 1
+        assert "Missing economic perspective" in think_notes[0]
+
+    @pytest.mark.asyncio
+    async def test_think_refined_query_preferred_over_reflection(self) -> None:
+        """Think step's next_query is preferred over reflection's refined_query."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        async def mock_search(**kwargs):
+            return [_make_source(f"src-x", f"https://dx.com/p")]
+
+        provider = MagicMock()
+        provider.get_provider_name.return_value = "tavily"
+        provider.search = mock_search
+
+        call_count = 0
+
+        async def mock_provider(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            phase = kwargs.get("phase", "")
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 20
+
+            if phase == "topic_reflection":
+                if call_count <= 2:
+                    result.content = json.dumps({
+                        "continue_searching": True,
+                        "refined_query": "reflection query",
+                        "research_complete": False,
+                        "rationale": "Need more",
+                    })
+                else:
+                    result.content = json.dumps({
+                        "continue_searching": False,
+                        "research_complete": True,
+                        "rationale": "Done",
+                    })
+            elif phase == "topic_think":
+                result.content = json.dumps({
+                    "reasoning": "Found basics, need depth",
+                    "next_query": "think query",
+                })
+            else:
+                result.content = "{}"
+            return result
+
+        mixin._provider_async_fn = mock_provider
+
+        semaphore = asyncio.Semaphore(3)
+        state_lock = asyncio.Lock()
+
+        result = await mixin._execute_topic_research_async(
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=state_lock,
+            semaphore=semaphore,
+        )
+
+        # Think query should be preferred
+        assert "think query" in result.refined_queries
+
+
+class TestPhase5ContentDedup:
+    """Tests for Phase 5.3: cross-researcher content deduplication."""
+
+    def test_content_similarity_identical_texts(self) -> None:
+        """Identical texts have similarity 1.0."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            content_similarity,
+        )
+
+        text = "This is a test document about deep learning and neural networks."
+        assert content_similarity(text, text) == 1.0
+
+    def test_content_similarity_completely_different(self) -> None:
+        """Completely different texts have low similarity."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            content_similarity,
+        )
+
+        text_a = "Deep learning is a subset of machine learning based on artificial neural networks."
+        text_b = "Cooking pasta requires boiling water and adding salt for optimal flavor results."
+        sim = content_similarity(text_a, text_b)
+        assert sim < 0.3
+
+    def test_content_similarity_mirror_content(self) -> None:
+        """Slightly modified mirror content has high similarity."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            content_similarity,
+        )
+
+        text_a = (
+            "Deep learning is a subset of machine learning that uses multi-layered "
+            "neural networks to progressively extract higher-level features from raw "
+            "input. For example, in image processing, lower layers may identify edges, "
+            "while higher layers may identify concepts relevant to a human."
+        )
+        # Minor modifications (syndicated content)
+        text_b = (
+            "Deep learning is a subset of machine learning that uses multi-layered "
+            "neural networks to progressively extract higher-level features from raw "
+            "input. For example, in image processing, lower layers may identify edges, "
+            "while higher layers may identify concepts relevant to humans."
+        )
+        sim = content_similarity(text_a, text_b)
+        assert sim > 0.8
+
+    def test_content_similarity_empty_texts(self) -> None:
+        """Empty texts return 0.0 similarity."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            content_similarity,
+        )
+
+        assert content_similarity("", "") == 0.0
+        assert content_similarity("Some text", "") == 0.0
+        assert content_similarity("", "Some text") == 0.0
+
+    def test_content_similarity_very_different_lengths(self) -> None:
+        """Very different length texts get early 0.0 via length-ratio check."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            content_similarity,
+        )
+
+        short = "Brief text."
+        long = "A " * 500 + "very long document with lots of content."
+        assert content_similarity(short, long) == 0.0
+
+    def test_normalize_content_for_dedup(self) -> None:
+        """Content normalization strips whitespace and copyright."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            _normalize_content_for_dedup,
+        )
+
+        raw = "  Hello   World\n\nCopyright 2024 Some Corp. All Rights Reserved  \nMore text  "
+        normalized = _normalize_content_for_dedup(raw)
+        assert "copyright" not in normalized
+        assert "  " not in normalized  # No double spaces
+        assert normalized.startswith("hello")
+
+    @pytest.mark.asyncio
+    async def test_content_dedup_skips_similar_source(self) -> None:
+        """Content-similar sources from different URLs are deduplicated."""
+        mixin = StubTopicResearch()
+        mixin.config.deep_research_enable_content_dedup = True
+        mixin.config.deep_research_content_dedup_threshold = 0.8
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        # Pre-existing source
+        existing = ResearchSource(
+            id="existing-1",
+            title="Deep Learning Overview",
+            url="https://site-a.com/dl-overview",
+            content=(
+                "Deep learning is a subset of machine learning that uses multi-layered "
+                "neural networks to progressively extract higher-level features from raw "
+                "input data for pattern recognition and classification tasks."
+            ),
+            quality=SourceQuality.HIGH,
+        )
+        state.sources.append(existing)
+
+        # Mirror content from different URL
+        mirror = ResearchSource(
+            id="new-mirror",
+            title="DL Overview Mirror",
+            url="https://site-b.com/dl-overview-copy",
+            content=(
+                "Deep learning is a subset of machine learning that uses multi-layered "
+                "neural networks to progressively extract higher-level features from raw "
+                "input data for pattern recognition and classification tasks."
+            ),
+            quality=SourceQuality.MEDIUM,
+        )
+
+        provider = MagicMock()
+        provider.get_provider_name.return_value = "tavily"
+        provider.search = AsyncMock(return_value=[mirror])
+
+        semaphore = asyncio.Semaphore(3)
+        state_lock = asyncio.Lock()
+
+        added = await mixin._topic_search(
+            query="deep learning",
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_sources_per_provider=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=state_lock,
+            semaphore=semaphore,
+        )
+
+        # Mirror content should be deduplicated
+        assert added == 0
+
+    @pytest.mark.asyncio
+    async def test_content_dedup_keeps_different_content(self) -> None:
+        """Genuinely different content from similar titles is preserved."""
+        mixin = StubTopicResearch()
+        mixin.config.deep_research_enable_content_dedup = True
+        mixin.config.deep_research_content_dedup_threshold = 0.8
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        existing = ResearchSource(
+            id="existing-1",
+            title="AI Safety Overview",
+            url="https://site-a.com/safety",
+            content="AI safety focuses on ensuring AI systems behave as intended and don't cause harm.",
+            quality=SourceQuality.MEDIUM,
+        )
+        state.sources.append(existing)
+
+        # Different content
+        different = ResearchSource(
+            id="new-different",
+            title="AI Safety Techniques",
+            url="https://site-b.com/safety-tech",
+            content="Reinforcement learning from human feedback is a technique for aligning language models.",
+            quality=SourceQuality.MEDIUM,
+        )
+
+        provider = MagicMock()
+        provider.get_provider_name.return_value = "tavily"
+        provider.search = AsyncMock(return_value=[different])
+
+        semaphore = asyncio.Semaphore(3)
+        state_lock = asyncio.Lock()
+
+        added = await mixin._topic_search(
+            query="AI safety",
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_sources_per_provider=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=state_lock,
+            semaphore=semaphore,
+        )
+
+        # Different content should be kept
+        assert added == 1
+
+    @pytest.mark.asyncio
+    async def test_content_dedup_disabled_via_config(self) -> None:
+        """Content dedup is skipped when config flag is disabled."""
+        mixin = StubTopicResearch()
+        mixin.config.deep_research_enable_content_dedup = False
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        existing = ResearchSource(
+            id="existing-1",
+            title="Existing",
+            url="https://site-a.com/page",
+            content="Identical content that should be added anyway because dedup is off " * 5,
+            quality=SourceQuality.MEDIUM,
+        )
+        state.sources.append(existing)
+
+        mirror = ResearchSource(
+            id="new-mirror",
+            title="Mirror",
+            url="https://site-b.com/page",
+            content="Identical content that should be added anyway because dedup is off " * 5,
+            quality=SourceQuality.MEDIUM,
+        )
+
+        provider = MagicMock()
+        provider.get_provider_name.return_value = "tavily"
+        provider.search = AsyncMock(return_value=[mirror])
+
+        semaphore = asyncio.Semaphore(3)
+        state_lock = asyncio.Lock()
+
+        added = await mixin._topic_search(
+            query="test",
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_sources_per_provider=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=state_lock,
+            semaphore=semaphore,
+        )
+
+        # Should be added because dedup is disabled
+        assert added == 1
+
+    @pytest.mark.asyncio
+    async def test_content_dedup_skips_short_content(self) -> None:
+        """Content dedup is skipped for very short content (< 100 chars)."""
+        mixin = StubTopicResearch()
+        mixin.config.deep_research_enable_content_dedup = True
+        mixin.config.deep_research_content_dedup_threshold = 0.8
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        existing = ResearchSource(
+            id="existing-1",
+            title="Short",
+            url="https://site-a.com/s",
+            content="Brief.",
+            quality=SourceQuality.MEDIUM,
+        )
+        state.sources.append(existing)
+
+        short_mirror = ResearchSource(
+            id="new-short",
+            title="Also Short",
+            url="https://site-b.com/s",
+            content="Brief.",
+            quality=SourceQuality.MEDIUM,
+        )
+
+        provider = MagicMock()
+        provider.get_provider_name.return_value = "tavily"
+        provider.search = AsyncMock(return_value=[short_mirror])
+
+        semaphore = asyncio.Semaphore(3)
+        state_lock = asyncio.Lock()
+
+        added = await mixin._topic_search(
+            query="test",
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_sources_per_provider=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=state_lock,
+            semaphore=semaphore,
+        )
+
+        # Short content should bypass dedup
+        assert added == 1
+
+
+class TestPhase5ConfigIntegration:
+    """Tests for Phase 5 config keys."""
+
+    def test_default_max_searches_is_5(self) -> None:
+        """Default topic_max_searches is 5 (increased from 3)."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        config = ResearchConfig()
+        assert config.deep_research_topic_max_searches == 5
+
+    def test_default_content_dedup_enabled(self) -> None:
+        """Content dedup is enabled by default."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        config = ResearchConfig()
+        assert config.deep_research_enable_content_dedup is True
+        assert config.deep_research_content_dedup_threshold == 0.8
+
+    def test_from_toml_dict_parses_content_dedup_keys(self) -> None:
+        """TOML parsing correctly reads content dedup config."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        config = ResearchConfig.from_toml_dict({
+            "deep_research_enable_content_dedup": False,
+            "deep_research_content_dedup_threshold": 0.7,
+        })
+        assert config.deep_research_enable_content_dedup is False
+        assert config.deep_research_content_dedup_threshold == 0.7
+
+    def test_sub_config_has_content_dedup_fields(self) -> None:
+        """DeepResearchConfig sub-config includes content dedup fields."""
+        from foundry_mcp.config.research_sub_configs import DeepResearchConfig
+
+        dc = DeepResearchConfig()
+        assert dc.topic_max_searches == 5
+        assert dc.enable_content_dedup is True
+        assert dc.content_dedup_threshold == 0.8
+
+    def test_deep_research_config_property_passes_new_fields(self) -> None:
+        """ResearchConfig.deep_research_config passes content dedup fields."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        config = ResearchConfig(
+            deep_research_enable_content_dedup=False,
+            deep_research_content_dedup_threshold=0.6,
+        )
+        dc = config.deep_research_config
+        assert dc.enable_content_dedup is False
+        assert dc.content_dedup_threshold == 0.6

@@ -295,4 +295,4 @@ Enhance per-topic researcher autonomy in three sub-phases:
 | **Planning self-critique** | **Gap** | **This plan Phase 2** |
 | **Global compression** | **Gap** | **This plan Phase 3** |
 | **Evaluation framework** | **Gap** | **This plan Phase 4** |
-| **Researcher tool autonomy** | **Partial** | **This plan Phase 5** |
+| **Researcher tool autonomy** | **Aligned** | **This plan Phase 5** |

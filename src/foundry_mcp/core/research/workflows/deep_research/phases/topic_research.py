@@ -19,6 +19,7 @@ from foundry_mcp.core.research.models.deep_research import (
 )
 from foundry_mcp.core.research.models.sources import SourceQuality, SubQuery
 from foundry_mcp.core.research.workflows.deep_research._helpers import (
+    content_similarity,
     extract_json,
     parse_reflection_decision,
 )
@@ -129,6 +130,29 @@ class TopicResearchMixin:
             result.searches_performed += 1
             result.sources_found += sources_added
 
+            # --- Cost-aware early-exit heuristic ---
+            # If sources are high-quality and diverse, stop regardless of
+            # remaining iterations.  This saves reflection + think + search
+            # costs when coverage is already sufficient.
+            if result.sources_found >= 3 and iteration > 0:
+                early_exit = await self._check_early_exit(
+                    sub_query=sub_query,
+                    state=state,
+                    state_lock=state_lock,
+                )
+                if early_exit:
+                    result.early_completion = True
+                    result.completion_rationale = (
+                        "Early exit: sufficient high-quality diverse sources found"
+                    )
+                    logger.info(
+                        "Topic %r early exit at iteration %d/%d: quality heuristic met",
+                        sub_query.id,
+                        iteration + 1,
+                        max_searches,
+                    )
+                    break
+
             # If this is the last allowed iteration, skip reflection
             # (max_searches is the hard cap regardless of reflection)
             if iteration >= max_searches - 1:
@@ -183,8 +207,29 @@ class TopicResearchMixin:
                 )
                 break
 
+            # --- Think step (between reflect and next search) ---
+            # Articulates: what was found, what angle to try next, why it
+            # matters.  Grounds the query refinement in explicit reasoning.
+            think_output = await self._topic_think(
+                original_query=sub_query.query,
+                current_query=current_query,
+                reflection_rationale=rationale,
+                refined_query_suggestion=decision.refined_query,
+                sources_found=result.sources_found,
+                iteration=iteration + 1,
+                state=state,
+            )
+            local_tokens_used += think_output.get("tokens_used", 0)
+            if think_output.get("reasoning"):
+                result.reflection_notes.append(
+                    f"[think] {think_output['reasoning']}"
+                )
+
             # --- Refine step ---
-            refined_query = decision.refined_query
+            # Prefer the think step's refined query (more grounded in explicit
+            # gap analysis) over the reflection's suggestion.
+            think_refined = think_output.get("next_query")
+            refined_query = think_refined or decision.refined_query
             if refined_query and refined_query != current_query:
                 current_query = refined_query
                 result.refined_queries.append(refined_query)
@@ -320,6 +365,41 @@ class TopicResearchMixin:
                                     continue
                                 seen_titles[normalized_title] = source.url or ""
 
+                            # Content-similarity deduplication (Phase 5.3)
+                            # Check if this source's content is substantially
+                            # similar to an existing source (mirror/syndicated).
+                            content_dedup_enabled = getattr(
+                                self.config, "deep_research_enable_content_dedup", True
+                            )
+                            dedup_threshold = getattr(
+                                self.config, "deep_research_content_dedup_threshold", 0.8
+                            )
+                            if (
+                                content_dedup_enabled
+                                and source.content
+                                and len(source.content) > 100
+                            ):
+                                is_content_dup = False
+                                for existing_src in state.sources:
+                                    if (
+                                        existing_src.content
+                                        and len(existing_src.content) > 100
+                                    ):
+                                        sim = content_similarity(
+                                            source.content, existing_src.content
+                                        )
+                                        if sim >= dedup_threshold:
+                                            logger.debug(
+                                                "Content dedup: %r (%.2f similar to %r)",
+                                                source.url or source.title,
+                                                sim,
+                                                existing_src.url or existing_src.title,
+                                            )
+                                            is_content_dup = True
+                                            break
+                                if is_content_dup:
+                                    continue
+
                             if source.url:
                                 seen_urls.add(source.url)
                                 if source.quality == SourceQuality.UNKNOWN:
@@ -431,19 +511,24 @@ class TopicResearchMixin:
             '  "research_complete": true/false,\n'
             '  "rationale": "explain your assessment and what specific gap remains if continuing"\n'
             "}\n\n"
-            "Decision rules (follow strictly):\n"
-            "1. STOP — set research_complete=true when you have 3 or more relevant sources "
-            "from distinct domains. This is a hard stop; do not continue searching.\n"
-            "2. CONTINUE — set continue_searching=true ONLY if fewer than 2 relevant sources "
-            "have been found. You MUST provide a refined_query and your rationale MUST "
-            "identify the specific information gap that another search would fill.\n"
+            "Decision rules (follow strictly, in priority order):\n"
+            "1. STOP IMMEDIATELY — set research_complete=true when you have 3+ sources "
+            "from 2+ distinct domains AND at least one high-quality source. "
+            "This is a hard stop; additional searches will not meaningfully improve coverage.\n"
+            "2. STOP — set research_complete=true when you have 3+ relevant sources "
+            "from distinct domains, even if none are explicitly high-quality.\n"
             "3. ADEQUATE — set continue_searching=false (without research_complete) if you "
             "have 2+ sources but they are from the same domain or cover only one perspective. "
             "This stops the loop without signalling full completion.\n"
-            "4. NO RESULTS — if zero sources were found, set continue_searching=true and "
+            "4. CONTINUE — set continue_searching=true ONLY if fewer than 2 relevant sources "
+            "have been found. You MUST provide a refined_query and your rationale MUST "
+            "identify the specific information gap that another search would fill.\n"
+            "5. NO RESULTS — if zero sources were found, set continue_searching=true and "
             "provide a broader or alternative refined_query.\n"
-            "5. The rationale field is REQUIRED and must never be empty. It must explain "
-            "your reasoning, not just restate the decision.\n"
+            "6. The rationale field is REQUIRED and must never be empty. It must explain "
+            "your reasoning, not just restate the decision.\n\n"
+            "IMPORTANT: Err on the side of stopping early. Each additional search iteration "
+            "has diminishing returns. If you already have diverse, relevant sources, STOP.\n"
             "- Keep refined queries focused on the original research topic.\n"
             "- Return ONLY valid JSON, no additional text."
         )
@@ -514,3 +599,172 @@ class TopicResearchMixin:
             }),
             "tokens_used": 0,
         }
+
+    # ------------------------------------------------------------------
+    # Cost-aware early-exit heuristic
+    # ------------------------------------------------------------------
+
+    async def _check_early_exit(
+        self,
+        sub_query: SubQuery,
+        state: DeepResearchState,
+        state_lock: asyncio.Lock,
+    ) -> bool:
+        """Check if this topic has sufficient high-quality diverse sources.
+
+        Returns True when: sources_found >= 3 AND distinct_domains >= 2
+        AND at least one HIGH quality source among this sub-query's sources.
+
+        This is a cheap heuristic check (no LLM call) that allows skipping
+        both the reflection and any subsequent search iterations.
+        """
+        async with state_lock:
+            # Collect sources belonging to this sub-query
+            topic_source_ids = set(sub_query.source_ids)
+            topic_sources = [s for s in state.sources if s.id in topic_source_ids]
+
+        if len(topic_sources) < 3:
+            return False
+
+        # Count distinct domains
+        distinct_domains: set[str] = set()
+        has_high_quality = False
+        for src in topic_sources:
+            if src.url:
+                try:
+                    from urllib.parse import urlparse
+
+                    domain = urlparse(src.url).netloc.lower()
+                    if domain.startswith("www."):
+                        domain = domain[4:]
+                    if domain:
+                        distinct_domains.add(domain)
+                except Exception:
+                    pass
+            if hasattr(src, "quality") and src.quality == SourceQuality.HIGH:
+                has_high_quality = True
+
+        return len(distinct_domains) >= 2 and has_high_quality
+
+    # ------------------------------------------------------------------
+    # Think step (within-loop deliberation)
+    # ------------------------------------------------------------------
+
+    async def _topic_think(
+        self,
+        original_query: str,
+        current_query: str,
+        reflection_rationale: str,
+        refined_query_suggestion: str | None,
+        sources_found: int,
+        iteration: int,
+        state: DeepResearchState,
+    ) -> dict[str, Any]:
+        """Deliberate about what was found and what angle to try next.
+
+        This is the "think-tool" equivalent for per-topic research — a
+        lightweight LLM call that articulates explicit reasoning about:
+        1. What information has been gathered so far
+        2. What specific gap remains
+        3. What search angle would best fill that gap
+        4. A refined query targeting that angle
+
+        Uses the reflection (cheap) model to minimize cost.
+
+        Returns:
+            Dict with keys: reasoning (str), next_query (str or None),
+            tokens_used (int).
+        """
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            resolve_phase_provider,
+            safe_resolve_model_for_role,
+        )
+
+        provider_id, think_model = safe_resolve_model_for_role(
+            self.config, "topic_reflection"
+        )
+        if provider_id is None:
+            provider_id = resolve_phase_provider(
+                self.config, "topic_reflection", "reflection"
+            )
+
+        system_prompt = (
+            "You are a research strategist. Given the current state of a "
+            "topic investigation, think through what has been found and what "
+            "specific angle would most improve coverage.\n\n"
+            "Respond with valid JSON:\n"
+            "{\n"
+            '  "reasoning": "Your analysis of what was found, what gap '
+            'remains, and why the next query would help",\n'
+            '  "next_query": "A specific, targeted search query to fill '
+            'the identified gap" or null\n'
+            "}\n\n"
+            "Guidelines:\n"
+            "- Focus on WHAT IS MISSING, not what was already found\n"
+            "- The next_query should target a different angle, perspective, "
+            "or information type than previous searches\n"
+            "- If the reflection's suggested query is good, you may refine "
+            "it further or return null to accept it as-is\n"
+            "- Keep reasoning concise (2-3 sentences)\n"
+            "- Return ONLY valid JSON, no additional text."
+        )
+
+        user_prompt = (
+            f"Original research topic: {original_query}\n"
+            f"Current search query: {current_query}\n"
+            f"Sources found so far: {sources_found}\n"
+            f"Search iteration: {iteration}\n"
+            f"Reflection assessment: {reflection_rationale}\n"
+        )
+        if refined_query_suggestion:
+            user_prompt += (
+                f"Reflection's suggested next query: {refined_query_suggestion}\n"
+            )
+        user_prompt += (
+            "\nThink about what specific information gap remains and what "
+            "search angle would best address it."
+        )
+
+        try:
+            result = await self._execute_provider_async(
+                prompt=user_prompt,
+                provider_id=provider_id,
+                model=think_model,
+                system_prompt=system_prompt,
+                timeout=self.config.deep_research_reflection_timeout,
+                temperature=0.3,
+                phase="topic_think",
+                fallback_providers=[],
+                max_retries=1,
+                retry_delay=2.0,
+            )
+
+            if not result.success:
+                return {"reasoning": "", "next_query": None, "tokens_used": 0}
+
+            tokens_used = result.tokens_used or 0
+            raw_content = result.content or ""
+
+            # Parse JSON response
+            json_str = extract_json(raw_content)
+            if json_str:
+                try:
+                    data = json.loads(json_str)
+                    return {
+                        "reasoning": str(data.get("reasoning", "")),
+                        "next_query": data.get("next_query"),
+                        "tokens_used": tokens_used,
+                    }
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            return {
+                "reasoning": raw_content[:200],
+                "next_query": None,
+                "tokens_used": tokens_used,
+            }
+
+        except (asyncio.TimeoutError, OSError, ValueError, RuntimeError) as exc:
+            logger.warning("Topic think step failed: %s. Continuing without.", exc)
+
+        return {"reasoning": "", "next_query": None, "tokens_used": 0}

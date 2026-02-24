@@ -564,22 +564,34 @@ class TestMandatoryReflectionLoop:
         sq = state.sub_queries[0]
 
         reflect_call_count = 0
+        think_call_count = 0
 
-        async def counting_reflect(**kwargs):
-            nonlocal reflect_call_count
-            reflect_call_count += 1
+        async def counting_calls(**kwargs):
+            nonlocal reflect_call_count, think_call_count
+            phase = kwargs.get("phase", "")
             result = MagicMock()
             result.success = True
-            result.content = json.dumps({
-                "continue_searching": True,
-                "refined_query": f"refined-{reflect_call_count}",
-                "research_complete": False,
-                "rationale": f"Iteration {reflect_call_count}",
-            })
             result.tokens_used = 30
+
+            if phase == "topic_reflection":
+                reflect_call_count += 1
+                result.content = json.dumps({
+                    "continue_searching": True,
+                    "refined_query": f"refined-{reflect_call_count}",
+                    "research_complete": False,
+                    "rationale": f"Iteration {reflect_call_count}",
+                })
+            elif phase == "topic_think":
+                think_call_count += 1
+                result.content = json.dumps({
+                    "reasoning": "Think step",
+                    "next_query": None,
+                })
+            else:
+                result.content = "{}"
             return result
 
-        mixin._provider_async_fn = counting_reflect
+        mixin._provider_async_fn = counting_calls
 
         # Provider always returns 1 source
         provider = _make_mock_provider("tavily")
@@ -602,7 +614,10 @@ class TestMandatoryReflectionLoop:
         # With max_searches=3, reflection is called after iterations 0 and 1
         # (not after the last iteration). Since reflection always says continue
         # with a refined query, we get exactly 2 reflection calls.
+        # Phase 5 adds a think step after each reflection-continue, so we also
+        # get 2 think calls.
         assert reflect_call_count == 2
+        assert think_call_count == 2
 
     @pytest.mark.asyncio
     async def test_reflection_called_even_with_zero_sources(self) -> None:
