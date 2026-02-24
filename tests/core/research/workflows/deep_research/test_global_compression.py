@@ -693,7 +693,7 @@ class TestGlobalCompressionConfig:
         from foundry_mcp.config.research import ResearchConfig
 
         config = ResearchConfig()
-        assert config.deep_research_enable_global_compression is True
+        assert config.deep_research_enable_global_compression is False  # Default off (Phase 3 PLAN)
         assert config.deep_research_global_compression_provider is None
         assert config.deep_research_global_compression_model is None
         assert config.deep_research_global_compression_timeout == 360.0

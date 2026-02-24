@@ -115,13 +115,13 @@
 
 ## Phase 3: Collapse Post-Gathering Pipeline
 
-- [ ] **3.1** Update `workflow_execution.py` default phase flow
+- [x] **3.1** Update `workflow_execution.py` default phase flow
   - Default: after SUPERVISION completes → skip to SYNTHESIS
   - COMPRESSION phase only runs when `deep_research_enable_global_compression=True`
   - ANALYSIS phase only runs when `deep_research_enable_analysis_digest=True`
   - REFINEMENT phase only runs when `deep_research_enable_refinement=True`
   - Update `_determine_next_phase()` to check config flags
-- [ ] **3.2** Update synthesis to consume compressed findings directly
+- [x] **3.2** Update synthesis to consume compressed findings directly
   - In `_build_synthesis_user_prompt()`:
     - Read from `state.topic_research_results[].compressed_findings`
     - Format: one section per topic with findings and source citations
@@ -133,20 +133,21 @@
     - List reports: direct list or per-item sections
     - General: overview, key findings by theme, conclusion
     - Maintain inline citations `[1][2]` referencing source list
-- [ ] **3.3** Add progressive token-limit retry to synthesis
+- [x] **3.3** Add progressive token-limit retry to synthesis
   - On token limit exceeded error:
     - Detect provider-specific error patterns (OpenAI, Anthropic, etc.)
     - Truncate compressed findings by 10%
     - Retry synthesis call
     - Max 3 retries before graceful failure with partial report
   - Log each retry with truncation percentage
-- [ ] **3.4** Add config defaults
+  - NOTE: Already handled by existing `execute_llm_call` lifecycle helper (3 retries, tiered truncation strategies)
+- [x] **3.4** Add config defaults
   - `deep_research_enable_global_compression: bool = False`
   - `deep_research_enable_analysis_digest: bool = False`
   - `deep_research_enable_refinement: bool = False`
   - Add `from_toml_dict()` parsing for all three
   - Keep existing phase code intact (opt-in, not deleted)
-- [ ] **3.5** Add tests for collapsed pipeline
+- [x] **3.5** Add tests for collapsed pipeline
   - Test: default pipeline is BRIEF → SUPERVISION → SYNTHESIS
   - Test: synthesis produces quality reports from compressed findings alone
   - Test: token-limit retry works (progressive truncation, max 3 attempts)

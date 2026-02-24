@@ -403,21 +403,29 @@ class WorkflowExecutionMixin:
                             state.advance_phase()  # SUPERVISION → ANALYSIS
 
                 if state.phase == DeepResearchPhase.ANALYSIS:
-                    err = await self._run_phase(
-                        state,
-                        DeepResearchPhase.ANALYSIS,
-                        self._execute_analysis_async(
-                            state=state,
-                            provider_id=state.analysis_provider,
-                            timeout=self.config.get_phase_timeout("analysis"),
-                        ),
-                    )
-                    if err:
-                        return err
-                    await self._maybe_reflect(state, DeepResearchPhase.ANALYSIS)
+                    if not getattr(self.config, "deep_research_enable_analysis_digest", False):
+                        logger.info(
+                            "Analysis phase skipped (disabled) for research %s — "
+                            "synthesis will use per-topic compressed findings directly",
+                            state.id,
+                        )
+                        state.advance_phase()  # Skip ANALYSIS → COMPRESSION
+                    else:
+                        err = await self._run_phase(
+                            state,
+                            DeepResearchPhase.ANALYSIS,
+                            self._execute_analysis_async(
+                                state=state,
+                                provider_id=state.analysis_provider,
+                                timeout=self.config.get_phase_timeout("analysis"),
+                            ),
+                        )
+                        if err:
+                            return err
+                        await self._maybe_reflect(state, DeepResearchPhase.ANALYSIS)
 
                 if state.phase == DeepResearchPhase.COMPRESSION:
-                    if not getattr(self.config, "deep_research_enable_global_compression", True):
+                    if not getattr(self.config, "deep_research_enable_global_compression", False):
                         state.advance_phase()  # Skip directly to SYNTHESIS
                     else:
                         self._check_cancellation(state)
@@ -483,8 +491,11 @@ class WorkflowExecutionMixin:
                         self._record_workflow_error(exc, state, "orchestrator_synthesis")
                         raise
 
-                    # Check if refinement needed
-                    if state.should_continue_refinement():
+                    # Check if refinement needed (gated by config flag — Phase 3 PLAN)
+                    enable_refinement = getattr(
+                        self.config, "deep_research_enable_refinement", False,
+                    )
+                    if enable_refinement and state.should_continue_refinement():
                         state.phase = DeepResearchPhase.REFINEMENT
                     else:
                         # Mark iteration as successfully completed (no more refinement)

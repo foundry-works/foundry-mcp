@@ -150,8 +150,13 @@ class ResearchConfig:
     deep_research_compression_model: Optional[str] = None  # Model override for per-topic compression
     deep_research_compression_max_content_length: int = 50000  # Max chars per source in compression prompt (matches open_deep_research)
 
+    # Post-gathering pipeline control (Phase 3 PLAN — collapse pipeline)
+    # Default off: SUPERVISION → SYNTHESIS (skip ANALYSIS, COMPRESSION, REFINEMENT)
+    deep_research_enable_analysis_digest: bool = False  # Run ANALYSIS phase (digest/rank/select findings)
+    deep_research_enable_refinement: bool = False  # Run REFINEMENT phase (loop back for more research)
+
     # Global compression (cross-topic deduplication before synthesis)
-    deep_research_enable_global_compression: bool = True  # Master switch for global compression phase
+    deep_research_enable_global_compression: bool = False  # Master switch for global compression phase (default off — Phase 3 PLAN)
     deep_research_global_compression_provider: Optional[str] = None  # LLM provider for global compression (uses research-tier if not set)
     deep_research_global_compression_model: Optional[str] = None  # Model override for global compression
     deep_research_global_compression_timeout: float = 360.0  # Timeout for global compression LLM call (seconds)
@@ -421,9 +426,16 @@ class ResearchConfig:
             deep_research_compression_max_content_length=int(
                 data.get("deep_research_compression_max_content_length", 50000)
             ),
+            # Post-gathering pipeline control (Phase 3 PLAN — collapse pipeline)
+            deep_research_enable_analysis_digest=_parse_bool(
+                data.get("deep_research_enable_analysis_digest", False)
+            ),
+            deep_research_enable_refinement=_parse_bool(
+                data.get("deep_research_enable_refinement", False)
+            ),
             # Global compression (cross-topic deduplication before synthesis)
             deep_research_enable_global_compression=_parse_bool(
-                data.get("deep_research_enable_global_compression", True)
+                data.get("deep_research_enable_global_compression", False)
             ),
             deep_research_global_compression_provider=data.get("deep_research_global_compression_provider"),
             deep_research_global_compression_model=data.get("deep_research_global_compression_model"),

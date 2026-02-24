@@ -148,7 +148,13 @@ class SynthesisPhaseMixin:
         Returns:
             WorkflowResult with synthesis outcome
         """
-        if not state.findings:
+        # Check if we have material to synthesize: either analysis findings
+        # or per-topic compressed findings (Phase 3 PLAN — collapsed pipeline).
+        has_compressed = any(
+            tr.compressed_findings
+            for tr in state.topic_research_results
+        )
+        if not state.findings and not state.compressed_digest and not has_compressed:
             logger.warning("No findings to synthesize")
             # Generate a minimal report even without findings
             state.report = self._generate_empty_report(state)
@@ -179,9 +185,10 @@ class SynthesisPhaseMixin:
             )
 
         logger.info(
-            "Starting synthesis phase: %d findings, %d sources",
+            "Starting synthesis phase: %d findings, %d sources, %d topic results with compressed findings",
             len(state.findings),
             len(state.sources),
+            sum(1 for tr in state.topic_research_results if tr.compressed_findings),
         )
 
         # Emit phase.started audit event
@@ -409,6 +416,41 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                 state, prompt_parts, id_to_citation, allocation_result,
             )
 
+        # ---------------------------------------------------------------
+        # Phase 3 PLAN: Direct-from-compressed-findings path.
+        #
+        # When the ANALYSIS phase is skipped (collapsed pipeline), there
+        # are no analysis findings but per-topic compressed_findings exist.
+        # Build the synthesis prompt from those directly.
+        # ---------------------------------------------------------------
+        compressed_topics = [
+            tr for tr in state.topic_research_results
+            if tr.compressed_findings
+        ]
+        if not state.findings and compressed_topics:
+            prompt_parts.extend([
+                "## Research Findings by Topic",
+                "",
+            ])
+            for tr in compressed_topics:
+                # Resolve sub-query text for section header
+                sq = state.get_sub_query(tr.sub_query_id)
+                topic_label = sq.query if sq else tr.sub_query_id
+                prompt_parts.append(f"### {topic_label}")
+                prompt_parts.append("")
+                prompt_parts.append(tr.compressed_findings or "")
+                prompt_parts.append("")
+
+            # Add contradictions and gaps (may still be populated from supervision)
+            self._append_contradictions_and_gaps(state, prompt_parts, id_to_citation)
+
+            return self._build_synthesis_tail(
+                state, prompt_parts, id_to_citation, allocation_result,
+            )
+
+        # ---------------------------------------------------------------
+        # Standard path: build from analysis findings.
+        # ---------------------------------------------------------------
         prompt_parts.extend([
             "## Findings to Synthesize",
             "",
@@ -435,7 +477,29 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                 prompt_parts.append(f"  Sources: {source_refs}")
             prompt_parts.append("")
 
-        # Add detected contradictions
+        # Add detected contradictions and knowledge gaps
+        self._append_contradictions_and_gaps(state, prompt_parts, id_to_citation)
+
+        return self._build_synthesis_tail(
+            state, prompt_parts, id_to_citation, allocation_result,
+        )
+
+    def _append_contradictions_and_gaps(
+        self,
+        state: DeepResearchState,
+        prompt_parts: list[str],
+        id_to_citation: dict[str, int],
+    ) -> None:
+        """Append contradiction and gap sections to the synthesis prompt.
+
+        Shared by both the compressed-findings path and the standard
+        findings path.
+
+        Args:
+            state: Current research state
+            prompt_parts: Accumulated prompt sections (mutated in-place)
+            id_to_citation: source-id → citation-number mapping
+        """
         if state.contradictions:
             prompt_parts.append("## Contradictions Detected")
             prompt_parts.append(
@@ -454,17 +518,12 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                         prompt_parts.append(f"  Preferred source: [{cn}]")
             prompt_parts.append("")
 
-        # Add knowledge gaps
         if state.gaps:
             prompt_parts.append("## Knowledge Gaps Identified")
             for gap in state.gaps:
                 status = "addressed" if gap.resolved else "unresolved"
                 prompt_parts.append(f"- [{status}] {gap.description}")
             prompt_parts.append("")
-
-        return self._build_synthesis_tail(
-            state, prompt_parts, id_to_citation, allocation_result,
-        )
 
     def _build_synthesis_tail(
         self,
