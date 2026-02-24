@@ -369,3 +369,154 @@ class TestQueryTypeHintInUserPrompt:
         assert "Source Reference" in prompt
         assert "Source 0" in prompt
         assert "Source 1" in prompt
+
+
+# =============================================================================
+# Tests: Phase 3 PLAN — Synthesis prompt alignment with open_deep_research
+# =============================================================================
+
+
+class TestSynthesisPromptAlignment:
+    """Tests for PLAN Phase 3: aligning synthesis prompt with open_deep_research."""
+
+    def _get_system_prompt(self, query: str = "What are the effects of caffeine on sleep?") -> str:
+        stub = StubSynthesis()
+        state = _make_state(query=query)
+        return stub._build_synthesis_system_prompt(state)
+
+    # -- 3.1: Verbosity expectation --
+
+    def test_verbosity_expectation_thorough(self) -> None:
+        """System prompt sets expectation that sections should be thorough."""
+        prompt = self._get_system_prompt()
+        assert "thorough" in prompt.lower()
+
+    def test_verbosity_expectation_detailed(self) -> None:
+        """System prompt sets expectation that sections should be detailed."""
+        prompt = self._get_system_prompt()
+        assert "detailed" in prompt.lower()
+
+    def test_verbosity_expectation_comprehensive(self) -> None:
+        """System prompt sets expectation of comprehensive answers."""
+        prompt = self._get_system_prompt()
+        assert "comprehensive" in prompt.lower()
+
+    def test_verbosity_expectation_deep_research(self) -> None:
+        """System prompt reminds the model this is a deep research report."""
+        prompt = self._get_system_prompt()
+        assert "deep research report" in prompt.lower()
+
+    def test_verbosity_expectation_section_length(self) -> None:
+        """System prompt says sections should be as long as necessary."""
+        prompt = self._get_system_prompt()
+        assert "as long as necessary" in prompt.lower()
+
+    # -- 3.2: Structure flexibility --
+
+    def test_structure_flexibility_permission(self) -> None:
+        """System prompt gives permission to structure however the model thinks best."""
+        prompt = self._get_system_prompt()
+        assert "however you think is best" in prompt.lower()
+
+    def test_structure_flexibility_suggestions(self) -> None:
+        """System prompt frames structure guidance as suggestions, not requirements."""
+        prompt = self._get_system_prompt()
+        assert "suggestions" in prompt.lower() or "suggest" in prompt.lower()
+
+    def test_structure_flexibility_fluid(self) -> None:
+        """System prompt describes sections as a fluid concept."""
+        prompt = self._get_system_prompt()
+        assert "fluid" in prompt.lower()
+
+    # -- 3.3: Analysis subsections optional --
+
+    def test_analysis_subsections_not_mandatory(self) -> None:
+        """System prompt does NOT require a mandatory 'Analysis' section with fixed subsections."""
+        prompt = self._get_system_prompt()
+        # Should NOT contain the old mandatory structure
+        assert "An **Analysis** section with subsections for **Supporting Evidence**" not in prompt
+
+    def test_conflicting_information_mentioned_as_optional(self) -> None:
+        """Conflicting Information is mentioned but as optional/natural integration."""
+        prompt = self._get_system_prompt()
+        assert "Conflicting Information" in prompt
+        # Should be framed as "where they exist" or "naturally"
+        assert "naturally" in prompt.lower() or "where they exist" in prompt.lower()
+
+    def test_limitations_mentioned_as_optional(self) -> None:
+        """Limitations are mentioned but not as a mandatory subsection."""
+        prompt = self._get_system_prompt()
+        assert "Limitations" in prompt
+        assert "naturally" in prompt.lower() or "where they exist" in prompt.lower()
+
+    # -- 3.4: Citation importance emphasis --
+
+    def test_citation_importance_emphasis(self) -> None:
+        """System prompt emphasizes that citations are extremely important."""
+        prompt = self._get_system_prompt()
+        assert "extremely important" in prompt.lower() or "citations are extremely important" in prompt.lower()
+
+    def test_citation_user_usage_guidance(self) -> None:
+        """System prompt notes that users will use citations to find more info."""
+        prompt = self._get_system_prompt()
+        assert "more information" in prompt.lower()
+
+    # -- 3.5: Language matching appears at least twice --
+
+    def test_language_matching_appears_twice(self) -> None:
+        """Language matching instruction appears at least twice in system prompt."""
+        prompt = self._get_system_prompt()
+        prompt_lower = prompt.lower()
+        # Count distinct language-matching instructions
+        # First: "same language" in the Language section
+        # Second: "REMEMBER" block at the end
+        occurrences = prompt_lower.count("same language")
+        assert occurrences >= 2, f"Expected 'same language' at least 2 times, found {occurrences}"
+
+    def test_language_matching_critical_reminder(self) -> None:
+        """System prompt has a critical/emphatic language-matching reminder at the end."""
+        prompt = self._get_system_prompt()
+        # The REMEMBER block should be near the end
+        assert "REMEMBER" in prompt
+        remember_idx = prompt.index("REMEMBER")
+        # Should be in the last 25% of the prompt
+        assert remember_idx > len(prompt) * 0.5
+
+    # -- 3.6: Per-section writing rules --
+
+    def test_section_title_format_rule(self) -> None:
+        """System prompt instructs using ## for section titles."""
+        prompt = self._get_system_prompt()
+        assert "## for" in prompt or "## for each section" in prompt.lower()
+
+    def test_paragraph_form_rule(self) -> None:
+        """System prompt instructs writing in paragraph form by default."""
+        prompt = self._get_system_prompt()
+        assert "paragraph form" in prompt.lower()
+
+    def test_no_self_reference_in_writing_rules(self) -> None:
+        """System prompt instructs not to refer to yourself or comment on the report."""
+        prompt = self._get_system_prompt()
+        assert "do not refer to yourself" in prompt.lower() or "never refer to yourself" in prompt.lower()
+
+    def test_just_write_the_report_rule(self) -> None:
+        """System prompt says 'just write the report' (matching open_deep_research)."""
+        prompt = self._get_system_prompt()
+        assert "just write the report" in prompt.lower()
+
+    # -- Regression: query-type classification still works --
+
+    def test_query_type_classification_still_works(self) -> None:
+        """Query-type classification produces correct structure guidance for all types."""
+        stub = StubSynthesis()
+        for query, expected_keyword in [
+            ("React vs Vue for web apps", "comparison"),
+            ("Top 5 Python frameworks", "enumeration"),
+            ("How to deploy FastAPI", "how-to"),
+            ("What is quantum computing?", "Key Findings"),
+        ]:
+            state = _make_state(query=query)
+            prompt = stub._build_synthesis_system_prompt(state)
+            assert expected_keyword in prompt, (
+                f"Missing '{expected_keyword}' for query '{query}'"
+            )

@@ -353,17 +353,23 @@ Select a report structure suited to the query type. A structural hint is provide
 
 {structure_guidance}
 
-Every report must include:
-- An **Analysis** section with subsections for **Supporting Evidence**, **Conflicting Information** (if contradictions exist), and **Limitations**
-- A **Conclusions** section with actionable insights
+These are suggestions. Section is a fluid concept — you can structure your report however you think is best, including in ways not listed above. Make sure sections are cohesive and make sense for the reader.
+
+Include analysis of Conflicting Information and Limitations where they exist, but integrate them naturally into the relevant sections rather than forcing separate subsections. A Conclusions section with actionable insights is always valuable.
+
+## Section Writing Rules
+
+- Use ## for each section title (Markdown format).
+- Write in paragraph form by default; use bullet points only when listing discrete items.
+- Each section should be as long as necessary to deeply answer the question with the information gathered. Sections are expected to be thorough and detailed. You are writing a deep research report and users expect comprehensive answers.
+- Do not refer to yourself or comment on the report itself — just write the report.
 
 ## Writing Quality
 
 - Write directly and authoritatively. Do not hedge with openers like "it appears that", "it seems", or "based on available information".
 - Never use meta-commentary about the report itself ("based on the research", "the findings show", "this report examines").
 - Never refer to yourself ("as an AI", "I found that", "in my analysis").
-- Use clear, professional language. Write in paragraph form by default; use bullet points only when listing discrete items.
-- Each section should be thorough — provide depth, not surface-level summaries. Readers expect comprehensive analysis.
+- Use clear, professional language.
 - Include all relevant findings. Do not omit information for brevity.
 
 ## Citations
@@ -372,8 +378,11 @@ Every report must include:
 - The citation numbers correspond to the numbered sources provided in the input.
 - Do NOT generate a Sources or References section — it will be appended automatically.
 - Distinguish between high-confidence findings (well-supported) and lower-confidence insights.
+- Citations are extremely important. Pay careful attention to getting these right. Users will often use citations to find more information on specific points.
 
-IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
+IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary.
+
+REMEMBER: The research and brief may be in English, but the final report MUST be written in the same language as the user's original query. This is critical — the user will only understand the answer if it matches their input language."""
 
     def _build_synthesis_user_prompt(
         self,

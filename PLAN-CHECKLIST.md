@@ -87,33 +87,36 @@
 
 ## Phase 3: Align Synthesis Prompt with open_deep_research
 
-- [ ] **3.1** Add section verbosity expectation to synthesis system prompt
-  - Add: "Each section should be as long as necessary to deeply answer the question with the information gathered. Sections are expected to be thorough and detailed. You are writing a deep research report and users expect comprehensive answers."
-  - Place after the "Writing Quality" section
-- [ ] **3.2** Soften structure prescriptiveness
-  - Add after structure guidance: "These are suggestions. Section is a fluid concept — you can structure your report however you think is best, including in ways not listed above. Make sure sections are cohesive and make sense for the reader."
-  - Keep query-type hints as starting points, not rigid templates
-- [ ] **3.3** Make Analysis subsections optional
-  - Change mandatory "Analysis" section with "Supporting Evidence", "Conflicting Information", and "Limitations" subsections
-  - Replace with: "Include analysis of conflicting information and limitations where they exist, but integrate them naturally into the relevant sections rather than forcing separate subsections."
-- [ ] **3.4** Add citation importance emphasis
-  - Add to Citations section: "Citations are extremely important. Pay careful attention to getting these right. Users will often use citations to find more information on specific points."
-- [ ] **3.5** Strengthen language matching
-  - Add a second language-matching instruction at the end of the system prompt:
+- [x] **3.1** Add section verbosity expectation to synthesis system prompt
+  - Added to new "Section Writing Rules" section: "Each section should be as long as necessary to deeply answer the question with the information gathered. Sections are expected to be thorough and detailed. You are writing a deep research report and users expect comprehensive answers."
+- [x] **3.2** Soften structure prescriptiveness
+  - Added after structure guidance: "These are suggestions. Section is a fluid concept — you can structure your report however you think is best, including in ways not listed above."
+  - Query-type hints retained as starting points, not rigid templates
+- [x] **3.3** Make Analysis subsections optional
+  - Removed mandatory "Analysis" section with "Supporting Evidence", "Conflicting Information", and "Limitations" subsections
+  - Replaced with: "Include analysis of Conflicting Information and Limitations where they exist, but integrate them naturally into the relevant sections rather than forcing separate subsections."
+- [x] **3.4** Add citation importance emphasis
+  - Added to Citations section: "Citations are extremely important. Pay careful attention to getting these right. Users will often use citations to find more information on specific points."
+- [x] **3.5** Strengthen language matching
+  - Added second language-matching instruction at end of system prompt:
     - "REMEMBER: The research and brief may be in English, but the final report MUST be written in the same language as the user's original query. This is critical — the user will only understand the answer if it matches their input language."
-- [ ] **3.6** Add per-section writing rules
-  - "Use ## for each section title (Markdown format)"
-  - "Write in paragraph form by default; use bullet points only when listing discrete items"
-  - "Do not refer to yourself or comment on the report itself — just write the report"
-- [ ] **3.7** Add tests for synthesis prompt changes
-  - Test: system prompt includes verbosity expectation ("thorough", "detailed", "comprehensive")
-  - Test: system prompt includes structure flexibility ("however you think is best")
-  - Test: "Supporting Evidence" / "Conflicting Information" / "Limitations" NOT mandatory
-  - Test: citation section includes importance emphasis
-  - Test: language matching instruction appears at least twice
-  - Test: per-section writing rules present (## headers, paragraph form, no self-reference)
-  - Test: query-type classification still works (comparison, enumeration, howto, explanation)
-- [ ] **3.8** Verify existing synthesis tests still pass
+  - Language matching now appears twice: in Language section and in REMEMBER block
+- [x] **3.6** Add per-section writing rules
+  - New "Section Writing Rules" section with:
+    - "Use ## for each section title (Markdown format)" *(present)*
+    - "Write in paragraph form by default; use bullet points only when listing discrete items" *(present)*
+    - "Do not refer to yourself or comment on the report itself — just write the report" *(present)*
+    - "Each section should be as long as necessary..." (verbosity from 3.1) *(present)*
+- [x] **3.7** Add tests for synthesis prompt changes
+  - Test: verbosity expectation — "thorough", "detailed", "comprehensive", "deep research report", "as long as necessary" *(TestSynthesisPromptAlignment — 5 tests)*
+  - Test: structure flexibility — "however you think is best", "suggestions", "fluid" *(TestSynthesisPromptAlignment — 3 tests)*
+  - Test: Analysis subsections NOT mandatory, Conflicting Information/Limitations optional *(TestSynthesisPromptAlignment — 3 tests)*
+  - Test: citation importance emphasis and user usage guidance *(TestSynthesisPromptAlignment — 2 tests)*
+  - Test: language matching appears at least twice + critical REMEMBER reminder *(TestSynthesisPromptAlignment — 2 tests)*
+  - Test: per-section writing rules — ## headers, paragraph form, no self-reference, "just write the report" *(TestSynthesisPromptAlignment — 4 tests)*
+  - Test: query-type classification still works for all types *(TestSynthesisPromptAlignment — 1 test)*
+  - Total new tests: 20 in TestSynthesisPromptAlignment class
+- [x] **3.8** Verify existing synthesis tests still pass *(2030 passed, 6 skipped, 0 failures)*
 
 ---
 
