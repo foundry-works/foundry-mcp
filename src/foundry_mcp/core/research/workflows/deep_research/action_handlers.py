@@ -105,12 +105,10 @@ class ActionHandlersMixin:
         # Resolve per-phase providers and models from config
         # Supports ProviderSpec format: "[cli]gemini:pro" -> (provider_id, model)
         planning_pid, planning_model = self.config.resolve_phase_provider("planning")
-        analysis_pid, analysis_model = self.config.resolve_phase_provider("analysis")
         synthesis_pid, synthesis_model = self.config.resolve_phase_provider("synthesis")
-        refinement_pid, refinement_model = self.config.resolve_phase_provider("refinement")
 
-        # Determine initial phase: CLARIFICATION if enabled, else PLANNING
-        initial_phase = DeepResearchPhase.PLANNING
+        # Determine initial phase: CLARIFICATION if enabled, else SUPERVISION
+        initial_phase = DeepResearchPhase.SUPERVISION
         if getattr(self.config, "deep_research_allow_clarification", False):
             initial_phase = DeepResearchPhase.CLARIFICATION
 
@@ -126,14 +124,10 @@ class ActionHandlersMixin:
             system_prompt=system_prompt,
             # Per-phase providers: explicit provider_id overrides config
             planning_provider=provider_id or planning_pid,
-            analysis_provider=provider_id or analysis_pid,
             synthesis_provider=provider_id or synthesis_pid,
-            refinement_provider=provider_id or refinement_pid,
             # Per-phase models from ProviderSpec (only used if provider_id not overridden)
             planning_model=None if provider_id else planning_model,
-            analysis_model=None if provider_id else analysis_model,
             synthesis_model=None if provider_id else synthesis_model,
-            refinement_model=None if provider_id else refinement_model,
             # Supervision configuration
             max_supervision_rounds=getattr(self.config, "deep_research_max_supervision_rounds", 3),
         )

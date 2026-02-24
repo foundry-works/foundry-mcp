@@ -91,17 +91,11 @@ class ResearchConfig:
     deep_research_clarification_provider: Optional[str] = None  # Uses default_provider if not set
 
     # Deep research brief phase (query enrichment before planning)
-    deep_research_enable_brief: bool = True  # Master switch for dedicated research brief generation
     deep_research_brief_provider: Optional[str] = None  # Uses research-tier if not set
     deep_research_brief_model: Optional[str] = None  # Uses research-tier model if not set
 
     # Deep research LLM-driven supervisor reflection
-    deep_research_enable_reflection: bool = True  # Master switch for LLM reflection at phase boundaries
     deep_research_reflection_provider: Optional[str] = None  # Uses default_provider if not set
-    deep_research_reflection_timeout: float = 60.0  # Timeout per reflection call (seconds)
-
-    # Deep research planning self-critique (validates sub-query decomposition quality)
-    deep_research_enable_planning_critique: bool = True  # Self-critique of sub-query decomposition before gathering
 
     # Deep research iterative supervision (coverage gap assessment between gathering rounds)
     deep_research_enable_supervision: bool = True  # Master switch for iterative supervision loop
@@ -112,20 +106,12 @@ class ResearchConfig:
     deep_research_supervision_provider: Optional[str] = None
     deep_research_supervision_model: Optional[str] = None
 
-    # Supervisor delegation model (Phase 4 PLAN)
-    deep_research_delegation_model: bool = True  # Use directive-based delegation (vs. query-generation fallback)
+    # Supervisor delegation configuration
     deep_research_max_concurrent_research_units: int = 5  # Max parallel researchers per delegation round
     deep_research_delegation_provider: Optional[str] = None  # LLM provider for delegation prompt (uses supervision fallback)
     deep_research_delegation_model_name: Optional[str] = None  # Model override for delegation prompt
 
-    # Supervisor-owned decomposition (Phase 2 PLAN — merge planning into supervision)
-    deep_research_supervisor_owned_decomposition: bool = True  # Skip PLANNING/GATHERING, supervisor decomposes in round 0
-
-    # Deep research contradiction detection in analysis phase
-    deep_research_enable_contradiction_detection: bool = True  # LLM-based contradiction detection between findings
-
     # Deep research parallel topic researcher agents
-    deep_research_enable_topic_agents: bool = True  # Master switch for per-topic ReAct loops in gathering
     deep_research_topic_max_tool_calls: int = 10  # Max tool calls (search + extract) per topic (ReAct loop limit)
     deep_research_topic_reflection_provider: Optional[str] = None  # Uses default_provider if not set
     deep_research_enable_content_dedup: bool = True  # Cross-researcher content-similarity deduplication
@@ -135,31 +121,19 @@ class ResearchConfig:
     deep_research_enable_extract: bool = True  # Allow researchers to extract full content from promising URLs
     deep_research_extract_max_per_iteration: int = 2  # Max URLs to extract per ReAct iteration
 
-    # Fetch-time source summarization (Phase 1)
-    deep_research_fetch_time_summarization: bool = True  # Summarize raw search results at fetch time
+    # Fetch-time source summarization
     deep_research_summarization_provider: Optional[str] = None  # LLM provider for fetch-time summarization (cheapest available)
     deep_research_summarization_model: Optional[str] = None  # Model override for fetch-time summarization
     deep_research_max_content_length: int = 50000  # Max chars per source before L1 summarization (matches open_deep_research)
     deep_research_summarization_timeout: int = 60  # Per-result summarization timeout in seconds
 
-    # Inline per-topic compression during gathering (Phase 2 PLAN)
+    # Inline per-topic compression during gathering
     deep_research_inline_compression: bool = True  # Compress each topic's findings immediately after its ReAct loop (before supervision)
 
-    # Per-topic compression before aggregation (Phase 3)
+    # Per-topic compression before aggregation
     deep_research_compression_provider: Optional[str] = None  # LLM provider for per-topic compression (defaults to research/default provider)
     deep_research_compression_model: Optional[str] = None  # Model override for per-topic compression
     deep_research_compression_max_content_length: int = 50000  # Max chars per source in compression prompt (matches open_deep_research)
-
-    # Post-gathering pipeline control (Phase 3 PLAN — collapse pipeline)
-    # Default off: SUPERVISION → SYNTHESIS (skip ANALYSIS, COMPRESSION, REFINEMENT)
-    deep_research_enable_analysis_digest: bool = False  # Run ANALYSIS phase (digest/rank/select findings)
-    deep_research_enable_refinement: bool = False  # Run REFINEMENT phase (loop back for more research)
-
-    # Global compression (cross-topic deduplication before synthesis)
-    deep_research_enable_global_compression: bool = False  # Master switch for global compression phase (default off — Phase 3 PLAN)
-    deep_research_global_compression_provider: Optional[str] = None  # LLM provider for global compression (uses research-tier if not set)
-    deep_research_global_compression_model: Optional[str] = None  # Model override for global compression
-    deep_research_global_compression_timeout: float = 360.0  # Timeout for global compression LLM call (seconds)
 
     # Research quality evaluation (LLM-as-judge)
     deep_research_evaluation_provider: Optional[str] = None  # LLM provider for evaluation (uses research-tier if not set)
@@ -189,20 +163,14 @@ class ResearchConfig:
     deep_research_max_concurrent: int = 3
     # Per-phase timeout overrides (seconds) - uses deep_research_timeout if not set
     deep_research_planning_timeout: float = 360.0
-    deep_research_analysis_timeout: float = 360.0
     deep_research_synthesis_timeout: float = 600.0  # Synthesis may take longer
-    deep_research_refinement_timeout: float = 360.0
     # Per-phase provider overrides - uses default_provider if not set
     deep_research_planning_provider: Optional[str] = None
-    deep_research_analysis_provider: Optional[str] = None
     deep_research_synthesis_provider: Optional[str] = None
-    deep_research_refinement_provider: Optional[str] = None
     # Per-phase fallback provider lists (for retry/fallback on failure)
     # On failure, tries next provider in the list until success or exhaustion
     deep_research_planning_providers: List[str] = field(default_factory=list)
-    deep_research_analysis_providers: List[str] = field(default_factory=list)
     deep_research_synthesis_providers: List[str] = field(default_factory=list)
-    deep_research_refinement_providers: List[str] = field(default_factory=list)
     # Retry settings for deep research phases
     deep_research_max_retries: int = 2  # Retry attempts per provider
     deep_research_retry_delay: float = 5.0  # Seconds between retries
@@ -258,9 +226,6 @@ class ResearchConfig:
     # Tavily extract configuration
     tavily_extract_depth: str = "basic"  # "basic", "advanced"
     tavily_extract_include_images: bool = False
-    # Tavily extract integration with deep research
-    tavily_extract_in_deep_research: bool = False  # Enable extract as follow-up step
-    tavily_extract_max_urls: int = 5  # Max URLs to extract per deep research run
 
     # Perplexity search configuration
     perplexity_search_context_size: str = "medium"  # "low", "medium", "high"
@@ -285,7 +250,6 @@ class ResearchConfig:
     audit_verbosity: str = "full"  # "full" or "minimal" - controls JSONL audit payload size
 
     # Document digest configuration (for large content compression in deep research)
-    deep_research_digest_policy: str = "auto"  # "off", "auto", "always", "proactive"
     deep_research_digest_min_chars: int = 10000  # Minimum chars before digest is applied
     deep_research_digest_max_sources: int = 8  # Max sources to digest per batch
     deep_research_digest_timeout: float = 120.0  # Timeout per digest operation (seconds)
@@ -296,7 +260,7 @@ class ResearchConfig:
     deep_research_digest_fetch_pdfs: bool = False  # Whether to fetch and extract PDF content
     deep_research_archive_content: bool = False  # Archive canonical text for digested sources
     deep_research_archive_retention_days: int = 30  # Days to retain archived digest content (0 = keep indefinitely)
-    # Digest LLM provider configuration (uses analysis provider if not set)
+    # Digest LLM provider configuration (uses default provider if not set)
     deep_research_digest_provider: Optional[str] = None  # Primary provider for digest
     deep_research_digest_providers: List[str] = field(default_factory=list)  # Fallback providers
 
@@ -333,9 +297,7 @@ class ResearchConfig:
             return list(val) if val else []
 
         deep_research_planning_providers = _parse_provider_list("deep_research_planning_providers")
-        deep_research_analysis_providers = _parse_provider_list("deep_research_analysis_providers")
         deep_research_synthesis_providers = _parse_provider_list("deep_research_synthesis_providers")
-        deep_research_refinement_providers = _parse_provider_list("deep_research_refinement_providers")
 
         # Parse per_provider_rate_limits - handle dict from TOML
         per_provider_rate_limits = data.get(
@@ -364,15 +326,10 @@ class ResearchConfig:
             deep_research_allow_clarification=_parse_bool(data.get("deep_research_allow_clarification", True)),
             deep_research_clarification_provider=data.get("deep_research_clarification_provider"),
             # Deep research brief phase (query enrichment)
-            deep_research_enable_brief=_parse_bool(data.get("deep_research_enable_brief", True)),
             deep_research_brief_provider=data.get("deep_research_brief_provider"),
             deep_research_brief_model=data.get("deep_research_brief_model"),
             # Deep research LLM-driven reflection
-            deep_research_enable_reflection=_parse_bool(data.get("deep_research_enable_reflection", True)),
             deep_research_reflection_provider=data.get("deep_research_reflection_provider"),
-            deep_research_reflection_timeout=float(data.get("deep_research_reflection_timeout", 60.0)),
-            # Deep research planning self-critique
-            deep_research_enable_planning_critique=_parse_bool(data.get("deep_research_enable_planning_critique", True)),
             # Deep research iterative supervision
             deep_research_enable_supervision=_parse_bool(data.get("deep_research_enable_supervision", True)),
             deep_research_max_supervision_rounds=int(data.get("deep_research_max_supervision_rounds", 6)),
@@ -381,23 +338,13 @@ class ResearchConfig:
             ),
             deep_research_supervision_provider=data.get("deep_research_supervision_provider"),
             deep_research_supervision_model=data.get("deep_research_supervision_model"),
-            # Supervisor delegation model (Phase 4 PLAN)
-            deep_research_delegation_model=_parse_bool(data.get("deep_research_delegation_model", True)),
+            # Supervisor delegation configuration
             deep_research_max_concurrent_research_units=int(
                 data.get("deep_research_max_concurrent_research_units", 5)
             ),
             deep_research_delegation_provider=data.get("deep_research_delegation_provider"),
             deep_research_delegation_model_name=data.get("deep_research_delegation_model_name"),
-            # Supervisor-owned decomposition (Phase 2 PLAN)
-            deep_research_supervisor_owned_decomposition=_parse_bool(
-                data.get("deep_research_supervisor_owned_decomposition", True)
-            ),
-            # Deep research contradiction detection
-            deep_research_enable_contradiction_detection=_parse_bool(
-                data.get("deep_research_enable_contradiction_detection", True)
-            ),
             # Deep research parallel topic researcher agents
-            deep_research_enable_topic_agents=_parse_bool(data.get("deep_research_enable_topic_agents", True)),
             deep_research_topic_max_tool_calls=int(
                 data.get(
                     "deep_research_topic_max_tool_calls",
@@ -411,36 +358,17 @@ class ResearchConfig:
             deep_research_enable_extract=_parse_bool(data.get("deep_research_enable_extract", True)),
             deep_research_extract_max_per_iteration=int(data.get("deep_research_extract_max_per_iteration", 2)),
             # Fetch-time source summarization
-            deep_research_fetch_time_summarization=_parse_bool(
-                data.get("deep_research_fetch_time_summarization", True)
-            ),
             deep_research_summarization_provider=data.get("deep_research_summarization_provider"),
             deep_research_summarization_model=data.get("deep_research_summarization_model"),
             deep_research_max_content_length=int(data.get("deep_research_max_content_length", 50000)),
             deep_research_summarization_timeout=int(data.get("deep_research_summarization_timeout", 60)),
             # Inline per-topic compression during gathering
             deep_research_inline_compression=_parse_bool(data.get("deep_research_inline_compression", True)),
-            # Per-topic compression (Phase 3)
+            # Per-topic compression
             deep_research_compression_provider=data.get("deep_research_compression_provider"),
             deep_research_compression_model=data.get("deep_research_compression_model"),
             deep_research_compression_max_content_length=int(
                 data.get("deep_research_compression_max_content_length", 50000)
-            ),
-            # Post-gathering pipeline control (Phase 3 PLAN — collapse pipeline)
-            deep_research_enable_analysis_digest=_parse_bool(
-                data.get("deep_research_enable_analysis_digest", False)
-            ),
-            deep_research_enable_refinement=_parse_bool(
-                data.get("deep_research_enable_refinement", False)
-            ),
-            # Global compression (cross-topic deduplication before synthesis)
-            deep_research_enable_global_compression=_parse_bool(
-                data.get("deep_research_enable_global_compression", False)
-            ),
-            deep_research_global_compression_provider=data.get("deep_research_global_compression_provider"),
-            deep_research_global_compression_model=data.get("deep_research_global_compression_model"),
-            deep_research_global_compression_timeout=float(
-                data.get("deep_research_global_compression_timeout", 360.0)
             ),
             # Research quality evaluation (LLM-as-judge)
             deep_research_evaluation_provider=data.get("deep_research_evaluation_provider"),
@@ -465,19 +393,13 @@ class ResearchConfig:
             deep_research_max_concurrent=int(data.get("deep_research_max_concurrent", 3)),
             # Per-phase timeout overrides (match class defaults)
             deep_research_planning_timeout=float(data.get("deep_research_planning_timeout", 360.0)),
-            deep_research_analysis_timeout=float(data.get("deep_research_analysis_timeout", 360.0)),
             deep_research_synthesis_timeout=float(data.get("deep_research_synthesis_timeout", 600.0)),
-            deep_research_refinement_timeout=float(data.get("deep_research_refinement_timeout", 360.0)),
             # Per-phase provider overrides
             deep_research_planning_provider=data.get("deep_research_planning_provider"),
-            deep_research_analysis_provider=data.get("deep_research_analysis_provider"),
             deep_research_synthesis_provider=data.get("deep_research_synthesis_provider"),
-            deep_research_refinement_provider=data.get("deep_research_refinement_provider"),
             # Per-phase fallback provider lists
             deep_research_planning_providers=deep_research_planning_providers,
-            deep_research_analysis_providers=deep_research_analysis_providers,
             deep_research_synthesis_providers=deep_research_synthesis_providers,
-            deep_research_refinement_providers=deep_research_refinement_providers,
             # Retry settings
             deep_research_max_retries=int(data.get("deep_research_max_retries", 2)),
             deep_research_retry_delay=float(data.get("deep_research_retry_delay", 5.0)),
@@ -506,9 +428,6 @@ class ResearchConfig:
             # Tavily extract configuration
             tavily_extract_depth=str(data.get("tavily_extract_depth", "basic")),
             tavily_extract_include_images=_parse_bool(data.get("tavily_extract_include_images", False)),
-            # Tavily extract in deep research
-            tavily_extract_in_deep_research=_parse_bool(data.get("tavily_extract_in_deep_research", False)),
-            tavily_extract_max_urls=int(data.get("tavily_extract_max_urls", 5)),
             # Perplexity search configuration
             perplexity_search_context_size=str(data.get("perplexity_search_context_size", "medium")),
             perplexity_max_tokens=int(data.get("perplexity_max_tokens", 50000)),
@@ -542,7 +461,6 @@ class ResearchConfig:
             # Audit verbosity
             audit_verbosity=str(data.get("audit_verbosity", "full")),
             # Document digest configuration
-            deep_research_digest_policy=str(data.get("deep_research_digest_policy", "auto")),
             deep_research_digest_min_chars=int(data.get("deep_research_digest_min_chars", 10000)),
             deep_research_digest_max_sources=int(data.get("deep_research_digest_max_sources", 8)),
             deep_research_digest_timeout=float(data.get("deep_research_digest_timeout", 120.0)),
@@ -770,14 +688,6 @@ class ResearchConfig:
         Raises:
             ValueError: If any digest config field has an invalid value.
         """
-        # Validate digest_policy
-        valid_policies = {"off", "auto", "always", "proactive"}
-        if self.deep_research_digest_policy not in valid_policies:
-            raise ValueError(
-                f"Invalid deep_research_digest_policy: {self.deep_research_digest_policy!r}. "
-                f"Must be one of: {sorted(valid_policies)}"
-            )
-
         # Validate min_chars (must be positive)
         if self.deep_research_digest_min_chars < 0:
             raise ValueError(
@@ -845,8 +755,8 @@ class ResearchConfig:
         falls back to deep_research_timeout.
 
         Args:
-            phase: Phase name ("planning", "analysis", "compression", "synthesis",
-                   "refinement", "gathering", "supervision")
+            phase: Phase name ("planning", "gathering", "supervision", "synthesis",
+                   "clarification", "brief")
 
         Returns:
             Timeout in seconds for the phase
@@ -857,10 +767,7 @@ class ResearchConfig:
             "planning": self.deep_research_planning_timeout,
             "gathering": self.deep_research_timeout,  # Gathering uses default
             "supervision": self.deep_research_planning_timeout,  # Lightweight LLM call, reuse planning timeout
-            "analysis": self.deep_research_analysis_timeout,
-            "compression": self.deep_research_global_compression_timeout,  # Global compression
             "synthesis": self.deep_research_synthesis_timeout,
-            "refinement": self.deep_research_refinement_timeout,
         }
         return phase_timeouts.get(phase.lower(), self.deep_research_timeout)
 
@@ -872,7 +779,7 @@ class ResearchConfig:
         and ProviderSpec format ("[cli]gemini:pro").
 
         Args:
-            phase: Phase name ("planning", "analysis", "synthesis", "refinement")
+            phase: Phase name ("planning", "synthesis")
 
         Returns:
             Provider ID for the phase (e.g., "gemini", "opencode")
@@ -887,16 +794,14 @@ class ResearchConfig:
         Returns (provider_id, model) tuple for use with the provider registry.
 
         Args:
-            phase: Phase name ("planning", "analysis", "synthesis", "refinement")
+            phase: Phase name ("planning", "synthesis")
 
         Returns:
             Tuple of (provider_id, model) where model may be None
         """
         phase_providers = {
             "planning": self.deep_research_planning_provider,
-            "analysis": self.deep_research_analysis_provider,
             "synthesis": self.deep_research_synthesis_provider,
-            "refinement": self.deep_research_refinement_provider,
         }
         configured = phase_providers.get(phase.lower())
         spec_str = configured or self.default_provider
@@ -909,16 +814,14 @@ class ResearchConfig:
         otherwise returns an empty list (no fallback).
 
         Args:
-            phase: Phase name ("planning", "analysis", "synthesis", "refinement")
+            phase: Phase name ("planning", "synthesis")
 
         Returns:
             List of fallback provider IDs to try on failure
         """
         phase_fallbacks = {
             "planning": self.deep_research_planning_providers,
-            "analysis": self.deep_research_analysis_providers,
             "synthesis": self.deep_research_synthesis_providers,
-            "refinement": self.deep_research_refinement_providers,
         }
         return phase_fallbacks.get(phase.lower(), [])
 
@@ -1042,17 +945,16 @@ class ResearchConfig:
     #: ``deep_research_{suffix}_model`` in order, then fall back to
     #: ``default_provider``.
     _ROLE_RESOLUTION_CHAIN: ClassVar[Dict[str, List[str]]] = {
-        "research": ["research", "analysis"],
+        "research": ["research"],
         "report": ["report", "synthesis"],
         "reflection": ["reflection"],
         "supervision": ["supervision", "reflection"],
         "topic_reflection": ["topic_reflection", "reflection"],
         "summarization": ["summarization"],
         "compression": ["compression"],
-        "global_compression": ["global_compression", "compression", "research"],
-        "clarification": ["clarification", "research", "analysis"],
-        "evaluation": ["evaluation", "research", "analysis"],
-        "brief": ["brief", "research", "analysis"],
+        "clarification": ["clarification", "research"],
+        "evaluation": ["evaluation", "research"],
+        "brief": ["brief", "research"],
         "delegation": ["delegation", "supervision", "reflection"],
     }
 
@@ -1341,8 +1243,6 @@ class ResearchConfig:
             auto_parameters=self.tavily_auto_parameters,
             extract_depth=self.tavily_extract_depth,
             extract_include_images=self.tavily_extract_include_images,
-            extract_in_deep_research=self.tavily_extract_in_deep_research,
-            extract_max_urls=self.tavily_extract_max_urls,
         )
 
     @property
@@ -1405,12 +1305,7 @@ class ResearchConfig:
 
         return DeepResearchConfig(
             allow_clarification=self.deep_research_allow_clarification,
-            enable_reflection=self.deep_research_enable_reflection,
-            enable_contradiction_detection=self.deep_research_enable_contradiction_detection,
-            enable_topic_agents=self.deep_research_enable_topic_agents,
             enable_supervision=self.deep_research_enable_supervision,
-            enable_planning_critique=self.deep_research_enable_planning_critique,
-            fetch_time_summarization=self.deep_research_fetch_time_summarization,
             max_supervision_rounds=self.deep_research_max_supervision_rounds,
             supervision_min_sources_per_query=self.deep_research_supervision_min_sources_per_query,
             max_iterations=self.deep_research_max_iterations,
@@ -1424,24 +1319,16 @@ class ResearchConfig:
             topic_max_searches=self.deep_research_topic_max_tool_calls,
             enable_content_dedup=self.deep_research_enable_content_dedup,
             content_dedup_threshold=self.deep_research_content_dedup_threshold,
-            reflection_timeout=self.deep_research_reflection_timeout,
             planning_timeout=self.deep_research_planning_timeout,
-            analysis_timeout=self.deep_research_analysis_timeout,
             synthesis_timeout=self.deep_research_synthesis_timeout,
-            refinement_timeout=self.deep_research_refinement_timeout,
             planning_provider=self.deep_research_planning_provider,
-            analysis_provider=self.deep_research_analysis_provider,
             synthesis_provider=self.deep_research_synthesis_provider,
-            refinement_provider=self.deep_research_refinement_provider,
             planning_providers=list(self.deep_research_planning_providers),
-            analysis_providers=list(self.deep_research_analysis_providers),
             synthesis_providers=list(self.deep_research_synthesis_providers),
-            refinement_providers=list(self.deep_research_refinement_providers),
             max_retries=self.deep_research_max_retries,
             retry_delay=self.deep_research_retry_delay,
             providers=list(self.deep_research_providers),
             stale_task_seconds=self.deep_research_stale_task_seconds,
-            digest_policy=self.deep_research_digest_policy,
             digest_min_chars=self.deep_research_digest_min_chars,
             digest_max_sources=self.deep_research_digest_max_sources,
             digest_timeout=self.deep_research_digest_timeout,

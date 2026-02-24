@@ -37,8 +37,6 @@ class TavilyConfig:
     auto_parameters: bool = False
     extract_depth: str = "basic"
     extract_include_images: bool = False
-    extract_in_deep_research: bool = False
-    extract_max_urls: int = 5
 
 
 @dataclass(frozen=True)
@@ -103,18 +101,13 @@ class ModelRoleConfig:
 class DeepResearchConfig:
     """Deep research workflow configuration.
 
-    Groups phase settings, timeouts, concurrency, and feature flags
-    from the ``deep_research_*`` namespace on ResearchConfig.
+    Groups workflow settings and tuning knobs from the ``deep_research_*``
+    namespace on ResearchConfig.
     """
 
-    # Feature flags
+    # Clarification / supervision toggles
     allow_clarification: bool = True
-    enable_reflection: bool = True
-    enable_contradiction_detection: bool = True
-    enable_topic_agents: bool = True
     enable_supervision: bool = True
-    enable_planning_critique: bool = True
-    fetch_time_summarization: bool = True
 
     # Supervision settings
     max_supervision_rounds: int = 6
@@ -135,26 +128,17 @@ class DeepResearchConfig:
     enable_content_dedup: bool = True
     content_dedup_threshold: float = 0.8
 
-    # Reflection settings
-    reflection_timeout: float = 60.0
-
     # Per-phase timeouts
     planning_timeout: float = 360.0
-    analysis_timeout: float = 360.0
     synthesis_timeout: float = 600.0
-    refinement_timeout: float = 360.0
 
     # Per-phase provider overrides
     planning_provider: Optional[str] = None
-    analysis_provider: Optional[str] = None
     synthesis_provider: Optional[str] = None
-    refinement_provider: Optional[str] = None
 
     # Per-phase fallback provider lists
     planning_providers: List[str] = field(default_factory=list)
-    analysis_providers: List[str] = field(default_factory=list)
     synthesis_providers: List[str] = field(default_factory=list)
-    refinement_providers: List[str] = field(default_factory=list)
 
     # Retry settings
     max_retries: int = 2
@@ -167,7 +151,6 @@ class DeepResearchConfig:
     stale_task_seconds: float = 300.0
 
     # Document digest configuration
-    digest_policy: str = "auto"
     digest_min_chars: int = 10000
     digest_max_sources: int = 8
     digest_timeout: float = 120.0

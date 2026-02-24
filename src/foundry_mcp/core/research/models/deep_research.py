@@ -432,16 +432,12 @@ class DeepResearchConfig(BaseModel):
 class DeepResearchPhase(str, Enum):
     """Phases of the DEEP_RESEARCH workflow.
 
-    The deep research workflow progresses through nine sequential phases:
+    The deep research workflow progresses through five sequential phases:
     0. CLARIFICATION - (Optional) Analyze query specificity and ask clarifying questions
-    1. BRIEF - (Optional) Enrich the raw query into a structured research brief
-    2. PLANNING - Analyze the query and decompose into focused sub-queries
-    3. GATHERING - Execute sub-queries in parallel and collect sources
-    4. SUPERVISION - Assess coverage gaps and generate follow-up queries
-    5. ANALYSIS - Extract findings and assess source quality
-    6. COMPRESSION - Global cross-topic deduplication and digest before synthesis
-    7. SYNTHESIS - Combine findings into a comprehensive report
-    8. REFINEMENT - Identify gaps and potentially loop back for more research
+    1. BRIEF - Enrich the raw query into a structured research brief
+    2. GATHERING - Execute sub-queries in parallel and collect sources
+    3. SUPERVISION - Assess coverage gaps and generate follow-up queries
+    4. SYNTHESIS - Combine findings into a comprehensive report
 
     The ordering of these enum values is significant - it defines the
     progression through advance_phase() method.
@@ -449,13 +445,9 @@ class DeepResearchPhase(str, Enum):
 
     CLARIFICATION = "clarification"
     BRIEF = "brief"
-    PLANNING = "planning"
     GATHERING = "gathering"
     SUPERVISION = "supervision"
-    ANALYSIS = "analysis"
-    COMPRESSION = "compression"
     SYNTHESIS = "synthesis"
-    REFINEMENT = "refinement"
 
 
 class DeepResearchState(BaseModel):
@@ -481,7 +473,7 @@ class DeepResearchState(BaseModel):
         description="Enriched research brief generated in BRIEF phase (or PLANNING fallback)",
     )
     phase: DeepResearchPhase = Field(
-        default=DeepResearchPhase.PLANNING,
+        default=DeepResearchPhase.CLARIFICATION,
         description="Current workflow phase",
     )
     iteration: int = Field(
@@ -608,14 +600,10 @@ class DeepResearchState(BaseModel):
     # Provider tracking (per-phase LLM provider configuration)
     # Supports ProviderSpec format: "[cli]gemini:pro" or simple names: "gemini"
     planning_provider: Optional[str] = Field(default=None)
-    analysis_provider: Optional[str] = Field(default=None)
     synthesis_provider: Optional[str] = Field(default=None)
-    refinement_provider: Optional[str] = Field(default=None)
     # Per-phase model overrides (from ProviderSpec parsing)
     planning_model: Optional[str] = Field(default=None)
-    analysis_model: Optional[str] = Field(default=None)
     synthesis_model: Optional[str] = Field(default=None)
-    refinement_model: Optional[str] = Field(default=None)
 
     # Supervision tracking (iterative coverage assessment)
     supervision_round: int = Field(
@@ -902,10 +890,9 @@ class DeepResearchState(BaseModel):
     def advance_phase(self) -> DeepResearchPhase:
         """Advance to the next research phase.
 
-        Phases advance in order: CLARIFICATION -> BRIEF -> PLANNING ->
-        GATHERING -> SUPERVISION -> ANALYSIS -> COMPRESSION -> SYNTHESIS ->
-        REFINEMENT.
-        Does nothing if already at REFINEMENT. The phase order is derived
+        Phases advance in order: CLARIFICATION -> BRIEF -> GATHERING ->
+        SUPERVISION -> SYNTHESIS.
+        Does nothing if already at SYNTHESIS. The phase order is derived
         from the DeepResearchPhase enum definition order.
 
         Returns:
@@ -917,22 +904,6 @@ class DeepResearchState(BaseModel):
             self.phase = phase_order[current_index + 1]
         self.updated_at = datetime.now(timezone.utc)
         return self.phase
-
-    def should_continue_refinement(self) -> bool:
-        """Check if another refinement iteration should occur.
-
-        Returns True if:
-        - Current iteration < max_iterations AND
-        - There are unresolved gaps
-
-        Returns:
-            True if refinement should continue, False otherwise
-        """
-        if self.iteration >= self.max_iterations:
-            return False
-        if not self.unresolved_gaps():
-            return False
-        return True
 
     def should_continue_supervision(self) -> bool:
         """Check if another supervision round should occur.
@@ -947,27 +918,6 @@ class DeepResearchState(BaseModel):
         if self.supervision_round >= self.max_supervision_rounds:
             return False
         return len(self.pending_sub_queries()) > 0
-
-    def start_new_iteration(self) -> int:
-        """Start a new refinement iteration.
-
-        Increments iteration counter and resets phase to GATHERING
-        to begin collecting sources for the new sub-queries.
-
-        Note: We intentionally skip CLARIFICATION and PLANNING here.
-        Clarification is a one-time pre-planning step (query refinement
-        is not needed once research is underway), and planning has
-        already decomposed the query into sub-queries. Refinement
-        iterations only need to re-gather, re-analyze, and re-synthesize.
-
-        Returns:
-            The new iteration number
-        """
-        self.iteration += 1
-        self.phase = DeepResearchPhase.GATHERING
-        self.supervision_round = 0
-        self.updated_at = datetime.now(timezone.utc)
-        return self.iteration
 
     def mark_completed(self, report: Optional[str] = None) -> None:
         """Mark the research session as completed.

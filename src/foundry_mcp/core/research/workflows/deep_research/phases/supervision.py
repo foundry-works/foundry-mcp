@@ -3,18 +3,11 @@
 Assesses coverage of completed sub-queries and generates follow-up research
 directives to fill gaps before proceeding to analysis.
 
-Supports two supervision models (configurable via ``deep_research_delegation_model``):
-
-1. **Delegation model** (default, Phase 4 PLAN): The supervisor generates
-   paragraph-length ``ResearchDirective`` objects targeting specific gaps.
-   Directives are executed as parallel topic researchers within the supervision
-   phase itself — no re-entry into the GATHERING phase is needed. This mirrors
-   open_deep_research's ``ConductResearch`` supervisor pattern.
-
-2. **Query-generation model** (fallback): The supervisor generates single-sentence
-   follow-up queries appended to the sub-query list. The workflow then loops back
-   to GATHERING to execute them. This is the original model preserved for backward
-   compatibility.
+Uses the **delegation model**: the supervisor generates paragraph-length
+``ResearchDirective`` objects targeting specific gaps.  Directives are executed
+as parallel topic researchers within the supervision phase itself — no re-entry
+into the GATHERING phase is needed.  This mirrors open_deep_research's
+``ConductResearch`` supervisor pattern.
 """
 
 from __future__ import annotations
@@ -47,10 +40,10 @@ from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import 
 
 logger = logging.getLogger(__name__)
 
-# Maximum follow-up queries the supervisor can generate per round (query-generation model)
+# Maximum follow-up queries the supervisor can generate per round (legacy path)
 _MAX_FOLLOW_UPS_PER_ROUND = 3
 
-# Maximum directives the supervisor can generate per round (delegation model)
+# Maximum directives the supervisor can generate per round
 # Actual cap also bounded by config.deep_research_max_concurrent_research_units
 _MAX_DIRECTIVES_PER_ROUND = 5
 
@@ -78,7 +71,7 @@ class SupervisionPhaseMixin:
         def _get_tavily_search_kwargs(self, state: DeepResearchState) -> dict[str, Any]: ...
 
     # ==================================================================
-    # Main entry point — dispatches to delegation or query-generation
+    # Main entry point
     # ==================================================================
 
     async def _execute_supervision_async(
@@ -89,8 +82,8 @@ class SupervisionPhaseMixin:
     ) -> WorkflowResult:
         """Execute supervision phase: assess coverage and fill gaps.
 
-        Dispatches to either the delegation model (default) or the legacy
-        query-generation model based on ``deep_research_delegation_model`` config.
+        Uses the delegation model: generates ``ResearchDirective`` objects
+        targeting specific gaps and executes them as parallel topic researchers.
 
         Args:
             state: Current research state with completed sub-queries
@@ -100,16 +93,9 @@ class SupervisionPhaseMixin:
         Returns:
             WorkflowResult with metadata["should_continue_gathering"] flag
         """
-        use_delegation = getattr(self.config, "deep_research_delegation_model", True)
-
-        if use_delegation:
-            return await self._execute_supervision_delegation_async(
-                state, provider_id, timeout,
-            )
-        else:
-            return await self._execute_supervision_query_generation_async(
-                state, provider_id, timeout,
-            )
+        return await self._execute_supervision_delegation_async(
+            state, provider_id, timeout,
+        )
 
     # ==================================================================
     # Delegation model (Phase 4 PLAN)
@@ -356,12 +342,9 @@ class SupervisionPhaseMixin:
         delegation.
 
         Conditions:
-        - ``deep_research_supervisor_owned_decomposition`` config is True
         - ``state.supervision_round == 0``
         - No prior topic research results exist
         """
-        if not getattr(self.config, "deep_research_supervisor_owned_decomposition", True):
-            return False
         if state.supervision_round != 0:
             return False
         if state.topic_research_results:
@@ -1107,7 +1090,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         """Execute supervision via follow-up query generation (legacy model).
 
         This is the original supervision implementation preserved for backward
-        compatibility when ``deep_research_delegation_model=False``.
+        compatibility.
 
         This phase:
         1. Builds per-sub-query coverage data (source count, quality, domains)

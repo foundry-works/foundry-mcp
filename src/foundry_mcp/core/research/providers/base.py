@@ -163,8 +163,8 @@ class SearchProvider(ABC):
     #: Optional fetch-time source summarizer.  When set, providers that
     #: support it will run summarization on each result's content after
     #: search, storing the original in ``raw_content`` and replacing
-    #: ``content`` with the summary.  Set via the gathering phase when
-    #: ``deep_research_fetch_time_summarization`` is enabled.
+    #: ``content`` with the summary.  Set via the gathering phase for
+    #: fetch-time summarization of search results.
     _source_summarizer: Any = None
 
     @abstractmethod
