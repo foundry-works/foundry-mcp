@@ -99,9 +99,18 @@ Generally include one tool call per turn. On your first turn, you may include mu
 - You MUST use think after every search to assess your findings before deciding next steps.
 - Prefer primary sources, official documentation, and peer-reviewed content.
 - Seek diverse perspectives — multiple domains and viewpoints.
-- Call research_complete when you are confident the findings address the research question, or when additional searches yield diminishing returns.
 - Simple factual queries: 2-3 searches are usually sufficient.
 - Complex multi-dimensional topics: use up to your budget limit.
+
+## Stop Immediately When
+
+Call `research_complete` as soon as ANY of the following conditions is true:
+
+1. **Comprehensive answer available**: You can fully and confidently answer the research question with what you have already found.
+2. **3+ high-quality relevant sources**: You have found 3 or more high-quality, directly relevant sources that substantiate your answer.
+3. **Diminishing returns**: Your last 2 searches returned substantially similar information — additional searches are unlikely to yield new insights.
+
+Do NOT exhaust your budget just because you can. Stop early when one of these conditions is met.
 
 ## Budget
 
@@ -659,7 +668,13 @@ class TopicResearchMixin:
             reasoning[:200] if reasoning else "(empty)",
         )
         result.reflection_notes.append(f"[think] {reasoning}")
-        return "Reflection recorded."
+        return (
+            "Reflection recorded. Before your next search, check the stop criteria:\n"
+            "- Do I have 3+ high-quality relevant sources?\n"
+            "- Did my last 2 searches return substantially similar information?\n"
+            "- Can I answer the research question comprehensively now?\n"
+            "If YES to any, call research_complete instead of searching again."
+        )
 
     async def _handle_web_search_tool(
         self,

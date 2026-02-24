@@ -1297,3 +1297,203 @@ class TestForcedReflection:
         audit_data = mixin._audit_events[-1][1]["data"]
         assert audit_data["reflection_injections"] == 0
         assert topic_result.searches_performed == 2
+
+
+# =============================================================================
+# Phase 5: Researcher Stop Heuristics
+# =============================================================================
+
+
+class TestResearcherStopHeuristics:
+    """Tests for explicit stop heuristics in the researcher prompt and think tool."""
+
+    def test_system_prompt_contains_stop_heuristics(self) -> None:
+        """5.1: System prompt includes 'Stop Immediately When' block with all three rules."""
+        prompt = _build_researcher_system_prompt(
+            budget_total=5, budget_remaining=5, extract_enabled=True, date_str="2026-02-24",
+        )
+        assert "Stop Immediately When" in prompt
+        assert "3 or more high-quality" in prompt or "3+" in prompt
+        assert "last 2 searches" in prompt
+        assert "Comprehensive answer" in prompt or "comprehensively" in prompt
+
+    def test_stop_heuristics_present_with_extract_disabled(self) -> None:
+        """Stop heuristics remain when extract_content tool is removed."""
+        prompt = _build_researcher_system_prompt(
+            budget_total=5, budget_remaining=5, extract_enabled=False, date_str="2026-02-24",
+        )
+        assert "Stop Immediately When" in prompt
+        assert "research_complete" in prompt
+
+    def test_think_tool_response_includes_stop_checklist(self) -> None:
+        """5.2: Think tool acknowledgment includes stop-criteria checklist."""
+        mixin = StubTopicResearch()
+        result = TopicResearchResult(sub_query_id="sq-test")
+        sq = SubQuery(id="sq-test", query="test query", rationale="test", priority=1)
+
+        tool_call = ResearcherToolCall(
+            tool="think",
+            arguments={"reasoning": "Found several good sources on the topic."},
+        )
+        response_text = mixin._handle_think_tool(
+            tool_call=tool_call, sub_query=sq, result=result,
+        )
+
+        # The response should include the stop-criteria checklist
+        assert "3+ high-quality relevant sources" in response_text
+        assert "last 2 searches" in response_text
+        assert "research_complete" in response_text
+
+    @pytest.mark.asyncio
+    async def test_researcher_completes_early_with_sufficient_sources(self) -> None:
+        """5.3: Researcher calls research_complete when 3+ sources found.
+
+        Simulates a researcher that finds 3+ sources from its first search,
+        reflects via think, and then correctly calls research_complete.
+        """
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        # Provider returns 3 high-quality sources per search
+        sources = [
+            _make_source(f"src-{i}", f"https://example.com/{i}", f"Source {i}", SourceQuality.HIGH)
+            for i in range(3)
+        ]
+        provider = _make_mock_provider("tavily", sources=sources)
+
+        llm_call_count = 0
+
+        async def mock_llm(**kwargs):
+            nonlocal llm_call_count
+            llm_call_count += 1
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 50
+            result.error = None
+            if llm_call_count == 1:
+                # Turn 1: initial search
+                result.content = _react_response(_web_search_call("deep learning basics"))
+            elif llm_call_count == 2:
+                # Turn 2: think — researcher reflects and recognizes 3+ sources
+                result.content = _react_response(
+                    _think_call("I've found 3 high-quality sources. Stopping criteria met.")
+                )
+            elif llm_call_count == 3:
+                # Turn 3: research_complete (the correct stop behavior)
+                result.content = _react_response(
+                    _complete_call("Found 3 high-quality sources addressing the question.")
+                )
+            else:
+                # Should not reach here
+                result.content = _react_response(_complete_call("Fallback"))
+            return result
+
+        mixin._provider_async_fn = mock_llm
+
+        topic_result = await mixin._execute_topic_research_async(
+            sub_query=sq, state=state, available_providers=[provider],
+            max_searches=10, timeout=30.0,
+            seen_urls=set(), seen_titles={},
+            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+        )
+
+        # Researcher stopped early after only 1 search (budget of 10)
+        assert topic_result.early_completion is True
+        assert topic_result.searches_performed == 1
+        assert topic_result.sources_found == 3
+        assert llm_call_count == 3  # search → think → complete
+
+    @pytest.mark.asyncio
+    async def test_researcher_stops_after_overlapping_searches(self) -> None:
+        """5.4: Researcher stops after 2 searches returning similar results.
+
+        Simulates a researcher whose second search returns overlapping content.
+        After reflecting, the researcher correctly calls research_complete
+        due to diminishing returns.
+        """
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        search_count = 0
+
+        def _make_overlapping_provider():
+            """Provider that returns similar sources on subsequent calls."""
+            prov = MagicMock()
+            prov.get_provider_name.return_value = "tavily"
+
+            async def search_fn(**kwargs):
+                nonlocal search_count
+                search_count += 1
+                # Both searches return similar-looking sources (different URLs but
+                # the researcher should note the overlap in its think step)
+                return [
+                    _make_source(
+                        f"src-search{search_count}-1",
+                        f"https://example.com/search{search_count}/1",
+                        f"Deep Learning Overview (Search {search_count})",
+                        SourceQuality.MEDIUM,
+                    ),
+                ]
+
+            prov.search = AsyncMock(side_effect=search_fn)
+            return prov
+
+        provider = _make_overlapping_provider()
+
+        llm_call_count = 0
+
+        async def mock_llm(**kwargs):
+            nonlocal llm_call_count
+            llm_call_count += 1
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 50
+            result.error = None
+            if llm_call_count == 1:
+                # Turn 1: first search
+                result.content = _react_response(_web_search_call("deep learning"))
+            elif llm_call_count == 2:
+                # Turn 2: think after first search
+                result.content = _react_response(
+                    _think_call("Found 1 source. Need more information.")
+                )
+            elif llm_call_count == 3:
+                # Turn 3: second search (different query, similar results)
+                result.content = _react_response(_web_search_call("deep learning overview"))
+            elif llm_call_count == 4:
+                # Turn 4: think — researcher notices overlap from last 2 searches
+                result.content = _react_response(
+                    _think_call(
+                        "Last 2 searches returned substantially similar information. "
+                        "Diminishing returns detected. Stopping."
+                    )
+                )
+            elif llm_call_count == 5:
+                # Turn 5: research_complete — correct stop on diminishing returns
+                result.content = _react_response(
+                    _complete_call("Stopping due to diminishing returns from searches.")
+                )
+            else:
+                result.content = _react_response(_complete_call("Fallback"))
+            return result
+
+        mixin._provider_async_fn = mock_llm
+
+        topic_result = await mixin._execute_topic_research_async(
+            sub_query=sq, state=state, available_providers=[provider],
+            max_searches=10, timeout=30.0,
+            seen_urls=set(), seen_titles={},
+            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+        )
+
+        # Researcher stopped after 2 searches (budget of 10) due to overlap
+        assert topic_result.early_completion is True
+        assert topic_result.searches_performed == 2
+        assert llm_call_count == 5  # search → think → search → think → complete
+
+        # Reflection notes should contain the diminishing-returns reasoning
+        think_notes = [n for n in topic_result.reflection_notes if n.startswith("[think]")]
+        assert len(think_notes) == 2
+        assert "diminishing returns" in think_notes[1].lower() or "similar" in think_notes[1].lower()

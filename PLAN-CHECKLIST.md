@@ -39,13 +39,13 @@
 - [x] 4.9 Test: audit trail records truncation details
 
 ## Phase 5 — Researcher Stop Heuristics
-- [ ] 5.1 Add "Stop Immediately When" block to `_build_researcher_system_prompt`:
+- [x] 5.1 Add "Stop Immediately When" block to `_build_researcher_system_prompt`:
   - (a) can answer comprehensively
   - (b) 3+ high-quality relevant sources found
   - (c) last 2 searches returned substantially similar results
-- [ ] 5.2 Add checklist to think-tool prompt: "Before next search: Do I have 3+ sources? Did last 2 searches overlap? Can I answer now?"
-- [ ] 5.3 Test: researcher calls `research_complete` when 3+ sources found
-- [ ] 5.4 Test: researcher stops after 2 overlapping searches
+- [x] 5.2 Add checklist to think-tool prompt: "Before next search: Do I have 3+ sources? Did last 2 searches overlap? Can I answer now?"
+- [x] 5.3 Test: researcher calls `research_complete` when 3+ sources found
+- [x] 5.4 Test: researcher stops after 2 overlapping searches
 
 ## Phase 6 — Supervisor think_tool as Conversation
 - [ ] 6.1 After think phase, inject gap analysis as assistant message in `supervision_messages` (depends on Phase 1)
