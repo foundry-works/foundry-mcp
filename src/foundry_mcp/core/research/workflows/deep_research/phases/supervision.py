@@ -335,6 +335,7 @@ class SupervisionPhaseMixin:
         - Quality distribution (HIGH/MEDIUM/LOW/UNKNOWN counts)
         - Unique domain count (from source URLs)
         - Findings summary from topic research results
+        - Compressed findings excerpt (when inline compression is available)
 
         Args:
             state: Current research state
@@ -385,8 +386,13 @@ class SupervisionPhaseMixin:
             # Findings summary from topic research
             topic_result = topic_results_by_sq.get(sq.id)
             findings_summary = None
-            if topic_result and topic_result.per_topic_summary:
-                findings_summary = topic_result.per_topic_summary[:500]
+            compressed_findings_excerpt = None
+            if topic_result:
+                if topic_result.per_topic_summary:
+                    findings_summary = topic_result.per_topic_summary[:500]
+                # Include compressed findings when available (from inline compression)
+                if topic_result.compressed_findings:
+                    compressed_findings_excerpt = topic_result.compressed_findings[:2000]
 
             coverage.append(
                 {
@@ -398,6 +404,7 @@ class SupervisionPhaseMixin:
                     "unique_domains": len(domains),
                     "domain_list": sorted(domains),
                     "findings_summary": findings_summary,
+                    "compressed_findings_excerpt": compressed_findings_excerpt,
                 }
             )
 
@@ -538,6 +545,13 @@ Guidelines:
 - Set should_continue_gathering=true ONLY if follow-up queries are provided AND coverage is not sufficient
 - If overall coverage is "sufficient", set should_continue_gathering=false even if minor gaps exist
 
+Content Assessment (when compressed findings are provided):
+- Evaluate whether the findings SUBSTANTIVELY address the research brief's dimensions, not just whether sources exist
+- Identify specific CONTENT gaps where important perspectives, evidence types, or data points are missing
+- Consider both quantitative coverage (source count, domain diversity) and qualitative coverage (finding depth, relevance)
+- Distinguish between topics where sources all cover the same angle vs. topics with genuinely diverse findings
+- When compressed findings are provided, base your assessment primarily on the content, not the source count
+
 IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
     def _build_supervision_user_prompt(
@@ -600,7 +614,11 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                     f"LOW={qd['LOW']}, UNKNOWN={qd['UNKNOWN']}"
                 )
                 prompt_parts.append(f"**Unique domains:** {entry['unique_domains']}")
-                if entry.get("findings_summary"):
+                # Include compressed findings when available (from inline compression)
+                # This enables content-aware coverage assessment
+                if entry.get("compressed_findings_excerpt"):
+                    prompt_parts.append(f"**Key findings:**\n{entry['compressed_findings_excerpt']}")
+                elif entry.get("findings_summary"):
                     prompt_parts.append(f"**Findings:** {entry['findings_summary']}")
             prompt_parts.append("")
 

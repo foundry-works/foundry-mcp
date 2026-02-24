@@ -128,6 +128,9 @@ class ResearchConfig:
     deep_research_summarization_model: Optional[str] = None  # Model override for fetch-time summarization
     deep_research_max_content_length: int = 50000  # Max chars per source before L1 summarization (matches open_deep_research)
 
+    # Inline per-topic compression during gathering (Phase 2 PLAN)
+    deep_research_inline_compression: bool = True  # Compress each topic's findings immediately after its ReAct loop (before supervision)
+
     # Per-topic compression before aggregation (Phase 3)
     deep_research_compression_provider: Optional[str] = None  # LLM provider for per-topic compression (defaults to research/default provider)
     deep_research_compression_model: Optional[str] = None  # Model override for per-topic compression
@@ -376,6 +379,8 @@ class ResearchConfig:
             deep_research_summarization_provider=data.get("deep_research_summarization_provider"),
             deep_research_summarization_model=data.get("deep_research_summarization_model"),
             deep_research_max_content_length=int(data.get("deep_research_max_content_length", 50000)),
+            # Inline per-topic compression during gathering
+            deep_research_inline_compression=_parse_bool(data.get("deep_research_inline_compression", True)),
             # Per-topic compression (Phase 3)
             deep_research_compression_provider=data.get("deep_research_compression_provider"),
             deep_research_compression_model=data.get("deep_research_compression_model"),

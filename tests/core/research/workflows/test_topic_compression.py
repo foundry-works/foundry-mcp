@@ -1178,7 +1178,7 @@ class TestCompressionAuditEvents:
         event_data = compression_event[1]["data"]
         assert event_data["topics_compressed"] == 1
         assert event_data["topics_failed"] == 0
-        assert event_data["compression_provider"] == "test-provider"
+        assert event_data["mode"] == "batch"
 
 
 # =============================================================================

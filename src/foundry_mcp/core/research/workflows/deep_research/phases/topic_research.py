@@ -59,6 +59,7 @@ class TopicResearchMixin:
         def _get_perplexity_search_kwargs(self, state: DeepResearchState) -> dict[str, Any]: ...
         def _get_semantic_scholar_search_kwargs(self, state: DeepResearchState) -> dict[str, Any]: ...
         async def _execute_provider_async(self, *args: Any, **kwargs: Any) -> Any: ...
+        async def _compress_single_topic_async(self, *args: Any, **kwargs: Any) -> tuple[int, int, bool]: ...
 
     # ------------------------------------------------------------------
     # Single-topic ReAct loop
@@ -264,6 +265,44 @@ class TopicResearchMixin:
         else:
             sub_query.mark_failed("No sources found after topic research loop")
 
+        # --- Inline per-topic compression ---
+        # Compress this topic's findings immediately so the supervision phase
+        # can assess actual content coverage (not just source counts).
+        # Gated by config flag; non-fatal on failure.
+        inline_compression_enabled = getattr(
+            self.config, "deep_research_inline_compression", True
+        )
+        if (
+            inline_compression_enabled
+            and result.sources_found > 0
+            and result.compressed_findings is None
+        ):
+            try:
+                comp_input, comp_output, comp_ok = await self._compress_single_topic_async(
+                    topic_result=result,
+                    state=state,
+                    timeout=timeout,
+                )
+                if comp_ok:
+                    logger.info(
+                        "Inline compression for topic %r: %d tokens",
+                        sub_query.id,
+                        comp_input + comp_output,
+                    )
+                else:
+                    logger.warning(
+                        "Inline compression failed for topic %r, supervision will use metadata-only assessment",
+                        sub_query.id,
+                    )
+                async with state_lock:
+                    state.total_tokens_used += comp_input + comp_output
+            except Exception as comp_exc:
+                logger.warning(
+                    "Inline compression exception for topic %r: %s. Non-fatal, continuing.",
+                    sub_query.id,
+                    comp_exc,
+                )
+
         self._write_audit_event(
             state,
             "topic_research_complete",
@@ -276,6 +315,7 @@ class TopicResearchMixin:
                 "reflection_notes": result.reflection_notes,
                 "early_completion": result.early_completion,
                 "completion_rationale": result.completion_rationale,
+                "inline_compressed": result.compressed_findings is not None,
             },
         )
 

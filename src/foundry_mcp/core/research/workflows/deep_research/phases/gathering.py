@@ -485,16 +485,29 @@ class GatheringPhaseMixin(CompressionMixin):
                 state.updated_at = datetime.now(timezone.utc)
 
             # --- Per-topic compression step ---
-            # Compress each topic's sources into citation-rich summaries
-            # before analysis.  Runs only when sources were gathered.
+            # When inline compression is enabled, each topic researcher already
+            # compressed its own findings during the ReAct loop. The batch path
+            # here only runs for topics that still lack compressed_findings
+            # (inline compression disabled, or inline compression failed).
             compression_stats: dict[str, Any] = {}
             if total_sources_added > 0 and state.topic_research_results:
-                self._check_cancellation(state)
-                compression_stats = await self._compress_topic_findings_async(
-                    state=state,
-                    max_concurrent=max_concurrent,
-                    timeout=timeout,
+                # Check if any topics still need compression
+                needs_compression = any(
+                    tr.source_ids and tr.compressed_findings is None
+                    for tr in state.topic_research_results
                 )
+                if needs_compression:
+                    self._check_cancellation(state)
+                    compression_stats = await self._compress_topic_findings_async(
+                        state=state,
+                        max_concurrent=max_concurrent,
+                        timeout=timeout,
+                    )
+                else:
+                    logger.info(
+                        "Skipping batch compression: all %d topics already compressed inline",
+                        len(state.topic_research_results),
+                    )
 
             # Save state and emit audit events (same as flat path)
             circuit_breaker_states_end = {

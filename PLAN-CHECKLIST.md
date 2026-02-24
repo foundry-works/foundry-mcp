@@ -69,36 +69,35 @@
 
 ## Phase 2: Inline Per-Topic Compression Before Supervision
 
-- [ ] **2.1** Extract reusable per-topic compression helper
-  - Factor `_compress_single_topic()` from `compression.py` per-topic logic
-  - Accept: sub-query, topic sources, reflection notes, refined queries, completion rationale, config
-  - Return: compressed findings string (or None on failure)
+- [x] **2.1** Extract reusable per-topic compression helper
+  - Factor `_compress_single_topic_async()` from `compression.py` per-topic logic
+  - Accept: topic_result, state, timeout
+  - Return: (input_tokens, output_tokens, success) tuple
   - Reusable from both gathering phase (inline) and compression phase (fallback)
-- [ ] **2.2** Add inline compression to `_execute_topic_research_async()`
+- [x] **2.2** Add inline compression to `_execute_topic_research_async()`
   - After ReAct loop completes and before returning `TopicResearchResult`
-  - Call `_compress_single_topic()` with the topic's sources and ReAct context
+  - Call `_compress_single_topic_async()` with the topic's sources and ReAct context
   - Populate `TopicResearchResult.compressed_findings` inline
   - Use compression-tier model (cheap, fast)
   - Non-fatal: on failure, leave `compressed_findings = None` and log warning
   - Track compression tokens in topic result metadata
-- [ ] **2.3** Update `_build_supervision_user_prompt()` for content-aware assessment
+- [x] **2.3** Update `_build_supervision_user_prompt()` for content-aware assessment
   - For each completed sub-query: include truncated compressed findings (max ~2000 chars)
-  - Format: `### Sub-query: "{query}"\n**Sources:** {count}\n**Key findings:**\n{compressed_findings[:2000]}`
-  - Fall back to source-count-only format when compressed findings unavailable
-- [ ] **2.4** Update `_build_supervision_system_prompt()` for content assessment
+  - Format: `**Key findings:**\n{compressed_findings[:2000]}`
+  - Fall back to findings_summary format when compressed findings unavailable
+- [x] **2.4** Update `_build_supervision_system_prompt()` for content assessment
   - Instruct LLM to assess content coverage, not just source diversity
   - New guidance: "Evaluate whether the findings substantively address the research brief's dimensions"
   - "Identify specific content gaps where important perspectives or evidence are missing"
   - "Consider both quantitative coverage (source count/diversity) and qualitative coverage (finding depth)"
-- [ ] **2.5** Refactor global compression phase (`_execute_global_compression_async`)
-  - Remove per-topic compression loop (already done inline during gathering)
-  - Read from `TopicResearchResult.compressed_findings` as input
-  - Keep only cross-topic merge/dedup/contradiction logic
-  - Fall back to re-compressing from raw sources if `compressed_findings` is None for any topic
-- [ ] **2.6** Add `deep_research_inline_compression: bool = True` config flag
-  - When False, per-topic compression deferred to separate COMPRESSION phase (legacy behavior)
+- [x] **2.5** Refactor global compression phase (`_execute_global_compression_async`)
+  - Batch compression in gathering.py skips already-compressed topics
+  - Global compression already reads from `TopicResearchResult.compressed_findings`
+  - Falls back to re-compressing from raw sources if `compressed_findings` is None for any topic
+- [x] **2.6** Add `deep_research_inline_compression: bool = True` config flag
+  - When False, per-topic compression deferred to batch step after all topics complete
   - Update `from_toml_dict()` parsing
-- [ ] **2.7** Add tests for inline compression
+- [x] **2.7** Add tests for inline compression
   - Test: `compressed_findings` populated in `TopicResearchResult` after gathering
   - Test: supervision prompt includes compressed content excerpts
   - Test: supervision coverage assessment references actual findings
