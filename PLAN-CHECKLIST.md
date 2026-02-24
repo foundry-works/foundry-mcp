@@ -28,15 +28,15 @@
 - [x] 3.5 Test: auto-appended Sources section still correct with inline links present
 
 ## Phase 4 — Token Limit Recovery in Report Generation
-- [ ] 4.1 Add try/except around synthesis LLM call for token-limit errors
-- [ ] 4.2 First retry: truncate findings to `model_token_limit * 4` characters
-- [ ] 4.3 Subsequent retries: reduce by 10% per attempt, max 3 retries
-- [ ] 4.4 Keep system prompt and source reference intact during truncation
-- [ ] 4.5 Fall back to lifecycle-level recovery if findings truncation insufficient
-- [ ] 4.6 Log truncation metrics (chars dropped, retry count) to audit trail
-- [ ] 4.7 Test: synthesis succeeds after findings truncation
-- [ ] 4.8 Test: lifecycle recovery kicks in as final fallback
-- [ ] 4.9 Test: audit trail records truncation details
+- [x] 4.1 Add try/except around synthesis LLM call for token-limit errors
+- [x] 4.2 First retry: truncate findings to `model_token_limit * 4` characters
+- [x] 4.3 Subsequent retries: reduce by 10% per attempt, max 3 retries
+- [x] 4.4 Keep system prompt and source reference intact during truncation
+- [x] 4.5 Fall back to lifecycle-level recovery if findings truncation insufficient
+- [x] 4.6 Log truncation metrics (chars dropped, retry count) to audit trail
+- [x] 4.7 Test: synthesis succeeds after findings truncation
+- [x] 4.8 Test: lifecycle recovery kicks in as final fallback
+- [x] 4.9 Test: audit trail records truncation details
 
 ## Phase 5 — Researcher Stop Heuristics
 - [ ] 5.1 Add "Stop Immediately When" block to `_build_researcher_system_prompt`:

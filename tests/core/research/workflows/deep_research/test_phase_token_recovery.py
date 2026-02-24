@@ -44,6 +44,10 @@ from foundry_mcp.core.research.workflows.deep_research.phases.compression import
 )
 from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
     SynthesisPhaseMixin,
+    _FINDINGS_START_MARKERS,
+    _MAX_FINDINGS_TRUNCATION_RETRIES,
+    _SOURCE_REF_MARKER,
+    _truncate_findings_section,
 )
 
 
@@ -853,3 +857,512 @@ class TestMaxPhaseTokenRetries:
     def test_value_is_3(self):
         """MAX_PHASE_TOKEN_RETRIES should be 3."""
         assert MAX_PHASE_TOKEN_RETRIES == 3
+
+
+# =============================================================================
+# PLAN Phase 4: Findings-Specific Truncation in Report Generation
+# =============================================================================
+
+
+def _build_synthesis_prompt(
+    findings_content: str = "Finding 1: Solar energy reduces costs. " * 50,
+    source_ref: str = "- [1]: Example Source [HIGH]\n  URL: https://example.com\n",
+    instructions: str = "Generate a comprehensive research report.",
+) -> str:
+    """Build a realistic synthesis user prompt with identifiable sections."""
+    return (
+        "# Research Query\nWhat are renewable energy benefits?\n\n"
+        "## Research Brief\nInvestigation of renewable energy.\n\n"
+        "## Findings to Synthesize\n\n"
+        f"{findings_content}\n\n"
+        f"## Source Reference (use these citation numbers in your report)\n"
+        f"{source_ref}\n\n"
+        f"## Instructions\n{instructions}\n"
+    )
+
+
+# =============================================================================
+# 4.7 / Unit: _truncate_findings_section() helper
+# =============================================================================
+
+
+class TestTruncateFindingsSection:
+    """Unit tests for _truncate_findings_section helper."""
+
+    def test_truncates_findings_preserving_header_and_tail(self):
+        """Findings section should be truncated; header and tail preserved."""
+        findings = "X" * 10_000
+        prompt = _build_synthesis_prompt(findings_content=findings)
+
+        truncated, chars_dropped = _truncate_findings_section(prompt, max_findings_chars=2_000)
+
+        assert chars_dropped > 0
+        assert len(truncated) < len(prompt)
+        # Header preserved
+        assert "# Research Query" in truncated
+        assert "## Research Brief" in truncated
+        # Tail preserved
+        assert _SOURCE_REF_MARKER in truncated
+        assert "## Instructions" in truncated
+        # Findings section was truncated
+        assert "[... content truncated for context limits]" in truncated
+
+    def test_returns_unchanged_when_findings_fit(self):
+        """Should return the original prompt when findings section is within budget."""
+        small_findings = "Short finding."
+        prompt = _build_synthesis_prompt(findings_content=small_findings)
+
+        truncated, chars_dropped = _truncate_findings_section(prompt, max_findings_chars=100_000)
+
+        assert truncated == prompt
+        assert chars_dropped == 0
+
+    def test_returns_unchanged_when_no_findings_markers(self):
+        """Should return unchanged when no findings start marker is found."""
+        prompt = "# Research Query\nSome query\n\n## Source Reference\nSources here\n"
+
+        truncated, chars_dropped = _truncate_findings_section(prompt, max_findings_chars=100)
+
+        assert truncated == prompt
+        assert chars_dropped == 0
+
+    def test_returns_unchanged_when_no_source_ref_marker(self):
+        """Should return unchanged when no source reference marker is found."""
+        prompt = "# Research Query\nQuery\n\n## Findings to Synthesize\nFindings here\n"
+
+        truncated, chars_dropped = _truncate_findings_section(prompt, max_findings_chars=10)
+
+        assert truncated == prompt
+        assert chars_dropped == 0
+
+    @pytest.mark.parametrize("marker", _FINDINGS_START_MARKERS)
+    def test_handles_all_findings_markers(self, marker: str):
+        """Each findings start marker type should be recognized."""
+        findings = "Y" * 5_000
+        prompt = (
+            "# Research Query\nQuery\n\n"
+            f"{marker}\n\n{findings}\n\n"
+            f"{_SOURCE_REF_MARKER} (use these citation numbers in your report)\n"
+            "Sources here\n"
+        )
+
+        truncated, chars_dropped = _truncate_findings_section(prompt, max_findings_chars=1_000)
+
+        assert chars_dropped > 0
+        assert _SOURCE_REF_MARKER in truncated
+
+    def test_source_reference_content_preserved(self):
+        """Source reference and instruction sections should be byte-for-byte intact."""
+        findings = "Z" * 10_000
+        source_ref = "- [1]: Important Source [HIGH]\n  URL: https://important.com\n"
+        instructions = "Write a detailed report with citations."
+        prompt = _build_synthesis_prompt(
+            findings_content=findings,
+            source_ref=source_ref,
+            instructions=instructions,
+        )
+
+        truncated, _ = _truncate_findings_section(prompt, max_findings_chars=500)
+
+        # Extract tail from truncated prompt
+        tail_start = truncated.find(_SOURCE_REF_MARKER)
+        assert tail_start != -1
+        truncated_tail = truncated[tail_start:]
+        # Extract tail from original
+        orig_tail_start = prompt.find(_SOURCE_REF_MARKER)
+        original_tail = prompt[orig_tail_start:]
+        assert truncated_tail == original_tail
+
+    def test_chars_dropped_accuracy(self):
+        """chars_dropped should equal the actual reduction in findings size."""
+        findings = "W" * 8_000
+        prompt = _build_synthesis_prompt(findings_content=findings)
+
+        truncated, chars_dropped = _truncate_findings_section(prompt, max_findings_chars=2_000)
+
+        actual_reduction = len(prompt) - len(truncated)
+        # chars_dropped should closely match actual reduction (may differ by
+        # a few chars due to the "\n\n" separator added after truncation)
+        assert abs(chars_dropped - actual_reduction) <= 10
+
+
+# =============================================================================
+# 4.7: Synthesis succeeds after findings truncation
+# =============================================================================
+
+
+class TestSynthesisFindingsTruncationRetry:
+    """Tests for findings-specific truncation in synthesis retry loop."""
+
+    def _make_synthesis_state(self) -> DeepResearchState:
+        """Create a state suitable for synthesis testing."""
+        state = _make_state(phase=DeepResearchPhase.SYNTHESIS)
+        tr = _make_topic_result(state)
+        tr.compressed_findings = "Compressed findings for testing"
+        return state
+
+    @pytest.mark.asyncio
+    async def test_findings_truncation_succeeds_on_retry(self):
+        """Synthesis should succeed after findings-specific truncation (4.7)."""
+        stub = StubSynthesis()
+        state = self._make_synthesis_state()
+
+        # Build a prompt with a large findings section
+        large_prompt = _build_synthesis_prompt(findings_content="F" * 20_000)
+
+        call_results = [
+            _make_context_window_error_result(phase="synthesis"),
+            _make_success_llm_result("# Report\n\nSynthesized after truncation"),
+        ]
+
+        captured_prompts: list[str] = []
+
+        async def capture_llm_call(**kwargs: Any) -> Any:
+            captured_prompts.append(kwargs.get("user_prompt", ""))
+            return call_results.pop(0)
+
+        with patch(
+            _SYNTHESIS_LLM_PATCH,
+            side_effect=capture_llm_call,
+        ), patch(
+            _SYNTHESIS_BUDGET_PATCH,
+        ) as mock_budget, patch(
+            _SYNTHESIS_FIT_PATCH,
+        ) as mock_fit, patch(
+            _SYNTHESIS_CITE_PATCH,
+            return_value=("# Report\n\nSynthesized after truncation", {}),
+        ):
+            mock_budget.return_value = MagicMock(
+                items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
+            )
+            mock_fit.return_value = (True, None, "sys prompt", large_prompt)
+
+            result = await stub._execute_synthesis_async(state, "test-provider", 120.0)
+
+        assert result.success is True
+        assert len(captured_prompts) == 2
+        # Second prompt should be shorter due to findings truncation
+        assert len(captured_prompts[1]) < len(captured_prompts[0])
+        # Source reference should be preserved in truncated prompt
+        assert _SOURCE_REF_MARKER in captured_prompts[1]
+        # Instructions should be preserved
+        assert "## Instructions" in captured_prompts[1]
+
+    @pytest.mark.asyncio
+    async def test_progressive_findings_truncation(self):
+        """Each retry should progressively reduce the findings char budget."""
+        stub = StubSynthesis()
+        state = self._make_synthesis_state()
+
+        large_prompt = _build_synthesis_prompt(findings_content="G" * 50_000)
+
+        captured_prompts: list[str] = []
+
+        async def capture_and_fail(**kwargs: Any) -> Any:
+            captured_prompts.append(kwargs.get("user_prompt", ""))
+            if len(captured_prompts) <= _MAX_FINDINGS_TRUNCATION_RETRIES:
+                return _make_context_window_error_result(phase="synthesis")
+            return _make_success_llm_result("# Report")
+
+        with patch(
+            _SYNTHESIS_LLM_PATCH,
+            side_effect=capture_and_fail,
+        ), patch(
+            _SYNTHESIS_BUDGET_PATCH,
+        ) as mock_budget, patch(
+            _SYNTHESIS_FIT_PATCH,
+        ) as mock_fit, patch(
+            _SYNTHESIS_CITE_PATCH,
+            return_value=("# Report", {}),
+        ):
+            mock_budget.return_value = MagicMock(
+                items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
+            )
+            mock_fit.return_value = (True, None, "sys", large_prompt)
+
+            await stub._execute_synthesis_async(state, "test-provider", 120.0)
+
+        # Should have at least 2 retried prompts (each shorter)
+        assert len(captured_prompts) >= 3
+        for i in range(2, len(captured_prompts)):
+            assert len(captured_prompts[i]) <= len(captured_prompts[i - 1])
+
+    @pytest.mark.asyncio
+    async def test_system_prompt_never_modified_during_findings_truncation(self):
+        """System prompt should remain unchanged across findings truncation retries."""
+        stub = StubSynthesis()
+        state = self._make_synthesis_state()
+
+        large_prompt = _build_synthesis_prompt(findings_content="H" * 20_000)
+
+        captured_system: list[str] = []
+        call_results = [
+            _make_context_window_error_result(phase="synthesis"),
+            _make_success_llm_result("# Report"),
+        ]
+
+        async def capture(**kwargs: Any) -> Any:
+            captured_system.append(kwargs.get("system_prompt", ""))
+            return call_results.pop(0)
+
+        with patch(
+            _SYNTHESIS_LLM_PATCH,
+            side_effect=capture,
+        ), patch(
+            _SYNTHESIS_BUDGET_PATCH,
+        ) as mock_budget, patch(
+            _SYNTHESIS_FIT_PATCH,
+        ) as mock_fit, patch(
+            _SYNTHESIS_CITE_PATCH,
+            return_value=("# Report", {}),
+        ):
+            mock_budget.return_value = MagicMock(
+                items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
+            )
+            mock_fit.return_value = (True, None, "sys prompt intact", large_prompt)
+
+            await stub._execute_synthesis_async(state, "test-provider", 120.0)
+
+        assert len(captured_system) == 2
+        assert captured_system[0] == captured_system[1] == "sys prompt intact"
+
+
+# =============================================================================
+# 4.8: Lifecycle recovery kicks in as final fallback
+# =============================================================================
+
+
+class TestSynthesisGenericFallback:
+    """Tests for fallback to lifecycle-level generic truncation."""
+
+    def _make_synthesis_state(self) -> DeepResearchState:
+        state = _make_state(phase=DeepResearchPhase.SYNTHESIS)
+        tr = _make_topic_result(state)
+        tr.compressed_findings = "Compressed findings"
+        return state
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_generic_when_no_findings_section(self):
+        """Falls back to truncate_prompt_for_retry when prompt has no findings markers (4.8)."""
+        stub = StubSynthesis()
+        state = self._make_synthesis_state()
+
+        # Prompt WITHOUT findings markers — _truncate_findings_section returns unchanged
+        prompt_without_markers = "Some large prompt content. " * 200
+
+        call_results = [
+            _make_context_window_error_result(phase="synthesis"),
+            _make_success_llm_result("# Report"),
+        ]
+
+        captured_prompts: list[str] = []
+
+        async def capture(**kwargs: Any) -> Any:
+            captured_prompts.append(kwargs.get("user_prompt", ""))
+            return call_results.pop(0)
+
+        with patch(
+            _SYNTHESIS_LLM_PATCH,
+            side_effect=capture,
+        ), patch(
+            _SYNTHESIS_BUDGET_PATCH,
+        ) as mock_budget, patch(
+            _SYNTHESIS_FIT_PATCH,
+        ) as mock_fit, patch(
+            _SYNTHESIS_CITE_PATCH,
+            return_value=("# Report", {}),
+        ):
+            mock_budget.return_value = MagicMock(
+                items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
+            )
+            mock_fit.return_value = (True, None, "sys", prompt_without_markers)
+
+            result = await stub._execute_synthesis_async(state, "test-provider", 120.0)
+
+        assert result.success is True
+        assert len(captured_prompts) == 2
+        # Second prompt should still be shorter (generic truncation applied)
+        assert len(captured_prompts[1]) < len(captured_prompts[0])
+        # Audit should show generic fallback was used
+        truncation_events = [
+            kwargs.get("data", {})
+            for e, kwargs in stub._audit_events
+            if e == "synthesis_findings_truncation"
+        ]
+        assert len(truncation_events) == 1
+        assert truncation_events[0]["used_generic_fallback"] is True
+
+
+# =============================================================================
+# 4.9: Audit trail records truncation details
+# =============================================================================
+
+
+_SYNTHESIS_TOKEN_LIMITS_PATCH = "foundry_mcp.core.research.workflows.deep_research.phases.synthesis.MODEL_TOKEN_LIMITS"
+
+
+class TestSynthesisTruncationAudit:
+    """Tests for audit trail recording of truncation metrics."""
+
+    def _make_synthesis_state(self) -> DeepResearchState:
+        state = _make_state(phase=DeepResearchPhase.SYNTHESIS)
+        state.synthesis_model = "tiny-model"
+        tr = _make_topic_result(state)
+        tr.compressed_findings = "Compressed findings"
+        return state
+
+    @pytest.mark.asyncio
+    async def test_audit_records_findings_truncation_event(self):
+        """Should emit synthesis_findings_truncation with correct fields (4.9)."""
+        stub = StubSynthesis()
+        state = self._make_synthesis_state()
+
+        large_prompt = _build_synthesis_prompt(findings_content="J" * 20_000)
+
+        call_results = [
+            _make_context_window_error_result(phase="synthesis"),
+            _make_success_llm_result("# Report"),
+        ]
+
+        # Use a tiny token limit so max_findings_chars = 2000 * 4 = 8000 < 20000
+        tiny_limits = {"tiny-model": 2_000}
+
+        with patch(
+            _SYNTHESIS_LLM_PATCH,
+            side_effect=call_results,
+        ), patch(
+            _SYNTHESIS_BUDGET_PATCH,
+        ) as mock_budget, patch(
+            _SYNTHESIS_FIT_PATCH,
+        ) as mock_fit, patch(
+            _SYNTHESIS_CITE_PATCH,
+            return_value=("# Report", {}),
+        ), patch(
+            _SYNTHESIS_TOKEN_LIMITS_PATCH,
+            tiny_limits,
+        ):
+            mock_budget.return_value = MagicMock(
+                items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
+            )
+            mock_fit.return_value = (True, None, "sys", large_prompt)
+
+            await stub._execute_synthesis_async(state, "test-provider", 120.0)
+
+        # Find the findings truncation audit event
+        truncation_events = [
+            kwargs.get("data", {})
+            for e, kwargs in stub._audit_events
+            if e == "synthesis_findings_truncation"
+        ]
+        assert len(truncation_events) >= 1
+
+        event = truncation_events[0]
+        # Verify all required fields are present
+        assert "retry" in event
+        assert "max_retries" in event
+        assert "max_findings_chars" in event
+        assert "chars_dropped" in event
+        assert "total_chars_dropped" in event
+        assert "used_generic_fallback" in event
+        assert "original_prompt_len" in event
+        assert "truncated_prompt_len" in event
+
+        # Values should be sensible
+        assert event["retry"] == 1
+        assert event["max_retries"] == _MAX_FINDINGS_TRUNCATION_RETRIES
+        assert event["chars_dropped"] > 0
+        assert event["total_chars_dropped"] > 0
+        assert event["used_generic_fallback"] is False
+        assert event["truncated_prompt_len"] < event["original_prompt_len"]
+
+    @pytest.mark.asyncio
+    async def test_audit_records_retry_succeeded_with_findings_metadata(self):
+        """synthesis_retry_succeeded should include findings-specific metadata."""
+        stub = StubSynthesis()
+        state = self._make_synthesis_state()
+
+        large_prompt = _build_synthesis_prompt(findings_content="K" * 20_000)
+
+        call_results = [
+            _make_context_window_error_result(phase="synthesis"),
+            _make_success_llm_result("# Report"),
+        ]
+
+        tiny_limits = {"tiny-model": 2_000}
+
+        with patch(
+            _SYNTHESIS_LLM_PATCH,
+            side_effect=call_results,
+        ), patch(
+            _SYNTHESIS_BUDGET_PATCH,
+        ) as mock_budget, patch(
+            _SYNTHESIS_FIT_PATCH,
+        ) as mock_fit, patch(
+            _SYNTHESIS_CITE_PATCH,
+            return_value=("# Report", {}),
+        ), patch(
+            _SYNTHESIS_TOKEN_LIMITS_PATCH,
+            tiny_limits,
+        ):
+            mock_budget.return_value = MagicMock(
+                items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
+            )
+            mock_fit.return_value = (True, None, "sys", large_prompt)
+
+            await stub._execute_synthesis_async(state, "test-provider", 120.0)
+
+        succeeded_events = [
+            kwargs.get("data", {})
+            for e, kwargs in stub._audit_events
+            if e == "synthesis_retry_succeeded"
+        ]
+        assert len(succeeded_events) == 1
+        event = succeeded_events[0]
+        assert event["findings_retries"] == 1
+        assert event["total_chars_dropped"] > 0
+        assert event["used_generic_fallback"] is False
+
+    @pytest.mark.asyncio
+    async def test_audit_records_exhausted_with_findings_metadata(self):
+        """synthesis_retry_exhausted should include findings-specific metadata."""
+        stub = StubSynthesis()
+        state = self._make_synthesis_state()
+
+        large_prompt = _build_synthesis_prompt(findings_content="L" * 20_000)
+
+        call_results = [
+            _make_context_window_error_result(phase="synthesis")
+        ] * (_MAX_FINDINGS_TRUNCATION_RETRIES + 1)
+
+        tiny_limits = {"tiny-model": 2_000}
+
+        with patch(
+            _SYNTHESIS_LLM_PATCH,
+            side_effect=call_results,
+        ), patch(
+            _SYNTHESIS_BUDGET_PATCH,
+        ) as mock_budget, patch(
+            _SYNTHESIS_FIT_PATCH,
+        ) as mock_fit, patch(
+            _SYNTHESIS_TOKEN_LIMITS_PATCH,
+            tiny_limits,
+        ):
+            mock_budget.return_value = MagicMock(
+                items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
+            )
+            mock_fit.return_value = (True, None, "sys", large_prompt)
+
+            result = await stub._execute_synthesis_async(state, "test-provider", 120.0)
+
+        assert result.success is False
+
+        exhausted_events = [
+            kwargs.get("data", {})
+            for e, kwargs in stub._audit_events
+            if e == "synthesis_retry_exhausted"
+        ]
+        assert len(exhausted_events) == 1
+        event = exhausted_events[0]
+        assert event["findings_retries"] == _MAX_FINDINGS_TRUNCATION_RETRIES
+        assert event["total_chars_dropped"] > 0
+        assert "error" in event

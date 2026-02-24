@@ -21,12 +21,15 @@ from foundry_mcp.core.research.workflows.deep_research._constants import (
     SYNTHESIS_OUTPUT_RESERVED,
 )
 from foundry_mcp.core.research.workflows.deep_research._helpers import (
+    estimate_token_limit_for_model,
     fidelity_level_from_score,
+    truncate_at_boundary,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._citation_postprocess import (
     postprocess_citations,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+    MODEL_TOKEN_LIMITS,
     execute_llm_call,
     finalize_phase,
 )
@@ -102,6 +105,86 @@ For **explanation/overview** queries, use this structure:
 ### [Theme/Category 2]
 ## Conclusions""",
 }
+
+
+# ---------------------------------------------------------------------------
+# Findings-specific truncation for token-limit recovery (PLAN Phase 4)
+# ---------------------------------------------------------------------------
+
+# Maximum retries with findings-specific truncation before giving up.
+_MAX_FINDINGS_TRUNCATION_RETRIES: int = 3
+
+# Each retry reduces the findings char budget by this factor (10% per retry).
+_FINDINGS_TRUNCATION_FACTOR: float = 0.9
+
+# Fallback context window (tokens) when the model is unknown.
+_FALLBACK_CONTEXT_WINDOW: int = 128_000
+
+# Markers that delineate the start of the findings section in the user prompt.
+_FINDINGS_START_MARKERS: list[str] = [
+    "## Unified Research Digest",
+    "## Research Findings by Topic",
+    "## Findings to Synthesize",
+]
+
+# Marker that delineates the end of the findings section.
+_SOURCE_REF_MARKER: str = "## Source Reference"
+
+
+def _truncate_findings_section(
+    user_prompt: str,
+    max_findings_chars: int,
+) -> tuple[str, int]:
+    """Truncate only the findings section of the synthesis user prompt.
+
+    Identifies the findings portion (between the research brief and the
+    source reference section) and truncates it to ``max_findings_chars``,
+    preserving the header (query + brief), source reference, and
+    instructions intact.
+
+    This mirrors open_deep_research's strategy of truncating findings
+    content specifically rather than applying generic prompt-level
+    truncation that might remove the system prompt or source context.
+
+    Args:
+        user_prompt: The full synthesis user prompt.
+        max_findings_chars: Maximum characters allowed for the findings
+            section.
+
+    Returns:
+        A tuple of (possibly truncated prompt, characters dropped).
+        If the findings section is already within budget or cannot be
+        identified, returns the original prompt with 0 chars dropped.
+    """
+    # Find the end of findings (start of source reference)
+    source_ref_idx = user_prompt.find(_SOURCE_REF_MARKER)
+    if source_ref_idx == -1:
+        return user_prompt, 0
+
+    # Find the start of the findings section
+    findings_start = -1
+    for marker in _FINDINGS_START_MARKERS:
+        idx = user_prompt.find(marker)
+        if idx != -1:
+            findings_start = idx
+            break
+
+    if findings_start == -1:
+        return user_prompt, 0
+
+    # Split: header + findings + tail
+    header = user_prompt[:findings_start]
+    findings = user_prompt[findings_start:source_ref_idx]
+    tail = user_prompt[source_ref_idx:]
+
+    original_len = len(findings)
+    if original_len <= max_findings_chars:
+        return user_prompt, 0
+
+    truncated_findings = truncate_at_boundary(findings, max_findings_chars)
+    chars_dropped = original_len - len(truncated_findings)
+
+    return header + truncated_findings + "\n\n" + tail, chars_dropped
 
 
 class SynthesisPhaseMixin:
@@ -244,23 +327,35 @@ class SynthesisPhaseMixin:
         self._check_cancellation(state)
 
         # ---------------------------------------------------------
-        # LLM call with phase-specific outer retry on token-limit
-        # errors.  Each outer retry pre-truncates the user prompt
-        # (oldest content first) before handing it back to
-        # execute_llm_call (which has its own inner structural
-        # retries).
+        # LLM call with findings-specific token-limit recovery.
+        #
+        # PLAN Phase 4: When synthesis hits a token limit, truncate
+        # the findings section specifically (preserving system prompt,
+        # source reference, and instructions) rather than applying
+        # generic prompt-level truncation.
+        #
+        # Strategy (mirrors open_deep_research):
+        #   Retry 1: truncate findings to model_token_limit * 4 chars
+        #   Retry 2: reduce findings budget by 10%
+        #   Retry 3: reduce findings budget by another 10%
+        #
+        # Falls back to lifecycle-level recovery (generic prompt
+        # truncation via truncate_prompt_for_retry) when findings-
+        # specific truncation alone is insufficient.
         # ---------------------------------------------------------
         from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
-            MAX_PHASE_TOKEN_RETRIES,
             _is_context_window_exceeded,
             truncate_prompt_for_retry,
         )
 
         current_user_prompt = user_prompt
-        outer_retries = 0
+        findings_retries = 0
+        total_findings_chars_dropped = 0
+        max_findings_chars: Optional[int] = None
+        used_generic_fallback = False
         result = None
 
-        for outer_attempt in range(MAX_PHASE_TOKEN_RETRIES + 1):  # 0 = initial
+        for outer_attempt in range(_MAX_FINDINGS_TRUNCATION_RETRIES + 1):  # 0 = initial
             call_result = await execute_llm_call(
                 workflow=self,
                 state=state,
@@ -274,7 +369,7 @@ class SynthesisPhaseMixin:
                 error_metadata={
                     "finding_count": len(state.findings),
                     "guidance": "Try reducing the number of findings or source content included",
-                    "outer_retries": outer_retries,
+                    "findings_retries": findings_retries,
                 },
                 role="report",
             )
@@ -282,28 +377,90 @@ class SynthesisPhaseMixin:
             if isinstance(call_result, WorkflowResult):
                 if (
                     _is_context_window_exceeded(call_result)
-                    and outer_attempt < MAX_PHASE_TOKEN_RETRIES
+                    and outer_attempt < _MAX_FINDINGS_TRUNCATION_RETRIES
                 ):
-                    outer_retries += 1
-                    current_user_prompt = truncate_prompt_for_retry(
-                        user_prompt, outer_retries, MAX_PHASE_TOKEN_RETRIES,
+                    findings_retries += 1
+
+                    # Determine findings char budget
+                    if max_findings_chars is None:
+                        # First retry: model_token_limit * 4 chars
+                        model_token_limit = estimate_token_limit_for_model(
+                            state.synthesis_model, MODEL_TOKEN_LIMITS,
+                        ) or _FALLBACK_CONTEXT_WINDOW
+                        max_findings_chars = model_token_limit * 4
+                    else:
+                        # Subsequent retries: reduce by 10%
+                        max_findings_chars = int(
+                            max_findings_chars * _FINDINGS_TRUNCATION_FACTOR,
+                        )
+
+                    # Try findings-specific truncation
+                    truncated_prompt, chars_dropped = _truncate_findings_section(
+                        user_prompt,  # Always truncate from original
+                        max_findings_chars,
                     )
-                    logger.warning(
-                        "Synthesis outer retry %d/%d: pre-truncating user "
-                        "prompt by %d%%",
-                        outer_retries,
-                        MAX_PHASE_TOKEN_RETRIES,
-                        int((0.1 + outer_retries * 0.1) * 100),
+                    total_findings_chars_dropped = (
+                        len(user_prompt) - len(truncated_prompt)
+                        if truncated_prompt != user_prompt
+                        else 0
+                    )
+
+                    if truncated_prompt != user_prompt:
+                        current_user_prompt = truncated_prompt
+                        logger.warning(
+                            "Synthesis findings-specific retry %d/%d: "
+                            "truncating findings to %d chars "
+                            "(dropped %d chars this pass, %d total)",
+                            findings_retries,
+                            _MAX_FINDINGS_TRUNCATION_RETRIES,
+                            max_findings_chars,
+                            chars_dropped,
+                            total_findings_chars_dropped,
+                        )
+                    else:
+                        # Findings truncation didn't help (section already
+                        # small or not found) — fall back to generic
+                        # lifecycle-level prompt truncation.
+                        used_generic_fallback = True
+                        current_user_prompt = truncate_prompt_for_retry(
+                            user_prompt,
+                            findings_retries,
+                            _MAX_FINDINGS_TRUNCATION_RETRIES,
+                        )
+                        logger.warning(
+                            "Synthesis findings-specific retry %d/%d: "
+                            "findings section already within budget, "
+                            "falling back to generic prompt truncation",
+                            findings_retries,
+                            _MAX_FINDINGS_TRUNCATION_RETRIES,
+                        )
+
+                    # Audit: truncation metrics
+                    self._write_audit_event(
+                        state,
+                        "synthesis_findings_truncation",
+                        data={
+                            "retry": findings_retries,
+                            "max_retries": _MAX_FINDINGS_TRUNCATION_RETRIES,
+                            "max_findings_chars": max_findings_chars,
+                            "chars_dropped": chars_dropped,
+                            "total_chars_dropped": total_findings_chars_dropped,
+                            "used_generic_fallback": used_generic_fallback,
+                            "original_prompt_len": len(user_prompt),
+                            "truncated_prompt_len": len(current_user_prompt),
+                        },
                     )
                     continue
 
                 # Non-retryable error or retries exhausted
-                if outer_retries > 0:
+                if findings_retries > 0:
                     self._write_audit_event(
                         state,
                         "synthesis_retry_exhausted",
                         data={
-                            "outer_retries": outer_retries,
+                            "findings_retries": findings_retries,
+                            "total_chars_dropped": total_findings_chars_dropped,
+                            "used_generic_fallback": used_generic_fallback,
                             "error": call_result.error,
                         },
                         level="warning",
@@ -311,11 +468,15 @@ class SynthesisPhaseMixin:
                 return call_result
 
             # Success — record retry metadata if retries were needed
-            if outer_retries > 0:
+            if findings_retries > 0:
                 self._write_audit_event(
                     state,
                     "synthesis_retry_succeeded",
-                    data={"outer_retries": outer_retries},
+                    data={
+                        "findings_retries": findings_retries,
+                        "total_chars_dropped": total_findings_chars_dropped,
+                        "used_generic_fallback": used_generic_fallback,
+                    },
                 )
             result = call_result.result
             break
@@ -328,7 +489,9 @@ class SynthesisPhaseMixin:
                 error="Synthesis failed: all token-limit retries exhausted",
                 metadata={
                     "research_id": state.id,
-                    "outer_retries": outer_retries,
+                    "findings_retries": findings_retries,
+                    "total_chars_dropped": total_findings_chars_dropped,
+                    "used_generic_fallback": used_generic_fallback,
                 },
             )
 
