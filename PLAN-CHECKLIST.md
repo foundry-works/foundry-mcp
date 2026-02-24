@@ -1,184 +1,189 @@
-# PLAN-CHECKLIST: Deep Research Alignment with open_deep_research
+# PLAN-CHECKLIST: Deep Research Quality — Think-Tool, Compression & Evaluation
 
 **Branch:** `tyler/foundry-mcp-20260223-0747`
 **Date:** 2026-02-23
 
 ---
 
-## Phase 1: Update Model Token Limits
+## Phase 1: Think-Tool Deliberation in Supervision
 
-- [x] **1.1** Update `model_token_limits.json` with accurate upstream values
-  - GPT-4.1 variants: 1,000,000 → 1,047,576
-  - Add gpt-4.1-nano (1,047,576), gpt-4o (128,000), gpt-4o-mini (128,000)
-  - Add gemini-2.5-pro (1,048,576), gemini-2.5-flash (1,048,576)
-  - Add gemini-1.5-pro (2,097,152)
-- [x] **1.2** Update `_lifecycle.py` inline `MODEL_TOKEN_LIMITS` fallback dict to match json
-- [x] **1.3** Verify `truncate_to_token_estimate` loads from json, not just hardcoded dict
-- [x] **1.4** Run existing token truncation tests — confirm no regressions (66/66 passed)
-
----
-
-## Phase 2: Research Brief Generation
-
-- [x] **2.1** Add `_build_brief_refinement_prompt()` to `planning.py`
-  - Original prompt (not copied), modeled after upstream principles
-  - Maximize specificity, fill unstated dimensions as open-ended
-  - Prefer primary sources, preserve language preference
-- [x] **2.2** Add brief-refinement LLM call at start of `_execute_planning_async()`
-  - Execute before sub-query decomposition
-  - Use cheap model role (summarization or new "brief" role)
-- [x] **2.3** Store refined brief in `state.research_brief`
-- [x] **2.4** Wire refined brief as input to `_build_planning_user_prompt()`
-- [x] **2.5** Add "brief" to `_ROLE_RESOLUTION_CHAIN` in `research.py` if using new role
-  - N/A: used existing "summarization" role instead of a new "brief" role
-- [x] **2.6** Test: ambiguous query produces more specific brief
-- [x] **2.7** Test: sub-queries are grounded in refined brief
-- [x] **2.8** Test: existing planning tests pass (additive change) — 2015 passed, 0 failed
+- [ ] **1.1** Add `_build_think_prompt()` to `SupervisionPhaseMixin`
+  - Generates gap-analysis-only prompt from per-sub-query coverage data
+  - Does NOT produce follow-up queries — only articulates what's found and what's missing
+  - Uses coverage_data dict already built by `_build_coverage_data()`
+- [ ] **1.2** Execute think call before coverage assessment in `_execute_supervision_async()`
+  - Separate LLM call using reflection role (cheap model)
+  - Guarded by heuristic fast-path: skip when `supervision_round > 0` and coverage sufficient
+  - Timeout matches `deep_research_reflection_timeout`
+- [ ] **1.3** Pass think output into `_build_supervision_user_prompt()`
+  - Think output becomes a `<gap_analysis>` section in the follow-up generation prompt
+  - Follow-up queries should reference specific gaps identified in think output
+- [ ] **1.4** Record think output in `state.metadata["supervision_history"]`
+  - Each supervision round entry gets a `think_output` field
+  - Preserves full deliberation chain for traceability
+- [ ] **1.5** Add tests for think-tool integration
+  - Test: think output contains per-sub-query gap analysis
+  - Test: follow-up queries reference gaps from think output
+  - Test: think step skipped on heuristic fast-path
+  - Test: token cost bounded (cheap model, ~500 tokens per round)
 
 ---
 
-## Phase 3: Synthesis Prompt Engineering
+## Phase 2: Think-Tool Self-Critique at Planning Boundary
 
-- [x] **3.1** Add language detection directive to `_build_synthesis_system_prompt()`
-  - Detect language from user query, instruct report in same language
-- [x] **3.2** Add structure-adaptive directives
-  - Comparison → side-by-side structure (Comparative Analysis, Overview of [Subject A/B])
-  - Enumeration → item-per-section or single-section list
-  - Explanation → overview + Key Findings with Theme/Category subsections + Conclusions
-  - How-to → Prerequisites + Step 1..N + Conclusions
-- [x] **3.3** Add anti-pattern guardrails
-  - No meta-commentary ("based on the research", "the findings show")
-  - No hedging openers ("it appears that", "it seems")
-  - No self-reference ("as an AI", "I found that")
-- [x] **3.4** Enforce citation format: inline `[N]` + auto-appended numbered source section
-  - System prompt instructs inline [N] citations; Sources section auto-appended by `_citation_postprocess.py`
-- [x] **3.5** Add query-type hint to `_build_synthesis_user_prompt()`
-  - `_classify_query_type()` classifies query → comparison/enumeration/howto/explanation
-  - "Query type hint" line added to Instructions section of user prompt
-- [x] **3.6** Test: non-English query produces non-English report directive
-  - `TestLanguageDirective` (3 tests): language directive present, Chinese example, Chinese query builds prompt
-- [x] **3.7** Test: comparison query produces comparison structure
-  - `TestStructureAdaptive` (5 tests): each query type gets correct structure, all include Conclusions
-- [x] **3.8** Test: output is free of anti-pattern phrases
-  - `TestAntiPatternGuardrails` (4 tests): meta-commentary, hedging, self-reference, direct writing
-- [x] **3.9** Test: citations are consistently formatted
-  - `TestCitationFormat` (3 tests): inline [N], no Sources section, Conflicting Information preserved
-  - 1841 passed, 6 skipped, 0 failures across full research test suite
+- [ ] **2.1** Add `_build_decomposition_critique_prompt()` to `PlanningPhaseMixin`
+  - Takes generated sub-queries + original research brief as input
+  - Evaluates: redundancies, missing perspectives, scope issues
+  - Returns structured JSON: `{redundancies: [], gaps: [], adjustments: []}`
+- [ ] **2.2** Execute critique call after sub-query generation in `_execute_planning_async()`
+  - Uses reflection role (cheap model)
+  - Single round only (not iterative)
+  - Runs before advancing to GATHERING phase
+- [ ] **2.3** Parse and apply critique adjustments to `state.sub_queries`
+  - Merge identified redundancies
+  - Add sub-queries for identified perspective gaps
+  - Respect `max_sub_queries` bound after adjustments
+- [ ] **2.4** Add config flag `deep_research_enable_planning_critique: bool = True`
+  - Update `ResearchConfig` in `src/foundry_mcp/config/research.py`
+  - Add to `from_dict()` parsing
+- [ ] **2.5** Record critique in `state.metadata["planning_critique"]`
+  - Store original sub-queries, critique response, and adjusted sub-queries
+- [ ] **2.6** Add tests for planning self-critique
+  - Test: redundant sub-queries identified and merged
+  - Test: missing perspectives added
+  - Test: sub-query count respects bounds after adjustments
+  - Test: critique skipped when config flag disabled
+  - Test: no regression in existing planning tests
 
 ---
 
-## Phase 4: Message-Aware Token Recovery
+## Phase 3: Global Note Compression Before Synthesis
 
-- [x] **4.1** Add `_structured_truncation()` helper to `_helpers.py`
-  - `_split_prompt_sections()` splits at markdown header boundaries
-  - `structured_truncate_blocks()` truncates longest sections first, preserving protected sections
-  - Source entry detection via `_SOURCE_ENTRY_PATTERNS` for synthesis, analysis, compression formats
-- [x] **4.2** Add quality-aware source dropping
-  - `structured_drop_sources()` scores by `[high]`/`[medium]`/`[low]` markers
-  - Falls back to length-based scoring within same quality tier
-  - Drops lowest-quality, largest sources first
-- [x] **4.3** Update retry loop in `execute_llm_call()` (lines 358-420)
-  - `_apply_truncation_strategy()` dispatches based on retry count
-  - Retry 1: `structured_truncate_blocks` (longest blocks first)
-  - Retry 2: `structured_drop_sources` (lowest quality or longest)
-  - Retry 3: `truncate_to_token_estimate` char-based truncation (fallback)
-  - Each strategy falls back to char-based when no structure is found
-- [x] **4.4** Test: structured truncation preserves high-quality sources
-  - `TestStructuredTruncateBlocks` (6 tests) + `TestStructuredTruncationIntegration.test_structured_prompt_preserves_high_quality_on_retry`
-- [x] **4.5** Test: char-based fallback still works when structured fails
-  - `TestStructuredTruncateBlocks.test_fallback_for_unstructured_prompt` + `TestStructuredTruncationIntegration.test_char_fallback_works_after_structured_fails`
-- [x] **4.6** Test: no regression in existing token recovery tests
-  - 1867 passed, 6 skipped, 0 failures across full research test suite
-
----
-
-## Phase 5: Reflection Enforcement
-
-- [x] **5.1** Update reflection system prompt in `_topic_reflect()` (lines 395-417)
-  - Hard stop: research_complete=true when 3+ sources from distinct domains
-  - Continue: only if <2 relevant sources found
-  - Rationale must articulate specific gap to be filled
-  - Added domain diversity counting (with www. dedup) and `Distinct source domains: N` to user prompt
-  - Numbered decision rules: STOP, CONTINUE, ADEQUATE, NO RESULTS, rationale requirement
-- [x] **5.2** Add guard: force research_complete if iteration >= max_searches
-  - Regardless of reflection LLM decision
-  - Added explicit `logger.info` when max_searches cap is hit
-- [x] **5.3** Add logging of reflection rationale for observability
-  - Every reflection decision now logged with `logger.info` showing complete/continue/rationale
-- [x] **5.4** Test: reflection returns research_complete after 3+ distinct-domain sources
-  - `TestReflectionEnforcement` (9 tests): prompt includes domain count, hard-stop rules, distinct-domain complete
-- [x] **5.5** Test: reflection never recommends continuing past max_searches
-  - `test_max_searches_enforced_regardless_of_reflection` + `test_max_searches_one_no_reflection`
-- [x] **5.6** Test: rationale field is always non-empty
-  - `test_rationale_always_non_empty_in_reflection_notes`, `test_rationale_from_failed_reflection_is_non_empty`, `test_rationale_from_exception_is_non_empty`
-  - 1876 passed, 6 skipped, 0 failures across full research test suite
+- [ ] **3.1** Add `COMPRESSION` to `DeepResearchPhase` enum
+  - Insert between `ANALYSIS` and `SYNTHESIS`
+  - Update `advance_phase()` logic in `DeepResearchState`
+  - Update `PHASE_TO_AGENT` mapping in orchestration.py
+- [ ] **3.2** Add `_execute_global_compression_async()` to `CompressionMixin`
+  - Takes all per-topic compressed findings + analysis findings/gaps/contradictions
+  - Deduplicates cross-topic findings (same fact, different sources)
+  - Merges related findings into coherent themes
+  - Produces unified digest with consistent citation numbering
+  - Flags cross-topic contradictions explicitly
+- [ ] **3.3** Add `compressed_digest` field to `DeepResearchState`
+  - `compressed_digest: Optional[str] = None`
+  - Populated by global compression, consumed by synthesis
+- [ ] **3.4** Update synthesis to use `compressed_digest` when available
+  - In `_build_synthesis_user_prompt()`, prefer `compressed_digest` over raw findings
+  - Fall back to raw findings when compression disabled or failed
+- [ ] **3.5** Wire into workflow_execution.py phase loop
+  - Add COMPRESSION phase handling between ANALYSIS and SYNTHESIS
+  - Include phase-boundary reflection hook
+- [ ] **3.6** Add config flag `deep_research_enable_global_compression: bool = True`
+  - Skip phase for single-topic research (no cross-topic dedup value)
+  - Add provider/model config keys
+- [ ] **3.7** Add tests for global compression
+  - Test: duplicate findings across topics are deduplicated
+  - Test: cross-topic contradictions preserved and flagged
+  - Test: citation numbering is consistent after merge
+  - Test: synthesis prompt size decreases with compression
+  - Test: skipped for single-topic research
+  - Test: graceful fallback when compression fails
 
 ---
 
-## Phase 6: Iterative Supervisor Architecture
+## Phase 4: Research Quality Evaluation Framework
 
-### Sub-Phase 6.1: State Model Extensions
+- [ ] **4.1** Create evaluation package structure
+  - `src/foundry_mcp/core/research/evaluation/__init__.py`
+  - `src/foundry_mcp/core/research/evaluation/evaluator.py`
+  - `src/foundry_mcp/core/research/evaluation/dimensions.py`
+  - `src/foundry_mcp/core/research/evaluation/scoring.py`
+- [ ] **4.2** Define 6 evaluation dimensions with rubrics
+  - Depth (1-5): thoroughness of investigation
+  - Source Quality (1-5): credibility, diversity, recency
+  - Analytical Rigor (1-5): reasoning quality, evidence use
+  - Completeness (1-5): coverage of all query dimensions
+  - Groundedness (1-5): claims supported by cited evidence
+  - Structure (1-5): organization, readability, citations
+- [ ] **4.3** Implement LLM-as-judge evaluator
+  - Takes: research query, final report, source list
+  - Produces: per-dimension score + rationale + composite score (0-1)
+  - Uses strong model (research-tier) for evaluation accuracy
+  - Handles structured output parsing with fallback
+- [ ] **4.4** Add scoring normalization and composite calculation
+  - Normalize each dimension to 0-1
+  - Weighted composite (equal weights initially, configurable later)
+  - Confidence interval based on score variance across dimensions
+- [ ] **4.5** Add evaluation action to research action handler
+  - `action="evaluate"` with `research_id` parameter
+  - Loads completed research report from session
+  - Returns evaluation results in standard response envelope
+- [ ] **4.6** Add config keys for evaluation
+  - `deep_research_evaluation_provider`
+  - `deep_research_evaluation_model`
+  - Update `ResearchConfig` and `from_dict()`
+- [ ] **4.7** Store evaluation results in session metadata
+  - `state.metadata["evaluation"]` with scores, rationales, composite
+- [ ] **4.8** Add test suite
+  - Test: consistent scores for identical reports (low variance)
+  - Test: poor reports score lower than comprehensive reports
+  - Test: dimensions produce independent scores
+  - Test: composite normalizes to 0-1
+  - Test: evaluation results persisted in session metadata
+  - Test: action handler returns evaluation in response envelope
 
-- [x] **6.1.1** Add `SUPERVISION = "supervision"` to `DeepResearchPhase` enum between GATHERING and ANALYSIS
-- [x] **6.1.2** Add supervision fields to `DeepResearchState`: `supervision_round`, `max_supervision_rounds`, `supervision_provider`, `supervision_model`
-- [x] **6.1.3** Update `start_new_iteration()` to reset `supervision_round = 0`
-- [x] **6.1.4** Update `advance_phase()` docstring to include SUPERVISION
-- [x] **6.1.5** Add `should_continue_supervision()` method to `DeepResearchState`
+---
 
-### Sub-Phase 6.2: Configuration
+## Phase 5: Enhanced Per-Researcher Tool Autonomy
 
-- [x] **6.2.1** Add `deep_research_enable_supervision` (bool, default True) to `ResearchConfig`
-- [x] **6.2.2** Add `deep_research_max_supervision_rounds` (int, default 3) to `ResearchConfig`
-- [x] **6.2.3** Add `deep_research_supervision_min_sources_per_query` (int, default 2) to `ResearchConfig`
-- [x] **6.2.4** Add `"supervision"` to `_ROLE_RESOLUTION_CHAIN` (falls back to `"reflection"`)
-- [x] **6.2.5** Add `"supervision"` to `get_phase_timeout()` (reuse planning timeout)
-- [x] **6.2.6** Wire `max_supervision_rounds` into `DeepResearchConfig` dataclass and state initialization
+### Phase 5.1: Increase Default Loop Depth
 
-### Sub-Phase 6.3: Orchestration Updates
+- [ ] **5.1.1** Update `deep_research_topic_max_searches` default from 3 to 5
+  - In `src/foundry_mcp/config/research.py`
+- [ ] **5.1.2** Add cost-aware early-exit heuristic in ReAct loop
+  - In `topic_research.py` ReAct loop (before reflection call)
+  - Condition: `sources_found >= 3 AND distinct_domains >= 2 AND quality_HIGH >= 1`
+  - Sets `research_complete=True`, skips remaining iterations
+- [ ] **5.1.3** Update reflection prompt for aggressive early stopping
+  - Strengthen "STOP" rules when quality is high
+  - Reduce bias toward continuing when coverage is already good
 
-- [x] **6.3.1** Add `DeepResearchPhase.SUPERVISION: AgentRole.SUPERVISOR` to `PHASE_TO_AGENT`
-- [x] **6.3.2** Add SUPERVISION case to `_build_agent_inputs()`
-- [x] **6.3.3** Add SUPERVISION case to `_evaluate_phase_quality()`
-- [x] **6.3.4** Add SUPERVISION to `get_reflection_prompt()` and `_build_reflection_llm_prompt()`
+### Phase 5.2: Think-Tool Step Within ReAct Loop
 
-### Sub-Phase 6.4: Supervision Phase Mixin
+- [ ] **5.2.1** Add `_topic_think()` method to `TopicResearchMixin`
+  - Articulates: what was found, what angle to try next, why it matters
+  - Uses reflection model (cheap)
+  - Returns structured reasoning for next-query construction
+- [ ] **5.2.2** Integrate into ReAct loop between reflect and next search
+  - After reflection decides `continue_searching=true`
+  - Think output feeds into query refinement
+  - Record think output in `TopicResearchResult.reflection_notes`
+- [ ] **5.2.3** Add tests for within-loop think step
+  - Test: think output produces actionable query rationale
+  - Test: refined queries reflect think-step reasoning
+  - Test: token cost bounded
 
-- [x] **6.4.1** Create `supervision.py` with `SupervisionPhaseMixin` class skeleton
-- [x] **6.4.2** Implement `_build_per_query_coverage(state)` — per-sub-query coverage data
-- [x] **6.4.3** Implement `_build_supervision_system_prompt(state)` — coverage assessment JSON schema
-- [x] **6.4.4** Implement `_build_supervision_user_prompt(state, coverage_data)` — research context + coverage table
-- [x] **6.4.5** Implement `_parse_supervision_response(content, state)` — JSON parsing with query dedup
-- [x] **6.4.6** Implement `_assess_coverage_heuristic(state, min_sources)` — LLM fallback
-- [x] **6.4.7** Implement `_execute_supervision_async(state, provider_id, timeout)` — main entry point
+### Phase 5.3: Cross-Researcher Content Deduplication
 
-### Sub-Phase 6.5: Workflow Execution Integration
-
-- [x] **6.5.1** Add `_execute_supervision_async` TYPE_CHECKING stub to `WorkflowExecutionMixin`
-- [x] **6.5.2** Add SUPERVISION block in `while True` loop after GATHERING block
-- [x] **6.5.3** Handle supervision-disabled path: `advance_phase()` to skip SUPERVISION entirely
-
-### Sub-Phase 6.6: Core Class Wiring
-
-- [x] **6.6.1** Add `SupervisionPhaseMixin` to `DeepResearchWorkflow` class inheritance in `core.py`
-- [x] **6.6.2** Add import and export in `phases/__init__.py`
-
-### Sub-Phase 6.7: Tests (25 tests)
-
-- [x] **6.7.1** State model tests (6 tests)
-- [x] **6.7.2** Prompt/coverage tests (3 tests)
-- [x] **6.7.3** Response parsing tests (4 tests)
-- [x] **6.7.4** Integration tests (4 tests)
-- [x] **6.7.5** Full regression: `pytest tests/core/research/ -x` — 1901 passed, 6 skipped, 0 failures
-
-### Sub-Phase 6.8: Checklist Update
-
-- [x] **6.8.1** Update `PLAN-CHECKLIST.md` Phase 6 section with completed items
+- [ ] **5.3.1** Add `_content_similarity_hash()` helper to `_helpers.py`
+  - Character n-gram overlap or simhash-based approach
+  - Returns similarity score 0-1
+  - Threshold: >0.8 = duplicate
+- [ ] **5.3.2** Extend dedup logic in `_topic_search()` for content similarity
+  - After URL/title dedup, check content similarity for remaining sources
+  - Mark similar-content sources as duplicates
+  - Log dedup events for observability
+- [ ] **5.3.3** Add config flag `deep_research_enable_content_dedup: bool = True`
+- [ ] **5.3.4** Add tests for content deduplication
+  - Test: mirror/syndicated content from different URLs is deduplicated
+  - Test: genuinely different content from similar titles is preserved
+  - Test: dedup disabled when config flag off
 
 ---
 
 ## Sign-off
 
-- [x] All phases reviewed and approved
-- [x] Tests pass: `pytest tests/core/research/ -x` — 1901 passed, 6 skipped, 0 failures
-- [x] No regressions in existing deep research tests
+- [ ] All phases reviewed and approved
+- [ ] Tests pass: `pytest tests/core/research/ -x`
+- [ ] No regressions in existing tests
 - [ ] Code review completed
