@@ -390,9 +390,29 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
             "",
             f"## Research Brief\n{state.research_brief or 'Direct research on the query'}",
             "",
+        ]
+
+        # When a global compressed digest is available, use it as the
+        # primary findings source.  The digest already contains deduplicated
+        # cross-topic findings with consistent citations, contradictions,
+        # and gaps — so we can skip the per-finding enumeration below.
+        if state.compressed_digest:
+            prompt_parts.extend([
+                "## Unified Research Digest",
+                "",
+                state.compressed_digest,
+                "",
+            ])
+            # Still include the source reference and instructions below
+            # (skip to source reference section)
+            return self._build_synthesis_tail(
+                state, prompt_parts, id_to_citation, allocation_result,
+            )
+
+        prompt_parts.extend([
             "## Findings to Synthesize",
             "",
-        ]
+        ])
 
         # Group findings by category if available
         categorized: dict[str, list] = {}
@@ -442,6 +462,31 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                 prompt_parts.append(f"- [{status}] {gap.description}")
             prompt_parts.append("")
 
+        return self._build_synthesis_tail(
+            state, prompt_parts, id_to_citation, allocation_result,
+        )
+
+    def _build_synthesis_tail(
+        self,
+        state: DeepResearchState,
+        prompt_parts: list[str],
+        id_to_citation: dict[str, int],
+        allocation_result: Optional[AllocationResult] = None,
+    ) -> str:
+        """Append source reference and instructions to the synthesis prompt.
+
+        Shared by both the standard findings path and the compressed-digest
+        path in ``_build_synthesis_user_prompt``.
+
+        Args:
+            state: Current research state
+            prompt_parts: Accumulated prompt sections (mutated in-place)
+            id_to_citation: source-id → citation-number mapping
+            allocation_result: Optional budget allocation result
+
+        Returns:
+            Complete user prompt string
+        """
         # Add source reference list with citation numbers - use allocation-aware content
         prompt_parts.append("## Source Reference (use these citation numbers in your report)")
 

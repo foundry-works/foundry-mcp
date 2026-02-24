@@ -126,6 +126,12 @@ class ResearchConfig:
     deep_research_compression_model: Optional[str] = None  # Model override for per-topic compression
     deep_research_compression_max_content_length: int = 50000  # Max chars per source in compression prompt (matches open_deep_research)
 
+    # Global compression (cross-topic deduplication before synthesis)
+    deep_research_enable_global_compression: bool = True  # Master switch for global compression phase
+    deep_research_global_compression_provider: Optional[str] = None  # LLM provider for global compression (uses research-tier if not set)
+    deep_research_global_compression_model: Optional[str] = None  # Model override for global compression
+    deep_research_global_compression_timeout: float = 360.0  # Timeout for global compression LLM call (seconds)
+
     # Multi-model cost optimization — role-based model hierarchy (Phase 6)
     # "research" role: main reasoning for analysis, planning, clarification (strongest available)
     deep_research_research_provider: Optional[str] = None
@@ -357,6 +363,15 @@ class ResearchConfig:
             deep_research_compression_model=data.get("deep_research_compression_model"),
             deep_research_compression_max_content_length=int(
                 data.get("deep_research_compression_max_content_length", 50000)
+            ),
+            # Global compression (cross-topic deduplication before synthesis)
+            deep_research_enable_global_compression=_parse_bool(
+                data.get("deep_research_enable_global_compression", True)
+            ),
+            deep_research_global_compression_provider=data.get("deep_research_global_compression_provider"),
+            deep_research_global_compression_model=data.get("deep_research_global_compression_model"),
+            deep_research_global_compression_timeout=float(
+                data.get("deep_research_global_compression_timeout", 360.0)
             ),
             # Multi-model cost optimization — role-based hierarchy (Phase 6)
             deep_research_research_provider=data.get("deep_research_research_provider"),
@@ -743,8 +758,8 @@ class ResearchConfig:
         falls back to deep_research_timeout.
 
         Args:
-            phase: Phase name ("planning", "analysis", "synthesis", "refinement",
-                   "gathering", "supervision")
+            phase: Phase name ("planning", "analysis", "compression", "synthesis",
+                   "refinement", "gathering", "supervision")
 
         Returns:
             Timeout in seconds for the phase
@@ -755,6 +770,7 @@ class ResearchConfig:
             "gathering": self.deep_research_timeout,  # Gathering uses default
             "supervision": self.deep_research_planning_timeout,  # Lightweight LLM call, reuse planning timeout
             "analysis": self.deep_research_analysis_timeout,
+            "compression": self.deep_research_global_compression_timeout,  # Global compression
             "synthesis": self.deep_research_synthesis_timeout,
             "refinement": self.deep_research_refinement_timeout,
         }
@@ -945,6 +961,7 @@ class ResearchConfig:
         "topic_reflection": ["topic_reflection", "reflection"],
         "summarization": ["summarization"],
         "compression": ["compression"],
+        "global_compression": ["global_compression", "compression", "research"],
         "clarification": ["clarification", "research", "analysis"],
     }
 

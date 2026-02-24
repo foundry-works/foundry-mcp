@@ -257,6 +257,9 @@ class TestDeepResearchState:
         assert state.phase == DeepResearchPhase.ANALYSIS
 
         state.advance_phase()
+        assert state.phase == DeepResearchPhase.COMPRESSION
+
+        state.advance_phase()
         assert state.phase == DeepResearchPhase.SYNTHESIS
 
         state.advance_phase()

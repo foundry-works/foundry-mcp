@@ -51,6 +51,7 @@ class AgentRole(str, Enum):
     PLANNER = "planner"
     GATHERER = "gatherer"
     ANALYZER = "analyzer"
+    COMPRESSOR = "compressor"
     SYNTHESIZER = "synthesizer"
     REFINER = "refiner"
 
@@ -62,6 +63,7 @@ PHASE_TO_AGENT: dict[DeepResearchPhase, AgentRole] = {
     DeepResearchPhase.GATHERING: AgentRole.GATHERER,
     DeepResearchPhase.SUPERVISION: AgentRole.SUPERVISOR,
     DeepResearchPhase.ANALYSIS: AgentRole.ANALYZER,
+    DeepResearchPhase.COMPRESSION: AgentRole.COMPRESSOR,
     DeepResearchPhase.SYNTHESIS: AgentRole.SYNTHESIZER,
     DeepResearchPhase.REFINEMENT: AgentRole.REFINER,
 }

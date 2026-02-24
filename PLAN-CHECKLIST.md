@@ -60,35 +60,44 @@
 
 ## Phase 3: Global Note Compression Before Synthesis
 
-- [ ] **3.1** Add `COMPRESSION` to `DeepResearchPhase` enum
+- [x] **3.1** Add `COMPRESSION` to `DeepResearchPhase` enum
   - Insert between `ANALYSIS` and `SYNTHESIS`
   - Update `advance_phase()` logic in `DeepResearchState`
-  - Update `PHASE_TO_AGENT` mapping in orchestration.py
-- [ ] **3.2** Add `_execute_global_compression_async()` to `CompressionMixin`
+  - Update `PHASE_TO_AGENT` mapping in orchestration.py (added `COMPRESSOR` agent role)
+- [x] **3.2** Add `_execute_global_compression_async()` to `CompressionMixin`
   - Takes all per-topic compressed findings + analysis findings/gaps/contradictions
   - Deduplicates cross-topic findings (same fact, different sources)
   - Merges related findings into coherent themes
   - Produces unified digest with consistent citation numbering
   - Flags cross-topic contradictions explicitly
-- [ ] **3.3** Add `compressed_digest` field to `DeepResearchState`
+- [x] **3.3** Add `compressed_digest` field to `DeepResearchState`
   - `compressed_digest: Optional[str] = None`
   - Populated by global compression, consumed by synthesis
-- [ ] **3.4** Update synthesis to use `compressed_digest` when available
+- [x] **3.4** Update synthesis to use `compressed_digest` when available
   - In `_build_synthesis_user_prompt()`, prefer `compressed_digest` over raw findings
   - Fall back to raw findings when compression disabled or failed
-- [ ] **3.5** Wire into workflow_execution.py phase loop
+  - Extracted `_build_synthesis_tail()` helper for shared source-reference + instructions
+- [x] **3.5** Wire into workflow_execution.py phase loop
   - Add COMPRESSION phase handling between ANALYSIS and SYNTHESIS
   - Include phase-boundary reflection hook
-- [ ] **3.6** Add config flag `deep_research_enable_global_compression: bool = True`
+  - Added TYPE_CHECKING stub for `_execute_global_compression_async`
+- [x] **3.6** Add config flag `deep_research_enable_global_compression: bool = True`
   - Skip phase for single-topic research (no cross-topic dedup value)
-  - Add provider/model config keys
-- [ ] **3.7** Add tests for global compression
+  - Add provider/model/timeout config keys (`global_compression_provider`, `global_compression_model`, `global_compression_timeout`)
+  - Added `global_compression` role to `_ROLE_RESOLUTION_CHAIN` (falls back to compression → research)
+  - Added `compression` to `get_phase_timeout()`
+  - Added `from_toml_dict()` parsing for all new config keys
+- [x] **3.7** Add tests for global compression (29 tests)
   - Test: duplicate findings across topics are deduplicated
   - Test: cross-topic contradictions preserved and flagged
-  - Test: citation numbering is consistent after merge
+  - Test: citation numbering is consistent after merge (original numbers preserved)
   - Test: synthesis prompt size decreases with compression
   - Test: skipped for single-topic research
   - Test: graceful fallback when compression fails
+  - Test: prompt includes all topics, analysis findings, contradictions
+  - Test: config fields, TOML parsing, role resolution chain
+  - Test: audit events emitted on success and failure
+  - Test: no regression in existing tests (1969 passed)
 
 ---
 

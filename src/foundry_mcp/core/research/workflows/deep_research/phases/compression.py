@@ -334,3 +334,275 @@ class CompressionMixin:
             "topics_failed": topics_failed,
             "total_compression_tokens": total_compression_tokens,
         }
+
+    # ------------------------------------------------------------------
+    # Global cross-topic compression
+    # ------------------------------------------------------------------
+
+    async def _execute_global_compression_async(
+        self,
+        state: DeepResearchState,
+        provider_id: str | None,
+        timeout: float,
+    ) -> dict[str, Any]:
+        """Compress all per-topic findings into a unified research digest.
+
+        This runs as the COMPRESSION phase between ANALYSIS and SYNTHESIS.
+        Unlike per-topic compression (which preserves everything verbatim),
+        global compression actively deduplicates cross-topic findings,
+        merges related themes, and flags contradictions — producing a
+        single digest that synthesis can consume directly.
+
+        The digest includes:
+        - Deduplicated findings with consistent cross-topic citation numbers
+        - Thematic grouping of related findings across topics
+        - Explicitly flagged cross-topic contradictions
+        - A unified source reference list
+
+        Skipped when:
+        - Only one topic was researched (no cross-topic dedup value)
+        - Global compression is disabled via config
+        - No per-topic compressed findings or analysis findings exist
+
+        Args:
+            state: Current research state with per-topic compressed findings
+                and analysis output (findings, contradictions, gaps).
+            provider_id: LLM provider to use (research-tier recommended).
+            timeout: LLM call timeout in seconds.
+
+        Returns:
+            Dict with compression statistics (success, tokens_used, etc.).
+        """
+        from foundry_mcp.core.research.workflows.base import WorkflowResult
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            safe_resolve_model_for_role,
+        )
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            execute_llm_call,
+        )
+
+        # Skip for single-topic research — no cross-topic dedup value
+        topic_count = len(state.topic_research_results)
+        if topic_count <= 1:
+            logger.info(
+                "Skipping global compression: only %d topic(s) for research %s",
+                topic_count,
+                state.id,
+            )
+            return {"skipped": True, "reason": "single_topic", "tokens_used": 0}
+
+        # Collect per-topic compressed findings (or fall back to per-topic summaries)
+        topic_sections: list[str] = []
+        for tr in state.topic_research_results:
+            sub_query = state.get_sub_query(tr.sub_query_id)
+            query_text = sub_query.query if sub_query else "Unknown query"
+
+            content = tr.compressed_findings or tr.per_topic_summary
+            if not content:
+                # Last resort: list the source titles for this topic
+                topic_sources = [s for s in state.sources if s.id in tr.source_ids]
+                if topic_sources:
+                    source_lines = [f"  - [{s.citation_number}] {s.title}" for s in topic_sources if s.citation_number]
+                    content = "Sources found:\n" + "\n".join(source_lines)
+                else:
+                    continue
+
+            topic_sections.append(
+                f"### Topic: {query_text}\n\n{content}"
+            )
+
+        if not topic_sections:
+            logger.info("Skipping global compression: no topic content for research %s", state.id)
+            return {"skipped": True, "reason": "no_content", "tokens_used": 0}
+
+        # Build analysis findings section
+        findings_section = ""
+        if state.findings:
+            id_to_citation = state.source_id_to_citation()
+            finding_lines: list[str] = []
+            for f in state.findings:
+                citation_refs = [
+                    f"[{id_to_citation[sid]}]"
+                    for sid in f.source_ids
+                    if sid in id_to_citation
+                ]
+                refs_str = ", ".join(citation_refs) if citation_refs else "no sources"
+                category = f.category or "General"
+                finding_lines.append(f"- [{category}] {f.content} (Sources: {refs_str})")
+            findings_section = (
+                "\n\n## Analysis Findings\n" + "\n".join(finding_lines)
+            )
+
+        # Build contradictions section
+        contradictions_section = ""
+        if state.contradictions:
+            contra_lines: list[str] = []
+            for c in state.contradictions:
+                contra_lines.append(f"- [{c.severity.upper()}] {c.description}")
+                if c.resolution:
+                    contra_lines.append(f"  Resolution: {c.resolution}")
+            contradictions_section = (
+                "\n\n## Detected Contradictions\n" + "\n".join(contra_lines)
+            )
+
+        # Build gaps section
+        gaps_section = ""
+        if state.gaps:
+            gap_lines = [
+                f"- [{'resolved' if g.resolved else 'unresolved'}] {g.description}"
+                for g in state.gaps
+            ]
+            gaps_section = "\n\n## Knowledge Gaps\n" + "\n".join(gap_lines)
+
+        # Build full source reference
+        source_ref_lines: list[str] = []
+        for s in state.sources:
+            if s.citation_number is not None:
+                source_ref_lines.append(
+                    f"[{s.citation_number}] {s.title}"
+                    + (f" - {s.url}" if s.url else "")
+                )
+        source_reference = "\n\n## Source Reference\n" + "\n".join(source_ref_lines)
+
+        # Assemble user prompt
+        topics_block = "\n\n".join(topic_sections)
+        user_prompt = (
+            f"# Research Query\n{state.original_query}\n\n"
+            f"# Per-Topic Research Findings ({topic_count} topics)\n\n"
+            f"{topics_block}"
+            f"{findings_section}"
+            f"{contradictions_section}"
+            f"{gaps_section}"
+            f"{source_reference}\n\n"
+            "Produce a unified research digest following the instructions."
+        )
+
+        system_prompt = (
+            "You are a research synthesizer. You have received per-topic "
+            "research findings from parallel researchers who each investigated "
+            "a different sub-query of the same research question.\n\n"
+            "<Task>\n"
+            "Merge all per-topic findings into a single, unified research "
+            "digest. Your goals:\n"
+            "1. DEDUPLICATE: Identify findings that appear across multiple "
+            "topics (same fact from different sources) and merge them, "
+            "keeping all relevant citation numbers.\n"
+            "2. MERGE THEMES: Group related findings into coherent thematic "
+            "sections, regardless of which topic they came from.\n"
+            "3. FLAG CONTRADICTIONS: When different topics report conflicting "
+            "information, explicitly flag the contradiction with the "
+            "conflicting citation numbers.\n"
+            "4. PRESERVE CITATIONS: Maintain the original citation numbers "
+            "[N] exactly as provided. Do NOT renumber.\n"
+            "5. PRESERVE ALL UNIQUE INFORMATION: Every unique fact, data "
+            "point, or insight must appear in the digest. Only truly "
+            "duplicated content should be merged.\n"
+            "</Task>\n\n"
+            "<Output Format>\n"
+            "## Research Digest\n"
+            "Brief overview of the research scope and key themes found.\n\n"
+            "## Thematic Findings\n"
+            "### [Theme 1]\n"
+            "Merged findings with inline citations [N].\n"
+            "### [Theme 2]\n"
+            "...\n\n"
+            "## Cross-Topic Contradictions\n"
+            "List any conflicting information found across topics, with "
+            "citations for both sides.\n\n"
+            "## Knowledge Gaps\n"
+            "Areas where research was insufficient or inconclusive.\n\n"
+            "## Source Summary\n"
+            "Brief note on source coverage: total sources, diversity of "
+            "domains, any quality concerns.\n"
+            "</Output Format>\n\n"
+            "<Guidelines>\n"
+            "- Use the ORIGINAL citation numbers [N] — do NOT renumber.\n"
+            "- When merging duplicate findings, combine citation numbers: "
+            "e.g., 'AI adoption is growing rapidly [1][4][7]'.\n"
+            "- Be comprehensive — this digest replaces the raw findings "
+            "for the synthesis phase.\n"
+            "- Organize by theme, not by original topic.\n"
+            "- The digest should be self-contained: a reader should understand "
+            "the full research landscape without seeing the original topics.\n"
+            "</Guidelines>"
+        )
+
+        # Resolve provider/model via role hierarchy
+        role_provider, role_model = safe_resolve_model_for_role(
+            self.config, "global_compression"
+        )
+        resolved_provider = provider_id or role_provider or self.config.default_provider
+        resolved_model = role_model
+
+        self._check_cancellation(state)
+
+        call_result = await execute_llm_call(
+            workflow=self,
+            state=state,
+            phase_name="compression",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            provider_id=resolved_provider,
+            model=resolved_model,
+            temperature=0.3,
+            timeout=timeout,
+            error_metadata={
+                "topic_count": topic_count,
+                "findings_count": len(state.findings),
+                "guidance": "Try reducing topic count or findings included",
+            },
+            role="global_compression",
+        )
+
+        if isinstance(call_result, WorkflowResult):
+            logger.error(
+                "Global compression failed for research %s: %s",
+                state.id,
+                call_result.error,
+            )
+            self._write_audit_event(
+                state,
+                "global_compression_failed",
+                data={"error": call_result.error},
+                level="error",
+            )
+            return {"success": False, "error": call_result.error, "tokens_used": 0}
+
+        result = call_result.result
+        if result.success and result.content:
+            state.compressed_digest = result.content
+            tokens_used = (result.input_tokens or 0) + (result.output_tokens or 0)
+
+            self._write_audit_event(
+                state,
+                "global_compression_complete",
+                data={
+                    "topic_count": topic_count,
+                    "findings_count": len(state.findings),
+                    "contradictions_count": len(state.contradictions),
+                    "digest_length": len(result.content),
+                    "tokens_used": tokens_used,
+                    "provider_id": resolved_provider,
+                    "model_used": resolved_model,
+                },
+            )
+
+            logger.info(
+                "Global compression complete: %d topics → %d char digest, %d tokens",
+                topic_count,
+                len(result.content),
+                tokens_used,
+            )
+
+            return {
+                "success": True,
+                "digest_length": len(result.content),
+                "tokens_used": tokens_used,
+                "topic_count": topic_count,
+            }
+
+        logger.warning(
+            "Global compression produced empty result for research %s",
+            state.id,
+        )
+        return {"success": False, "error": "empty_result", "tokens_used": 0}

@@ -176,14 +176,15 @@ class DeepResearchConfig(BaseModel):
 class DeepResearchPhase(str, Enum):
     """Phases of the DEEP_RESEARCH workflow.
 
-    The deep research workflow progresses through seven sequential phases:
+    The deep research workflow progresses through eight sequential phases:
     0. CLARIFICATION - (Optional) Analyze query specificity and ask clarifying questions
     1. PLANNING - Analyze the query and decompose into focused sub-queries
     2. GATHERING - Execute sub-queries in parallel and collect sources
     3. SUPERVISION - Assess coverage gaps and generate follow-up queries
     4. ANALYSIS - Extract findings and assess source quality
-    5. SYNTHESIS - Combine findings into a comprehensive report
-    6. REFINEMENT - Identify gaps and potentially loop back for more research
+    5. COMPRESSION - Global cross-topic deduplication and digest before synthesis
+    6. SYNTHESIS - Combine findings into a comprehensive report
+    7. REFINEMENT - Identify gaps and potentially loop back for more research
 
     The ordering of these enum values is significant - it defines the
     progression through advance_phase() method.
@@ -194,6 +195,7 @@ class DeepResearchPhase(str, Enum):
     GATHERING = "gathering"
     SUPERVISION = "supervision"
     ANALYSIS = "analysis"
+    COMPRESSION = "compression"
     SYNTHESIS = "synthesis"
     REFINEMENT = "refinement"
 
@@ -245,6 +247,17 @@ class DeepResearchState(BaseModel):
     topic_research_results: list[TopicResearchResult] = Field(
         default_factory=list,
         description="Per-topic research results from parallel topic researcher agents",
+    )
+
+    # Global compression output (cross-topic deduplication digest)
+    compressed_digest: Optional[str] = Field(
+        default=None,
+        description=(
+            "Unified research digest produced by global compression. "
+            "Deduplicates cross-topic findings, merges themes, and "
+            "flags contradictions. When present, synthesis prefers this "
+            "over raw findings for prompt construction."
+        ),
     )
 
     # Final output
@@ -622,9 +635,9 @@ class DeepResearchState(BaseModel):
         """Advance to the next research phase.
 
         Phases advance in order: CLARIFICATION -> PLANNING -> GATHERING ->
-        SUPERVISION -> ANALYSIS -> SYNTHESIS -> REFINEMENT. Does nothing if
-        already at REFINEMENT. The phase order is derived from the
-        DeepResearchPhase enum definition order.
+        SUPERVISION -> ANALYSIS -> COMPRESSION -> SYNTHESIS -> REFINEMENT.
+        Does nothing if already at REFINEMENT. The phase order is derived
+        from the DeepResearchPhase enum definition order.
 
         Returns:
             The new phase after advancement

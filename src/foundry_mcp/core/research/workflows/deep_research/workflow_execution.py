@@ -1,8 +1,8 @@
 """Async workflow execution engine for deep research.
 
 Orchestrates the multi-phase workflow (planning, gathering, supervision,
-analysis, synthesis, refinement) with cancellation support, error handling,
-and resource cleanup.
+analysis, compression, synthesis, refinement) with cancellation support,
+error handling, and resource cleanup.
 """
 
 from __future__ import annotations
@@ -71,6 +71,7 @@ class WorkflowExecutionMixin:
         async def _execute_supervision_async(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_extract_followup_async(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_digest_step_async(self, *args: Any, **kwargs: Any) -> Any: ...
+        async def _execute_global_compression_async(self, *args: Any, **kwargs: Any) -> Any: ...
 
     async def _maybe_reflect(
         self,
@@ -377,6 +378,32 @@ class WorkflowExecutionMixin:
                     if err:
                         return err
                     await self._maybe_reflect(state, DeepResearchPhase.ANALYSIS)
+
+                if state.phase == DeepResearchPhase.COMPRESSION:
+                    if not getattr(self.config, "deep_research_enable_global_compression", True):
+                        state.advance_phase()  # Skip directly to SYNTHESIS
+                    else:
+                        self._check_cancellation(state)
+                        compression_stats = await self._execute_global_compression_async(
+                            state=state,
+                            provider_id=resolve_phase_provider(self.config, "global_compression", "compression"),
+                            timeout=self.config.get_phase_timeout("compression"),
+                        )
+                        self._write_audit_event(
+                            state,
+                            "global_compression_result",
+                            data=compression_stats,
+                        )
+                        if compression_stats.get("skipped"):
+                            logger.info(
+                                "Global compression skipped for research %s: %s",
+                                state.id,
+                                compression_stats.get("reason"),
+                            )
+                        # Persist state with compressed digest
+                        self.memory.save_deep_research(state)
+                        await self._maybe_reflect(state, DeepResearchPhase.COMPRESSION)
+                        state.advance_phase()  # COMPRESSION → SYNTHESIS
 
                 if state.phase == DeepResearchPhase.SYNTHESIS:
                     err = await self._run_phase(
