@@ -1,298 +1,354 @@
-# PLAN: Deep Research Quality — Think-Tool, Compression & Evaluation
+# PLAN: Deep Research Architecture — Brief, Compression, Delegation & Tooling
 
 **Branch:** `tyler/foundry-mcp-20260223-0747`
-**Date:** 2026-02-23
+**Date:** 2026-02-24
 **Reference:** `~/GitHub/open_deep_research`
 **Status:** Draft
-**Depends on:** Phases 1-6 of prior plan (all complete)
+**Depends on:** All prior phases (think-tool, global compression, evaluation, autonomy — all complete)
 
 ---
 
 ## Context
 
-Comparative analysis of foundry-mcp deep research against `open_deep_research` (RACE score 0.4344, #6 on Deep Research Bench) identified five remaining alignment gaps after completing prior Phases 1-6 (token limits, brief refinement, synthesis prompts, structured truncation, reflection enforcement, supervision architecture).
+Comparative analysis of foundry-mcp deep research against `open_deep_research` (RACE score 0.4344, #6 on Deep Research Bench) after completing two prior plan cycles (12 phases total) reveals five remaining structural gaps. Prior work aligned token management, compression, reflection patterns, and evaluation. What remains is:
 
-The completed work gave us the structural bones — supervision phase, per-topic ReAct loops, fetch-time summarization, phase-boundary reflection. What's missing is the **deliberation quality** (think-tool pattern), **information density management** (global compression), and **measurement** (evaluation framework) that distinguish high-performing deep research systems.
+1. **Query enrichment** — open_deep_research transforms raw user messages into a detailed research brief (source preferences, filled dimensions, specificity) before planning. foundry-mcp refines the query during planning but never creates a standalone research brief that drives all downstream phases.
 
-Phases are ordered by impact-to-effort ratio. Phases 1-2 are low-effort prompt/flow changes. Phases 3-4 are medium-effort architectural additions. Phase 5 is a larger effort that builds on measurement from Phase 4.
+2. **Compression timing** — open_deep_research compresses per-researcher findings *inside* the researcher subgraph before the supervisor sees them. foundry-mcp defers all compression to a separate phase after analysis, so supervision operates on raw source counts instead of actual content.
+
+3. **Search depth** — open_deep_research allows 10 tool calls per researcher and 6 supervisor iterations (with 5 parallel researchers each). foundry-mcp caps at 5 searches per topic and 3 supervision rounds. Researchers also lack URL extraction capability (can search but can't deeply read specific pages).
+
+4. **Supervision model** — open_deep_research's supervisor delegates *research tasks* (detailed paragraph-length directives) to parallel researcher agents via `ConductResearch`. foundry-mcp's supervisor generates follow-up *queries* (single-sentence strings). The delegation model produces more targeted, context-rich research assignments.
+
+5. **Tool extensibility** — open_deep_research dynamically loads MCP tools into researcher agents. foundry-mcp researchers have a fixed toolkit (search providers only). No mechanism for injecting custom tools at runtime.
+
+Phases are ordered by dependency chain: Phase 1 is independent with highest upstream impact. Phase 2 is prerequisite for Phase 4. Phase 3 enables Phase 5. Phase 4 depends on Phase 2 (supervisor needs compressed findings). Phase 5 depends on Phase 3 (flexible tool loop).
 
 ---
 
-## Phase 1: Think-Tool Deliberation in Supervision
+## Phase 1: Research Brief Generation
 
 **Effort:** Low | **Impact:** High
 **Files:**
-- `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py` (lines 86-168)
-- `src/foundry_mcp/core/research/workflows/deep_research/orchestration.py` (lines 526-631)
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/brief.py` (new)
+- `src/foundry_mcp/core/research/models/deep_research.py` (state additions)
+- `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py` (phase wiring)
+- `src/foundry_mcp/core/research/workflows/deep_research/orchestration.py` (agent mapping)
+- `src/foundry_mcp/config/research.py` (config fields)
 
 ### Problem
 
-open_deep_research's highest-impact quality pattern is the `think_tool` — a no-op tool that forces the LLM to explicitly reason through findings before acting. The supervisor uses it before every `ConductResearch` delegation and after every result return (prompts.py:79-136). The key constraint: think_tool must NOT run in parallel with action tools, creating deliberate sequential reasoning pauses.
+open_deep_research's `write_research_brief` step (prompts.py:44-77) transforms raw user messages into a structured `ResearchQuestion` with:
+- Maximized specificity (unstated dimensions filled as open-ended rather than assumed)
+- Source preferences (official/primary sources, peer-reviewed work, language-native sources)
+- Explicit scope boundaries (what to include, what to exclude)
 
-foundry-mcp's supervision phase (`_execute_supervision_async`) makes a single LLM call for coverage assessment (line 150-168). There's no structured deliberation step where the model articulates *what it found*, *what's missing*, and *why specific follow-ups would fill gaps* before generating follow-up queries.
+foundry-mcp's planning phase has a brief refinement sub-step (planning.py:80-114) that cleans up the query, but it's embedded within planning — not a dedicated phase. The refined brief is never stored as a distinct artifact and isn't available to downstream phases (supervision, synthesis) that could benefit from its specificity.
 
-The `async_think_pause` in orchestration.py is a phase-boundary reflection (runs after a phase completes). It's not the same as within-phase deliberation that shapes the phase's own outputs.
+Poor query quality cascades: vague queries produce vague sub-queries which produce shallow research. The research brief is the single highest-leverage upstream quality amplifier.
 
 ### Design
 
-Add a two-step deliberation pattern to supervision's coverage assessment:
+Add a new BRIEF phase between CLARIFICATION and PLANNING:
 
-1. **Think step**: Ask the LLM to analyze coverage gaps without producing follow-up queries. Force it to articulate: what was found per sub-query, what domains are represented, what perspectives are missing, and what specific information gaps exist. This is the "think_tool" equivalent.
+1. **Phase insertion**: Add `BRIEF` to `DeepResearchPhase` enum after CLARIFICATION.
+2. **Structured output**: LLM transforms raw query + clarification constraints into a `research_brief` string. The prompt adapts open_deep_research's approach: maximize specificity, prefer primary sources, fill unstated dimensions as open-ended, avoid unwarranted assumptions.
+3. **State storage**: `state.research_brief` persists the brief for all downstream consumers.
+4. **Planning integration**: `_execute_planning_async()` uses `state.research_brief` (when available) instead of `state.original_query` for sub-query decomposition. This replaces the existing inline refinement sub-step.
+5. **Synthesis integration**: The brief is included in synthesis context so the report directly addresses the enriched question.
+6. **Supervision integration**: Coverage assessment references the brief's scope boundaries.
 
-2. **Act step**: Feed the think output into the existing follow-up query generation prompt. The LLM now generates follow-ups grounded in explicit gap analysis rather than making both assessments simultaneously.
-
-This mirrors open_deep_research's pattern (think before ConductResearch, think after results) but adapted to foundry-mcp's single-prompt architecture. The think step is a separate LLM call, not a tool call, since we don't use tool-calling loops.
+The brief phase uses the research-tier model (not cheap/reflection) because query enrichment requires strong reasoning about unstated dimensions.
 
 ### Changes
 
-1. Add `_build_think_prompt()` to `SupervisionPhaseMixin` — generates a gap-analysis-only prompt from coverage data
-2. Execute think call before the existing coverage assessment call in `_execute_supervision_async()`
-3. Pass think output as context into `_build_supervision_user_prompt()` so follow-up generation is grounded
-4. Record think output in `state.metadata["supervision_history"]` for traceability
-5. Use cheap model (reflection role) for the think step — this is fast analytical reasoning, not synthesis
-6. Guard: skip think step when heuristic fast-path triggers (round > 0, coverage sufficient)
+1. Add `BRIEF` to `DeepResearchPhase` enum between `CLARIFICATION` and `PLANNING`
+2. Add `research_brief: Optional[str] = None` to `DeepResearchState`
+3. Create `phases/brief.py` with `BriefPhaseMixin`:
+   - `_execute_brief_async()` — orchestrator
+   - `_build_brief_system_prompt()` — adapted from open_deep_research's `transform_messages_into_research_topic_prompt`
+   - `_build_brief_user_prompt()` — includes original query, clarification constraints, date
+   - Uses `execute_structured_llm_call()` for parse-retry reliability
+4. Add `BRIEFER` agent role to `PHASE_TO_AGENT` mapping in orchestration.py
+5. Wire BRIEF phase into `workflow_execution.py` phase loop (after CLARIFICATION, before PLANNING)
+6. Update `_execute_planning_async()`: when `state.research_brief` exists, use it as decomposition input instead of running inline refinement
+7. Update `_build_synthesis_user_prompt()` to include research brief in context
+8. Add config: `deep_research_brief_provider`, `deep_research_brief_model` (defaults to research-tier)
+9. Add config flag: `deep_research_enable_brief: bool = True`
+10. Add `phases/__init__.py` export
 
 ### Validation
 
-- Test: think output contains per-sub-query gap analysis when coverage is incomplete
-- Test: follow-up queries reference specific gaps identified in think output
-- Test: think step is skipped when heuristic fast-path triggers
-- Test: supervision with think-tool produces more targeted follow-ups than without (qualitative)
-- Test: total token cost increase is bounded (think step uses cheap model, adds ~500 tokens per round)
+- Test: brief enriches a vague query with specific dimensions and source preferences
+- Test: brief preserves explicit user constraints from clarification phase
+- Test: planning uses research_brief when available, falls back to original_query
+- Test: brief skipped when config flag disabled
+- Test: synthesis prompt includes research brief context
+- Test: brief phase audit event emitted
+- Test: non-fatal — if brief generation fails, planning uses original query
 
 ---
 
-## Phase 2: Think-Tool Self-Critique at Planning Boundary
+## Phase 2: Inline Per-Topic Compression Before Supervision
 
-**Effort:** Low | **Impact:** Medium
+**Effort:** Medium | **Impact:** High
 **Files:**
-- `src/foundry_mcp/core/research/workflows/deep_research/phases/planning.py` (lines 49-309)
-- `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py` (lines 229-280)
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py` (compression call)
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/compression.py` (refactor)
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py` (content-aware assessment)
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/gathering.py` (orchestration)
 
 ### Problem
 
-open_deep_research's supervisor thinks before every research delegation — evaluating whether sub-queries cover the research space, identifying redundancies, and ensuring diverse perspectives (prompts.py:86-92). foundry-mcp's planning phase generates sub-queries in a single pass (planning.py `_execute_planning_async`). The research brief is refined (Phase 2 of prior plan), but sub-query decomposition isn't self-critiqued before expensive gathering begins.
+open_deep_research compresses per-researcher findings *inside* the researcher subgraph (`compress_research` node) before returning results to the supervisor. The supervisor thus operates on clean, compressed findings when deciding next steps — it reads actual research content, not just source counts.
 
-Poor decomposition cascades: redundant sub-queries waste search budget, missing perspectives leave gaps that supervision must later fill with follow-up queries (more expensive than getting it right upfront).
+foundry-mcp defers all per-topic compression to a separate COMPRESSION phase that runs *after* analysis. The supervision phase (between GATHERING and ANALYSIS) sees only raw metadata: source counts, quality scores, domain diversity. It cannot assess whether the *content* of findings actually covers the query's requirements.
+
+This is the single largest architectural divergence from open_deep_research's supervision model. Coverage assessment without content visibility is fundamentally limited — the supervisor can't distinguish between 5 sources that all say the same thing and 5 sources that each cover a different dimension.
 
 ### Design
 
-After sub-query generation, add a self-critique step that validates the decomposition before advancing to GATHERING:
+Move per-topic compression into the gathering phase. After each topic researcher's ReAct loop completes, immediately compress its findings:
 
-1. Present the generated sub-queries back to an LLM with the original research brief
-2. Ask it to evaluate: Are there redundancies? Missing perspectives? Overly broad queries? Overly narrow queries?
-3. If critique identifies issues, apply adjustments (merge redundant queries, add missing perspectives, refine scope)
-4. Limit to one critique round (not iterative) to bound cost
-
-This is NOT the same as the existing phase-boundary reflection (which assesses "should we proceed?" generically). This is a targeted self-critique of the decomposition quality specifically.
+1. **Inline compression**: At the end of `_execute_topic_research_async()`, after the ReAct loop and before returning `TopicResearchResult`, call the existing per-topic compression logic.
+2. **Result enrichment**: `TopicResearchResult.compressed_findings` is populated inline (already exists as a field, currently populated later by separate compression phase).
+3. **Supervision upgrade**: `_build_supervision_user_prompt()` now includes compressed findings per sub-query, not just source counts. The LLM can assess actual content coverage.
+4. **Global compression adjustment**: The separate COMPRESSION phase (global cross-topic dedup) continues to run post-analysis, but operates on already-compressed per-topic findings instead of raw sources. Remove the per-topic compression from this phase (it's already done).
+5. **Fallback**: If inline compression fails for a topic, supervision falls back to metadata-only assessment for that topic. Non-fatal.
 
 ### Changes
 
-1. Add `_build_decomposition_critique_prompt()` to `PlanningPhaseMixin`
-2. After sub-query generation in `_execute_planning_async()`, execute critique LLM call
-3. Parse critique response for: redundancies to merge, gaps to fill, scope adjustments
-4. Apply adjustments to `state.sub_queries` before returning
-5. Use cheap model (reflection role) — this is analytical, not creative
-6. Add config flag `deep_research_enable_planning_critique: bool = True` to allow disabling
-7. Record critique in `state.metadata["planning_critique"]` for observability
+1. Extract `_compress_single_topic()` from `compression.py` into a reusable helper (or call it from `topic_research.py`)
+2. Add compression call at end of `_execute_topic_research_async()` after ReAct loop completes
+3. Populate `TopicResearchResult.compressed_findings` inline during gathering
+4. Update `_build_supervision_user_prompt()` to include compressed findings per sub-query:
+   - For each sub-query: include `compressed_findings[:2000]` (truncated for budget)
+   - Shift prompt from "N sources found, M domains" to "N sources found, key findings: ..."
+5. Update `_build_supervision_system_prompt()` to instruct LLM to assess content coverage, not just source diversity
+6. Refactor `_execute_global_compression_async()` (COMPRESSION phase): remove per-topic compression loop, keep only cross-topic merge/dedup logic
+7. Update `_execute_global_compression_async()` input: read from `TopicResearchResult.compressed_findings` instead of re-compressing raw sources
+8. Add `deep_research_inline_compression: bool = True` config flag (enables per-topic compression during gathering)
+9. Tests
 
 ### Validation
 
-- Test: redundant sub-queries are identified and merged (e.g., "AI safety regulations" + "AI governance policies")
-- Test: missing perspectives are added (e.g., historical, economic angles for a policy question)
-- Test: critique does not run when disabled via config flag
-- Test: total sub-query count stays within configured bounds after critique adjustments
-- Test: existing planning tests pass without regression
+- Test: `TopicResearchResult.compressed_findings` is populated after gathering (not null)
+- Test: supervision prompt includes compressed content excerpts
+- Test: supervision coverage assessment references actual findings, not just counts
+- Test: global compression phase operates on pre-compressed findings (no double compression)
+- Test: inline compression failure is non-fatal (supervision falls back to metadata)
+- Test: total workflow token usage doesn't significantly increase (compression happens same number of times, just earlier)
+- Test: supervision produces more targeted follow-ups when it can see content
 
 ---
 
-## Phase 3: Global Note Compression Before Synthesis
+## Phase 3: Iteration Budget + Extract Tool for Researchers
 
 **Effort:** Medium | **Impact:** Medium
 **Files:**
-- `src/foundry_mcp/core/research/workflows/deep_research/phases/compression.py` (lines 47-336)
-- `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py` (lines 124-616)
-- `src/foundry_mcp/core/research/models/deep_research.py` (state model)
-- `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py`
+- `src/foundry_mcp/config/research.py` (budget defaults)
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py` (extract integration)
+- `src/foundry_mcp/core/research/providers/tavily.py` (extract provider)
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py` (iteration limits)
 
 ### Problem
 
-open_deep_research has a two-level compression pipeline:
-1. **Per-researcher compression** (deep_researcher.py:511) — each researcher's messages are compressed into structured notes after their ReAct loop
-2. **Global note accumulation** (deep_researcher.py:323-330) — all researcher notes are concatenated and fed to final report generation
+**Budget gap**: open_deep_research allows 10 tool calls per researcher and 6 supervisor iterations with 5 parallel researchers each iteration. foundry-mcp caps at 5 searches per topic and 3 supervision rounds. For PhD-level research tasks (Deep Research Bench: 100 tasks across 22 fields), this limits exploration depth.
 
-foundry-mcp has per-topic compression (compression.py) but no equivalent global compression pass. The synthesis phase receives the full analysis output (structured findings, sources, contradictions, gaps) directly. For complex multi-topic research, this means synthesis receives a large, heterogeneous prompt that may exceed context limits or produce incoherent reports because the model must simultaneously comprehend, deduplicate, and synthesize across topics.
+**Extract gap**: open_deep_research researchers can call `tavily_search` with `include_raw_content=True`, getting full page content alongside search snippets. foundry-mcp researchers only get search result snippets from providers. When a search reveals a promising URL, there's no way to deeply read that page's content. open_deep_research's `summarize_webpage()` processes raw content at ~50K chars, extracting structured summaries with key excerpts.
 
-### Design
-
-Add a global compression step between analysis and synthesis that:
-
-1. Takes all per-topic compressed findings + analysis output (findings, gaps, contradictions)
-2. Deduplicates cross-topic findings (same fact from different sources)
-3. Merges related findings into coherent themes
-4. Produces a unified research digest with consistent citation numbering
-5. Flags cross-topic contradictions explicitly
-
-This is NOT the same as per-topic compression (which preserves everything verbatim). Global compression actively deduplicates and synthesizes across topics while preserving all unique information.
-
-### Changes
-
-1. Add `_execute_global_compression_async()` to `CompressionMixin`
-2. Add `COMPRESSION` phase to `DeepResearchPhase` enum (between ANALYSIS and SYNTHESIS)
-3. Build prompt that receives all topic findings grouped by theme
-4. Store result in `state.compressed_digest: Optional[str]` (new field)
-5. Update synthesis to use `compressed_digest` when available instead of raw findings
-6. Add config: `deep_research_enable_global_compression: bool = True`
-7. Wire into workflow_execution.py phase loop
-8. Use research-tier model (this is substantive synthesis, not cheap reflection)
-
-### Validation
-
-- Test: global compression deduplicates identical findings across topics
-- Test: cross-topic contradictions are preserved and flagged
-- Test: citation numbering is consistent across merged topics
-- Test: synthesis prompt size decreases after global compression
-- Test: synthesis quality does not degrade (compressed digest preserves all unique information)
-- Test: phase is skipped when single-topic research (no cross-topic value)
-
----
-
-## Phase 4: Research Quality Evaluation Framework
-
-**Effort:** Medium | **Impact:** Medium
-**Files:**
-- New: `src/foundry_mcp/core/research/evaluation/` (new package)
-- New: `tests/core/research/evaluation/`
-
-### Problem
-
-open_deep_research includes a comprehensive evaluation framework (evaluators.py) that scores research output across 11 dimensions using LLM-as-judge:
-- Research Depth, Source Quality, Analytical Rigor, Practical Value, Balance & Objectivity
-- Writing Quality, Relevance, Structure, Correctness, Groundedness, Completeness
-
-Each dimension is scored 1-5, normalized to 0-1, producing a composite RACE score. This enables data-driven decisions about whether architectural changes (like our supervision phase) actually improve output quality.
-
-foundry-mcp has no evaluation framework. We can't measure whether Phases 1-3 of this plan improve research quality, and we can't benchmark against open_deep_research's 0.4344 RACE score.
+The extract tool is particularly valuable for: technical documentation (API specs, configuration guides), academic papers (methodology details, results tables), and comparison pages (feature matrices, pricing tables) — exactly the content types that Deep Research Bench evaluates.
 
 ### Design
 
-Build an evaluation module that can score completed research reports. Design principles:
+**Budget uplift**:
+- Raise `deep_research_topic_max_searches` default: 5 → 10 (matching open_deep_research's `max_react_tool_calls`)
+- Raise `deep_research_max_supervision_rounds` default: 3 → 6 (matching `max_researcher_iterations`)
+- The early-exit heuristic (Phase 5 of prior plan) already prevents over-searching — higher caps just remove artificial ceilings for complex queries.
 
-1. **Dimension-based scoring** — evaluate independently on 6 core dimensions (subset of open_deep_research's 11, focused on the most discriminating):
-   - **Depth**: thoroughness of investigation
-   - **Source Quality**: credibility, diversity, recency of sources
-   - **Analytical Rigor**: quality of reasoning, evidence use
-   - **Completeness**: coverage of all query dimensions
-   - **Groundedness**: claims supported by cited evidence
-   - **Structure**: organization, readability, citation consistency
-
-2. **LLM-as-judge** — use a strong model to evaluate against rubrics
-3. **Batch evaluation** — can score multiple reports for A/B testing
-4. **Integration with deep research action** — optional `evaluate=True` flag on `deep-research-report` action
+**Extract tool integration**:
+- Add a content extraction step to the per-topic ReAct loop. After search results return, the researcher can optionally extract full content from the most promising URLs.
+- Use Tavily Extract API (already available via `tavily_extract` MCP tool) or direct HTTP fetch + LLM summarization.
+- Extraction is budget-counted: each extract counts toward the per-topic tool call limit.
+- The reflection step can recommend URLs for extraction (new field: `urls_to_extract`).
+- Extracted content goes through the same source summarization pipeline (50K char cap, LLM summary).
 
 ### Changes
 
-1. Create `src/foundry_mcp/core/research/evaluation/__init__.py`
-2. Create `src/foundry_mcp/core/research/evaluation/evaluator.py` — core evaluation logic
-3. Create `src/foundry_mcp/core/research/evaluation/dimensions.py` — rubric definitions per dimension
-4. Create `src/foundry_mcp/core/research/evaluation/scoring.py` — score normalization, composite calculation
-5. Add evaluation action to research action handler: `action="evaluate"` with `research_id` parameter
-6. Add config: `deep_research_evaluation_provider`, `deep_research_evaluation_model`
-7. Store evaluation results in research session metadata
-8. Create test suite with fixture reports of known quality
+1. Update config defaults:
+   - `deep_research_topic_max_searches`: 5 → 10
+   - `deep_research_max_supervision_rounds`: 3 → 6
+2. Rename `deep_research_topic_max_searches` to `deep_research_topic_max_tool_calls` (reflects that search + extract both count)
+3. Add `_topic_extract()` method to `TopicResearchMixin`:
+   - Input: list of URLs to extract
+   - Uses Tavily Extract API or HTTP fetch
+   - Summarizes extracted content via `SourceSummarizer`
+   - Creates `ResearchSource` entries with full content
+   - Respects concurrency semaphore
+4. Update reflection decision schema: add `urls_to_extract: list[str]` field (optional, max 2 per iteration)
+5. Update ReAct loop: after reflection, if `urls_to_extract` is non-empty, run extraction before next search
+6. Update reflection system prompt: instruct LLM to recommend extraction when search snippet suggests rich content behind a URL
+7. Add `deep_research_enable_extract: bool = True` config flag
+8. Add `deep_research_extract_max_per_iteration: int = 2` config (caps extraction cost)
+9. Tests
 
 ### Validation
 
-- Test: evaluator produces consistent scores for identical reports (low variance across runs)
-- Test: obviously poor reports score lower than comprehensive reports
-- Test: each dimension produces independent scores (not all identical)
-- Test: evaluation results are persisted in session metadata
-- Test: composite score normalizes correctly to 0-1 range
+- Test: higher iteration budget allows deeper research on complex queries
+- Test: early-exit heuristic still fires (no regression on simple queries)
+- Test: extract tool fetches and summarizes URL content
+- Test: extracted sources are properly deduplicated against search sources
+- Test: extraction failures are non-fatal (research continues with search sources)
+- Test: reflection can recommend URLs for extraction
+- Test: total tool calls (search + extract) respect `max_tool_calls` cap
+- Test: supervision respects new round limit (6 vs 3)
 
 ---
 
-## Phase 5: Enhanced Per-Researcher Tool Autonomy
+## Phase 4: Supervisor Delegation Model
 
 **Effort:** High | **Impact:** High
 **Files:**
-- `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py` (lines 66-237)
-- `src/foundry_mcp/core/research/workflows/deep_research/phases/gathering.py` (lines 430-570)
-- `src/foundry_mcp/config/research.py`
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py` (major refactor)
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/gathering.py` (delegation support)
+- `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py` (loop changes)
+- `src/foundry_mcp/core/research/models/deep_research.py` (state additions)
+- `src/foundry_mcp/config/research.py` (config additions)
 
 ### Problem
 
-open_deep_research gives each researcher a full tool-calling ReAct loop with `max_react_tool_calls=10` — researchers can search, read results, think about gaps, search differently, and iterate up to 10 times per topic. foundry-mcp's topic agents have `max_searches=3` and a simpler loop: search → reflect → (maybe refine query) → search.
+open_deep_research's supervisor delegates *research tasks* — detailed paragraph-length directives — via the `ConductResearch` tool. Each directive is a rich description of what to investigate, what perspective to take, and what evidence to seek. The supervisor can spawn up to 5 parallel researchers per iteration and run 6 iterations, seeing compressed findings between each round.
 
-The key differences:
-1. **Loop depth**: 3 vs 10 max iterations (open_deep_research researchers can dig deeper)
-2. **Tool diversity**: open_deep_research researchers can use MCP tools, native web search, and Tavily; foundry-mcp researchers only use configured search providers
-3. **Think-tool integration**: open_deep_research researchers use think_tool between every search; foundry-mcp researchers use structured reflection (similar but not as free-form)
-4. **Concurrency model**: open_deep_research runs up to 5 researchers in parallel; foundry-mcp uses semaphore-bounded concurrency (configurable)
+foundry-mcp's supervision generates *follow-up queries* — single-sentence strings appended to the sub-query list. The queries then go through the same gathering pipeline as the original queries. The supervisor cannot:
+- Specify the research approach (compare vs. investigate vs. validate)
+- Target specific gaps in existing findings
+- Delegate to parallel researchers with distinct mandates
+- See compressed findings between delegation rounds (Phase 2 fixes this prerequisite)
+
+The delegation model is more powerful because it gives the supervisor *directive authority* over research strategy, not just query-generation authority.
 
 ### Design
 
-Enhance per-topic researcher autonomy in three sub-phases:
+Refactor supervision into a delegation-based model that mirrors open_deep_research's supervisor pattern:
 
-**5.1: Increase default loop depth**
-- Change `deep_research_topic_max_searches` default from 3 to 5
-- Add a cost-aware early exit: if sources are high-quality and diverse after 2 iterations, stop regardless of max
-- The current reflection decision rules already support this but the hard cap is too low
+1. **Delegation tool**: Define a `ResearchDirective` structured output (analogous to `ConductResearch`):
+   ```
+   research_topic: str  # Detailed paragraph-length directive
+   perspective: str     # What angle to approach from
+   evidence_needed: str # What specific evidence to seek
+   priority: int        # 1=critical, 2=important, 3=nice-to-have
+   ```
 
-**5.2: Add think-tool step within ReAct loop**
-- After each search+reflect cycle, add a brief think step before the next search
-- Think step articulates: what was found, what angle to try next, why that angle matters
-- This grounds query refinement in explicit reasoning (currently refinement comes from reflection's `refined_query` field which is often generic)
+2. **Supervisor loop**: Instead of a single coverage-assessment LLM call:
+   - Think step: analyze compressed findings, identify gaps (already exists from Phase 1 of prior plan)
+   - Delegate step: generate 1-N `ResearchDirective` objects targeting specific gaps
+   - Execute step: spawn parallel topic researchers for each directive
+   - Compress step: inline compression of results (Phase 2)
+   - Assess step: decide whether to continue or complete
 
-**5.3: Cross-researcher deduplication improvement**
-- Currently dedup uses URL + normalized title matching via shared `seen_urls` / `seen_titles` sets
-- Add content-similarity dedup: if two sources from different URLs have >80% content overlap (via fuzzy hash), mark as duplicate
-- This prevents wasted synthesis effort on mirror/syndicated content
+3. **Parallel execution**: Directives execute as parallel topic researchers (reusing existing `_execute_topic_research_async()` infrastructure). Each directive becomes a new `SubQuery` with the directive's topic as its text.
+
+4. **Think-tool enforcement**: Mandatory think step before delegation (articulate gaps) and after results return (assess coverage). Mirrors open_deep_research's "think before ConductResearch" pattern.
+
+5. **Completion signal**: Supervisor can signal `ResearchComplete` when satisfied, or the iteration limit triggers automatic completion.
+
+6. **Budget management**: `max_concurrent_research_units` config caps parallel researchers per delegation round. `max_supervision_rounds` caps total rounds.
 
 ### Changes
 
-**5.1:**
-1. Update default `deep_research_topic_max_searches` from 3 to 5
-2. Add early-exit heuristic in ReAct loop: if `sources_found >= 3` AND `distinct_domains >= 2` AND `quality_distribution["HIGH"] >= 1`, set `research_complete=True` regardless of iteration count
-3. Update reflection prompt to be more aggressive about early stopping when quality is high
-
-**5.2:**
-4. Add `_topic_think()` method to `TopicResearchMixin`
-5. Call between reflect and next search iteration in the ReAct loop
-6. Think output feeds into next search query construction
-7. Use reflection model (cheap) for think step
-
-**5.3:**
-8. Add `_content_similarity_hash()` helper to `_helpers.py` using simhash or character n-gram overlap
-9. Extend dedup logic in `_topic_search()` to check content similarity for sources with different URLs
-10. Add config: `deep_research_enable_content_dedup: bool = True`
+1. Add `ResearchDirective` dataclass to `models/deep_research.py`
+2. Add `max_concurrent_research_units: int = 5` to `ResearchConfig`
+3. Refactor `_execute_supervision_async()`:
+   - Replace single LLM call with think → delegate → execute → assess loop
+   - Think step produces gap analysis (existing)
+   - Delegate step produces list of `ResearchDirective` objects (new)
+   - Execute step spawns parallel topic researchers (reuse existing infrastructure)
+   - Assess step evaluates results and decides continue/complete
+4. Add `_build_delegation_prompt()` — system prompt for generating directives from gap analysis
+5. Add `_parse_delegation_response()` — extract `ResearchDirective` objects from LLM response
+6. Add `_execute_directives_async()` — spawn parallel researchers for directives, collect results
+7. Update `workflow_execution.py`: supervision can now trigger inline gathering (not just follow-up query generation)
+8. Add think-before-delegate and think-after-results calls (using reflection model)
+9. Add `deep_research_delegation_model: bool = True` config flag (fall back to query-generation model when disabled)
+10. Add `deep_research_max_concurrent_research_units: int = 5` config
+11. Tests
 
 ### Validation
 
-- Test: researchers with max_searches=5 find more diverse sources than max_searches=3 on complex topics
-- Test: early-exit heuristic triggers when high-quality diverse sources are found quickly
-- Test: think step produces actionable next-query rationale
-- Test: content-similar sources from different URLs are deduplicated
-- Test: total token cost increase is bounded (think steps use cheap model, early-exit reduces unnecessary iterations)
-- Test: no regression in existing topic research tests
+- Test: supervisor generates paragraph-length directives (not single-sentence queries)
+- Test: directives target specific gaps identified in think output
+- Test: parallel researcher execution respects concurrency limit
+- Test: supervisor sees compressed findings from directive execution
+- Test: think step runs before delegation and after results
+- Test: completion signal terminates supervision loop
+- Test: iteration limit triggers automatic completion
+- Test: fallback to query-generation when delegation disabled
+- Test: directive priorities influence execution order
+- Test: total search budget respected across delegation rounds
 
 ---
 
-## Reference: Alignment Status
+## Phase 5: Dynamic Tool Injection (MCP)
 
-| Area | Status | Phase |
-|------|--------|-------|
-| Model token limits | Aligned | Prior Phase 1 |
-| Research brief refinement | Aligned | Prior Phase 2 |
-| Synthesis prompt engineering | Aligned | Prior Phase 3 |
-| Structured token recovery | Aligned | Prior Phase 4 |
-| Topic reflection enforcement | Aligned | Prior Phase 5 |
-| Supervision architecture | Aligned | Prior Phase 6 |
-| Fetch-time summarization | Aligned | Prior work |
-| Per-topic compression | Aligned | Prior work |
-| Per-topic ReAct loops | Aligned | Prior work |
-| Multi-model cost routing | Aligned | Prior work |
-| **Think-tool deliberation** | **Gap** | **This plan Phase 1** |
-| **Planning self-critique** | **Gap** | **This plan Phase 2** |
-| **Global compression** | **Gap** | **This plan Phase 3** |
-| **Evaluation framework** | **Gap** | **This plan Phase 4** |
-| **Researcher tool autonomy** | **Aligned** | **This plan Phase 5** |
+**Effort:** Medium | **Impact:** Medium
+**Files:**
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py` (tool loading)
+- `src/foundry_mcp/core/research/providers/` (new MCP provider wrapper)
+- `src/foundry_mcp/config/research.py` (MCP config)
+- `src/foundry_mcp/core/research/models/deep_research.py` (tool tracking)
+
+### Problem
+
+open_deep_research dynamically loads MCP tools into researcher agents at runtime (utils.py `load_mcp_tools()`). Researchers can use custom tools alongside search — for example, a code analysis tool for technical research, a financial data API for market research, or a specialized academic database. This extensibility lets the system adapt to domain-specific research needs.
+
+foundry-mcp researchers have a fixed toolkit: search providers (Tavily, Perplexity, Google, Semantic Scholar) and the extract tool (Phase 3). There's no mechanism to inject custom tools at runtime. The MCP server infrastructure exists in foundry-mcp (it's an MCP server itself), but the deep research workflow doesn't consume external MCP tools.
+
+### Design
+
+Add dynamic tool loading for per-topic researchers:
+
+1. **MCP config**: New config section for MCP tool sources:
+   ```
+   deep_research_mcp_servers: list of {url, tools, auth_required}
+   ```
+   Each entry specifies an MCP server URL, optional tool name filter, and auth requirements.
+
+2. **Tool loading**: At gathering phase init, load tools from configured MCP servers. Cache loaded tools for the session.
+
+3. **Tool injection**: Each topic researcher receives the loaded MCP tools alongside search and extract tools. The reflection prompt includes tool descriptions so the researcher can decide when to use them.
+
+4. **Error handling**: MCP tool failures are non-fatal. Wrap each MCP tool call with timeout and error catching. Authentication errors surface as retry-able messages. Interaction-required errors (code -32003) are logged but don't block research.
+
+5. **Tool tracking**: `TopicResearchResult` tracks which tools were used per topic for observability.
+
+### Changes
+
+1. Add `deep_research_mcp_servers: list[MCPServerConfig] = []` to `ResearchConfig`
+2. Add `MCPServerConfig` dataclass: `url`, `tools` (optional filter), `auth_required`, `timeout`
+3. Create `providers/mcp_tools.py`:
+   - `load_mcp_research_tools()` — loads and caches tools from configured servers
+   - `wrap_mcp_tool()` — wraps tool with timeout, error handling, auth
+   - `get_mcp_tool_descriptions()` — generates prompt descriptions for loaded tools
+4. Update `_execute_gathering_async()` — load MCP tools at phase init, pass to topic researchers
+5. Update `_execute_topic_research_async()` — accept additional tools parameter
+6. Update reflection system prompt — include MCP tool descriptions when tools are available
+7. Add `tools_used: list[str]` field to `TopicResearchResult`
+8. Add MCP tool call support in ReAct loop:
+   - After reflection, if reflection recommends a tool call, execute it
+   - Tool results fed into next reflection cycle
+   - MCP tool calls count toward `max_tool_calls` budget
+9. Add `deep_research_enable_mcp_tools: bool = False` config flag (opt-in, disabled by default)
+10. Tests
+
+### Validation
+
+- Test: MCP tools loaded from configured servers
+- Test: tool descriptions included in researcher prompt when tools available
+- Test: researcher can invoke MCP tool and use results
+- Test: MCP tool failures are non-fatal (research continues)
+- Test: tool calls count toward iteration budget
+- Test: tools_used field tracks MCP tool usage
+- Test: MCP disabled by default (opt-in flag)
+- Test: authentication errors handled gracefully
+- Test: tool name filtering works (only specified tools loaded)
+- Test: cached tools reused across topic researchers within same session
