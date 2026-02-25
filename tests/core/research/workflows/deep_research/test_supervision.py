@@ -3778,3 +3778,135 @@ class TestConfidenceScoredCoverage:
         assert "queries_assessed" in result
         assert "queries_sufficient" in result
         assert result["overall_coverage"] in ("sufficient", "partial", "insufficient")
+
+
+# ===========================================================================
+# Phase 2: Supervisor Delegation Scaling Heuristics
+# ===========================================================================
+
+
+class TestQueryComplexityClassification:
+    """Tests for _classify_query_complexity() — Phase 2b."""
+
+    def test_simple_query_few_sub_queries_short_brief(self):
+        """Short brief with 0-2 sub-queries classifies as simple."""
+        state = _make_state(num_completed=2, sources_per_query=1)
+        state.research_brief = "What is the capital of France?"
+        result = StubSupervision()._classify_query_complexity(state)
+        assert result == "simple"
+
+    def test_simple_query_no_brief_falls_back_to_original(self):
+        """When research_brief is None, falls back to original_query."""
+        state = _make_state(num_completed=1, sources_per_query=1)
+        state.research_brief = None
+        state.original_query = "What is Python?"
+        result = StubSupervision()._classify_query_complexity(state)
+        assert result == "simple"
+
+    def test_moderate_query_three_sub_queries(self):
+        """3-4 sub-queries classifies as moderate."""
+        state = _make_state(num_completed=3, sources_per_query=1)
+        state.research_brief = "Compare Python and JavaScript for web development"
+        result = StubSupervision()._classify_query_complexity(state)
+        assert result == "moderate"
+
+    def test_moderate_query_medium_brief(self):
+        """Brief with 80-199 words classifies as moderate even with few sub-queries."""
+        state = _make_state(num_completed=1, sources_per_query=1)
+        state.research_brief = " ".join(["word"] * 100)
+        result = StubSupervision()._classify_query_complexity(state)
+        assert result == "moderate"
+
+    def test_complex_query_five_plus_sub_queries(self):
+        """5+ sub-queries classifies as complex."""
+        state = _make_state(num_completed=5, sources_per_query=1)
+        state.research_brief = "Short brief"
+        result = StubSupervision()._classify_query_complexity(state)
+        assert result == "complex"
+
+    def test_complex_query_long_brief(self):
+        """Brief with 200+ words classifies as complex."""
+        state = _make_state(num_completed=1, sources_per_query=1)
+        state.research_brief = " ".join(["word"] * 250)
+        result = StubSupervision()._classify_query_complexity(state)
+        assert result == "complex"
+
+    def test_boundary_two_sub_queries_short_brief_is_simple(self):
+        """Boundary: 2 sub-queries + short brief = simple."""
+        state = _make_state(num_completed=2, sources_per_query=1)
+        state.research_brief = "Brief topic"
+        result = StubSupervision()._classify_query_complexity(state)
+        assert result == "simple"
+
+    def test_boundary_three_sub_queries_is_moderate(self):
+        """Boundary: exactly 3 sub-queries = moderate."""
+        state = _make_state(num_completed=3, sources_per_query=1)
+        state.research_brief = "Short"
+        result = StubSupervision()._classify_query_complexity(state)
+        assert result == "moderate"
+
+    def test_boundary_eighty_words_is_moderate(self):
+        """Boundary: exactly 80 words = moderate."""
+        state = _make_state(num_completed=1, sources_per_query=1)
+        state.research_brief = " ".join(["word"] * 80)
+        result = StubSupervision()._classify_query_complexity(state)
+        assert result == "moderate"
+
+
+class TestDelegationScalingHeuristics:
+    """Tests for scaling heuristics in delegation prompts — Phase 2a/2b."""
+
+    def test_system_prompt_has_scaling_guidance(self):
+        """Follow-up delegation system prompt includes directive count scaling."""
+        stub = StubSupervision(delegation_model=True)
+        prompt = stub._build_delegation_system_prompt()
+
+        assert "Directive Count Scaling" in prompt
+        assert "Simple factual gaps" in prompt
+        assert "1-2 directives" in prompt
+        assert "Comparison gaps" in prompt
+        assert "3-5 directives" in prompt
+        assert "BIAS toward fewer" in prompt
+
+    def test_system_prompt_still_has_max_five(self):
+        """Follow-up delegation system prompt preserves the max-5 cap."""
+        stub = StubSupervision(delegation_model=True)
+        prompt = stub._build_delegation_system_prompt()
+
+        assert "Maximum 5 directives per round" in prompt
+
+    def test_user_prompt_includes_complexity_label_simple(self):
+        """User prompt includes simple complexity signal for simple queries."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=2, sources_per_query=1)
+        state.research_brief = "What is Python?"
+        coverage = stub._build_per_query_coverage(state)
+
+        prompt = stub._build_delegation_user_prompt(state, coverage)
+
+        assert "Query complexity: **simple**" in prompt
+        assert "1-2 focused directives" in prompt
+
+    def test_user_prompt_includes_complexity_label_moderate(self):
+        """User prompt includes moderate complexity signal."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=3, sources_per_query=1)
+        state.research_brief = "Compare Python, JavaScript, and Rust"
+        coverage = stub._build_per_query_coverage(state)
+
+        prompt = stub._build_delegation_user_prompt(state, coverage)
+
+        assert "Query complexity: **moderate**" in prompt
+        assert "2-3 directives" in prompt
+
+    def test_user_prompt_includes_complexity_label_complex(self):
+        """User prompt includes complex complexity signal."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=5, sources_per_query=1)
+        state.research_brief = " ".join(["word"] * 250)
+        coverage = stub._build_per_query_coverage(state)
+
+        prompt = stub._build_delegation_user_prompt(state, coverage)
+
+        assert "Query complexity: **complex**" in prompt
+        assert "3-5 directives" in prompt

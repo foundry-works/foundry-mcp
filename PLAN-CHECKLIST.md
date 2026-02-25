@@ -20,12 +20,12 @@ Cross-reference: [PLAN.md](PLAN.md) for detailed rationale and file references.
 
 ## Phase 2: Supervisor Delegation Scaling Heuristics
 
-- [ ] **2a** Add query-type scaling rules to `_build_delegation_system_prompt()`
+- [x] **2a** Add query-type scaling rules to `_build_delegation_system_prompt()`
   - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py:1204`
   - Rules: simple→1-2, comparison→1-per-element, complex→3-5
   - Verify: prompt changes don't break existing test fixtures
 
-- [ ] **2b** Add complexity signal to `_build_delegation_user_prompt()`
+- [x] **2b** Add complexity signal to `_build_delegation_user_prompt()`
   - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py:1241`
   - Heuristic: sub-query count + brief length → simple/moderate/complex label
   - Test: Unit test for complexity classification function

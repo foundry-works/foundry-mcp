@@ -1198,6 +1198,41 @@ Guidelines:
         return "\n".join(parts) if parts else None
 
     # ------------------------------------------------------------------
+    # Query complexity classification
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _classify_query_complexity(
+        state: DeepResearchState,
+    ) -> str:
+        """Classify the original query's complexity for directive scaling.
+
+        Uses heuristics based on sub-query count and research brief length
+        to produce a simple/moderate/complex label that guides the supervisor
+        in calibrating how many directives to generate.
+
+        Args:
+            state: Current research state (uses sub_queries, research_brief,
+                   original_query)
+
+        Returns:
+            One of ``"simple"``, ``"moderate"``, or ``"complex"``
+        """
+        sub_query_count = len(state.sub_queries)
+        brief = state.research_brief or state.original_query
+        brief_word_count = len(brief.split())
+
+        # High sub-query count or long brief → complex
+        if sub_query_count >= 5 or brief_word_count >= 200:
+            return "complex"
+
+        # Moderate indicators
+        if sub_query_count >= 3 or brief_word_count >= 80:
+            return "moderate"
+
+        return "simple"
+
+    # ------------------------------------------------------------------
     # Delegation prompts
     # ------------------------------------------------------------------
 
@@ -1232,9 +1267,15 @@ Guidelines:
 - "perspective" should specify the angle: technical, comparative, historical, regulatory, user-focused, etc.
 - "evidence_needed" should name concrete evidence types: statistics, case studies, expert opinions, benchmarks, etc.
 - "priority": 1=critical gap (blocks report quality), 2=important (improves comprehensiveness), 3=nice-to-have
-- Maximum 5 directives per round
 - Do NOT duplicate research already covered — target SPECIFIC gaps
 - Directives should be complementary, not overlapping — each covers a different dimension
+
+Directive Count Scaling:
+- Simple factual gaps (single missing fact or stat): 1-2 directives maximum
+- Comparison gaps (need data on specific compared elements): 1 directive per element needing more research
+- Complex multi-dimensional gaps (multiple interrelated areas uncovered): 3-5 directives targeting distinct dimensions
+- BIAS toward fewer, more focused directives — a single well-scoped directive beats three vague ones
+- Maximum 5 directives per round regardless of complexity
 
 IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
@@ -1266,12 +1307,23 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                 "",
             ])
 
+        # Complexity signal for directive scaling
+        complexity = self._classify_query_complexity(state)
+        complexity_guidance = {
+            "simple": "This is a **simple** query — target 1-2 focused directives for remaining gaps.",
+            "moderate": "This is a **moderate** complexity query — target 2-3 directives for remaining gaps.",
+            "complex": "This is a **complex** multi-dimensional query — target 3-5 directives for remaining gaps.",
+        }
+
         parts.extend([
             "## Research Status",
             f"- Iteration: {state.iteration}/{state.max_iterations}",
             f"- Supervision round: {state.supervision_round + 1}/{state.max_supervision_rounds}",
             f"- Completed sub-queries: {len(state.completed_sub_queries())}",
             f"- Total sources: {len(state.sources)}",
+            f"- Query complexity: **{complexity}**",
+            "",
+            complexity_guidance[complexity],
             "",
         ])
 
