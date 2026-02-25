@@ -403,7 +403,7 @@ class TestNoveltyInSearchResults:
 
         with patch.object(stub, "_topic_search", side_effect=mock_topic_search):
             with patch.object(stub, "_summarize_search_results", side_effect=mock_summarize):
-                output = await stub._handle_web_search_tool(
+                output, _charged = await stub._handle_web_search_tool(
                     tool_call=ResearcherToolCall(
                         tool="web_search",
                         arguments={"query": "renewable energy"},
@@ -452,7 +452,7 @@ class TestNoveltyInSearchResults:
 
         with patch.object(stub, "_topic_search", side_effect=mock_topic_search):
             with patch.object(stub, "_summarize_search_results", side_effect=mock_summarize):
-                output = await stub._handle_web_search_tool(
+                output, _charged = await stub._handle_web_search_tool(
                     tool_call=ResearcherToolCall(
                         tool="web_search",
                         arguments={"query": "test"},
@@ -506,7 +506,7 @@ class TestNoveltyInSearchResults:
 
         with patch.object(stub, "_topic_search", side_effect=mock_topic_search):
             with patch.object(stub, "_summarize_search_results", side_effect=mock_summarize):
-                output = await stub._handle_web_search_tool(
+                output, _charged = await stub._handle_web_search_tool(
                     tool_call=ResearcherToolCall(
                         tool="web_search",
                         arguments={"query": "climate agriculture"},
@@ -547,7 +547,7 @@ class TestNoveltyInSearchResults:
 
         with patch.object(stub, "_topic_search", side_effect=mock_topic_search):
             with patch.object(stub, "_summarize_search_results", side_effect=mock_summarize):
-                await stub._handle_web_search_tool(
+                _output, _charged = await stub._handle_web_search_tool(
                     tool_call=ResearcherToolCall(
                         tool="web_search",
                         arguments={"query": "test"},
@@ -580,7 +580,7 @@ class TestNoveltyInSearchResults:
             return 0
 
         with patch.object(stub, "_topic_search", side_effect=mock_topic_search):
-            output = await stub._handle_web_search_tool(
+            output, charged = await stub._handle_web_search_tool(
                 tool_call=ResearcherToolCall(
                     tool="web_search",
                     arguments={"query": "test"},
@@ -597,6 +597,7 @@ class TestNoveltyInSearchResults:
                 semaphore=asyncio.Semaphore(5),
             )
 
+        assert charged == 1
         assert "no new sources" in output.lower()
         # Should NOT contain novelty header
         assert "Novelty:" not in output

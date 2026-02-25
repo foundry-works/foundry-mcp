@@ -25,6 +25,7 @@ from foundry_mcp.core.research.models.deep_research import (
     ResearcherResponse,
     ResearcherToolCall,
     TopicResearchResult,
+    WebSearchTool,
     parse_researcher_response,
 )
 from foundry_mcp.core.research.models.sources import (
@@ -1290,7 +1291,7 @@ class TestForcedReflection:
             budget_total=5, budget_remaining=5, extract_enabled=True
         )
         assert "call think as your next action before issuing another search" in prompt
-        assert "first turn only, you may issue multiple web_search" in prompt
+        assert "queries" in prompt  # batch guidance replaces first-turn exception
 
     @pytest.mark.asyncio
     async def test_search_think_search_pattern(self) -> None:
@@ -1777,7 +1778,7 @@ class TestPerResultSummarization:
                 tool="web_search",
                 arguments={"query": sq.query, "max_results": 5},
             )
-            result_text = await mixin._handle_web_search_tool(
+            result_text, _ = await mixin._handle_web_search_tool(
                 tool_call=tool_call,
                 sub_query=sq,
                 state=state,
@@ -1837,7 +1838,7 @@ class TestPerResultSummarization:
                 tool="web_search",
                 arguments={"query": sq.query, "max_results": 5},
             )
-            result_text = await mixin._handle_web_search_tool(
+            result_text, _ = await mixin._handle_web_search_tool(
                 tool_call=tool_call,
                 sub_query=sq,
                 state=state,
@@ -1893,7 +1894,7 @@ class TestPerResultSummarization:
                 tool="web_search",
                 arguments={"query": sq.query, "max_results": 5},
             )
-            result_text = await mixin._handle_web_search_tool(
+            result_text, _ = await mixin._handle_web_search_tool(
                 tool_call=tool_call,
                 sub_query=sq,
                 state=state,
@@ -1949,7 +1950,7 @@ class TestPerResultSummarization:
                 tool="web_search",
                 arguments={"query": sq.query, "max_results": 5},
             )
-            result_text = await mixin._handle_web_search_tool(
+            result_text, _ = await mixin._handle_web_search_tool(
                 tool_call=tool_call,
                 sub_query=sq,
                 state=state,
@@ -2015,7 +2016,7 @@ class TestPerResultSummarization:
                 tool="web_search",
                 arguments={"query": sq.query, "max_results": 5},
             )
-            await mixin._handle_web_search_tool(
+            _, _ = await mixin._handle_web_search_tool(
                 tool_call=tool_call,
                 sub_query=sq,
                 state=state,
@@ -2086,7 +2087,7 @@ class TestPerResultSummarization:
                 tool="web_search",
                 arguments={"query": sq.query, "max_results": 5},
             )
-            await mixin._handle_web_search_tool(
+            _, _ = await mixin._handle_web_search_tool(
                 tool_call=tool_call,
                 sub_query=sq,
                 state=state,
@@ -2373,7 +2374,7 @@ class TestSearchResultPresentationFormat:
             tool="web_search",
             arguments={"query": sq.query, "max_results": 5},
         )
-        result_text = await mixin._handle_web_search_tool(
+        result_text, _ = await mixin._handle_web_search_tool(
             tool_call=tool_call,
             sub_query=sq,
             state=state,
@@ -2729,3 +2730,174 @@ class TestExtractContentVisibility:
         assert "novelty_tag" in extracted.metadata
         assert "novelty_similarity" in extracted.metadata
         assert extracted.metadata["novelty_tag"] in ("new", "related", "duplicate")
+
+
+# =============================================================================
+# Phase: Batch Search Queries (ODR alignment)
+# =============================================================================
+
+
+class TestWebSearchToolBatchValidation:
+    """Tests for WebSearchTool model validation with batch queries."""
+
+    def test_single_query_normalized_to_queries(self) -> None:
+        tool = WebSearchTool(query="test query")
+        assert tool.queries == ["test query"]
+        assert tool.query == "test query"
+
+    def test_batch_queries(self) -> None:
+        tool = WebSearchTool(queries=["q1", "q2", "q3"])
+        assert tool.queries == ["q1", "q2", "q3"]
+        assert tool.query == "q1"
+
+    def test_both_query_and_queries_merges(self) -> None:
+        tool = WebSearchTool(query="extra", queries=["q1", "q2"])
+        assert "extra" in tool.queries
+        assert "q1" in tool.queries
+        assert "q2" in tool.queries
+        assert tool.query == tool.queries[0]
+
+    def test_both_query_and_queries_no_duplicate(self) -> None:
+        """If query is already in queries, it is not duplicated."""
+        tool = WebSearchTool(query="q1", queries=["q1", "q2"])
+        assert tool.queries == ["q1", "q2"]
+
+    def test_neither_raises_error(self) -> None:
+        with pytest.raises(Exception):
+            WebSearchTool()
+
+    def test_empty_queries_raises_error(self) -> None:
+        with pytest.raises(Exception):
+            WebSearchTool(queries=[])
+
+    def test_max_results_default(self) -> None:
+        tool = WebSearchTool(query="test")
+        assert tool.max_results == 5
+
+
+class TestBatchSearchBudgetAccounting:
+    """Tests for batch query budget charging and capping."""
+
+    @pytest.mark.asyncio
+    async def test_single_query_charges_one(self) -> None:
+        """Single query charges 1 against budget."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+        provider = _make_mock_provider("tavily")
+
+        tool_call = ResearcherToolCall(
+            tool="web_search",
+            arguments={"query": "test query"},
+        )
+        _, charged = await mixin._handle_web_search_tool(
+            tool_call=tool_call,
+            sub_query=sq,
+            state=state,
+            result=TopicResearchResult(sub_query_id=sq.id),
+            available_providers=[provider],
+            max_sources_per_provider=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
+            budget_remaining=10,
+        )
+        assert charged == 1
+
+    @pytest.mark.asyncio
+    async def test_batch_of_three_charges_three(self) -> None:
+        """Batch of 3 queries charges 3 against budget."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+        provider = _make_mock_provider("tavily")
+
+        tool_call = ResearcherToolCall(
+            tool="web_search",
+            arguments={"queries": ["q1", "q2", "q3"]},
+        )
+        _, charged = await mixin._handle_web_search_tool(
+            tool_call=tool_call,
+            sub_query=sq,
+            state=state,
+            result=TopicResearchResult(sub_query_id=sq.id),
+            available_providers=[provider],
+            max_sources_per_provider=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
+            budget_remaining=10,
+        )
+        assert charged == 3
+
+    @pytest.mark.asyncio
+    async def test_batch_capped_to_budget_remaining(self) -> None:
+        """Batch of 5 queries with budget=2 only executes and charges 2."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+        provider = _make_mock_provider("tavily")
+
+        tool_call = ResearcherToolCall(
+            tool="web_search",
+            arguments={"queries": ["q1", "q2", "q3", "q4", "q5"]},
+        )
+        _, charged = await mixin._handle_web_search_tool(
+            tool_call=tool_call,
+            sub_query=sq,
+            state=state,
+            result=TopicResearchResult(sub_query_id=sq.id),
+            available_providers=[provider],
+            max_sources_per_provider=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
+            budget_remaining=2,
+        )
+        assert charged == 2
+
+    @pytest.mark.asyncio
+    async def test_batch_refined_queries_tracked(self) -> None:
+        """Batch queries different from sub_query are tracked as refined."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+        provider = _make_mock_provider("tavily")
+        result = TopicResearchResult(sub_query_id=sq.id)
+
+        tool_call = ResearcherToolCall(
+            tool="web_search",
+            arguments={"queries": ["refined q1", "refined q2"]},
+        )
+        await mixin._handle_web_search_tool(
+            tool_call=tool_call,
+            sub_query=sq,
+            state=state,
+            result=result,
+            available_providers=[provider],
+            max_sources_per_provider=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
+            budget_remaining=10,
+        )
+        # Both refined queries should be tracked (neither matches sub_query.query)
+        assert "refined q1" in result.refined_queries
+        assert "refined q2" in result.refined_queries
+
+    @pytest.mark.asyncio
+    async def test_batch_prompt_documents_queries_param(self) -> None:
+        """System prompt documents the batch queries parameter."""
+        prompt = _build_researcher_system_prompt(
+            budget_total=10, budget_remaining=10, extract_enabled=True,
+        )
+        assert "queries" in prompt
+        assert "batch" in prompt.lower()

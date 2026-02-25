@@ -395,15 +395,38 @@ class WebSearchTool(BaseModel):
 
     The researcher calls this to search the web for information on a topic.
     Dispatched to configured search providers (Tavily, Perplexity, etc.).
+
+    Supports both single-query (``query``) and batch (``queries``) forms.
+    The model_validator normalizes both into ``queries`` so the handler
+    always works with a list.
     """
 
-    query: str = Field(..., description="Search query string")
+    query: str | None = Field(default=None, description="Single search query string")
+    queries: list[str] | None = Field(
+        default=None,
+        description="Batch of search queries to execute in parallel",
+    )
     max_results: int = Field(
         default=5,
         ge=1,
         le=20,
-        description="Maximum number of results to return",
+        description="Maximum number of results to return per query",
     )
+
+    @model_validator(mode="after")
+    def _normalize_queries(self) -> "WebSearchTool":
+        """Normalize single query and batch queries into ``self.queries``."""
+        if self.queries and self.query:
+            # Both provided — merge single into batch if not already present
+            if self.query not in self.queries:
+                self.queries = [self.query] + list(self.queries)
+        elif self.query:
+            self.queries = [self.query]
+        elif not self.queries:
+            raise ValueError("Either 'query' or 'queries' must be provided")
+        # Ensure query reflects first entry for backward compat
+        self.query = self.queries[0]
+        return self
 
 
 class ExtractContentTool(BaseModel):

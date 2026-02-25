@@ -165,9 +165,11 @@ You are a focused research agent. Your task is to thoroughly research a specific
 ## Available Tools
 
 ### web_search
-Search the web for information.
+Search the web for information. Supports single or batch queries.
 Arguments: {{"query": "search query string", "max_results": 5}}
-Returns: Search results with titles, URLs, and content summaries.
+  — OR for batch searches —
+Arguments: {{"queries": ["query 1", "query 2", ...], "max_results": 5}}
+Returns: Search results with titles, URLs, and content summaries. Batch queries return one consolidated, deduplicated result set. Each query in a batch counts against your tool call budget.
 
 ### extract_content
 Extract full page content from promising URLs found in search results.
@@ -179,7 +181,7 @@ Only available when extraction is enabled. If unavailable, focus on web_search.
 Pause and reflect on your research progress. Assess what you've found, identify gaps, and plan your next steps.
 Arguments: {{"reasoning": "your analysis of findings and gaps"}}
 Returns: Acknowledgment. Does NOT count against your tool call budget.
-After each web_search or extract_content, call think as your next action before issuing another search. On your first turn only, you may issue multiple web_search calls for initial broad coverage.
+After each web_search or extract_content, call think as your next action before issuing another search. Use the `queries` parameter to search multiple angles at once for initial broad coverage.
 
 ### research_complete
 Signal that your research is complete and summarize your findings.
@@ -198,7 +200,7 @@ Respond with a JSON object containing your tool calls for this turn:
 }}
 ```
 
-Generally include one tool call per turn.
+Generally include one tool call per turn. For broad initial coverage, use the batch `queries` parameter instead of multiple tool calls.
 
 ## Research Strategy
 
@@ -632,7 +634,7 @@ class TopicResearchMixin:
                         })
                         continue
 
-                    tool_result_text = await self._handle_web_search_tool(
+                    tool_result_text, queries_charged = await self._handle_web_search_tool(
                         tool_call=tool_call,
                         sub_query=sub_query,
                         state=state,
@@ -644,10 +646,11 @@ class TopicResearchMixin:
                         seen_titles=seen_titles,
                         state_lock=state_lock,
                         semaphore=semaphore,
+                        budget_remaining=budget_remaining,
                     )
-                    tool_calls_used += 1
-                    budget_remaining -= 1
-                    result.searches_performed += 1
+                    tool_calls_used += queries_charged
+                    budget_remaining -= queries_charged
+                    result.searches_performed += queries_charged
                     message_history.append({
                         "role": "tool",
                         "tool": "web_search",
@@ -967,11 +970,17 @@ class TopicResearchMixin:
         seen_titles: dict[str, str],
         state_lock: asyncio.Lock,
         semaphore: asyncio.Semaphore,
-    ) -> str:
+        budget_remaining: int = 1,
+    ) -> tuple[str, int]:
         """Handle a WebSearch tool call: dispatch to search providers.
 
+        Supports both single-query and batch-query forms. When multiple
+        queries are provided, they are dispatched in parallel via
+        ``asyncio.gather`` over ``_topic_search``. Cross-query dedup is
+        automatic via the shared ``seen_urls``/``seen_titles`` sets.
+
         Args:
-            tool_call: The web_search tool call with query argument.
+            tool_call: The web_search tool call with query/queries argument.
             sub_query: The sub-query being researched.
             state: Current research state.
             result: TopicResearchResult to update.
@@ -982,37 +991,90 @@ class TopicResearchMixin:
             seen_titles: Shared title dedup dict.
             state_lock: Lock for thread-safe state mutations.
             semaphore: Semaphore for concurrency control.
+            budget_remaining: Remaining tool call budget; batch is capped
+                to this value so the researcher cannot overspend.
 
         Returns:
-            Formatted tool result string with search results.
+            Tuple of (formatted tool result string, queries_charged).
         """
+        # --- Parse queries (batch or single) ---
         try:
             search_args = WebSearchTool.model_validate(tool_call.arguments)
-            query = search_args.query
+            queries = list(search_args.queries)  # type: ignore[arg-type]
         except Exception:
-            query = tool_call.arguments.get("query", sub_query.query)
+            raw_query = tool_call.arguments.get("query", sub_query.query)
+            raw_queries = tool_call.arguments.get("queries")
+            if isinstance(raw_queries, list) and raw_queries:
+                queries = [str(q) for q in raw_queries]
+            else:
+                queries = [str(raw_query)]
+
+        # Cap batch to budget_remaining so researcher can't overspend
+        queries = queries[:max(budget_remaining, 1)]
+        queries_charged = len(queries)
 
         # Track refined queries
-        if query != sub_query.query:
-            result.refined_queries.append(query)
+        for q in queries:
+            if q != sub_query.query:
+                result.refined_queries.append(q)
 
-        sources_added = await self._topic_search(
-            query=query,
-            sub_query=sub_query,
-            state=state,
-            available_providers=available_providers,
-            max_sources_per_provider=max_sources_per_provider,
-            timeout=timeout,
-            seen_urls=seen_urls,
-            seen_titles=seen_titles,
-            state_lock=state_lock,
-            semaphore=semaphore,
-        )
+        # --- Dispatch searches (parallel for batch) ---
+        if len(queries) == 1:
+            # Fast path: single query, no gather overhead
+            sources_added = await self._topic_search(
+                query=queries[0],
+                sub_query=sub_query,
+                state=state,
+                available_providers=available_providers,
+                max_sources_per_provider=max_sources_per_provider,
+                timeout=timeout,
+                seen_urls=seen_urls,
+                seen_titles=seen_titles,
+                state_lock=state_lock,
+                semaphore=semaphore,
+            )
+        else:
+            # Batch path: parallel dispatch via asyncio.gather
+            per_query_results = await asyncio.gather(
+                *(
+                    self._topic_search(
+                        query=q,
+                        sub_query=sub_query,
+                        state=state,
+                        available_providers=available_providers,
+                        max_sources_per_provider=max_sources_per_provider,
+                        timeout=timeout,
+                        seen_urls=seen_urls,
+                        seen_titles=seen_titles,
+                        state_lock=state_lock,
+                        semaphore=semaphore,
+                    )
+                    for q in queries
+                ),
+                return_exceptions=True,
+            )
+            sources_added = 0
+            for i, r in enumerate(per_query_results):
+                if isinstance(r, Exception):
+                    logger.warning(
+                        "Batch query %r failed: %s", queries[i], r,
+                    )
+                elif isinstance(r, int):
+                    sources_added += r
+
         result.sources_found += sources_added
 
         # Format search results for message history
+        query_label = (
+            f'"{queries[0]}"'
+            if len(queries) == 1
+            else f"{len(queries)} queries ({', '.join(repr(q) for q in queries)})"
+        )
         if sources_added == 0:
-            return f'Search for "{query}" returned no new sources.'
+            return (
+                f"Search for {query_label} returned no new sources.",
+                queries_charged,
+            )
 
         # Build formatted source listing from this search
         topic_source_ids = set(sub_query.source_ids)
@@ -1031,8 +1093,8 @@ class TopicResearchMixin:
             )
         except Exception as summ_exc:
             logger.warning(
-                "Batch summarization failed for query %r: %s. Using raw content.",
-                query,
+                "Batch summarization failed for %s: %s. Using raw content.",
+                query_label,
                 summ_exc,
             )
 
@@ -1069,10 +1131,13 @@ class TopicResearchMixin:
 
         # Format results with novelty annotations (Phase 4 ODR alignment)
         novelty_header = build_novelty_summary(novelty_tags)
-        return _format_search_results_batch(
-            sources=recent_sources,
-            novelty_tags=novelty_tags,
-            novelty_header=novelty_header,
+        return (
+            _format_search_results_batch(
+                sources=recent_sources,
+                novelty_tags=novelty_tags,
+                novelty_header=novelty_header,
+            ),
+            queries_charged,
         )
 
     async def _handle_extract_tool(
