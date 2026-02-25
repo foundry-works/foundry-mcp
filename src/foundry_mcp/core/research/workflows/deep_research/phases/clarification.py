@@ -272,11 +272,11 @@ Make a binary decision and respond with valid JSON in this exact structure:
 }
 
 Rules:
-- Set "need_clarification" to true ONLY if the query is genuinely vague, overly broad, or ambiguous
+- Set "need_clarification" to true ONLY if the query is genuinely vague, overly broad, or ambiguous. Unnecessary clarification adds latency and user friction — the user has to respond before research begins. Err toward proceeding when a reasonable interpretation exists.
 - Set "need_clarification" to false if the query is specific enough for focused research
 - When "need_clarification" is true: provide the single most important clarifying question in "question"
 - When "need_clarification" is false: provide your understanding of the query in "verification" — restate what you believe the user wants researched, including scope, domain, and focus
-- ALWAYS provide "verification" regardless of the decision — it documents your understanding
+- ALWAYS provide "verification" regardless of the decision. Verification serves as an audit trail and catches misunderstandings early — if your interpretation diverges from the user's intent, this makes it visible before a full research cycle is wasted.
 
 Example — needs clarification: "What's the best database?" → Missing context (use case, scale, budget)
 Example — does NOT need clarification: "Compare PostgreSQL vs MySQL for high-write OLTP workloads in 2024"

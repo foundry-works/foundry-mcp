@@ -391,9 +391,9 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
             '"severity": "major or minor"}\n'
             "]}\n\n"
             "Rules:\n"
-            "- Only report genuine factual contradictions, not differences in emphasis or scope\n"
-            "- severity=major for direct factual conflicts, minor for nuance/interpretation differences\n"
-            "- preferred_source_id should reference the more authoritative source if determinable, otherwise null\n"
+            "- Only report genuine factual contradictions, not differences in emphasis or scope. Emphasis differences are natural (sources cover different angles) and don't indicate unreliable information — flagging them as contradictions would create false alarms that undermine synthesis quality.\n"
+            "- severity=major for direct factual conflicts, minor for nuance/interpretation differences. Major contradictions require explicit resolution in the report (the reader needs to know about the disagreement); minor ones can be integrated as complementary perspectives.\n"
+            "- preferred_source_id should reference the more authoritative source if determinable, otherwise null. When findings conflict, synthesis needs a tiebreaker — source authority (recency, expertise, primary vs. secondary) is the most defensible criterion.\n"
             '- If no contradictions exist, return {"contradictions": []}\n'
             "- Return ONLY valid JSON"
         )

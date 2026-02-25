@@ -317,12 +317,11 @@ Your response MUST be valid JSON with this exact structure:
 }
 
 Guidelines:
-- Generate 2-5 sub-queries (aim for 3-4 typically)
-- Each sub-query should focus on a distinct aspect of the research
-- Queries should be specific enough to yield relevant search results
+- Generate 2-5 sub-queries (aim for 3-4 typically). Too few risks missing important dimensions of the topic; too many fragments the research budget across too many threads, producing thin coverage per topic.
+- Each sub-query should focus on a distinct aspect of the research — overlap between sub-queries wastes researcher budget on redundant results and inflates source count without adding real coverage.
+- Queries should be specific enough to yield relevant search results. Vague queries produce generic results that don't address the user's actual question — specificity is what makes web search useful.
 - Priority 1 is highest (most important), higher numbers are lower priority
-- Avoid overlapping queries - each should cover unique ground
-- Consider different angles: definition, examples, comparisons, recent developments, expert opinions
+- Consider different angles: definition, examples, comparisons, recent developments, expert opinions. These represent the dimensions users most commonly need for a comprehensive understanding — covering multiple angles preempts follow-up questions.
 
 IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
@@ -512,10 +511,10 @@ Generate the research plan as JSON."""
             '    "assessment": "Brief overall assessment of decomposition quality"\n'
             "}\n\n"
             "Guidelines:\n"
-            "- Only flag TRUE redundancies (significant content overlap, not just related topics)\n"
+            "- Only flag TRUE redundancies (significant content overlap, not just related topics). Related-but-distinct topics often have unique angles worth preserving — over-merging loses coverage breadth.\n"
             "- Only add gaps for GENUINELY missing critical perspectives\n"
-            "- Keep the total sub-query count reasonable (2-7 after changes)\n"
-            "- If the decomposition is already good, return empty arrays\n"
+            "- Keep the total sub-query count reasonable (2-7 after changes). Too few misses dimensions; too many dilutes per-topic depth given fixed researcher budget.\n"
+            "- If the decomposition is already good, return empty arrays. Unnecessary changes introduce instability — only intervene when the improvement clearly exceeds the disruption.\n"
             "- merged_query in redundancies replaces ALL the redundant queries with one\n\n"
             "IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."
         )

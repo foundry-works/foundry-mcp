@@ -61,19 +61,19 @@ Your response MUST be valid JSON with this exact structure:
 }
 
 Guidelines for findings:
-- Extract 2-5 key findings from the sources
+- Extract 2-5 key findings from the sources. Findings are the atomic units that downstream synthesis weaves into the report — too few loses important nuance, too many buries the signal in noise and inflates synthesis prompt size.
 - Each finding should be a specific, actionable insight
-- Confidence levels: "low" (single weak source), "medium" (multiple sources or one authoritative), "high" (multiple authoritative sources agree)
+- Confidence levels: "low" (single weak source), "medium" (multiple sources or one authoritative), "high" (multiple authoritative sources agree). Downstream synthesis uses confidence to weight findings — high-confidence findings anchor the report's conclusions, while low-confidence ones are presented with appropriate caveats.
 - Include source_ids that support each finding
-- Categorize findings by theme when applicable
+- Categorize findings by theme when applicable. Categorization helps synthesis organize the report into coherent sections rather than presenting a flat list of disconnected facts.
 
 Guidelines for gaps:
-- Identify 1-3 knowledge gaps or unanswered questions
+- Identify 1-3 knowledge gaps or unanswered questions. Gaps feed the refinement/iteration loop — each gap may trigger a follow-up research cycle, so they should be genuinely actionable (not aspirational).
 - Provide specific follow-up queries that could fill each gap
 - Priority 1 is most important, higher numbers are lower priority
 
 Guidelines for quality_updates:
-- Assess source quality based on authority, relevance, and recency
+- Assess source quality based on authority, relevance, and recency. Quality assessments help synthesis prefer authoritative sources when findings conflict, and help the user gauge how much to trust specific claims.
 - "low" = questionable reliability, "medium" = generally reliable, "high" = authoritative
 
 IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""

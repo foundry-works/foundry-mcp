@@ -772,12 +772,12 @@ Your response MUST follow this exact format:
 ```
 
 Guidelines:
-- Set "research_complete" to true ONLY when existing coverage is sufficient across all dimensions
-- Each directive's "research_topic" MUST be a detailed paragraph (2-4 sentences)
+- Set "research_complete" to true ONLY when existing coverage is sufficient across all dimensions. Premature completion leaves gaps that degrade report quality, but never completing wastes budget on diminishing returns. The threshold is "sufficient for a confident, well-sourced answer."
+- Each directive's "research_topic" MUST be a detailed paragraph (2-4 sentences). Researchers receive this as their sole guidance — a vague directive produces a vague, unfocused research pass that wastes a full iteration budget.
 - "priority": 1=critical gap, 2=important, 3=nice-to-have
 - Maximum 5 directives per round
 - Do NOT duplicate research already covered
-- Your directives MUST directly address gaps from your analysis — do not generate unrelated directives
+- Your directives MUST directly address gaps from your analysis. Untargeted directives risk duplicating already-covered ground while leaving actual gaps unfilled.
 - The gap_analysis section MUST come FIRST, before the JSON"""
 
     def _build_combined_think_delegate_user_prompt(
@@ -1406,17 +1406,17 @@ Guidelines:
   - What the researcher should focus on and what to exclude
 - "perspective" should specify the angle: technical, comparative, historical, regulatory, user-focused, etc.
 - "evidence_needed" should name concrete evidence types: statistics, case studies, expert opinions, benchmarks, etc.
-- "priority": 1=critical gap (blocks report quality), 2=important (improves comprehensiveness), 3=nice-to-have
+- "priority": 1=critical gap (blocks report quality), 2=important (improves comprehensiveness), 3=nice-to-have. Priority determines execution order when budget is limited — critical gaps are addressed first because they block the report from being useful; nice-to-have gaps are only pursued if budget remains.
 - Do NOT duplicate research already covered — target SPECIFIC gaps
 - Directives should be complementary, not overlapping — each covers a different dimension
-- Do NOT use acronyms or abbreviations in directive text — spell out all terms so researchers search for the correct concepts
+- Do NOT use acronyms or abbreviations in directive text — spell out all terms so researchers search for the correct concepts. Acronyms may be ambiguous (e.g., "ML" could mean machine learning or markup language) and produce irrelevant search results.
 
 Directive Count Scaling:
 - Simple factual gaps (single missing fact or stat): 1-2 directives maximum
 - Comparison gaps (need data on specific compared elements): 1 directive per element needing more research
 - Complex multi-dimensional gaps (multiple interrelated areas uncovered): 3-5 directives targeting distinct dimensions
-- BIAS toward fewer, more focused directives — a single well-scoped directive beats three vague ones
-- Maximum 5 directives per round regardless of complexity
+- BIAS toward fewer, more focused directives — a single well-scoped directive beats three vague ones. Each directive spawns a full researcher agent with its own search budget; fewer, focused directives concentrate budget on the actual gaps, while many vague ones spread budget thin and produce overlapping, shallow results.
+- Maximum 5 directives per round regardless of complexity. Each directive consumes a researcher agent's full budget — more than 5 per round risks exceeding the session's total budget and hitting diminishing returns before the next supervision assessment.
 
 IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
