@@ -229,7 +229,12 @@ class BriefPhaseMixin:
             "   If the user's query is written in a non-English language, "
             "prioritize sources published in that language.\n"
             "4. **Define scope boundaries**: State what the research should "
-            "include AND what it should exclude to prevent scope creep.\n\n"
+            "include AND what it should exclude to prevent scope creep.\n"
+            "5. **Use the first person**: Phrase the brief from the "
+            "perspective of the user (e.g. 'I am looking for…' rather "
+            "than 'Research the following topic…'). This preserves the "
+            "user's voice and helps downstream researchers understand "
+            "intent.\n\n"
             "Output your response as a JSON object with this schema:\n"
             "{\n"
             '  "research_brief": "Complete brief as one or two well-structured paragraphs",\n'

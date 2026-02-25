@@ -29,7 +29,7 @@
 
 ## Phase 2: First-Person Phrasing in Research Brief
 
-- [ ] **2a.** Add first-person instruction to `_build_brief_system_prompt`
+- [x] **2a.** Add first-person instruction to `_build_brief_system_prompt`
   - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/brief.py` (line 231)
   - Add rule 5: "Use the first person — phrase from user's perspective"
 
