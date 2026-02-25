@@ -1104,6 +1104,10 @@ class TopicResearchMixin:
     ) -> str:
         """Handle an ExtractContent tool call: fetch full page content.
 
+        After successful extraction, summarizes content via SourceSummarizer
+        and applies novelty scoring — mirroring the search result pipeline so
+        the researcher LLM can reason about extracted content.
+
         Args:
             tool_call: The extract_content tool call with URLs argument.
             sub_query: The sub-query being researched.
@@ -1117,7 +1121,8 @@ class TopicResearchMixin:
             extract_max: Maximum URLs per extraction call.
 
         Returns:
-            Formatted tool result string with extracted content.
+            Formatted tool result string with extracted content summaries
+            and novelty annotations.
         """
         try:
             extract_args = ExtractContentTool.model_validate(tool_call.arguments)
@@ -1132,6 +1137,10 @@ class TopicResearchMixin:
         if not urls:
             return "No valid URLs provided for extraction."
 
+        # 1c: Snapshot pre-existing source IDs so we only process newly
+        # extracted sources (guard against redundant summarization).
+        pre_extract_source_ids = set(sub_query.source_ids)
+
         extract_added = await self._topic_extract(
             urls=urls,
             sub_query=sub_query,
@@ -1144,13 +1153,65 @@ class TopicResearchMixin:
         )
         result.sources_found += extract_added
 
-        if extract_added > 0:
-            result.reflection_notes.append(
-                f"[extract] Fetched {extract_added} source(s) from {len(urls)} URL(s)"
-            )
-            return f"Extracted content from {extract_added} of {len(urls)} URL(s)."
-        else:
+        if extract_added == 0:
             return f"Extraction from {len(urls)} URL(s) yielded no new content."
+
+        result.reflection_notes.append(
+            f"[extract] Fetched {extract_added} source(s) from {len(urls)} URL(s)"
+        )
+        confirmation = f"Extracted content from {extract_added} of {len(urls)} URL(s)."
+
+        # 1c: Identify only sources added by *this* extraction call.
+        new_source_ids = set(sub_query.source_ids) - pre_extract_source_ids
+        newly_extracted = [s for s in state.sources if s.id in new_source_ids]
+
+        if not newly_extracted:
+            return confirmation
+
+        # 1a: Summarize extracted content (same pipeline as search results).
+        try:
+            await self._summarize_search_results(
+                sources=newly_extracted,
+                state=state,
+                state_lock=state_lock,
+            )
+        except Exception as summ_exc:
+            logger.warning(
+                "Summarization failed for extracted sources: %s. Using raw content.",
+                summ_exc,
+            )
+
+        # 1b: Novelty scoring against pre-existing sources for this sub-query.
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            NoveltyTag,
+            build_novelty_summary,
+            compute_novelty_tag,
+        )
+
+        pre_existing_sources: list[tuple[str, str, str | None]] = [
+            (s.content or s.snippet or "", s.title, s.url)
+            for s in state.sources
+            if s.id in pre_extract_source_ids
+        ]
+
+        novelty_tags: list[NoveltyTag] = []
+        for src in newly_extracted:
+            tag = compute_novelty_tag(
+                new_content=src.content or src.snippet or "",
+                new_url=src.url,
+                existing_sources=pre_existing_sources,
+            )
+            novelty_tags.append(tag)
+            src.metadata["novelty_tag"] = tag.category
+            src.metadata["novelty_similarity"] = tag.similarity
+
+        # Format with novelty annotations (mirroring search result presentation).
+        novelty_header = build_novelty_summary(novelty_tags)
+        blocks: list[str] = [f"{confirmation}\n{novelty_header}"]
+        for idx, (src, ntag) in enumerate(zip(newly_extracted, novelty_tags), 1):
+            blocks.append(_format_source_block(idx, src, ntag))
+
+        return "\n\n".join(blocks)
 
     # ------------------------------------------------------------------
     # Search step (scoped to one sub-query)

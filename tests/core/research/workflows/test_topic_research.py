@@ -2395,3 +2395,338 @@ class TestSearchResultPresentationFormat:
         assert "--- SOURCE 2:" in result_text
         assert "URL: https://alpha.example.com/page" in result_text
         assert "URL: https://beta.example.com/page" in result_text
+
+
+# =============================================================================
+# Tests: Extract-Content Visibility (Phase 1 ODR alignment)
+# =============================================================================
+
+
+class TestExtractContentVisibility:
+    """Tests for _handle_extract_tool with summarization and novelty scoring."""
+
+    @pytest.fixture()
+    def mixin(self) -> StubTopicResearch:
+        return StubTopicResearch()
+
+    @pytest.fixture()
+    def state(self) -> DeepResearchState:
+        return _make_state(num_sub_queries=1)
+
+    @pytest.fixture()
+    def sub_query(self, state: DeepResearchState) -> SubQuery:
+        return state.sub_queries[0]
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_extract_returns_formatted_source_blocks(
+        self, mixin: StubTopicResearch, state: DeepResearchState, sub_query: SubQuery
+    ) -> None:
+        """After extraction, researcher sees formatted source blocks — not just a count."""
+        extracted = ResearchSource(
+            id="ext-1",
+            title="Deep Learning Guide",
+            url="https://example.com/deep-learning",
+            content="A comprehensive guide to deep learning methods and applications.",
+            quality=SourceQuality.HIGH,
+        )
+
+        async def fake_extract(*, urls, sub_query, state, **kwargs):
+            state.append_source(extracted)
+            sub_query.source_ids.append(extracted.id)
+            return 1
+
+        mixin._topic_extract = AsyncMock(side_effect=fake_extract)
+        mixin._summarize_search_results = AsyncMock()
+
+        tool_call = ResearcherToolCall(
+            tool="extract_content",
+            arguments={"urls": ["https://example.com/deep-learning"]},
+        )
+        result_text = await mixin._handle_extract_tool(
+            tool_call=tool_call,
+            sub_query=sub_query,
+            state=state,
+            result=TopicResearchResult(sub_query_id=sub_query.id),
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
+            timeout=30.0,
+        )
+
+        # Confirmation prefix preserved
+        assert "Extracted content from 1 of 1 URL(s)." in result_text
+        # Formatted source block present
+        assert "--- SOURCE 1: Deep Learning Guide ---" in result_text
+        assert "URL: https://example.com/deep-learning" in result_text
+        # Novelty tag present
+        assert "NOVELTY:" in result_text
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_extract_novelty_tags_applied(
+        self, mixin: StubTopicResearch, state: DeepResearchState, sub_query: SubQuery
+    ) -> None:
+        """Extracted sources get novelty tags (NEW/RELATED/DUPLICATE)."""
+        # Pre-existing source in state
+        existing = ResearchSource(
+            id="existing-1",
+            title="ML Basics",
+            url="https://example.com/ml-basics",
+            content="Machine learning fundamentals and core concepts.",
+            quality=SourceQuality.MEDIUM,
+        )
+        state.append_source(existing)
+        sub_query.source_ids.append(existing.id)
+
+        # Extracted source — different content → should be NEW
+        extracted = ResearchSource(
+            id="ext-new",
+            title="Quantum Computing Overview",
+            url="https://quantum.example.com/overview",
+            content="Quantum computing leverages quantum-mechanical phenomena.",
+            quality=SourceQuality.HIGH,
+        )
+
+        async def fake_extract(*, urls, sub_query, state, **kwargs):
+            state.append_source(extracted)
+            sub_query.source_ids.append(extracted.id)
+            return 1
+
+        mixin._topic_extract = AsyncMock(side_effect=fake_extract)
+        mixin._summarize_search_results = AsyncMock()
+
+        tool_call = ResearcherToolCall(
+            tool="extract_content",
+            arguments={"urls": ["https://quantum.example.com/overview"]},
+        )
+        result_text = await mixin._handle_extract_tool(
+            tool_call=tool_call,
+            sub_query=sub_query,
+            state=state,
+            result=TopicResearchResult(sub_query_id=sub_query.id),
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
+            timeout=30.0,
+        )
+
+        assert "NOVELTY: [NEW]" in result_text
+        assert extracted.metadata.get("novelty_tag") == "new"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_extract_skips_pre_existing_sources(
+        self, mixin: StubTopicResearch, state: DeepResearchState, sub_query: SubQuery
+    ) -> None:
+        """Sources already in state before extraction are not re-formatted."""
+        # Pre-existing source
+        existing = ResearchSource(
+            id="old-src",
+            title="Old Source",
+            url="https://example.com/old",
+            content="Previously found content.",
+            quality=SourceQuality.MEDIUM,
+        )
+        state.append_source(existing)
+        sub_query.source_ids.append(existing.id)
+
+        # _topic_extract adds nothing new (URL dedup caught it)
+        async def fake_extract(*, urls, sub_query, state, **kwargs):
+            return 0
+
+        mixin._topic_extract = AsyncMock(side_effect=fake_extract)
+
+        tool_call = ResearcherToolCall(
+            tool="extract_content",
+            arguments={"urls": ["https://example.com/old"]},
+        )
+        result_text = await mixin._handle_extract_tool(
+            tool_call=tool_call,
+            sub_query=sub_query,
+            state=state,
+            result=TopicResearchResult(sub_query_id=sub_query.id),
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
+            timeout=30.0,
+        )
+
+        assert "yielded no new content" in result_text
+        # No source blocks in the output
+        assert "--- SOURCE" not in result_text
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_extract_summarization_called(
+        self, mixin: StubTopicResearch, state: DeepResearchState, sub_query: SubQuery
+    ) -> None:
+        """Extracted sources are passed to _summarize_search_results."""
+        extracted = ResearchSource(
+            id="ext-summ",
+            title="Long Article",
+            url="https://example.com/long-article",
+            content="A" * 500,  # Exceeds min content length
+            quality=SourceQuality.HIGH,
+        )
+
+        async def fake_extract(*, urls, sub_query, state, **kwargs):
+            state.append_source(extracted)
+            sub_query.source_ids.append(extracted.id)
+            return 1
+
+        mixin._topic_extract = AsyncMock(side_effect=fake_extract)
+        mixin._summarize_search_results = AsyncMock()
+
+        tool_call = ResearcherToolCall(
+            tool="extract_content",
+            arguments={"urls": ["https://example.com/long-article"]},
+        )
+        await mixin._handle_extract_tool(
+            tool_call=tool_call,
+            sub_query=sub_query,
+            state=state,
+            result=TopicResearchResult(sub_query_id=sub_query.id),
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
+            timeout=30.0,
+        )
+
+        mixin._summarize_search_results.assert_awaited_once()
+        call_kwargs = mixin._summarize_search_results.call_args
+        sources_arg = call_kwargs.kwargs.get("sources") or call_kwargs.args[0]
+        assert len(sources_arg) == 1
+        assert sources_arg[0].id == "ext-summ"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_extract_summarization_failure_graceful(
+        self, mixin: StubTopicResearch, state: DeepResearchState, sub_query: SubQuery
+    ) -> None:
+        """If summarization fails, extract still returns formatted output."""
+        extracted = ResearchSource(
+            id="ext-fail",
+            title="Fallback Source",
+            url="https://example.com/fallback",
+            content="Short content that should display even if summarization fails.",
+            quality=SourceQuality.MEDIUM,
+        )
+
+        async def fake_extract(*, urls, sub_query, state, **kwargs):
+            state.append_source(extracted)
+            sub_query.source_ids.append(extracted.id)
+            return 1
+
+        mixin._topic_extract = AsyncMock(side_effect=fake_extract)
+        mixin._summarize_search_results = AsyncMock(
+            side_effect=RuntimeError("Summarizer unavailable")
+        )
+
+        tool_call = ResearcherToolCall(
+            tool="extract_content",
+            arguments={"urls": ["https://example.com/fallback"]},
+        )
+        result_text = await mixin._handle_extract_tool(
+            tool_call=tool_call,
+            sub_query=sub_query,
+            state=state,
+            result=TopicResearchResult(sub_query_id=sub_query.id),
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
+            timeout=30.0,
+        )
+
+        # Still returns formatted output with source blocks
+        assert "Extracted content from 1 of 1 URL(s)." in result_text
+        assert "--- SOURCE 1: Fallback Source ---" in result_text
+        assert "NOVELTY:" in result_text
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_extract_multiple_sources_formatted(
+        self, mixin: StubTopicResearch, state: DeepResearchState, sub_query: SubQuery
+    ) -> None:
+        """Multiple extracted sources produce numbered source blocks."""
+        sources = [
+            ResearchSource(
+                id=f"ext-{i}",
+                title=f"Article {i}",
+                url=f"https://example{i}.com/page",
+                content=f"Content for article {i} with sufficient length for display.",
+                quality=SourceQuality.MEDIUM,
+            )
+            for i in range(1, 3)
+        ]
+
+        async def fake_extract(*, urls, sub_query, state, **kwargs):
+            for src in sources:
+                state.append_source(src)
+                sub_query.source_ids.append(src.id)
+            return len(sources)
+
+        mixin._topic_extract = AsyncMock(side_effect=fake_extract)
+        mixin._summarize_search_results = AsyncMock()
+
+        tool_call = ResearcherToolCall(
+            tool="extract_content",
+            arguments={"urls": ["https://example1.com/page", "https://example2.com/page"]},
+        )
+        result_text = await mixin._handle_extract_tool(
+            tool_call=tool_call,
+            sub_query=sub_query,
+            state=state,
+            result=TopicResearchResult(sub_query_id=sub_query.id),
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
+            timeout=30.0,
+        )
+
+        assert "Extracted content from 2 of 2 URL(s)." in result_text
+        assert "--- SOURCE 1: Article 1 ---" in result_text
+        assert "--- SOURCE 2: Article 2 ---" in result_text
+        assert "URL: https://example1.com/page" in result_text
+        assert "URL: https://example2.com/page" in result_text
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_extract_novelty_metadata_stored(
+        self, mixin: StubTopicResearch, state: DeepResearchState, sub_query: SubQuery
+    ) -> None:
+        """Novelty tag and similarity stored in source metadata."""
+        extracted = ResearchSource(
+            id="ext-meta",
+            title="New Discovery",
+            url="https://example.com/discovery",
+            content="Completely novel content not seen before.",
+            quality=SourceQuality.HIGH,
+        )
+
+        async def fake_extract(*, urls, sub_query, state, **kwargs):
+            state.append_source(extracted)
+            sub_query.source_ids.append(extracted.id)
+            return 1
+
+        mixin._topic_extract = AsyncMock(side_effect=fake_extract)
+        mixin._summarize_search_results = AsyncMock()
+
+        tool_call = ResearcherToolCall(
+            tool="extract_content",
+            arguments={"urls": ["https://example.com/discovery"]},
+        )
+        await mixin._handle_extract_tool(
+            tool_call=tool_call,
+            sub_query=sub_query,
+            state=state,
+            result=TopicResearchResult(sub_query_id=sub_query.id),
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
+            timeout=30.0,
+        )
+
+        assert "novelty_tag" in extracted.metadata
+        assert "novelty_similarity" in extracted.metadata
+        assert extracted.metadata["novelty_tag"] in ("new", "related", "duplicate")
