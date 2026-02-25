@@ -578,12 +578,22 @@ class TestResolveModelForRoleEdgeCases:
     """Edge-case tests for resolve_model_for_role()."""
 
     def test_empty_config_all_defaults(self) -> None:
-        """Completely default config (no overrides) returns default_provider."""
+        """Completely default config (no overrides) returns default_provider.
+
+        Roles with cost-tier defaults (summarization, compression) get a
+        cheap model; other roles get None.
+        """
         config = ResearchConfig()
-        for role in ("research", "report", "reflection", "summarization", "compression", "clarification"):
+        for role in ("research", "report", "reflection", "clarification"):
             provider, model = config.resolve_model_for_role(role)
             assert provider == config.default_provider
             assert model is None
+
+        # Cost-tier roles get cheap model defaults
+        for role in ("summarization", "compression"):
+            provider, model = config.resolve_model_for_role(role)
+            assert provider == config.default_provider
+            assert model == "2.0-flash"
 
     def test_empty_string_provider_spec(self) -> None:
         """Empty string as provider spec: _parse_provider_spec raises ValueError,
@@ -674,3 +684,97 @@ class TestResolveModelForRoleEdgeCases:
         # Provider should be from default (gemini), model from explicit config
         assert provider == "gemini"
         assert model == "opus"
+
+
+# =============================================================================
+# Tests: Cost-tier model defaults (Phase 1 ODR alignment)
+# =============================================================================
+
+
+class TestCostTierModelDefaults:
+    """Test that high-volume roles get cheap model defaults automatically."""
+
+    def test_summarization_gets_cheap_default(self) -> None:
+        """Summarization role resolves to cheap model when no config set."""
+        config = _make_config(default_provider="gemini")
+        provider, model = config.resolve_model_for_role("summarization")
+        assert provider == "gemini"
+        assert model == "2.0-flash"
+
+    def test_compression_gets_cheap_default(self) -> None:
+        """Compression role resolves to cheap model when no config set."""
+        config = _make_config(default_provider="gemini")
+        provider, model = config.resolve_model_for_role("compression")
+        assert provider == "gemini"
+        assert model == "2.0-flash"
+
+    def test_research_role_has_no_cost_tier_default(self) -> None:
+        """Research role is NOT a cost-tier role — model stays None."""
+        config = _make_config(default_provider="gemini")
+        provider, model = config.resolve_model_for_role("research")
+        assert provider == "gemini"
+        assert model is None
+
+    def test_explicit_model_overrides_cost_tier(self) -> None:
+        """Explicit model config takes precedence over cost-tier default."""
+        config = _make_config(
+            default_provider="gemini",
+            deep_research_summarization_model="pro",
+        )
+        provider, model = config.resolve_model_for_role("summarization")
+        assert provider == "gemini"
+        assert model == "pro"
+
+    def test_explicit_provider_spec_model_overrides_cost_tier(self) -> None:
+        """Model embedded in provider spec overrides cost-tier default."""
+        config = _make_config(
+            default_provider="gemini",
+            deep_research_compression_provider="[cli]claude:haiku",
+        )
+        provider, model = config.resolve_model_for_role("compression")
+        assert provider == "claude"
+        assert model == "haiku"
+
+    def test_cost_tier_with_custom_default_provider(self) -> None:
+        """Cost-tier model applies even with a non-gemini default_provider."""
+        config = _make_config(default_provider="claude")
+        provider, model = config.resolve_model_for_role("summarization")
+        assert provider == "claude"
+        assert model == "2.0-flash"
+
+    def test_get_summarization_model_returns_cost_tier(self) -> None:
+        """get_summarization_model() returns cost-tier default when unconfigured."""
+        config = _make_config(default_provider="gemini")
+        assert config.get_summarization_model() == "2.0-flash"
+
+    def test_get_compression_model_returns_cost_tier(self) -> None:
+        """get_compression_model() returns cost-tier default when unconfigured."""
+        config = _make_config(default_provider="gemini")
+        assert config.get_compression_model() == "2.0-flash"
+
+    def test_get_summarization_model_explicit_override(self) -> None:
+        """get_summarization_model() returns explicit model over cost-tier."""
+        config = _make_config(
+            default_provider="gemini",
+            deep_research_summarization_model="pro",
+        )
+        assert config.get_summarization_model() == "pro"
+
+    def test_get_compression_model_explicit_override(self) -> None:
+        """get_compression_model() returns explicit model over cost-tier."""
+        config = _make_config(
+            default_provider="gemini",
+            deep_research_compression_model="sonnet",
+        )
+        assert config.get_compression_model() == "sonnet"
+
+    def test_safe_resolve_returns_cost_tier(self) -> None:
+        """safe_resolve_model_for_role returns cost-tier default for summarization."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            safe_resolve_model_for_role,
+        )
+
+        config = _make_config(default_provider="gemini")
+        provider, model = safe_resolve_model_for_role(config, "summarization")
+        assert provider == "gemini"
+        assert model == "2.0-flash"

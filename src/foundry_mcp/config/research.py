@@ -24,6 +24,10 @@ logger = logging.getLogger(__name__)
 class ResearchConfig:
     """Configuration for research workflows (CHAT, CONSENSUS, THINKDEEP, IDEATE, DEEP_RESEARCH).
 
+    **Cost-tiered model routing:** High-volume roles (summarization, compression)
+    automatically use a cheap model (``2.0-flash``) when no explicit model is
+    configured.  See ``_COST_TIER_MODEL_DEFAULTS`` and the deep-research guide.
+
     Attributes:
         enabled: Master switch for research tools
         ttl_hours: Time-to-live for stored states in hours
@@ -902,18 +906,18 @@ class ResearchConfig:
     def get_summarization_model(self) -> Optional[str]:
         """Get model override for fetch-time source summarization.
 
-        Returns the summarization-specific model if configured, otherwise None
-        (provider default will be used).
+        Returns the summarization-specific model if configured, otherwise
+        the cost-tier default for the summarization role.
 
         Returns:
-            Model name or None
+            Model name (cost-tier default if no explicit config)
         """
         if self.deep_research_summarization_model:
             return self.deep_research_summarization_model
         if self.deep_research_summarization_provider:
             _, model = _parse_provider_spec(self.deep_research_summarization_provider)
             return model
-        return None
+        return self._COST_TIER_MODEL_DEFAULTS.get("summarization")
 
     def get_compression_provider(self) -> str:
         """Get LLM provider ID for per-topic compression.
@@ -933,18 +937,18 @@ class ResearchConfig:
     def get_compression_model(self) -> Optional[str]:
         """Get model override for per-topic compression.
 
-        Returns the compression-specific model if configured, otherwise None
-        (provider default will be used).
+        Returns the compression-specific model if configured, otherwise
+        the cost-tier default for the compression role.
 
         Returns:
-            Model name or None
+            Model name (cost-tier default if no explicit config)
         """
         if self.deep_research_compression_model:
             return self.deep_research_compression_model
         if self.deep_research_compression_provider:
             _, model = _parse_provider_spec(self.deep_research_compression_provider)
             return model
-        return None
+        return self._COST_TIER_MODEL_DEFAULTS.get("compression")
 
     # ------------------------------------------------------------------
     # Role-based model resolution (Phase 6: Multi-Model Cost Optimization)
@@ -968,6 +972,16 @@ class ResearchConfig:
         "delegation": ["delegation", "supervision", "reflection"],
     }
 
+    #: Cost-tier model defaults for high-volume, low-complexity roles.
+    #: When no explicit model is configured for these roles, the cheap-tier
+    #: model is used instead of the provider's default (which may be expensive).
+    #: This mirrors ODR's pattern of routing summarization to ~10x cheaper models.
+    #: Users can override by setting ``deep_research_{role}_model`` explicitly.
+    _COST_TIER_MODEL_DEFAULTS: ClassVar[Dict[str, str]] = {
+        "summarization": "2.0-flash",
+        "compression": "2.0-flash",
+    }
+
     def resolve_model_for_role(self, role: str) -> Tuple[str, Optional[str]]:
         """Resolve ``(provider_id, model)`` for a model role.
 
@@ -977,10 +991,13 @@ class ResearchConfig:
            ``deep_research_{role}_model``.
         2. **Phase-level fallback** — the role maps to one or more phase
            suffixes (see ``_ROLE_RESOLUTION_CHAIN``), each checked in order.
-        3. **Global default** — ``default_provider``.
+        3. **Cost-tier default** — for high-volume roles (summarization,
+           compression), a cheap model is used instead of the provider's
+           default (see ``_COST_TIER_MODEL_DEFAULTS``).
+        4. **Global default** — ``default_provider``.
 
         The returned ``model`` may be ``None`` when only the provider is
-        configured (the provider's default model will be used).
+        configured and no cost-tier default applies.
 
         Args:
             role: Model role name (``"research"``, ``"report"``,
@@ -1018,8 +1035,8 @@ class ResearchConfig:
         spec_str = resolved_provider or self.default_provider
         provider_id, spec_model = _parse_provider_spec(spec_str)
 
-        # Model priority: explicit model field > model embedded in provider spec
-        final_model = resolved_model or spec_model
+        # Model priority: explicit model field > model embedded in provider spec > cost-tier default
+        final_model = resolved_model or spec_model or self._COST_TIER_MODEL_DEFAULTS.get(role)
 
         return provider_id, final_model
 

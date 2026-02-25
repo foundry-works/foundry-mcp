@@ -75,6 +75,12 @@ class ModelRoleConfig:
     Groups all ``deep_research_*_provider`` / ``deep_research_*_model``
     fields that control cost-optimised routing of LLM calls to different
     models based on task role (research, report, reflection, etc.).
+
+    **Cost-tier defaults:** High-volume, low-complexity roles (summarization,
+    compression) automatically use a cheap model (``2.0-flash``) when no
+    explicit model is configured.  This mirrors ODR's pattern of routing
+    summarization to ~10x cheaper models.  See
+    ``ResearchConfig._COST_TIER_MODEL_DEFAULTS`` for the mapping.
     """
 
     research_provider: Optional[str] = None

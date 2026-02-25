@@ -1319,11 +1319,11 @@ class TestCompressionConfig:
         assert config.get_compression_provider() == "claude"
 
     def test_default_compression_model(self) -> None:
-        """Default compression model is None."""
+        """Default compression model uses cost-tier default (2.0-flash)."""
         from foundry_mcp.config.research import ResearchConfig
 
         config = ResearchConfig()
-        assert config.get_compression_model() is None
+        assert config.get_compression_model() == "2.0-flash"
 
     def test_explicit_compression_model(self) -> None:
         """Explicit compression model is used when set."""
