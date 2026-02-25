@@ -1351,13 +1351,14 @@ class TestDelegationIntegration:
         })
 
         async def mock_execute_llm_call(**kwargs):
-            if kwargs.get("phase_name") == "supervision_think":
+            phase = kwargs.get("phase_name")
+            if phase == "supervision_think":
                 result = MagicMock()
                 result.result = WorkflowResult(
                     success=True, content="Gap analysis", tokens_used=50
                 )
                 return result
-            elif kwargs.get("phase_name") == "supervision_delegate":
+            elif phase in ("supervision_delegate", "supervision_delegate_generate"):
                 result = MagicMock()
                 result.result = WorkflowResult(
                     success=True,
@@ -1368,8 +1369,15 @@ class TestDelegationIntegration:
                     duration_ms=400.0,
                 )
                 return result
+            elif phase == "supervision_delegate_critique":
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True, content="VERDICT: NO_ISSUES", tokens_used=30,
+                    provider_id="test", model_used="test",
+                )
+                return result
             # No other calls expected
-            raise AssertionError(f"Unexpected call: {kwargs.get('phase_name')}")
+            raise AssertionError(f"Unexpected call: {phase}")
 
         with patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
@@ -1411,14 +1419,15 @@ class TestDelegationIntegration:
         call_phases: list[str] = []
 
         async def mock_execute_llm_call(**kwargs):
-            call_phases.append(kwargs.get("phase_name", "unknown"))
-            if kwargs.get("phase_name") == "supervision_think":
+            phase = kwargs.get("phase_name", "unknown")
+            call_phases.append(phase)
+            if phase == "supervision_think":
                 result = MagicMock()
                 result.result = WorkflowResult(
                     success=True, content="Gaps exist", tokens_used=40
                 )
                 return result
-            elif kwargs.get("phase_name") == "supervision_delegate":
+            elif phase in ("supervision_delegate", "supervision_delegate_generate"):
                 result = MagicMock()
                 result.result = WorkflowResult(
                     success=True,
@@ -1429,7 +1438,14 @@ class TestDelegationIntegration:
                     duration_ms=300.0,
                 )
                 return result
-            raise AssertionError(f"Unexpected: {kwargs.get('phase_name')}")
+            elif phase == "supervision_delegate_critique":
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True, content="VERDICT: NO_ISSUES", tokens_used=20,
+                    provider_id="test", model_used="test",
+                )
+                return result
+            raise AssertionError(f"Unexpected: {phase}")
 
         # Mock _execute_topic_research_async to avoid needing real providers
         async def mock_topic_research(*args, **kwargs):
@@ -1479,13 +1495,14 @@ class TestDelegationIntegration:
         })
 
         async def mock_execute_llm_call(**kwargs):
-            if kwargs.get("phase_name") == "supervision_think":
+            phase = kwargs.get("phase_name")
+            if phase == "supervision_think":
                 result = MagicMock()
                 result.result = WorkflowResult(
                     success=True, content="Analysis", tokens_used=40
                 )
                 return result
-            elif kwargs.get("phase_name") == "supervision_delegate":
+            elif phase in ("supervision_delegate", "supervision_delegate_generate"):
                 result = MagicMock()
                 result.result = WorkflowResult(
                     success=True,
@@ -1496,7 +1513,14 @@ class TestDelegationIntegration:
                     duration_ms=300.0,
                 )
                 return result
-            raise AssertionError(f"Unexpected: {kwargs.get('phase_name')}")
+            elif phase == "supervision_delegate_critique":
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True, content="VERDICT: NO_ISSUES", tokens_used=20,
+                    provider_id="test", model_used="test",
+                )
+                return result
+            raise AssertionError(f"Unexpected: {phase}")
 
         with patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
@@ -1617,13 +1641,50 @@ class TestFirstRoundDecompositionPrompts:
         # Scaling rules
         assert "FEWER researchers for simple queries" in prompt.upper() or "fewer researchers for simple queries" in prompt.lower()
         assert "COMPARISONS" in prompt.upper() or "comparison" in prompt.lower()
-        # Self-critique
-        assert "Self-Critique" in prompt or "self-critique" in prompt.lower()
-        assert "redundant" in prompt.lower()
+        # Self-critique is now a separate call — NOT in the generation prompt
+        assert "Self-Critique" not in prompt
         # JSON format
         assert "research_complete" in prompt
         assert "directives" in prompt
         assert "rationale" in prompt
+
+    def test_critique_system_prompt_has_quality_criteria(self):
+        """Critique system prompt covers all four quality criteria."""
+        stub = StubSupervision(delegation_model=True)
+        prompt = stub._build_critique_system_prompt()
+
+        assert "Redundancy" in prompt
+        assert "Coverage" in prompt
+        assert "Proportionality" in prompt
+        assert "Specificity" in prompt
+        assert "VERDICT" in prompt
+
+    def test_revision_system_prompt_has_merge_instructions(self):
+        """Revision system prompt instructs merging, adding, removing directives."""
+        stub = StubSupervision(delegation_model=True)
+        prompt = stub._build_revision_system_prompt()
+
+        assert "MERGE" in prompt
+        assert "ADD" in prompt
+        assert "REMOVE" in prompt
+        assert "research_complete" in prompt
+
+    def test_critique_has_issues_detects_verdicts(self):
+        """_critique_has_issues correctly parses VERDICT lines."""
+        assert SupervisionPhaseMixin._critique_has_issues(
+            "All good.\nVERDICT: NO_ISSUES"
+        ) is False
+        assert SupervisionPhaseMixin._critique_has_issues(
+            "Problems found.\nVERDICT: REVISION_NEEDED"
+        ) is True
+        # Fallback: ISSUE markers without verdict
+        assert SupervisionPhaseMixin._critique_has_issues(
+            "1. Redundancy: ISSUE: directives 1 and 3 overlap"
+        ) is True
+        # No issues and no verdict
+        assert SupervisionPhaseMixin._critique_has_issues(
+            "Everything looks fine. All criteria pass."
+        ) is False
 
     def test_first_round_delegation_user_prompt_includes_brief(self):
         """First-round delegation user prompt includes research brief and query."""
@@ -2102,12 +2163,19 @@ class TestUnifiedSupervisorOrchestration:
         prompt = stub._build_first_round_delegation_system_prompt()
         assert "2-5" in prompt
 
-    def test_first_round_delegation_prompt_has_self_critique(self):
-        """First-round delegation system prompt includes self-critique checklist."""
+    def test_first_round_delegation_prompt_no_inline_self_critique(self):
+        """First-round delegation system prompt does NOT have inline self-critique.
+
+        Self-critique is now handled by a separate LLM call (call 2 of the
+        decompose → critique → revise pipeline).
+        """
         stub = StubSupervision(delegation_model=True)
         prompt = stub._build_first_round_delegation_system_prompt()
-        assert "redundant" in prompt.lower()
-        assert "missing" in prompt.lower() or "critical perspective" in prompt.lower()
+        assert "Self-Critique" not in prompt
+        # Critique concerns live in the separate critique prompt
+        critique_prompt = stub._build_critique_system_prompt()
+        assert "redundancy" in critique_prompt.lower()
+        assert "coverage" in critique_prompt.lower()
 
     # ------------------------------------------------------------------
     # 1.6: Round 0 → round 1 handoff
@@ -3180,6 +3248,13 @@ class TestPhase6ThinkAsConversation:
                 result = MagicMock()
                 result.result = WorkflowResult(
                     success=True, content=content, tokens_used=50,
+                )
+                return result
+            if "critique" in phase_name:
+                result = MagicMock()
+                result.result = WorkflowResult(
+                    success=True, content="VERDICT: NO_ISSUES", tokens_used=20,
+                    provider_id="test", model_used="test",
                 )
                 return result
             raise AssertionError(f"Unexpected phase: {phase_name}")

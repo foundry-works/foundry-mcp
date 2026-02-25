@@ -585,16 +585,18 @@ class SupervisionPhaseMixin:
             Tuple of (directives list, research_complete flag, raw LLM response content)
         """
         is_first_round = self._is_first_round_decomposition(state)
+
+        # First-round decomposition uses a 3-call pipeline:
+        # generate → critique → revise for higher-quality directives.
         if is_first_round:
-            system_prompt = self._build_first_round_delegation_system_prompt()
-            user_prompt = self._build_first_round_delegation_user_prompt(
-                state, think_output,
+            return await self._first_round_decompose_critique_revise(
+                state, think_output, provider_id, timeout,
             )
-        else:
-            system_prompt = self._build_delegation_system_prompt()
-            user_prompt = self._build_delegation_user_prompt(
-                state, coverage_data, think_output,
-            )
+
+        system_prompt = self._build_delegation_system_prompt()
+        user_prompt = self._build_delegation_user_prompt(
+            state, coverage_data, think_output,
+        )
 
         # Use structured output parsing with automatic retry on parse failure
         call_result = await execute_structured_llm_call(
@@ -642,7 +644,7 @@ class SupervisionPhaseMixin:
                 "directives_generated": len(directives),
                 "research_complete": research_complete,
                 "directive_topics": [d.research_topic[:100] for d in directives],
-                "is_first_round_decomposition": is_first_round,
+                "is_first_round_decomposition": False,
                 "structured_parse": call_result.parsed is not None,
                 "parse_retries": call_result.parse_retries,
             },
@@ -1783,11 +1785,6 @@ Quality Guidelines:
 - "evidence_needed" should name concrete evidence types: statistics, case studies, expert opinions, benchmarks, official documentation, etc.
 - "priority": 1=critical (core to answering the query), 2=important (improves comprehensiveness), 3=nice-to-have (supplementary context)
 
-Self-Critique Checklist (verify before responding):
-- Are any directives redundant? If so, merge them.
-- Is any critical perspective missing for this type of query?
-- Are directives specific enough, or are they too broad/vague?
-
 IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
     def _build_first_round_delegation_user_prompt(
@@ -1850,12 +1847,413 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             "2. Each directive should target a distinct aspect of the query",
             "3. Each directive should be specific enough to yield targeted results",
             "4. Prioritize: 1=critical to the core question, 2=important for comprehensiveness, 3=supplementary",
-            "5. Verify no redundant directives and no missing critical perspectives",
             "",
             "Return your response as JSON.",
         ])
 
         return "\n".join(parts)
+
+    # ==================================================================
+    # First-round decompose → critique → revise pipeline
+    # ==================================================================
+
+    async def _first_round_decompose_critique_revise(
+        self,
+        state: DeepResearchState,
+        think_output: Optional[str],
+        provider_id: Optional[str],
+        timeout: float,
+    ) -> tuple[list[ResearchDirective], bool, Optional[str]]:
+        """Three-call pipeline for first-round query decomposition.
+
+        Replaces the single-call first-round delegation with a pipeline that
+        separates generation, critique, and revision into distinct LLM calls
+        for higher-quality directives:
+
+        1. **Generate** — decompose the query into initial directives (existing
+           first-round prompts).
+        2. **Critique** — evaluate the initial directives for redundancy,
+           coverage gaps, proportionality, and specificity issues.
+        3. **Revise** — apply the critique to produce the final directive set.
+           Skipped if the critique finds no issues.
+
+        Args:
+            state: Current research state
+            think_output: Decomposition strategy from think step
+            provider_id: LLM provider to use
+            timeout: Request timeout
+
+        Returns:
+            Tuple of (directives list, research_complete flag, raw content)
+        """
+        effective_provider = provider_id or state.supervision_provider
+
+        # --- Call 1: Generate initial directives ---
+        self._check_cancellation(state)
+        gen_result = await execute_structured_llm_call(
+            workflow=self,
+            state=state,
+            phase_name="supervision_delegate_generate",
+            system_prompt=self._build_first_round_delegation_system_prompt(),
+            user_prompt=self._build_first_round_delegation_user_prompt(
+                state, think_output,
+            ),
+            provider_id=effective_provider,
+            model=state.supervision_model,
+            temperature=0.3,
+            timeout=timeout,
+            parse_fn=parse_delegation_response,
+            role="delegation",
+        )
+
+        if isinstance(gen_result, WorkflowResult):
+            logger.warning(
+                "First-round generate call failed: %s", gen_result.error,
+            )
+            return [], False, None
+
+        # Extract initial directives
+        if gen_result.parsed is not None:
+            gen_delegation: DelegationResponse = gen_result.parsed
+            initial_directives = self._apply_directive_caps(
+                gen_delegation.directives, state,
+            )
+            research_complete = gen_delegation.research_complete
+        else:
+            logger.warning(
+                "First-round generate parse failed, falling back to legacy parser",
+            )
+            initial_directives, research_complete = self._parse_delegation_response(
+                gen_result.result.content, state,
+            )
+
+        initial_count = len(initial_directives)
+
+        self._write_audit_event(
+            state,
+            "first_round_generate",
+            data={
+                "provider_id": gen_result.result.provider_id,
+                "model_used": gen_result.result.model_used,
+                "tokens_used": gen_result.result.tokens_used,
+                "directive_count": initial_count,
+                "research_complete": research_complete,
+                "directive_topics": [
+                    d.research_topic[:100] for d in initial_directives
+                ],
+            },
+        )
+
+        # If generation signalled research_complete or produced no directives,
+        # skip critique/revision — there's nothing to refine.
+        if research_complete or not initial_directives:
+            self._write_audit_event(
+                state,
+                "first_round_decomposition",
+                data={
+                    "initial_directive_count": initial_count,
+                    "final_directive_count": initial_count,
+                    "critique_triggered_revision": False,
+                    "skip_reason": (
+                        "research_complete" if research_complete
+                        else "no_directives"
+                    ),
+                },
+            )
+            return initial_directives, research_complete, gen_result.result.content
+
+        # --- Call 2: Critique the initial directives ---
+        self._check_cancellation(state)
+        directives_json = json.dumps(
+            [
+                {
+                    "research_topic": d.research_topic,
+                    "perspective": d.perspective,
+                    "evidence_needed": d.evidence_needed,
+                    "priority": d.priority,
+                }
+                for d in initial_directives
+            ],
+            indent=2,
+        )
+
+        critique_result = await execute_llm_call(
+            workflow=self,
+            state=state,
+            phase_name="supervision_delegate_critique",
+            system_prompt=self._build_critique_system_prompt(),
+            user_prompt=self._build_critique_user_prompt(
+                state, directives_json,
+            ),
+            provider_id=effective_provider,
+            model=state.supervision_model,
+            temperature=0.2,
+            timeout=getattr(
+                self.config, "deep_research_reflection_timeout", 60.0,
+            ),
+            role="reflection",
+        )
+
+        if isinstance(critique_result, WorkflowResult):
+            logger.warning(
+                "First-round critique call failed: %s. Using initial directives.",
+                critique_result.error,
+            )
+            self._write_audit_event(
+                state,
+                "first_round_decomposition",
+                data={
+                    "initial_directive_count": initial_count,
+                    "final_directive_count": initial_count,
+                    "critique_triggered_revision": False,
+                    "skip_reason": "critique_failed",
+                },
+            )
+            return initial_directives, research_complete, gen_result.result.content
+
+        critique_text = critique_result.result.content or ""
+
+        # Detect whether the critique flagged any issues worth revising.
+        needs_revision = self._critique_has_issues(critique_text)
+
+        self._write_audit_event(
+            state,
+            "first_round_critique",
+            data={
+                "provider_id": critique_result.result.provider_id,
+                "model_used": critique_result.result.model_used,
+                "tokens_used": critique_result.result.tokens_used,
+                "needs_revision": needs_revision,
+                "critique_length": len(critique_text),
+            },
+        )
+
+        # --- Call 3: Revise (skip if critique found no issues) ---
+        if not needs_revision:
+            logger.info(
+                "First-round critique found no issues, using initial directives",
+            )
+            self._write_audit_event(
+                state,
+                "first_round_decomposition",
+                data={
+                    "initial_directive_count": initial_count,
+                    "final_directive_count": initial_count,
+                    "critique_triggered_revision": False,
+                },
+            )
+            return initial_directives, research_complete, gen_result.result.content
+
+        self._check_cancellation(state)
+        revise_result = await execute_structured_llm_call(
+            workflow=self,
+            state=state,
+            phase_name="supervision_delegate_revise",
+            system_prompt=self._build_revision_system_prompt(),
+            user_prompt=self._build_revision_user_prompt(
+                state, directives_json, critique_text,
+            ),
+            provider_id=effective_provider,
+            model=state.supervision_model,
+            temperature=0.3,
+            timeout=timeout,
+            parse_fn=parse_delegation_response,
+            role="delegation",
+        )
+
+        if isinstance(revise_result, WorkflowResult):
+            logger.warning(
+                "First-round revision call failed: %s. Using initial directives.",
+                revise_result.error,
+            )
+            self._write_audit_event(
+                state,
+                "first_round_decomposition",
+                data={
+                    "initial_directive_count": initial_count,
+                    "final_directive_count": initial_count,
+                    "critique_triggered_revision": True,
+                    "revision_failed": True,
+                },
+            )
+            return initial_directives, research_complete, gen_result.result.content
+
+        # Extract revised directives
+        if revise_result.parsed is not None:
+            rev_delegation: DelegationResponse = revise_result.parsed
+            final_directives = self._apply_directive_caps(
+                rev_delegation.directives, state,
+            )
+            research_complete = rev_delegation.research_complete
+        else:
+            logger.warning(
+                "Revision parse failed, falling back to legacy parser",
+            )
+            final_directives, research_complete = self._parse_delegation_response(
+                revise_result.result.content, state,
+            )
+
+        final_count = len(final_directives)
+
+        self._write_audit_event(
+            state,
+            "first_round_revise",
+            data={
+                "provider_id": revise_result.result.provider_id,
+                "model_used": revise_result.result.model_used,
+                "tokens_used": revise_result.result.tokens_used,
+                "directive_count": final_count,
+                "directive_topics": [
+                    d.research_topic[:100] for d in final_directives
+                ],
+            },
+        )
+
+        self._write_audit_event(
+            state,
+            "first_round_decomposition",
+            data={
+                "initial_directive_count": initial_count,
+                "final_directive_count": final_count,
+                "critique_triggered_revision": True,
+                "directives_delta": final_count - initial_count,
+            },
+        )
+
+        logger.info(
+            "First-round decompose→critique→revise: %d → %d directives",
+            initial_count,
+            final_count,
+        )
+
+        # Return the revision's raw content for message accumulation
+        raw_content = revise_result.result.content
+        return final_directives, research_complete, raw_content
+
+    def _build_critique_system_prompt(self) -> str:
+        """Build system prompt for the critique call (call 2 of 3).
+
+        Instructs the LLM to evaluate a set of research directives against
+        four quality criteria without revising them.
+        """
+        return """You are a research quality reviewer. You will receive a set of research directives generated for a query. Your task is to critique them — identify issues but do NOT revise the directives yourself.
+
+Evaluate the directives against these four criteria:
+
+1. **Redundancy**: Are any directives investigating the same topic from the same angle? If so, identify which ones overlap and should be merged.
+2. **Coverage**: Is there a major dimension of the query that no directive addresses? If so, identify what perspective or facet is missing.
+3. **Proportionality**: Given the complexity of the query, is the number of directives appropriate? A simple factual question needs 1-2 directives, not 4-5. A complex multi-dimensional topic warrants 3-5.
+4. **Specificity**: Are all directives specific enough to yield targeted search results? Identify any that are too broad or vague.
+
+For each criterion, state either:
+- "PASS" — no issues found
+- "ISSUE: <description>" — describe the specific problem
+
+End your response with a summary line:
+- "VERDICT: NO_ISSUES" — if all four criteria pass
+- "VERDICT: REVISION_NEEDED" — if any criterion has issues
+
+Be concise and specific. Focus on actionable feedback."""
+
+    def _build_critique_user_prompt(
+        self,
+        state: DeepResearchState,
+        directives_json: str,
+    ) -> str:
+        """Build user prompt for the critique call.
+
+        Args:
+            state: Current research state (for the original query)
+            directives_json: JSON string of the initial directives
+        """
+        return "\n".join([
+            f"# Original Research Query\n{state.original_query}",
+            "",
+            "# Directives to Critique",
+            directives_json,
+            "",
+            "Evaluate the directives above against the four criteria "
+            "(redundancy, coverage, proportionality, specificity).",
+        ])
+
+    def _build_revision_system_prompt(self) -> str:
+        """Build system prompt for the revision call (call 3 of 3).
+
+        Instructs the LLM to revise directives based on critique feedback.
+        """
+        return """You are a research lead revising a set of research directives based on critique feedback. Apply the critique to produce an improved directive set.
+
+Your response MUST be valid JSON with this exact structure:
+{
+    "research_complete": false,
+    "directives": [
+        {
+            "research_topic": "Detailed paragraph-length description of what to investigate...",
+            "perspective": "What angle or perspective to approach from",
+            "evidence_needed": "What specific evidence, data, or sources to seek",
+            "priority": 1
+        }
+    ],
+    "rationale": "How the critique was applied to improve the directives"
+}
+
+Revision Guidelines:
+- MERGE directives flagged as redundant into single stronger directives
+- ADD a directive for any missing coverage identified in the critique
+- REMOVE excess directives if proportionality issues were flagged
+- SHARPEN any directives flagged as too broad or vague
+- Keep directives that were not flagged unchanged
+- Maintain 2-5 directives total
+- Each "research_topic" should be a detailed paragraph (2-4 sentences)
+
+IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
+
+    def _build_revision_user_prompt(
+        self,
+        state: DeepResearchState,
+        directives_json: str,
+        critique_text: str,
+    ) -> str:
+        """Build user prompt for the revision call.
+
+        Args:
+            state: Current research state (for the original query)
+            directives_json: JSON string of the initial directives
+            critique_text: Critique feedback from call 2
+        """
+        return "\n".join([
+            f"# Original Research Query\n{state.original_query}",
+            "",
+            "# Current Directives",
+            directives_json,
+            "",
+            "# Critique Feedback",
+            critique_text,
+            "",
+            "Revise the directives based on the critique above. "
+            "Return the improved directive set as JSON.",
+        ])
+
+    @staticmethod
+    def _critique_has_issues(critique_text: str) -> bool:
+        """Check whether the critique indicates issues that need revision.
+
+        Looks for the ``VERDICT:`` line. Falls back to checking for ``ISSUE:``
+        markers if no verdict is found.
+
+        Args:
+            critique_text: Raw text from the critique LLM call
+
+        Returns:
+            True if revision is needed, False if all criteria passed
+        """
+        text_upper = critique_text.upper()
+        if "VERDICT: NO_ISSUES" in text_upper or "VERDICT:NO_ISSUES" in text_upper:
+            return False
+        if "VERDICT: REVISION_NEEDED" in text_upper or "VERDICT:REVISION_NEEDED" in text_upper:
+            return True
+        # Fallback: if no explicit verdict, check for ISSUE markers
+        return "ISSUE:" in text_upper
 
     # ==================================================================
     # Query-generation model (legacy fallback)

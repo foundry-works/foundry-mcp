@@ -1,275 +1,265 @@
-# Deep Research ODR Alignment — Phase 2 Plan
+# Supervisor-as-Sole-Orchestrator — Alignment Plan
 
-Follow-on from the Phase 1 ODR alignment plan (Phases 1-5, all complete).
-Addresses three remaining priority gaps identified by comparing foundry-mcp's
-deep research workflow against [open_deep_research](https://github.com/langchain-ai/open_deep_research).
+Completes the transition to a supervisor-owned orchestration model where
+SUPERVISION is the single phase responsible for both initial query decomposition
+and iterative gap-filling. Eliminates the vestigial GATHERING re-entry loop and
+folds PLANNING's self-critique quality gate into supervision round 0.
 
-**Prerequisite context (already implemented):**
-- Synthesis phase *does* have findings-specific token-limit retry (synthesis.py:329-496)
-  with the ODR pattern (model_token_limit×4 chars → 10% reduction per retry).
-- Per-topic compression retries use message-boundary-aware truncation.
-- Supervision messages accumulate think/delegation/tool_result entries across rounds.
+**Context:** The codebase is already ~70% aligned. BRIEF only does enrichment
+(no decomposition). New workflows skip PLANNING/GATHERING and jump to
+SUPERVISION after BRIEF. Supervision round 0 already performs initial
+decomposition into directives. The delegation model always returns
+`should_continue_gathering: False`. What remains is cleanup: removing the
+GATHERING loop from the orchestrator, adding the critique mechanism that
+PLANNING had, and marking legacy phases as deprecated.
 
-**What's still missing:**
-1. No `raw_notes` capture — when compression degrades or fails, there is no
-   unprocessed fallback data for synthesis or evaluation.
-2. Supervisor sees only compressed summaries from prior rounds — detailed
-   evidence, specific URLs, and nuanced reasoning from directive researchers
-   are discarded before the next delegation cycle.
-3. Synthesis has no supplementary data path — when token-limit retries force
-   findings truncation, the report loses depth with no way to recover detail.
+**Comparison with open_deep_research (ODR):**
+ODR has no separate planning or gathering phases. The supervisor is the sole
+orchestrator: think → delegate → research → compress → assess → iterate. This
+plan brings foundry-mcp to the same model.
 
 ---
 
-## Phase 1: Raw Notes Pipeline
+## Phase 1: Self-Critique in Supervision Round 0
 
-**ODR pattern:** Every researcher captures `raw_notes` alongside `compressed_research`.
-`raw_notes` is populated by `filter_messages(researcher_messages, include_types=["tool", "ai"])`
-— the unprocessed concatenation of all tool responses and AI reasoning from the
-ReAct loop. These flow upward: researcher → supervisor (`raw_notes` list on
-`SupervisorState`) → `AgentState.raw_notes` → available to both `final_report_generation`
-and the groundedness evaluator.
+**Rationale:** PLANNING had a self-critique step (`_apply_critique_adjustments`
+in planning.py:656-741) that caught redundant sub-queries, missing perspectives,
+and scope issues. Supervision round 0 currently lacks this. Without it, the
+first-round decomposition may produce overlapping directives.
 
-**Current state:** `TopicResearchResult` stores `message_history` (full ReAct
-conversation) and `compressed_findings` (post-compression summary). After
-compression, `message_history` is retained on the model but is never aggregated
-into a flat `raw_notes` field. Synthesis reads `compressed_findings` or the
-global `compressed_digest` — it has no access to uncompressed researcher output.
+**ODR pattern:** ODR's supervisor uses natural heuristic judgment — the LLM
+reasons about redundancy and proportionality inline during delegation. No
+separate critique pass needed because the instructions embed it.
 
 **Changes:**
 
-### 1a. Add `raw_notes` field to `TopicResearchResult`
+### 1a. Three-call decompose → critique → revise pipeline for first-round delegation
 
-Add a `raw_notes: Optional[str]` field to `TopicResearchResult`. Populated after
-the ReAct loop completes (before compression), by concatenating the content of
-all tool-result and assistant messages from `message_history`. This is the
-researcher-level raw capture, matching ODR's per-researcher `raw_notes`.
+Replace the single first-round delegation LLM call with a 3-call pipeline that
+mirrors PLANNING's separate critique step but keeps everything inside supervision
+round 0. This gives the LLM a genuine opportunity to reflect on its own output
+and revise, producing higher-quality directives than inline self-critique alone.
 
-**File:** `src/foundry_mcp/core/research/models/deep_research.py`
+**Call 1 — Generate:** The existing first-round delegation call produces initial
+directives (JSON). No prompt changes needed to the existing system/user prompts
+for this call.
 
-### 1b. Populate `raw_notes` in topic research completion
+**Call 2 — Critique:** A new LLM call receives the initial directives and
+evaluates them against four criteria:
+1. **Redundancy:** Are any directives investigating the same topic from the same angle? Identify which to merge.
+2. **Coverage:** Is there a major dimension of the query that no directive addresses? Identify what's missing.
+3. **Proportionality:** For simple queries, could fewer directives suffice? Identify excess.
+4. **Specificity:** Are directives specific enough, or too broad/vague? Identify which need sharpening.
 
-At the end of `_execute_topic_research_async()`, after the ReAct loop exits but
-before compression, build `raw_notes` from `message_history`:
+The critique call returns structured feedback (not revised directives).
 
+**Call 3 — Revise:** A new LLM call receives the original directives + the
+critique feedback and produces the final revised directive set as JSON. If the
+critique found no issues, this call may return the directives unchanged.
+
+**Optimization:** If the critique indicates no issues (all four criteria pass),
+skip call 3 and use the original directives directly.
+
+**Implementation:** Add a new method `_first_round_decompose_critique_revise()`
+that orchestrates the 3-call pipeline, called from `_supervision_delegate_step()`
+when `is_first_round` is True. New helper methods:
+- `_build_critique_system_prompt()` — system prompt for call 2
+- `_build_critique_user_prompt(directives)` — user prompt with initial directives
+- `_build_revision_system_prompt()` — system prompt for call 3
+- `_build_revision_user_prompt(directives, critique)` — user prompt with directives + critique feedback
+
+**File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
+- `_supervision_delegate_step()` (~line 563) — branch to new pipeline when first round
+- New methods for critique and revision prompts and orchestration
+
+### 1b. Log critique pipeline in audit trail
+
+Add audit events for each stage of the 3-call pipeline to provide observability
+into how the critique step affects directive quality:
+
+- **`first_round_generate`** — after call 1, records initial directive count and topics
+- **`first_round_critique`** — after call 2, records the critique findings (which criteria flagged issues)
+- **`first_round_revise`** — after call 3, records final directive count, directives added/removed/merged, and whether revision was skipped (no issues found)
+- **`first_round_decomposition`** — summary event with `initial_directive_count`, `final_directive_count`, `critique_triggered_revision: bool`, `query_complexity` fields
+
+**File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
+- Inside `_first_round_decompose_critique_revise()` after each call
+
+---
+
+## Phase 2: Remove GATHERING from Active Workflow Loop
+
+**Rationale:** The delegation model (`_execute_supervision_delegation_async`)
+handles all research execution internally via `_execute_directives_async()` and
+always returns `should_continue_gathering: False` (supervision.py:466). The
+GATHERING ↔ SUPERVISION loop in the workflow orchestrator (workflow_execution.py
+lines 221-317) is dead code for the active path.
+
+**ODR pattern:** ODR's supervisor loop is self-contained — delegate, execute,
+assess, repeat. No external phase re-entry.
+
+**Changes:**
+
+### 2a. Simplify the iteration loop in workflow_execution.py
+
+Replace the `while True` GATHERING ↔ SUPERVISION loop (lines 221-317) with
+a linear SUPERVISION → SYNTHESIS progression. The supervision phase's internal
+multi-round loop (bounded by `max_supervision_rounds`) is the sole iteration
+mechanism.
+
+Before:
 ```python
-raw_notes_parts = []
-for msg in topic_result.message_history:
-    if msg.get("role") in ("assistant", "tool_result"):
-        raw_notes_parts.append(msg.get("content", ""))
-topic_result.raw_notes = "\n".join(raw_notes_parts)
+while True:
+    if state.phase == DeepResearchPhase.GATHERING:
+        err = await self._run_phase(state, GATHERING, ...)
+    if state.phase == DeepResearchPhase.SUPERVISION:
+        err = await self._run_phase(state, SUPERVISION, ...)
+        if should_gather and has_pending and within_limit:
+            state.phase = GATHERING; continue
+        else:
+            state.phase = SYNTHESIS
+    if state.phase == DeepResearchPhase.SYNTHESIS:
+        ...; break
+    break
 ```
 
-This ensures raw notes survive even if compression fails or drops content.
+After:
+```python
+# Legacy resume: if saved state is at GATHERING, run it once then proceed
+if state.phase == DeepResearchPhase.GATHERING:
+    err = await self._run_phase(state, GATHERING, ...)
+    if err: return err
+    state.phase = DeepResearchPhase.SUPERVISION
 
-**File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py`
+# SUPERVISION (handles decomposition + research + gap-fill internally)
+if state.phase == DeepResearchPhase.SUPERVISION:
+    state.metadata["iteration_in_progress"] = True
+    err = await self._run_phase(state, SUPERVISION, ..., skip_transition=True)
+    if err: return err
+    state.phase = DeepResearchPhase.SYNTHESIS
 
-### 1c. Add aggregated `raw_notes` field to `DeepResearchState`
+# SYNTHESIS
+if state.phase == DeepResearchPhase.SYNTHESIS:
+    err = await self._run_phase(state, SYNTHESIS, ..., skip_transition=True)
+    if err: return err
+    # ... orchestrator transition, mark_completed, break
+```
 
-Add `raw_notes: list[str]` to `DeepResearchState`. This is the session-level
-aggregation of all researcher raw notes, populated during the gathering and
-supervision phases as topic researchers complete.
+**File:** `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py`
+- `_execute_workflow_async()` (lines 218-317)
+
+### 2b. Remove `should_continue_gathering` from supervision return metadata
+
+The delegation model's WorkflowResult always sets `should_continue_gathering: False`.
+Remove this field from the return metadata since it's no longer consumed by the
+orchestrator. Keep it in the `supervision_history` audit entries for observability.
+
+**File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
+- `_execute_supervision_delegation_async()` return value (~line 456-471)
+
+### 2c. Remove `pending_sub_queries()` / `should_continue_gathering` check from orchestrator
+
+The `has_pending = len(state.pending_sub_queries()) > 0` check (line 261) and
+`should_gather = last_hist.get("should_continue_gathering", False)` (line 260)
+are part of the GATHERING re-entry logic. Remove them from the orchestrator.
+`pending_sub_queries()` itself stays on the state model (used by coverage
+assessment internally).
+
+**File:** `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py`
+- Lines 258-266 (the should_gather / has_pending / within_limit block)
+
+---
+
+## Phase 3: Deprecate PLANNING and GATHERING Phase Enum Values
+
+**Rationale:** New workflows never enter these phases. Marking them explicitly
+as deprecated prevents future code from accidentally routing through them and
+makes the architectural intent clear.
+
+**Changes:**
+
+### 3a. Add deprecation comments to phase enum
+
+Add inline comments to `DeepResearchPhase.GATHERING` marking it as
+legacy-resume-only. Note: there is no `PLANNING` value in the enum (it was
+already removed). Only GATHERING remains as a legacy phase.
 
 **File:** `src/foundry_mcp/core/research/models/deep_research.py`
+- `DeepResearchPhase` enum (~line 644)
 
-### 1d. Aggregate raw notes after topic research and directive execution
+### 3b. Strengthen deprecation logging for GATHERING resume
 
-In `_execute_gathering_async()` (gathering phase) and `_execute_directives_async()`
-(supervision phase), after topic researchers return results, append each
-`topic_result.raw_notes` to `state.raw_notes`:
+The legacy resume path (workflow_execution.py lines 198-214) already logs a
+warning. Ensure the audit event includes `deprecated_phase: true` for
+monitoring dashboards.
 
-```python
-for result in topic_results:
-    if result.raw_notes:
-        state.raw_notes.append(result.raw_notes)
-```
+**File:** `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py`
+
+### 3c. Remove unused PLANNING imports from workflow execution
+
+If `_execute_planning_async` or other planning-specific functions are imported
+in workflow_execution.py or the main workflow module, remove them from the
+active path. Planning.py itself stays for potential legacy resume use.
 
 **Files:**
-- `src/foundry_mcp/core/research/workflows/deep_research/phases/gathering.py`
-- `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
-
----
-
-## Phase 2: Supervisor Context Preservation
-
-**ODR pattern:** In ODR, the supervisor accumulates `supervisor_messages` with the
-full LangGraph message objects (including complete tool call results from researchers).
-`raw_notes` is separately aggregated and never compressed within the supervisor loop.
-The supervisor always sees both its compressed notes (`notes` list) and has access
-to the full raw researcher output.
-
-**Current state:** After directives execute, their results are compressed inline
-(`_compress_directive_results_inline`), and only the compressed text is appended to
-`supervision_messages` as a `tool_result` entry (supervision.py:347-360). The raw
-researcher output — full message histories, individual search results, source-level
-detail — is discarded from the supervisor's view. On round N+1, the supervisor
-sees compressed summaries from round N. This causes two problems:
-
-1. **Re-investigation:** The supervisor may re-target gaps that were actually
-   addressed in the raw findings but whose detail was lost during compression.
-2. **Evidence loss:** Specific URLs, data points, and quotes that the supervisor
-   could reference when formulating targeted directives are unavailable.
-
-**Changes:**
-
-### 2a. Append raw evidence summaries alongside compressed findings
-
-After directives execute and inline compression runs, build a concise
-**evidence inventory** from each directive result's `raw_notes` (from Phase 1)
-or `source_ids` + source metadata. Append this as a separate `evidence_inventory`
-message to `supervision_messages`, alongside the existing compressed `tool_result`:
-
-```python
-# After existing compressed findings append (supervision.py:347-360):
-if result.raw_notes or result.source_ids:
-    inventory = self._build_evidence_inventory(result, state)
-    state.supervision_messages.append({
-        "role": "tool_result",
-        "type": "evidence_inventory",
-        "round": state.supervision_round,
-        "directive_id": result.sub_query_id,
-        "content": inventory,
-    })
-```
-
-The evidence inventory is a structured, compact summary (not the full raw notes)
-listing: sources found (URL + title), key data points extracted, and which
-sub-queries they address. This gives the supervisor specific evidence to reason
-about without the full token cost of raw notes.
-
-**File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
-
-### 2b. Build `_build_evidence_inventory()` helper
-
-Create a helper that produces a compact evidence summary from a directive result:
-
-```
-Sources: 4 found, 3 unique domains
-- [1] "Title A" (example.com) — covers: pricing, features
-- [2] "Title B" (docs.example.com) — covers: API reference
-- [3] "Title C" (blog.example.com) — covers: user experience
-Key data points: 7 extracted
-Topics addressed: pricing comparison, feature matrix
-```
-
-This is structured enough for the supervisor to know what evidence exists
-without reading the full compressed findings, and specific enough to prevent
-re-investigation of already-covered topics.
-
-**File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
-
-### 2c. Include evidence inventories in supervisor think prompt
-
-Update `_build_think_prompt()` and `_build_combined_think_delegate_user_prompt()`
-to render `evidence_inventory` messages distinctly from `research_findings`
-messages. The think prompt should present inventories as a "what evidence we
-have" section separate from the "what we found" section:
-
-```
-### [Round 1] Evidence Inventory (directive dir-abc123)
-Sources: 4 found, 3 unique domains
-- [1] "Title A" (example.com) — covers: pricing, features
-...
-
-### [Round 1] Research Findings (directive dir-abc123)
-[compressed findings text]
-```
-
-**File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
-
-### 2d. Token budget for evidence inventories in supervision messages
-
-Evidence inventories add to the supervision message history growth. To prevent
-token overflow:
-- Cap each evidence inventory at 500 chars (roughly 125 tokens).
-- When `truncate_supervision_messages()` runs, evidence inventories from the
-  oldest rounds are dropped before compressed findings from recent rounds.
-
-**File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/_lifecycle.py`
-
----
-
-## Phase 3: Synthesis Raw-Notes Fallback
-
-**ODR pattern:** `final_report_generation()` builds findings from
-`"\n".join(notes)` — the compressed research. But `raw_notes` is available on
-`AgentState` and is used by the evaluator (`eval_groundedness`) as ground truth.
-When token retry truncates findings, the raw notes provide a safety net: the
-evaluator can assess whether the report still reflects the full evidence base.
-
-**Current state:** Synthesis builds its prompt from `compressed_digest` (preferred),
-per-topic `compressed_findings`, or analysis `findings`. When token-limit retries
-force truncation, the findings section shrinks progressively. There is no
-supplementary data path — truncated findings mean lost detail with no recovery.
-
-**Changes:**
-
-### 3a. Inject raw notes as supplementary context for synthesis (token-budget permitting)
-
-After building the primary synthesis prompt from compressed findings, calculate
-remaining token headroom. If headroom exists (>10% of context window unused),
-append a `## Supplementary Research Notes` section with excerpts from
-`state.raw_notes`, truncated to fit the available budget:
-
-```python
-headroom = estimate_remaining_tokens(system_prompt, user_prompt, provider_id)
-if headroom > supplementary_threshold:
-    raw_notes_text = "\n---\n".join(state.raw_notes)
-    raw_notes_truncated = truncate_at_boundary(raw_notes_text, headroom_chars)
-    user_prompt += f"\n\n## Supplementary Research Notes\n{raw_notes_truncated}"
-```
-
-This gives the synthesizer access to uncompressed detail when budget allows,
-improving report depth without risking token-limit failures.
-
-**File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py`
-
-### 3b. Use raw notes as degraded-mode fallback when compressed findings are empty
-
-In `_execute_synthesis_async()`, extend the "no findings" check (synthesis.py:236-240)
-to fall back on `state.raw_notes` before generating an empty report:
-
-```python
-has_compressed = any(tr.compressed_findings for tr in state.topic_research_results)
-has_raw_notes = bool(state.raw_notes)
-
-if not state.findings and not state.compressed_digest and not has_compressed:
-    if has_raw_notes:
-        # Degraded mode: synthesize directly from raw notes
-        logger.warning("No compressed findings, falling back to raw notes for synthesis")
-        # Build synthesis prompt from raw_notes instead
-        ...
-    else:
-        # No data at all: generate empty report
-        ...
-```
-
-This prevents the "empty report" path when compression failed but raw data exists.
-
-**File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py`
-
-### 3c. Include raw notes in evaluation groundedness check
-
-When the evaluation framework (`evaluation/evaluator.py`) runs LLM-as-judge
-scoring, pass `state.raw_notes` as the ground-truth context for the
-groundedness dimension. This matches ODR's `eval_groundedness` which uses
-`outputs["raw_notes"]` as context to assess whether the report is supported
-by the evidence gathered.
-
-**File:** `src/foundry_mcp/core/research/workflows/deep_research/evaluation/evaluator.py`
+- `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py`
+- Any other files with unused planning imports
 
 ---
 
 ## Dependency Graph
 
 ```
-Phase 1 (raw notes pipeline)
-    ├──→ Phase 2 (supervisor context) — uses raw_notes for evidence inventory
-    └──→ Phase 3 (synthesis fallback) — uses raw_notes for supplementary/degraded paths
+Phase 1 (supervision critique)  ← independent
+Phase 2 (remove GATHERING loop) ← independent
+Phase 3 (deprecate enum values) ← depends on Phase 2
 ```
 
-Phase 1 is the foundation. Phases 2 and 3 can be implemented in parallel once
-Phase 1 is complete.
+Phases 1 and 2 can be implemented in parallel. Phase 3 is cleanup after Phase 2.
+
+---
+
+## Files Modified
+
+| File | Phases | Description |
+|------|--------|-------------|
+| `phases/supervision.py` | 1a, 1b, 2b | 3-call decompose→critique→revise pipeline; audit events; remove should_continue_gathering from return |
+| `workflow_execution.py` | 2a, 2c, 3b, 3c | Simplify loop; remove GATHERING re-entry; deprecation audit; clean imports |
+| `models/deep_research.py` | 3a | Deprecation comments on phase enum |
+
+All paths relative to `src/foundry_mcp/core/research/workflows/deep_research/`.
+
+---
+
+## What Is NOT Changed
+
+- **TopicResearchMixin** — unchanged, still the ReAct loop engine
+- **SubQuery model** — stays as the internal execution unit (directives convert to SubQuery via `state.add_sub_query()`)
+- **Compression pipeline** — unchanged
+- **Coverage assessment** — unchanged (operates on completed sub-queries internally)
+- **Synthesis** — unchanged
+- **Evaluation** — unchanged
+- **PLANNING phase code** (planning.py) — kept for legacy compat, not deleted
+- **GATHERING phase code** (gathering.py) — kept for legacy compat, not deleted
+- **Config parameters** — no new parameters needed
+
+---
+
+## Verification
+
+1. **Unit tests**: Run existing deep research test suite for regressions
+2. **Integration test**: Execute a full deep research workflow and verify:
+   - BRIEF → SUPERVISION → SYNTHESIS (no GATHERING phase entered)
+   - Supervision round 0 produces directives with critique evidence in audit log
+   - Supervision rounds 1+ operate as before (gap-fill via directives)
+3. **Legacy resume**: Create a saved state at GATHERING phase, resume it, verify
+   it still works through the legacy path with deprecation warning logged
+4. **Audit trail**: Verify supervision_history entries no longer contain
+   `should_continue_gathering` in the WorkflowResult metadata
+
+```bash
+python -m pytest tests/ -x -q --timeout=120
+```
 
 ---
 
@@ -277,7 +267,6 @@ Phase 1 is complete.
 
 | Phase | Risk | Mitigation |
 |-------|------|------------|
-| 1 | `raw_notes` increases `DeepResearchState` serialization size | Cap per-topic raw_notes at `max_content_length` (50k chars default); gc oldest on state save |
-| 2 | Evidence inventories add token overhead to supervision | Hard cap at 500 chars/inventory; drop oldest-round inventories first during truncation |
-| 3a | Supplementary notes in synthesis could cause token overflow | Only inject when headroom > threshold; raw notes are always truncated to fit |
-| 3b | Raw notes are noisier than compressed findings | System prompt instructs synthesizer to prefer compressed findings; raw notes are labeled "supplementary" |
+| 1 | Inline critique adds tokens to first-round delegation prompt | Minimal — ~100 tokens of instruction; first-round prompt is not token-constrained |
+| 2 | Legacy saved states expect GATHERING in the loop | Legacy resume path preserved; only the active-path loop changes |
+| 3 | Code referencing `DeepResearchPhase.GATHERING` breaks | Enum values stay; only comments and routing change |

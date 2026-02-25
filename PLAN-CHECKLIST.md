@@ -1,93 +1,82 @@
-# Deep Research ODR Alignment Phase 2 — Checklist
+# Supervisor-as-Sole-Orchestrator — Checklist
 
 Cross-reference: [PLAN.md](PLAN.md) for detailed rationale, ODR patterns, and code references.
 
-**Note:** Synthesis token-limit retry already exists (synthesis.py:329-496).
-These phases address the remaining gaps: raw data capture, supervisor context
-preservation, and synthesis fallback paths.
+**Note:** BRIEF phase already only does enrichment (no decomposition). Supervision
+round 0 already performs initial decomposition. This plan completes the alignment
+by adding self-critique, removing the GATHERING re-entry loop, and deprecating
+legacy phases.
 
 ---
 
-## Phase 1: Raw Notes Pipeline
+## Phase 1: Self-Critique in Supervision Round 0
 
-- [x] **1a** Add `raw_notes: Optional[str]` field to `TopicResearchResult`
+- [x] **1a** Implement 3-call decompose → critique → revise pipeline for first-round delegation
+  - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
+  - **Call 1 (Generate):** Existing first-round delegation call produces initial directives JSON (no prompt changes needed)
+  - **Call 2 (Critique):** New LLM call evaluates initial directives against: redundancy, coverage, proportionality, specificity
+    - Add: `_build_critique_system_prompt()`, `_build_critique_user_prompt(directives)`
+    - Returns structured critique feedback (not revised directives)
+  - **Call 3 (Revise):** New LLM call receives original directives + critique → produces final revised JSON
+    - Add: `_build_revision_system_prompt()`, `_build_revision_user_prompt(directives, critique)`
+    - Optimization: skip call 3 if critique finds no issues
+  - Add: `_first_round_decompose_critique_revise()` orchestrator method
+  - Modify: `_supervision_delegate_step()` to branch to new pipeline when `is_first_round`
+  - Remove: Self-Critique Checklist from `_build_first_round_delegation_system_prompt()` (now handled by separate call)
+  - Test: Existing supervision tests still pass; first-round produces critique audit events
+
+- [x] **1b** Add audit events for critique pipeline stages
+  - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
+  - Location: Inside `_first_round_decompose_critique_revise()` after each call
+  - Events: `first_round_generate`, `first_round_critique`, `first_round_revise`, `first_round_decomposition` (summary)
+  - Summary event fields: `initial_directive_count`, `final_directive_count`, `critique_triggered_revision`, `query_complexity`
+  - Test: Verify all audit events appear in supervision audit trail
+
+---
+
+## Phase 2: Remove GATHERING from Active Workflow Loop
+
+Depends on: None (independent of Phase 1).
+
+- [ ] **2a** Simplify `_execute_workflow_async()` iteration loop
+  - File: `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py`
+  - Replace: `while True` loop (lines 221-317) with linear SUPERVISION → SYNTHESIS
+  - Keep: Legacy GATHERING entry (lines 198-214) for saved-state resume, but transition to SUPERVISION after it completes (not loop)
+  - Test: Full workflow test — verify phases are CLARIFICATION → BRIEF → SUPERVISION → SYNTHESIS
+  - Test: No GATHERING phase appears in phase_metrics for new workflows
+
+- [ ] **2b** Remove `should_continue_gathering` from supervision WorkflowResult metadata
+  - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
+  - Location: `_execute_supervision_delegation_async()` return (~line 456-471)
+  - Remove: `"should_continue_gathering": False` from metadata dict
+  - Keep: `should_continue_gathering` in supervision_history audit entries (observability)
+  - Test: Verify WorkflowResult metadata no longer contains the field
+
+- [ ] **2c** Remove GATHERING re-entry logic from orchestrator
+  - File: `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py`
+  - Remove: `should_gather` / `has_pending` / `within_limit` check block (lines 258-266)
+  - Remove: `state.phase = DeepResearchPhase.GATHERING; continue` branch
+  - Test: Verify orchestrator never sets phase to GATHERING during normal execution
+
+---
+
+## Phase 3: Deprecate PLANNING and GATHERING Phase Enum Values
+
+Depends on: Phase 2 (GATHERING loop removed from active path).
+
+- [ ] **3a** Add deprecation comments to `DeepResearchPhase` enum
   - File: `src/foundry_mcp/core/research/models/deep_research.py`
-  - Field: `Optional[str]`, default `None`, described as unprocessed concatenation of tool+assistant messages
-  - Test: Verify serialization round-trip with raw_notes populated
+  - Location: `DeepResearchPhase` enum (~line 644)
+  - Add: `# DEPRECATED: legacy-resume-only` comment on GATHERING value
+  - Test: Enum still serializes/deserializes correctly (no functional change)
 
-- [x] **1b** Populate `raw_notes` in topic research completion
-  - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py`
-  - Location: End of `_execute_topic_research_async()`, after ReAct loop, before compression
-  - Logic: Concatenate `content` from all `message_history` entries where `role in ("assistant", "tool")`
-  - Cap: Truncate to `config.deep_research_max_content_length` (default 50k chars)
-  - Test: Unit test that raw_notes is populated after a mocked ReAct loop with 3+ messages
+- [ ] **3b** Add `deprecated_phase: true` to GATHERING resume audit event
+  - File: `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py`
+  - Location: Legacy resume audit event (lines 206-214)
+  - Add: `"deprecated_phase": True` to audit event data dict
+  - Test: Verify audit event includes the deprecation flag
 
-- [x] **1c** Add `raw_notes: list[str]` field to `DeepResearchState`
-  - File: `src/foundry_mcp/core/research/models/deep_research.py`
-  - Field: `list[str]`, default `[]`, session-level aggregation of all researcher raw notes
-  - Test: Verify serialization round-trip
-
-- [x] **1d** Aggregate raw notes after topic research completion (gathering phase)
-  - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/gathering.py`
-  - Location: After `_execute_topic_research_async()` returns, append `result.raw_notes` to `state.raw_notes`
-  - Test: Integration test verifying `state.raw_notes` has entries after gathering completes
-
-- [x] **1e** Aggregate raw notes after directive execution (supervision phase)
-  - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
-  - Location: After `_execute_directives_async()` returns (near line 347), append each result's raw_notes
-  - Test: Unit test verifying directive results' raw_notes flow into `state.raw_notes`
-
----
-
-## Phase 2: Supervisor Context Preservation
-
-Depends on: Phase 1 (1a, 1b) for `raw_notes` on `TopicResearchResult`.
-
-- [x] **2a** Append evidence inventory messages to `supervision_messages`
-  - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
-  - Location: After compressed findings append (line ~360), add `evidence_inventory` message
-  - Message format: `{"role": "tool_result", "type": "evidence_inventory", "round": N, "directive_id": "...", "content": "..."}`
-  - Test: Unit test verifying evidence_inventory messages appear in supervision_messages after directive execution
-
-- [x] **2b** Implement `_build_evidence_inventory()` helper
-  - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
-  - Input: `TopicResearchResult` + `DeepResearchState` (for source metadata lookup)
-  - Output: Compact string listing sources (URL + title + coverage), data point count, topics addressed
-  - Cap: 500 chars max per inventory
-  - Test: Unit test with mock TopicResearchResult containing 5 sources, verify output format and char cap
-
-- [x] **2c** Render evidence inventories in supervisor think prompt
-  - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
-  - Update: `_build_combined_think_delegate_user_prompt()` and `_build_delegation_user_prompt()`
-  - Render `evidence_inventory` type messages with distinct header: `### [Round N] Evidence Inventory`
-  - Test: Snapshot test of think prompt with both research_findings and evidence_inventory messages
-
-- [x] **2d** Add evidence inventory awareness to `truncate_supervision_messages()`
-  - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/_lifecycle.py`
-  - Rule: When truncating for token limits, drop `evidence_inventory` messages from oldest rounds before `research_findings`
-  - Test: Unit test with 20+ supervision messages, verify oldest inventories dropped first
-
----
-
-## Phase 3: Synthesis Raw-Notes Fallback
-
-Depends on: Phase 1 (1c, 1d, 1e) for `state.raw_notes` populated.
-
-- [x] **3a** Inject raw notes as supplementary context in synthesis prompt
-  - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py`
-  - Location: In `_build_synthesis_user_prompt()` or after `_build_synthesis_tail()`
-  - Logic: Estimate remaining token headroom after primary prompt; if >10% window free, append `## Supplementary Research Notes` with truncated raw_notes
-  - Guard: Never exceed 80% of context window with supplementary content
-  - Test: Unit test with mock state containing raw_notes, verify supplementary section appears when headroom exists and is absent when budget is tight
-
-- [x] **3b** Fall back to raw notes when compressed findings are empty
-  - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py`
-  - Location: `_execute_synthesis_async()` near line 240, extend empty-findings check
-  - Logic: If no compressed findings but `state.raw_notes` exist, build synthesis prompt from raw_notes directly
-  - Add `degraded_mode: bool` to synthesis audit event and WorkflowResult metadata
-  - Test: Unit test with empty compressed_findings but populated raw_notes, verify report is generated (not empty report)
-
-- [x] **3c** Pass raw notes to evaluation groundedness scorer
-  - File: `src/foundry_mcp/core/research/workflows/deep_research/evaluation/evaluator.py`
-  - Logic: When computing groundedness dimension, set context = `"\n".join(state.raw_notes)` if available, else fall back to compressed findings
-  - Test: Unit test verifying groundedness evaluator receives raw_notes as context
+- [ ] **3c** Remove unused PLANNING imports from workflow execution
+  - Files: `workflow_execution.py`, any other active-path modules
+  - Check: `grep -r "_execute_planning_async" src/` and remove unused imports
+  - Test: No import errors; existing tests pass
