@@ -182,6 +182,16 @@ class SupervisionPhaseMixin:
             # Build coverage data
             coverage_data = self._build_per_query_coverage(state)
 
+            # --- Coverage delta for think-step focus (Phase 5) ---
+            coverage_delta: Optional[str] = None
+            if state.supervision_round > 0:
+                coverage_delta = self._compute_coverage_delta(
+                    state, coverage_data, min_sources=min_sources,
+                )
+
+            # Store coverage snapshot for use in subsequent rounds
+            self._store_coverage_snapshot(state, coverage_data)
+
             # --- Heuristic early-exit (round > 0) ---
             if state.supervision_round > 0:
                 heuristic = self._assess_coverage_heuristic(state, min_sources)
@@ -247,6 +257,7 @@ class SupervisionPhaseMixin:
                 # --- Two-call path (Phase 6, option 6.4 — default) ---
                 think_output = await self._supervision_think_step(
                     state, coverage_data, timeout,
+                    coverage_delta=coverage_delta,
                 )
 
                 # Inject think into conversation BEFORE delegation so the
@@ -351,8 +362,15 @@ class SupervisionPhaseMixin:
             post_think_output: Optional[str] = None
             if directive_results:
                 post_coverage_data = self._build_per_query_coverage(state)
+                # Compute delta against the pre-execution snapshot for this round
+                post_delta = self._compute_coverage_delta(
+                    state, post_coverage_data, min_sources=min_sources,
+                )
+                # Update the snapshot with post-execution coverage
+                self._store_coverage_snapshot(state, post_coverage_data)
                 post_think_output = await self._supervision_think_step(
                     state, post_coverage_data, timeout,
+                    coverage_delta=post_delta,
                 )
                 # Phase 6: Post-execution assessment flows into conversation
                 # history so the next round's delegation sees what was learned.
@@ -461,6 +479,7 @@ class SupervisionPhaseMixin:
         state: DeepResearchState,
         coverage_data: list[dict[str, Any]],
         timeout: float,
+        coverage_delta: Optional[str] = None,
     ) -> Optional[str]:
         """Run the think step: gap analysis or first-round decomposition strategy.
 
@@ -468,10 +487,15 @@ class SupervisionPhaseMixin:
         research), produces a decomposition strategy. For subsequent rounds,
         produces gap analysis.
 
+        When a ``coverage_delta`` is provided (from ``_compute_coverage_delta``),
+        it is injected into the think prompt to help the LLM focus on what
+        changed since the previous round.
+
         Args:
             state: Current research state
             coverage_data: Per-sub-query coverage data
             timeout: Request timeout
+            coverage_delta: Optional delta summary for rounds > 0
 
         Returns:
             Think output text, or None if the step failed
@@ -481,7 +505,9 @@ class SupervisionPhaseMixin:
             think_prompt = self._build_first_round_think_prompt(state)
             think_system = self._build_first_round_think_system_prompt()
         else:
-            think_prompt = self._build_think_prompt(state, coverage_data)
+            think_prompt = self._build_think_prompt(
+                state, coverage_data, coverage_delta=coverage_delta,
+            )
             think_system = self._build_think_system_prompt()
 
         self._check_cancellation(state)
@@ -1991,10 +2017,129 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
         return coverage
 
+    def _store_coverage_snapshot(
+        self,
+        state: DeepResearchState,
+        coverage_data: list[dict[str, Any]],
+    ) -> None:
+        """Store a coverage snapshot for the current supervision round.
+
+        Snapshots are keyed by round number in ``state.metadata["coverage_snapshots"]``
+        and used by ``_compute_coverage_delta`` to produce round-over-round deltas.
+
+        Each snapshot entry stores the lightweight fields needed for delta
+        comparison: source_count, unique_domains, and status.
+
+        Args:
+            state: Current research state
+            coverage_data: Per-sub-query coverage from ``_build_per_query_coverage``
+        """
+        snapshots = state.metadata.setdefault("coverage_snapshots", {})
+        snapshot: dict[str, dict[str, Any]] = {}
+        for entry in coverage_data:
+            snapshot[entry["sub_query_id"]] = {
+                "query": entry["query"],
+                "source_count": entry["source_count"],
+                "unique_domains": entry["unique_domains"],
+                "status": entry["status"],
+            }
+        # Store with string key (JSON-safe)
+        snapshots[str(state.supervision_round)] = snapshot
+
+    def _compute_coverage_delta(
+        self,
+        state: DeepResearchState,
+        coverage_data: list[dict[str, Any]],
+        min_sources: int = 3,
+    ) -> Optional[str]:
+        """Compute a coverage delta between the current and previous supervision round.
+
+        Compares per-query source counts, domain counts, and status against the
+        snapshot from the previous round.  Produces a compact summary like::
+
+            Coverage delta (round 0 → 1):
+            - query_1: +2 sources, +1 domain (now: 4 sources, 3 domains) — SUFFICIENT
+            - query_2: +0 sources — STILL INSUFFICIENT
+            - query_3 [NEW]: 1 source from this round's directives
+
+        Returns ``None`` if there is no previous snapshot (round 0) or if
+        coverage_snapshots metadata is missing.
+
+        Args:
+            state: Current research state
+            coverage_data: Current per-sub-query coverage
+            min_sources: Minimum sources per query for "SUFFICIENT" label
+
+        Returns:
+            Compact delta summary string, or ``None`` if no previous snapshot exists
+        """
+        snapshots = state.metadata.get("coverage_snapshots", {})
+        prev_round = state.supervision_round - 1
+        prev_snapshot = snapshots.get(str(prev_round))
+        if prev_snapshot is None:
+            return None
+
+        # Build current lookup
+        current_by_id: dict[str, dict[str, Any]] = {}
+        for entry in coverage_data:
+            current_by_id[entry["sub_query_id"]] = entry
+
+        lines: list[str] = [
+            f"Coverage delta (round {prev_round} → {state.supervision_round}):",
+        ]
+
+        # Track IDs we've seen to detect new queries
+        prev_ids = set(prev_snapshot.keys())
+        current_ids = set(current_by_id.keys())
+
+        # Process queries that existed in previous round
+        for sq_id in sorted(prev_ids & current_ids):
+            prev = prev_snapshot[sq_id]
+            curr = current_by_id[sq_id]
+            src_delta = curr["source_count"] - prev["source_count"]
+            dom_delta = curr["unique_domains"] - prev["unique_domains"]
+
+            # Determine sufficiency label
+            if curr["source_count"] >= min_sources:
+                if prev["source_count"] < min_sources:
+                    status_label = "NEWLY SUFFICIENT"
+                else:
+                    status_label = "SUFFICIENT"
+            else:
+                status_label = "STILL INSUFFICIENT"
+
+            src_sign = f"+{src_delta}" if src_delta >= 0 else str(src_delta)
+            dom_sign = f"+{dom_delta}" if dom_delta >= 0 else str(dom_delta)
+
+            query_text = curr.get("query", prev.get("query", sq_id))[:80]
+            lines.append(
+                f"- {query_text}: {src_sign} sources, {dom_sign} domains "
+                f"(now: {curr['source_count']} sources, {curr['unique_domains']} domains) "
+                f"— {status_label}"
+            )
+
+        # Process new queries (not in previous round)
+        for sq_id in sorted(current_ids - prev_ids):
+            curr = current_by_id[sq_id]
+            query_text = curr.get("query", sq_id)[:80]
+            lines.append(
+                f"- {query_text} [NEW]: "
+                f"{curr['source_count']} sources, {curr['unique_domains']} domains"
+            )
+
+        # Process removed queries (in previous but not current — rare)
+        for sq_id in sorted(prev_ids - current_ids):
+            prev = prev_snapshot[sq_id]
+            query_text = prev.get("query", sq_id)[:80]
+            lines.append(f"- {query_text} [REMOVED]")
+
+        return "\n".join(lines)
+
     def _build_think_prompt(
         self,
         state: DeepResearchState,
         coverage_data: list[dict[str, Any]],
+        coverage_delta: Optional[str] = None,
     ) -> str:
         """Build a gap-analysis-only prompt for the think step.
 
@@ -2009,9 +2154,14 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         - What perspectives or information gaps exist
         - What specific types of information would fill those gaps
 
+        When a ``coverage_delta`` is provided (rounds > 0), it is injected
+        before the per-query coverage section so the LLM can focus its analysis
+        on what actually changed since the last round.
+
         Args:
             state: Current research state
             coverage_data: Per-sub-query coverage from _build_per_query_coverage
+            coverage_delta: Optional delta summary from ``_compute_coverage_delta``
 
         Returns:
             Think prompt string for gap analysis
@@ -2028,6 +2178,17 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         parts.append(f"**Iteration:** {state.iteration}/{state.max_iterations}")
         parts.append(f"**Supervision Round:** {state.supervision_round + 1}/{state.max_supervision_rounds}")
         parts.append(f"**Total Sources:** {len(state.sources)}\n")
+
+        # Coverage delta (injected before full coverage for focus)
+        if coverage_delta:
+            parts.append("## What Changed Since Last Round\n")
+            parts.append(coverage_delta)
+            parts.append("")
+            parts.append(
+                "*Focus your analysis on the changes above. Queries marked "
+                "STILL INSUFFICIENT or NEW deserve the most attention.*"
+            )
+            parts.append("")
 
         # Per-sub-query findings and coverage
         if coverage_data:

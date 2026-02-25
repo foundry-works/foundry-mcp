@@ -2810,6 +2810,195 @@ class TestTypeAwareSupervisionTruncation:
 
 
 # ===========================================================================
+# Phase 5: Coverage Delta Injection for Supervisor Think Step
+# ===========================================================================
+
+
+class TestCoverageDelta:
+    """Tests for Phase 5: coverage delta computation and injection.
+
+    Covers PLAN checklist items:
+    - 5.1: _compute_coverage_delta helper
+    - 5.2: Coverage snapshots stored in state.metadata
+    - 5.3: Delta injected into think step user prompt
+    - 5.5: Delta correctly identifies newly sufficient, still-insufficient, new queries
+    - 5.6: Delta injected into think prompt on rounds > 0
+    - 5.7: Coverage snapshots persist across supervision rounds
+    """
+
+    def _make_stub(self):
+        """Create a StubSupervision instance for testing."""
+        return StubSupervision(delegation_model=True)
+
+    def test_compute_delta_identifies_newly_sufficient(self):
+        """5.5: Delta marks queries that became sufficient this round."""
+        stub = self._make_stub()
+        state = _make_state(num_completed=2, sources_per_query=3, supervision_round=1)
+
+        # Simulate previous snapshot where query had only 1 source (insufficient)
+        state.metadata["coverage_snapshots"] = {
+            "0": {
+                "sq-0": {"query": "Sub-query 0: aspect 0 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
+                "sq-1": {"query": "Sub-query 1: aspect 1 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
+            }
+        }
+
+        coverage_data = stub._build_per_query_coverage(state)
+        delta = stub._compute_coverage_delta(state, coverage_data, min_sources=2)
+
+        assert delta is not None, "Delta should be generated for round > 0"
+        assert "NEWLY SUFFICIENT" in delta, "Queries that crossed min_sources threshold should be marked NEWLY SUFFICIENT"
+        assert "round 0" in delta, "Delta should reference previous round"
+        assert "1)" in delta, "Delta should reference current round"
+
+    def test_compute_delta_identifies_still_insufficient(self):
+        """5.5: Delta marks queries that remain insufficient."""
+        stub = self._make_stub()
+        state = _make_state(num_completed=1, sources_per_query=1, supervision_round=1)
+
+        # Previous snapshot had same count — still insufficient
+        state.metadata["coverage_snapshots"] = {
+            "0": {
+                "sq-0": {"query": "Sub-query 0: aspect 0 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
+            }
+        }
+
+        coverage_data = stub._build_per_query_coverage(state)
+        delta = stub._compute_coverage_delta(state, coverage_data, min_sources=3)
+
+        assert delta is not None
+        assert "STILL INSUFFICIENT" in delta, "Queries still below threshold should be marked STILL INSUFFICIENT"
+
+    def test_compute_delta_identifies_new_queries(self):
+        """5.5: Delta marks queries that didn't exist in the previous round."""
+        stub = self._make_stub()
+        state = _make_state(num_completed=2, sources_per_query=2, supervision_round=1)
+
+        # Previous snapshot only had sq-0, so sq-1 is new
+        state.metadata["coverage_snapshots"] = {
+            "0": {
+                "sq-0": {"query": "Sub-query 0: aspect 0 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
+            }
+        }
+
+        coverage_data = stub._build_per_query_coverage(state)
+        delta = stub._compute_coverage_delta(state, coverage_data, min_sources=2)
+
+        assert delta is not None
+        assert "[NEW]" in delta, "Queries not in previous snapshot should be marked [NEW]"
+
+    def test_compute_delta_returns_none_for_round_zero(self):
+        """5.5: No delta on round 0 (no previous snapshot)."""
+        stub = self._make_stub()
+        state = _make_state(num_completed=2, sources_per_query=2, supervision_round=0)
+
+        coverage_data = stub._build_per_query_coverage(state)
+        delta = stub._compute_coverage_delta(state, coverage_data)
+
+        assert delta is None, "Delta should be None when no previous snapshot exists"
+
+    def test_store_coverage_snapshot(self):
+        """5.2: Snapshots are stored in state.metadata keyed by round number."""
+        stub = self._make_stub()
+        state = _make_state(num_completed=2, sources_per_query=2, supervision_round=0)
+
+        coverage_data = stub._build_per_query_coverage(state)
+        stub._store_coverage_snapshot(state, coverage_data)
+
+        snapshots = state.metadata.get("coverage_snapshots", {})
+        assert "0" in snapshots, "Snapshot for round 0 should be stored"
+        assert "sq-0" in snapshots["0"], "Snapshot should contain sub-query IDs"
+        assert snapshots["0"]["sq-0"]["source_count"] == 2
+        assert "query" in snapshots["0"]["sq-0"], "Snapshot should contain query text"
+
+    def test_snapshots_persist_across_rounds(self):
+        """5.7: Multiple rounds' snapshots coexist in state.metadata."""
+        stub = self._make_stub()
+        state = _make_state(num_completed=2, sources_per_query=2, supervision_round=0)
+
+        # Store snapshot for round 0
+        coverage_data = stub._build_per_query_coverage(state)
+        stub._store_coverage_snapshot(state, coverage_data)
+
+        # Simulate round 1 with more sources
+        state.supervision_round = 1
+        state.sources.append(
+            ResearchSource(
+                id="src-extra",
+                url="https://newdomain.com/article",
+                title="Extra source",
+                source_type=SourceType.WEB,
+                quality=SourceQuality.HIGH,
+                sub_query_id="sq-0",
+            )
+        )
+        coverage_data_r1 = stub._build_per_query_coverage(state)
+        stub._store_coverage_snapshot(state, coverage_data_r1)
+
+        snapshots = state.metadata["coverage_snapshots"]
+        assert "0" in snapshots, "Round 0 snapshot should persist"
+        assert "1" in snapshots, "Round 1 snapshot should be added"
+        assert snapshots["0"]["sq-0"]["source_count"] == 2
+        assert snapshots["1"]["sq-0"]["source_count"] == 3, "Round 1 should reflect new source"
+
+    def test_delta_injected_into_think_prompt(self):
+        """5.3/5.6: Coverage delta appears in the think prompt on rounds > 0."""
+        stub = self._make_stub()
+        state = _make_state(num_completed=2, sources_per_query=3, supervision_round=1)
+
+        # Set up previous snapshot
+        state.metadata["coverage_snapshots"] = {
+            "0": {
+                "sq-0": {"query": "Sub-query 0: aspect 0 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
+                "sq-1": {"query": "Sub-query 1: aspect 1 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
+            }
+        }
+
+        coverage_data = stub._build_per_query_coverage(state)
+        delta = stub._compute_coverage_delta(state, coverage_data, min_sources=2)
+
+        # Build the think prompt with delta
+        prompt = stub._build_think_prompt(state, coverage_data, coverage_delta=delta)
+
+        assert "What Changed Since Last Round" in prompt, "Delta section header should appear"
+        assert "Coverage delta" in prompt, "Delta content should be in prompt"
+        assert "STILL INSUFFICIENT" in prompt or "NEWLY SUFFICIENT" in prompt or "SUFFICIENT" in prompt, \
+            "Delta status labels should appear in prompt"
+        assert "Focus your analysis" in prompt, "Guidance to focus on changes should appear"
+
+    def test_think_prompt_without_delta_on_round_zero(self):
+        """5.6: Think prompt omits delta section when delta is None (round 0)."""
+        stub = self._make_stub()
+        state = _make_state(num_completed=2, sources_per_query=2, supervision_round=0)
+
+        coverage_data = stub._build_per_query_coverage(state)
+
+        # No delta for round 0
+        prompt = stub._build_think_prompt(state, coverage_data, coverage_delta=None)
+
+        assert "What Changed Since Last Round" not in prompt, "Delta section should not appear on round 0"
+        assert "Coverage delta" not in prompt
+
+    def test_delta_shows_source_and_domain_changes(self):
+        """5.5: Delta includes numeric source and domain changes."""
+        stub = self._make_stub()
+        state = _make_state(num_completed=1, sources_per_query=3, supervision_round=1)
+
+        state.metadata["coverage_snapshots"] = {
+            "0": {
+                "sq-0": {"query": "Sub-query 0: aspect 0 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
+            }
+        }
+
+        coverage_data = stub._build_per_query_coverage(state)
+        delta = stub._compute_coverage_delta(state, coverage_data, min_sources=2)
+
+        assert delta is not None
+        assert "+2 sources" in delta, "Delta should show source count change"
+        assert "now: 3 sources" in delta, "Delta should show current totals"
+
+
+# ===========================================================================
 # Phase 6: Supervisor think_tool as Conversation
 # ===========================================================================
 

@@ -39,13 +39,13 @@
 - [x] 4.7 Test: verify total token usage stays within model limits after truncation
 
 ## Phase 5 — Coverage Delta Injection for Supervisor Think Step
-- [ ] 5.1 Add `_compute_coverage_delta` helper comparing current vs previous round's per-query coverage
-- [ ] 5.2 Store coverage snapshots in `state.metadata["coverage_snapshots"]` keyed by round number
-- [ ] 5.3 Build compact delta summary string and inject into think step user prompt
-- [ ] 5.4 Modify `_supervision_think_step` to accept and incorporate coverage delta
-- [ ] 5.5 Test: verify delta correctly identifies newly sufficient, still-insufficient, and new queries
-- [ ] 5.6 Test: verify delta is injected into think prompt on rounds > 0
-- [ ] 5.7 Test: verify coverage snapshots persist across supervision rounds
+- [x] 5.1 Add `_compute_coverage_delta` helper comparing current vs previous round's per-query coverage
+- [x] 5.2 Store coverage snapshots in `state.metadata["coverage_snapshots"]` keyed by round number
+- [x] 5.3 Build compact delta summary string and inject into think step user prompt
+- [x] 5.4 Modify `_supervision_think_step` to accept and incorporate coverage delta
+- [x] 5.5 Test: verify delta correctly identifies newly sufficient, still-insufficient, and new queries
+- [x] 5.6 Test: verify delta is injected into think prompt on rounds > 0
+- [x] 5.7 Test: verify coverage snapshots persist across supervision rounds
 
 ## Phase 6 — Confidence-Scored Coverage Heuristic
 - [ ] 6.1 Extend `_assess_coverage_heuristic` with multi-dimensional scoring (source adequacy, domain diversity, query completion rate)
