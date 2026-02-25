@@ -8,11 +8,11 @@
 
 ## Phase 2: Supervisor directive isolation + no-acronym instruction
 
-- [ ] Edit `_build_first_round_delegation_user_prompt()` in `phases/supervision.py` (~line 1842) to add rationale for self-contained directives
-- [ ] Add no-acronym instruction to the decomposition guidelines in `_build_first_round_delegation_system_prompt()` (~line 1788)
-- [ ] Add same no-acronym instruction to the follow-up delegation prompt in `_build_followup_delegation_system_prompt()` (~line 1410 area)
-- [ ] Verify both prompts render correctly
-- [ ] Run tests: `pytest tests/ -k supervision` (if applicable)
+- [x] Edit `_build_first_round_delegation_user_prompt()` in `phases/supervision.py` (~line 1842) to add rationale for self-contained directives
+- [x] Add no-acronym instruction to the decomposition guidelines in `_build_first_round_delegation_system_prompt()` (~line 1788)
+- [x] Add same no-acronym instruction to the follow-up delegation prompt in `_build_followup_delegation_system_prompt()` (~line 1410 area)
+- [x] Verify both prompts render correctly
+- [x] Run tests: `pytest tests/ -k supervision` (if applicable)
 
 ## Phase 3: Language preservation in synthesis and brief
 

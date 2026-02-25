@@ -1409,6 +1409,7 @@ Guidelines:
 - "priority": 1=critical gap (blocks report quality), 2=important (improves comprehensiveness), 3=nice-to-have
 - Do NOT duplicate research already covered — target SPECIFIC gaps
 - Directives should be complementary, not overlapping — each covers a different dimension
+- Do NOT use acronyms or abbreviations in directive text — spell out all terms so researchers search for the correct concepts
 
 Directive Count Scaling:
 - Simple factual gaps (single missing fact or stat): 1-2 directives maximum
@@ -1787,6 +1788,7 @@ Decomposition Guidelines:
 - For COMPLEX multi-dimensional topics: 3-5 directives covering different facets (technical, economic, regulatory, user impact, etc.)
 - Directives should be SPECIFIC enough to yield targeted search results
 - Directives must cover DISTINCT aspects — no two should investigate substantially the same ground
+- Do NOT use acronyms or abbreviations in directive text — spell out all terms so researchers search for the correct concepts
 
 IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
@@ -1840,7 +1842,8 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                 "",
                 "Generate research directives that implement the decomposition "
                 "strategy above. Each directive should be a detailed, self-contained "
-                "research assignment for a specialized researcher.",
+                "research assignment for a specialized researcher — sub-agents cannot "
+                "see other agents' work, so every directive must include full context.",
                 "",
             ])
 
