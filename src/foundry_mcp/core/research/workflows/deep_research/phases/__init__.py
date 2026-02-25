@@ -8,8 +8,8 @@ from .analysis import AnalysisPhaseMixin
 from .brief import BriefPhaseMixin
 from .clarification import ClarificationPhaseMixin
 from .compression import CompressionMixin
-from .gathering import GatheringPhaseMixin
-from .planning import PlanningPhaseMixin
+from .gathering import GatheringPhaseMixin  # DEPRECATED: legacy resume compat only
+from .planning import PlanningPhaseMixin  # DEPRECATED: legacy resume compat only
 from .refinement import RefinementPhaseMixin
 from .supervision import SupervisionPhaseMixin
 from .synthesis import SynthesisPhaseMixin

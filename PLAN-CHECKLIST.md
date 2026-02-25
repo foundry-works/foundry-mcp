@@ -64,19 +64,19 @@ Depends on: None (independent of Phase 1).
 
 Depends on: Phase 2 (GATHERING loop removed from active path).
 
-- [ ] **3a** Add deprecation comments to `DeepResearchPhase` enum
+- [x] **3a** Add deprecation comments to `DeepResearchPhase` enum
   - File: `src/foundry_mcp/core/research/models/deep_research.py`
   - Location: `DeepResearchPhase` enum (~line 644)
   - Add: `# DEPRECATED: legacy-resume-only` comment on GATHERING value
   - Test: Enum still serializes/deserializes correctly (no functional change)
 
-- [ ] **3b** Add `deprecated_phase: true` to GATHERING resume audit event
+- [x] **3b** Add `deprecated_phase: true` to GATHERING resume audit event
   - File: `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py`
   - Location: Legacy resume audit event (lines 206-214)
   - Add: `"deprecated_phase": True` to audit event data dict
   - Test: Verify audit event includes the deprecation flag
 
-- [ ] **3c** Remove unused PLANNING imports from workflow execution
+- [x] **3c** Remove unused PLANNING imports from workflow execution
   - Files: `workflow_execution.py`, any other active-path modules
   - Check: `grep -r "_execute_planning_async" src/` and remove unused imports
   - Test: No import errors; existing tests pass

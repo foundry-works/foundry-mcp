@@ -70,7 +70,7 @@ from foundry_mcp.core.research.workflows.deep_research.phases.gathering import (
     GatheringPhaseMixin,
 )
 
-# Phase mixins
+# Phase mixins (PlanningPhaseMixin: DEPRECATED — kept for legacy resume compat only)
 from foundry_mcp.core.research.workflows.deep_research.phases.planning import (
     PlanningPhaseMixin,
 )
@@ -112,8 +112,8 @@ class DeepResearchWorkflow(
     WorkflowExecutionMixin,
     ClarificationPhaseMixin,
     BriefPhaseMixin,
-    PlanningPhaseMixin,
-    GatheringPhaseMixin,
+    PlanningPhaseMixin,  # DEPRECATED: legacy resume compat only
+    GatheringPhaseMixin,  # DEPRECATED: legacy resume compat only
     TopicResearchMixin,
     SupervisionPhaseMixin,
     AnalysisPhaseMixin,
@@ -132,12 +132,15 @@ class DeepResearchWorkflow(
     - Multi-agent supervisor hooks
     - Session persistence for resume capability
 
-    Workflow Phases:
-    1. PLANNING - Decompose query into sub-queries
-    2. GATHERING - Execute sub-queries in parallel
-    3. ANALYSIS - Extract findings and assess quality
-    4. SYNTHESIS - Generate comprehensive report
-    5. REFINEMENT - Identify gaps and iterate if needed
+    Active Workflow Phases:
+    0. CLARIFICATION - (Optional) Analyze query and ask clarifying questions
+    1. BRIEF - Enrich raw query into a structured research brief
+    2. SUPERVISION - Supervisor-owned decomposition (round 0) and gap-fill (rounds 1+)
+    3. SYNTHESIS - Combine findings into a comprehensive report
+
+    Legacy phases (PLANNING, GATHERING) are retained in the class hierarchy
+    for saved-state resume compatibility only. New workflows proceed directly
+    from BRIEF → SUPERVISION → SYNTHESIS.
     """
 
     # Class-level task registry for background task tracking

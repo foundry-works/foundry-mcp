@@ -644,12 +644,14 @@ class DeepResearchConfig(BaseModel):
 class DeepResearchPhase(str, Enum):
     """Phases of the DEEP_RESEARCH workflow.
 
-    The deep research workflow progresses through five sequential phases:
+    Active workflow progression:
     0. CLARIFICATION - (Optional) Analyze query specificity and ask clarifying questions
     1. BRIEF - Enrich the raw query into a structured research brief
-    2. GATHERING - Execute sub-queries in parallel and collect sources
-    3. SUPERVISION - Assess coverage gaps and generate follow-up queries
-    4. SYNTHESIS - Combine findings into a comprehensive report
+    2. SUPERVISION - Supervisor-owned decomposition (round 0) and gap-fill (rounds 1+)
+    3. SYNTHESIS - Combine findings into a comprehensive report
+
+    GATHERING is retained only for legacy saved-state resume compatibility.
+    New workflows proceed directly from BRIEF → SUPERVISION → SYNTHESIS.
 
     The ordering of these enum values is significant - it defines the
     progression through advance_phase() method.
@@ -657,7 +659,7 @@ class DeepResearchPhase(str, Enum):
 
     CLARIFICATION = "clarification"
     BRIEF = "brief"
-    GATHERING = "gathering"
+    GATHERING = "gathering"  # DEPRECATED: legacy-resume-only; new workflows skip to SUPERVISION
     SUPERVISION = "supervision"
     SYNTHESIS = "synthesis"
 

@@ -174,7 +174,7 @@ class WorkflowExecutionMixin:
                     self._execute_clarification_async(
                         state=state,
                         provider_id=resolve_phase_provider(self.config, "clarification"),
-                        timeout=self.config.get_phase_timeout("planning"),  # Reuse planning timeout
+                        timeout=self.config.get_phase_timeout("clarification"),
                     ),
                 )
                 if err:
@@ -211,6 +211,7 @@ class WorkflowExecutionMixin:
                     data={
                         "phase": "gathering",
                         "message": "Legacy saved state resumed at GATHERING phase",
+                        "deprecated_phase": True,
                     },
                     level="warning",
                 )
