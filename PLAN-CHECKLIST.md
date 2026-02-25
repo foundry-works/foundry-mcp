@@ -2,9 +2,9 @@
 
 ## Phase 1: Research brief — domain-specific source guidance
 
-- [ ] Edit `_build_brief_system_prompt()` in `phases/brief.py` (~line 215) to add domain-specific source examples after the generic "Specify source preferences" instruction
-- [ ] Verify the prompt renders correctly by reading the updated method
-- [ ] Run tests: `pytest tests/ -k brief` (if applicable)
+- [x] Edit `_build_brief_system_prompt()` in `phases/brief.py` (~line 215) to add domain-specific source examples after the generic "Specify source preferences" instruction
+- [x] Verify the prompt renders correctly by reading the updated method
+- [x] Run tests: `pytest tests/ -k brief` (if applicable)
 
 ## Phase 2: Supervisor directive isolation + no-acronym instruction
 
