@@ -3910,3 +3910,329 @@ class TestDelegationScalingHeuristics:
 
         assert "Query complexity: **complex**" in prompt
         assert "3-5 directives" in prompt
+
+
+# ===========================================================================
+# Phase 2 ODR Alignment: Supervisor Context Preservation
+# ===========================================================================
+
+
+class TestBuildEvidenceInventory:
+    """Tests for _build_evidence_inventory() helper (checklist 2b).
+
+    Verifies compact evidence summary output format, character cap,
+    and handling of edge cases (no sources, no raw notes, etc.).
+    """
+
+    def test_basic_inventory_with_sources(self):
+        """Inventory lists sources with URLs, titles, and domain count."""
+        stub = StubSupervision()
+        state = _make_state(num_completed=0)
+        # Add sources manually
+        for i in range(3):
+            state.sources.append(
+                ResearchSource(
+                    id=f"inv-src-{i}",
+                    url=f"https://domain{i}.com/page",
+                    title=f"Article {i}",
+                    source_type=SourceType.WEB,
+                    quality=SourceQuality.HIGH,
+                )
+            )
+
+        result = TopicResearchResult(
+            sub_query_id="sq-inv",
+            source_ids=["inv-src-0", "inv-src-1", "inv-src-2"],
+            sources_found=3,
+        )
+
+        inventory = stub._build_evidence_inventory(result, state)
+
+        assert inventory is not None
+        assert "Sources: 3 found" in inventory
+        assert "3 unique domains" in inventory
+        assert '"Article 0"' in inventory
+        assert "domain0.com" in inventory
+
+    def test_inventory_with_raw_notes_data_points(self):
+        """Inventory includes data point estimate from raw notes."""
+        stub = StubSupervision()
+        state = _make_state(num_completed=0)
+        state.sources.append(
+            ResearchSource(
+                id="inv-src-x",
+                url="https://example.com/data",
+                title="Data Source",
+                source_type=SourceType.WEB,
+                quality=SourceQuality.MEDIUM,
+            )
+        )
+
+        result = TopicResearchResult(
+            sub_query_id="sq-inv-2",
+            source_ids=["inv-src-x"],
+            sources_found=1,
+            raw_notes="Line 1\nLine 2\nLine 3\n\nLine 5\n",
+        )
+
+        inventory = stub._build_evidence_inventory(result, state)
+
+        assert inventory is not None
+        assert "Key data points:" in inventory
+
+    def test_inventory_respects_char_cap(self):
+        """Inventory output does not exceed max_chars."""
+        stub = StubSupervision()
+        state = _make_state(num_completed=0)
+        # Add many sources with long titles
+        for i in range(20):
+            state.sources.append(
+                ResearchSource(
+                    id=f"inv-long-{i}",
+                    url=f"https://example{i}.com/very-long-article-path",
+                    title=f"Very Long Article Title Number {i} With Extra Words",
+                    source_type=SourceType.WEB,
+                    quality=SourceQuality.MEDIUM,
+                )
+            )
+
+        result = TopicResearchResult(
+            sub_query_id="sq-inv-3",
+            source_ids=[f"inv-long-{i}" for i in range(20)],
+            sources_found=20,
+        )
+
+        inventory = stub._build_evidence_inventory(result, state, max_chars=200)
+
+        assert inventory is not None
+        assert len(inventory) <= 200
+
+    def test_inventory_returns_none_when_no_evidence(self):
+        """Returns None when result has neither source_ids nor raw_notes."""
+        stub = StubSupervision()
+        state = _make_state(num_completed=0)
+
+        result = TopicResearchResult(
+            sub_query_id="sq-empty",
+            source_ids=[],
+            sources_found=0,
+        )
+
+        inventory = stub._build_evidence_inventory(result, state)
+        assert inventory is None
+
+    def test_inventory_with_raw_notes_only(self):
+        """Inventory works with raw_notes but no matching sources."""
+        stub = StubSupervision()
+        state = _make_state(num_completed=0)
+
+        result = TopicResearchResult(
+            sub_query_id="sq-notes-only",
+            source_ids=["nonexistent-src"],
+            sources_found=0,
+            raw_notes="Some raw research data\nAnother line\nThird line",
+        )
+
+        inventory = stub._build_evidence_inventory(result, state)
+
+        # Should still produce an inventory from the raw notes data points
+        # even though source_ids don't match any sources in state
+        assert inventory is not None
+        assert "Sources: 0 found" in inventory
+
+
+class TestEvidenceInventoryInPrompts:
+    """Tests for evidence inventory rendering in supervisor prompts (checklist 2c).
+
+    Verifies that evidence_inventory messages are rendered with distinct
+    headers in both the combined think+delegate and delegation prompts.
+    """
+
+    def test_combined_prompt_renders_evidence_inventory(self):
+        """Evidence inventory messages render with distinct header in combined prompt."""
+        stub = StubSupervision()
+        state = _make_state(num_completed=2, supervision_round=1)
+        state.supervision_messages = [
+            {
+                "role": "assistant", "type": "think", "round": 0,
+                "content": "Gap analysis text",
+            },
+            {
+                "role": "tool_result", "type": "research_findings", "round": 0,
+                "directive_id": "dir-1", "content": "Compressed findings",
+            },
+            {
+                "role": "tool_result", "type": "evidence_inventory", "round": 0,
+                "directive_id": "dir-1", "content": "Sources: 3 found, 2 unique domains",
+            },
+        ]
+
+        coverage = stub._build_per_query_coverage(state)
+        prompt = stub._build_combined_think_delegate_user_prompt(state, coverage)
+
+        assert "### [Round 0] Evidence Inventory (directive dir-1)" in prompt
+        assert "### [Round 0] Research Findings (directive dir-1)" in prompt
+        assert "Sources: 3 found, 2 unique domains" in prompt
+
+    def test_delegation_prompt_renders_evidence_inventory(self):
+        """Evidence inventory messages render with distinct header in delegation prompt."""
+        stub = StubSupervision()
+        state = _make_state(num_completed=2, supervision_round=1)
+        state.supervision_messages = [
+            {
+                "role": "tool_result", "type": "evidence_inventory", "round": 0,
+                "directive_id": "dir-abc", "content": "Sources: 5 found, 3 unique domains",
+            },
+            {
+                "role": "tool_result", "type": "research_findings", "round": 0,
+                "directive_id": "dir-abc", "content": "Detailed compressed findings here",
+            },
+        ]
+
+        coverage = stub._build_per_query_coverage(state)
+        prompt = stub._build_delegation_user_prompt(state, coverage)
+
+        assert "### [Round 0] Evidence Inventory (directive dir-abc)" in prompt
+        assert "### [Round 0] Research Findings (directive dir-abc)" in prompt
+
+    def test_prompt_without_evidence_inventory_unchanged(self):
+        """Prompts without evidence_inventory messages render as before."""
+        stub = StubSupervision()
+        state = _make_state(num_completed=2, supervision_round=1)
+        state.supervision_messages = [
+            {
+                "role": "tool_result", "type": "research_findings", "round": 0,
+                "directive_id": "dir-old", "content": "Old findings",
+            },
+        ]
+
+        coverage = stub._build_per_query_coverage(state)
+        prompt = stub._build_combined_think_delegate_user_prompt(state, coverage)
+
+        assert "Evidence Inventory" not in prompt
+        assert "### [Round 0] Research Findings (directive dir-old)" in prompt
+
+
+class TestEvidenceInventoryTruncation:
+    """Tests for evidence inventory truncation awareness (checklist 2d).
+
+    Verifies that evidence_inventory messages from oldest rounds are
+    dropped before research_findings messages during truncation.
+    """
+
+    def test_evidence_inventories_dropped_before_findings(self):
+        """Evidence inventories from oldest rounds dropped before research_findings."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            truncate_supervision_messages,
+        )
+
+        messages = []
+        # Round 0: findings + evidence inventory
+        messages.append({
+            "role": "tool_result", "type": "research_findings", "round": 0,
+            "directive_id": "d-0", "content": "F" * 30_000,
+        })
+        messages.append({
+            "role": "tool_result", "type": "evidence_inventory", "round": 0,
+            "directive_id": "d-0", "content": "E" * 10_000,
+        })
+        # Round 1: findings + evidence inventory
+        messages.append({
+            "role": "tool_result", "type": "research_findings", "round": 1,
+            "directive_id": "d-1", "content": "G" * 30_000,
+        })
+        messages.append({
+            "role": "tool_result", "type": "evidence_inventory", "round": 1,
+            "directive_id": "d-1", "content": "H" * 10_000,
+        })
+        # Round 2: findings + evidence inventory (most recent)
+        messages.append({
+            "role": "tool_result", "type": "research_findings", "round": 2,
+            "directive_id": "d-2", "content": "I" * 30_000,
+        })
+        messages.append({
+            "role": "tool_result", "type": "evidence_inventory", "round": 2,
+            "directive_id": "d-2", "content": "J" * 10_000,
+        })
+
+        # Budget that forces some removal but not all
+        # 40% findings budget of 20k tokens * 4 chars = 32k chars
+        small_limits = {"test-model": 20_000}
+        result = truncate_supervision_messages(
+            messages, model="test-model", token_limits=small_limits,
+        )
+
+        # Evidence inventories from oldest round should be removed first
+
+        # Check: if any evidence_inventory was removed, it should be from
+        # the oldest round(s) before any research_findings was removed
+        removed_types = set()
+        for msg in messages:
+            found = any(
+                m.get("type") == msg.get("type")
+                and m.get("round") == msg.get("round")
+                and m.get("directive_id") == msg.get("directive_id")
+                for m in result
+            )
+            if not found:
+                removed_types.add((msg.get("type"), msg.get("round")))
+
+        # If both an inventory and findings from the same round were
+        # candidates for removal, the inventory should have been removed first.
+        # Verify: no research_findings removed from a round where
+        # evidence_inventory was kept.
+        for msg_type, msg_round in removed_types:
+            if msg_type == "research_findings":
+                # The inventory for this round should also be removed
+                # (it should have been dropped first)
+                inv_kept = any(
+                    m.get("type") == "evidence_inventory" and m.get("round") == msg_round
+                    for m in result
+                )
+                assert not inv_kept, (
+                    f"Research findings from round {msg_round} were removed but "
+                    f"evidence_inventory from the same round was kept"
+                )
+
+    def test_evidence_inventory_type_detected(self):
+        """_is_evidence_inventory correctly identifies evidence_inventory messages."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _is_evidence_inventory,
+        )
+
+        assert _is_evidence_inventory({"type": "evidence_inventory", "role": "tool_result"})
+        assert not _is_evidence_inventory({"type": "research_findings", "role": "tool_result"})
+        assert not _is_evidence_inventory({"type": "think", "role": "assistant"})
+        assert not _is_evidence_inventory({})
+
+    def test_truncation_with_mixed_messages_preserves_recent(self):
+        """Truncation with all message types preserves most recent round."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            truncate_supervision_messages,
+        )
+
+        messages = []
+        for r in range(4):
+            messages.append({
+                "role": "assistant", "type": "think", "round": r,
+                "content": f"Think {r}: " + "x" * 20_000,
+            })
+            messages.append({
+                "role": "tool_result", "type": "research_findings", "round": r,
+                "directive_id": f"d-{r}",
+                "content": f"Findings {r}: " + "y" * 20_000,
+            })
+            messages.append({
+                "role": "tool_result", "type": "evidence_inventory", "round": r,
+                "directive_id": f"d-{r}",
+                "content": f"Inventory {r}: " + "z" * 5_000,
+            })
+
+        tiny_limits = {"test-model": 10_000}
+        result = truncate_supervision_messages(
+            messages, model="test-model", token_limits=tiny_limits,
+        )
+
+        remaining_rounds = {m.get("round") for m in result}
+        # Most recent round (3) should survive
+        assert 3 in remaining_rounds

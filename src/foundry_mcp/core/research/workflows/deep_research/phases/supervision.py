@@ -364,6 +364,21 @@ class SupervisionPhaseMixin:
                 if result.raw_notes:
                     state.raw_notes.append(result.raw_notes)
 
+            # --- Append evidence inventories (Phase 2 ODR alignment) ---
+            # Gives the supervisor a compact evidence reference alongside
+            # compressed findings, preventing re-investigation of covered topics.
+            for result in directive_results:
+                if result.raw_notes or result.source_ids:
+                    inventory = self._build_evidence_inventory(result, state)
+                    if inventory:
+                        state.supervision_messages.append({
+                            "role": "tool_result",
+                            "type": "evidence_inventory",
+                            "round": state.supervision_round,
+                            "directive_id": result.sub_query_id,
+                            "content": inventory,
+                        })
+
             # --- Step 4: Think-after-results (assess what was learned) ---
             post_think_output: Optional[str] = None
             if directive_results:
@@ -811,6 +826,11 @@ Guidelines:
                     parts.append(f"### [Round {msg_round}] Your Delegation Response")
                     parts.append(msg_content)
                     parts.append("")
+                elif msg.get("role") == "tool_result" and msg_type == "evidence_inventory":
+                    directive_id = msg.get("directive_id", "unknown")
+                    parts.append(f"### [Round {msg_round}] Evidence Inventory (directive {directive_id})")
+                    parts.append(msg_content)
+                    parts.append("")
                 elif msg.get("role") == "tool_result":
                     directive_id = msg.get("directive_id", "unknown")
                     parts.append(f"### [Round {msg_round}] Research Findings (directive {directive_id})")
@@ -1203,6 +1223,107 @@ Guidelines:
         return "\n".join(parts) if parts else None
 
     # ------------------------------------------------------------------
+    # Evidence inventory for supervisor context preservation
+    # ------------------------------------------------------------------
+
+    # Maximum character length for a single evidence inventory message.
+    # Keeps token overhead bounded (~125 tokens at 4 chars/token).
+    _EVIDENCE_INVENTORY_MAX_CHARS: int = 500
+
+    @staticmethod
+    def _build_evidence_inventory(
+        topic_result: TopicResearchResult,
+        state: DeepResearchState,
+        max_chars: int = _EVIDENCE_INVENTORY_MAX_CHARS,
+    ) -> Optional[str]:
+        """Build a compact evidence inventory from a directive result.
+
+        Produces a structured, short summary listing sources found (URL +
+        title + topic coverage), key data point count, and topics addressed.
+        This gives the supervisor specific evidence to reason about without
+        the full token cost of raw notes or compressed findings.
+
+        Matches the ODR pattern where the supervisor sees both compressed
+        notes and a separate evidence reference for each researcher's output.
+
+        Args:
+            topic_result: The directive's topic research result (with
+                ``source_ids`` and optionally ``raw_notes``).
+            state: Current research state (for source metadata lookup).
+            max_chars: Maximum character length for the inventory
+                (default 500).
+
+        Returns:
+            Compact inventory string, or ``None`` if no evidence exists.
+        """
+        if not topic_result.source_ids and not topic_result.raw_notes:
+            return None
+
+        # Gather source metadata
+        source_map = {s.id: s for s in state.sources}
+        topic_sources = [
+            source_map[sid] for sid in topic_result.source_ids
+            if sid in source_map
+        ]
+
+        if not topic_sources and not topic_result.raw_notes:
+            return None
+
+        parts: list[str] = []
+
+        # Source summary line
+        unique_domains: set[str] = set()
+        for src in topic_sources:
+            if src.url:
+                try:
+                    domain = urlparse(src.url).netloc
+                    if domain:
+                        unique_domains.add(domain)
+                except Exception:
+                    pass
+
+        parts.append(
+            f"Sources: {len(topic_sources)} found, "
+            f"{len(unique_domains)} unique domain{'s' if len(unique_domains) != 1 else ''}"
+        )
+
+        # Per-source entries (compact: number + title + domain)
+        remaining = max_chars - len(parts[0]) - 2  # reserve for newlines
+        for idx, src in enumerate(topic_sources, 1):
+            domain = ""
+            if src.url:
+                try:
+                    domain = urlparse(src.url).netloc
+                except Exception:
+                    pass
+            title = (src.title or "Untitled")[:60]
+            entry = f"- [{idx}] \"{title}\""
+            if domain:
+                entry += f" ({domain})"
+            if len(entry) + 1 > remaining:
+                break
+            parts.append(entry)
+            remaining -= len(entry) + 1
+
+        # Data point estimate from raw notes (count paragraphs as proxy)
+        if topic_result.raw_notes:
+            # Count non-empty lines as a rough data-point proxy
+            lines = [
+                ln for ln in topic_result.raw_notes.split("\n")
+                if ln.strip()
+            ]
+            data_points = min(len(lines), 999)
+            dp_line = f"Key data points: ~{data_points} extracted"
+            if len(dp_line) + 1 <= remaining:
+                parts.append(dp_line)
+                remaining -= len(dp_line) + 1
+
+        result = "\n".join(parts)
+        if len(result) > max_chars:
+            result = result[:max_chars - 3] + "..."
+        return result
+
+    # ------------------------------------------------------------------
     # Query complexity classification
     # ------------------------------------------------------------------
 
@@ -1351,6 +1472,11 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                     parts.append("")
                 elif msg.get("role") == "assistant" and msg_type == "delegation":
                     parts.append(f"### [Round {msg_round}] Your Delegation Response")
+                    parts.append(msg_content)
+                    parts.append("")
+                elif msg.get("role") == "tool_result" and msg_type == "evidence_inventory":
+                    directive_id = msg.get("directive_id", "unknown")
+                    parts.append(f"### [Round {msg_round}] Evidence Inventory (directive {directive_id})")
                     parts.append(msg_content)
                     parts.append("")
                 elif msg.get("role") == "tool_result":

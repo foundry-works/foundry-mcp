@@ -150,6 +150,16 @@ def _is_findings_message(msg: dict[str, Any]) -> bool:
     return msg.get("role") == "tool_result" or msg.get("type") == "research_findings"
 
 
+def _is_evidence_inventory(msg: dict[str, Any]) -> bool:
+    """Return True if the message is an evidence inventory (lower-priority findings).
+
+    Evidence inventories are compact source listings appended alongside
+    compressed research findings.  During truncation they are dropped before
+    regular research_findings messages from the same round.
+    """
+    return msg.get("type") == "evidence_inventory"
+
+
 def _truncate_findings_body(content: str) -> str:
     """Truncate a findings message body, preserving the header/summary portion.
 
@@ -260,18 +270,36 @@ def truncate_supervision_messages(
                 findings_chars -= saved
                 body_truncated[idx] = truncated_content
 
-    # --- Phase 2: Drop oldest findings messages if still over budget ---
+    # --- Phase 2: Drop evidence inventories from oldest rounds first ---
+    # Evidence inventories are compact and lower-priority than research
+    # findings.  Dropping them first preserves the detailed compressed
+    # findings that the supervisor relies on for gap analysis.
     findings_to_remove: set[int] = set()
     if findings_chars > findings_budget:
-        findings_by_round = sorted(findings_indices, key=lambda i: messages[i].get("round", 0))
-        for idx in findings_by_round:
+        inventory_indices = sorted(
+            (i for i in findings_indices if _is_evidence_inventory(messages[i])),
+            key=lambda i: messages[i].get("round", 0),
+        )
+        for idx in inventory_indices:
             if findings_chars <= findings_budget:
                 break
             content_len = len(body_truncated.get(idx, _msg_content(messages[idx])))
             findings_chars -= content_len
             findings_to_remove.add(idx)
 
-    # --- Phase 3: Drop oldest reasoning messages if over budget ---
+    # --- Phase 3: Drop oldest remaining findings messages if still over budget ---
+    if findings_chars > findings_budget:
+        findings_by_round = sorted(findings_indices, key=lambda i: messages[i].get("round", 0))
+        for idx in findings_by_round:
+            if findings_chars <= findings_budget:
+                break
+            if idx in findings_to_remove:
+                continue  # Already removed in phase 2
+            content_len = len(body_truncated.get(idx, _msg_content(messages[idx])))
+            findings_chars -= content_len
+            findings_to_remove.add(idx)
+
+    # --- Phase 4: Drop oldest reasoning messages if over budget ---
     # Protected think messages are never removed.
     reasoning_to_remove: set[int] = set()
     if reasoning_chars > reasoning_budget:
@@ -284,7 +312,7 @@ def truncate_supervision_messages(
             reasoning_chars -= len(_msg_content(messages[idx]))
             reasoning_to_remove.add(idx)
 
-    # --- Phase 4: Rebalance — if one bucket is under budget, donate surplus ---
+    # --- Phase 5: Rebalance — if one bucket is under budget, donate surplus ---
     # If reasoning is still over after phase 3 (due to protected thinks),
     # try to steal from unused findings budget, and vice versa.
     reasoning_remaining = sum(

@@ -43,26 +43,26 @@ preservation, and synthesis fallback paths.
 
 Depends on: Phase 1 (1a, 1b) for `raw_notes` on `TopicResearchResult`.
 
-- [ ] **2a** Append evidence inventory messages to `supervision_messages`
+- [x] **2a** Append evidence inventory messages to `supervision_messages`
   - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
   - Location: After compressed findings append (line ~360), add `evidence_inventory` message
   - Message format: `{"role": "tool_result", "type": "evidence_inventory", "round": N, "directive_id": "...", "content": "..."}`
   - Test: Unit test verifying evidence_inventory messages appear in supervision_messages after directive execution
 
-- [ ] **2b** Implement `_build_evidence_inventory()` helper
+- [x] **2b** Implement `_build_evidence_inventory()` helper
   - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
   - Input: `TopicResearchResult` + `DeepResearchState` (for source metadata lookup)
   - Output: Compact string listing sources (URL + title + coverage), data point count, topics addressed
   - Cap: 500 chars max per inventory
   - Test: Unit test with mock TopicResearchResult containing 5 sources, verify output format and char cap
 
-- [ ] **2c** Render evidence inventories in supervisor think prompt
+- [x] **2c** Render evidence inventories in supervisor think prompt
   - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
-  - Update: `_build_think_prompt()` and `_build_combined_think_delegate_user_prompt()`
+  - Update: `_build_combined_think_delegate_user_prompt()` and `_build_delegation_user_prompt()`
   - Render `evidence_inventory` type messages with distinct header: `### [Round N] Evidence Inventory`
   - Test: Snapshot test of think prompt with both research_findings and evidence_inventory messages
 
-- [ ] **2d** Add evidence inventory awareness to `truncate_supervision_messages()`
+- [x] **2d** Add evidence inventory awareness to `truncate_supervision_messages()`
   - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/_lifecycle.py`
   - Rule: When truncating for token limits, drop `evidence_inventory` messages from oldest rounds before `research_findings`
   - Test: Unit test with 20+ supervision messages, verify oldest inventories dropped first
