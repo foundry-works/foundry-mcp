@@ -217,9 +217,7 @@ class BriefPhaseMixin:
             "work, government datasets, original research papers) over "
             "aggregators or secondary commentary.\n"
             "4. **Define scope boundaries**: State what the research should "
-            "include AND what it should exclude to prevent scope creep.\n"
-            "5. **Preserve language**: Write the brief in the same language "
-            "as the user's query.\n\n"
+            "include AND what it should exclude to prevent scope creep.\n\n"
             "Output your response as a JSON object with this schema:\n"
             "{\n"
             '  "research_brief": "Complete brief as one or two well-structured paragraphs",\n'

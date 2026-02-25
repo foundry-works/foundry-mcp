@@ -354,9 +354,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             "note them as open questions the research should address.",
             "3. Bias toward primary and official sources (specifications, documentation, "
             "peer-reviewed work, government datasets) over aggregators or secondary commentary.",
-            "4. Preserve the user's language — write the brief in the same language "
-            "as the query below.",
-            "5. Output ONLY the research brief paragraph, nothing else.\n",
+            "4. Output ONLY the research brief paragraph, nothing else.\n",
             f"User query:\n{state.original_query}",
         ]
 

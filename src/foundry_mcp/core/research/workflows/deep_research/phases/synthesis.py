@@ -605,10 +605,6 @@ class SynthesisPhaseMixin:
 
         return f"""You are a research synthesizer. Your task is to create a comprehensive, well-structured research report from analyzed findings.
 
-## Language
-
-Detect the language of the user's research query. Write the entire report in that same language. If the query is in English, write in English. If the query is in Chinese, write entirely in Chinese. Match the user's language exactly.
-
 ## Report Structure
 
 Select a report structure suited to the query type. A structural hint is provided in the user prompt.
@@ -643,9 +639,7 @@ Include analysis of Conflicting Information and Limitations where they exist, bu
 - Distinguish between high-confidence findings (well-supported) and lower-confidence insights.
 - Citations are extremely important. Pay careful attention to getting these right. Users will often use citations to find more information on specific points.
 
-IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary.
-
-REMEMBER: The research and brief may be in English, but the final report MUST be written in the same language as the user's original query. This is critical — the user will only understand the answer if it matches their input language."""
+IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
 
     def _build_synthesis_user_prompt(
         self,

@@ -142,30 +142,12 @@ class TestClassifyQueryType:
 
 
 # =============================================================================
-# Tests: Language directive in system prompt (3.1, 3.6)
+# Tests: Prompt building with non-English queries (3.1, 3.6)
 # =============================================================================
 
 
-class TestLanguageDirective:
-    """Tests for language matching in the synthesis system prompt."""
-
-    def test_system_prompt_contains_language_directive(self) -> None:
-        """System prompt instructs the LLM to detect and match query language."""
-        stub = StubSynthesis()
-        state = _make_state()
-        prompt = stub._build_synthesis_system_prompt(state)
-
-        assert "language" in prompt.lower()
-        assert "same language" in prompt.lower()
-
-    def test_language_directive_mentions_non_english_example(self) -> None:
-        """System prompt mentions a non-English language as example."""
-        stub = StubSynthesis()
-        state = _make_state()
-        prompt = stub._build_synthesis_system_prompt(state)
-
-        # Should mention at least one non-English language as an example
-        assert "Chinese" in prompt or "chinese" in prompt
+class TestNonEnglishPromptBuilding:
+    """Tests that prompt building works correctly with non-English queries."""
 
     def test_non_english_query_still_builds_prompt(self) -> None:
         """Non-English query successfully builds system and user prompts."""
@@ -475,25 +457,6 @@ class TestSynthesisPromptAlignment:
         assert "more information" in prompt.lower()
 
     # -- 3.5: Language matching appears at least twice --
-
-    def test_language_matching_appears_twice(self) -> None:
-        """Language matching instruction appears at least twice in system prompt."""
-        prompt = self._get_system_prompt()
-        prompt_lower = prompt.lower()
-        # Count distinct language-matching instructions
-        # First: "same language" in the Language section
-        # Second: "REMEMBER" block at the end
-        occurrences = prompt_lower.count("same language")
-        assert occurrences >= 2, f"Expected 'same language' at least 2 times, found {occurrences}"
-
-    def test_language_matching_critical_reminder(self) -> None:
-        """System prompt has a critical/emphatic language-matching reminder at the end."""
-        prompt = self._get_system_prompt()
-        # The REMEMBER block should be near the end
-        assert "REMEMBER" in prompt
-        remember_idx = prompt.index("REMEMBER")
-        # Should be in the last 25% of the prompt
-        assert remember_idx > len(prompt) * 0.5
 
     # -- 3.6: Per-section writing rules --
 
