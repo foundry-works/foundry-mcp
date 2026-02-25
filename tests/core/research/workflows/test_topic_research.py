@@ -1285,13 +1285,12 @@ class TestForcedReflection:
     """Tests for Phase 2 forced reflection enforcement."""
 
     def test_prompt_contains_reflection_protocol(self) -> None:
-        """System prompt includes the CRITICAL Reflection Protocol section."""
+        """System prompt includes reflection guidance in think tool description."""
         prompt = _build_researcher_system_prompt(
             budget_total=5, budget_remaining=5, extract_enabled=True
         )
-        assert "CRITICAL: Reflection Protocol" in prompt
-        assert "search → think → search → think" in prompt
-        assert "MUST call think after every web_search" in prompt
+        assert "call think as your next action before issuing another search" in prompt
+        assert "first turn only, you may issue multiple web_search" in prompt
 
     @pytest.mark.asyncio
     async def test_search_think_search_pattern(self) -> None:

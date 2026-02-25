@@ -179,25 +179,12 @@ Only available when extraction is enabled. If unavailable, focus on web_search.
 Pause and reflect on your research progress. Assess what you've found, identify gaps, and plan your next steps.
 Arguments: {{"reasoning": "your analysis of findings and gaps"}}
 Returns: Acknowledgment. Does NOT count against your tool call budget.
-CRITICAL: You MUST call think after every web_search or extract_content before doing anything else.
+After each web_search or extract_content, call think as your next action before issuing another search. On your first turn only, you may issue multiple web_search calls for initial broad coverage.
 
 ### research_complete
 Signal that your research is complete and summarize your findings.
 Arguments: {{"summary": "comprehensive summary addressing the research question"}}
 Returns: Confirmation. Call this when you are confident your findings address the research question.
-
-## CRITICAL: Reflection Protocol
-
-After EVERY `web_search` or `extract_content` call, you MUST call `think` as your very next action before issuing another search or extraction.
-
-Rules:
-1. After any `web_search` or `extract_content`, your next response MUST contain ONLY a `think` call.
-2. Do NOT call `think` in the same turn as `web_search` or `extract_content`.
-3. Exception: On your FIRST turn only, you may issue multiple `web_search` calls for initial broad coverage.
-
-Correct pattern: search → think → search → think → ... → research_complete
-Incorrect: search → search (missing reflection between searches)
-Incorrect: search + think in same turn (think must be a separate turn)
 
 ## Response Format
 
@@ -211,12 +198,11 @@ Respond with a JSON object containing your tool calls for this turn:
 }}
 ```
 
-Generally include one tool call per turn. On your first turn, you may include multiple `web_search` calls for initial broad coverage.
+Generally include one tool call per turn.
 
 ## Research Strategy
 
 - Start with broader searches, then narrow based on what you find.
-- You MUST use think after every search to assess your findings before deciding next steps.
 - Prefer primary sources, official documentation, and peer-reviewed content.
 - Seek diverse perspectives — multiple domains and viewpoints.
 - Simple factual queries: 2-3 searches are usually sufficient.
