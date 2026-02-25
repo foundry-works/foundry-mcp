@@ -75,6 +75,8 @@ def _make_valid_eval_response(scores: dict[str, int] | None = None) -> str:
             "completeness": 3,
             "groundedness": 4,
             "structure": 5,
+            "practical_value": 4,
+            "balance": 3,
         }
     response = {
         "scores": {
@@ -189,12 +191,13 @@ class TestParseEvaluationResponse:
         result = _parse_evaluation_response(content)
 
         assert isinstance(result, EvaluationResult)
-        assert len(result.dimension_scores) == 6
+        assert len(result.dimension_scores) == 8
         assert 0.0 <= result.composite_score <= 1.0
 
     def test_extracts_all_dimension_scores(self):
         scores = {"depth": 5, "source_quality": 4, "analytical_rigor": 3,
-                  "completeness": 2, "groundedness": 1, "structure": 4}
+                  "completeness": 2, "groundedness": 1, "structure": 4,
+                  "practical_value": 3, "balance": 4}
         content = _make_valid_eval_response(scores)
         result = _parse_evaluation_response(content)
 
@@ -209,7 +212,8 @@ class TestParseEvaluationResponse:
     def test_dimensions_produce_independent_scores(self):
         """Different raw scores should produce different normalized values."""
         scores = {"depth": 5, "source_quality": 1, "analytical_rigor": 3,
-                  "completeness": 4, "groundedness": 2, "structure": 5}
+                  "completeness": 4, "groundedness": 2, "structure": 5,
+                  "practical_value": 3, "balance": 4}
         content = _make_valid_eval_response(scores)
         result = _parse_evaluation_response(content)
 
@@ -237,12 +241,12 @@ class TestParseEvaluationResponse:
     def test_handles_json_in_code_block(self):
         content = '```json\n' + _make_valid_eval_response() + '\n```'
         result = _parse_evaluation_response(content)
-        assert len(result.dimension_scores) == 6
+        assert len(result.dimension_scores) == 8
 
     def test_handles_json_with_surrounding_text(self):
         content = "Here is my evaluation:\n" + _make_valid_eval_response() + "\nThat's my assessment."
         result = _parse_evaluation_response(content)
-        assert len(result.dimension_scores) == 6
+        assert len(result.dimension_scores) == 8
 
     def test_no_json_raises_value_error(self):
         with pytest.raises(ValueError, match="No JSON"):
@@ -308,7 +312,7 @@ class TestEvaluateReport:
         )
 
         assert isinstance(result, EvaluationResult)
-        assert len(result.dimension_scores) == 6
+        assert len(result.dimension_scores) == 8
         assert 0.0 <= result.composite_score <= 1.0
 
     @pytest.mark.asyncio
@@ -329,7 +333,7 @@ class TestEvaluateReport:
         assert "evaluation" in state.metadata
         eval_data = state.metadata["evaluation"]
         assert eval_data["composite_score"] == result.composite_score
-        assert len(eval_data["dimension_scores"]) == 6
+        assert len(eval_data["dimension_scores"]) == 8
 
     @pytest.mark.asyncio
     async def test_persists_state(self):
@@ -631,7 +635,8 @@ class TestQualityDifferentiation:
 
     def test_variance_nonzero_for_varied_scores(self):
         scores = {"depth": 5, "source_quality": 1, "analytical_rigor": 3,
-                  "completeness": 4, "groundedness": 2, "structure": 5}
+                  "completeness": 4, "groundedness": 2, "structure": 5,
+                  "practical_value": 3, "balance": 4}
         content = _make_valid_eval_response(scores)
         result = _parse_evaluation_response(content)
         assert result.score_variance > 0.0

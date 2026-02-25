@@ -5,18 +5,20 @@ from __future__ import annotations
 from foundry_mcp.core.research.evaluation.dimensions import (
     DIMENSION_BY_NAME,
     DIMENSIONS,
-    Dimension,
 )
 
 
 class TestDimensionDefinitions:
     """Verify dimension metadata and completeness."""
 
-    def test_six_dimensions_defined(self):
-        assert len(DIMENSIONS) == 6
+    def test_eight_dimensions_defined(self):
+        assert len(DIMENSIONS) == 8
 
     def test_dimension_names(self):
-        expected = {"depth", "source_quality", "analytical_rigor", "completeness", "groundedness", "structure"}
+        expected = {
+            "depth", "source_quality", "analytical_rigor", "completeness",
+            "groundedness", "structure", "practical_value", "balance",
+        }
         actual = {d.name for d in DIMENSIONS}
         assert actual == expected
 
@@ -36,7 +38,7 @@ class TestDimensionDefinitions:
             assert dim.description, f"Dimension {dim.name} has empty description"
 
     def test_dimension_by_name_lookup(self):
-        assert len(DIMENSION_BY_NAME) == 6
+        assert len(DIMENSION_BY_NAME) == 8
         for dim in DIMENSIONS:
             assert DIMENSION_BY_NAME[dim.name] is dim
 

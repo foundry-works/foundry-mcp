@@ -114,6 +114,33 @@ STRUCTURE = Dimension(
     ),
 )
 
+PRACTICAL_VALUE = Dimension(
+    name="practical_value",
+    display_name="Practical Value",
+    description="Actionability, specificity of insights, and usefulness to the reader.",
+    rubric=(
+        "1: Abstract/generic — no actionable takeaways.\n"
+        "2: Mostly generic with occasional specific points.\n"
+        "3: Some actionable insights but lacks specificity in key areas.\n"
+        "4: Mostly actionable with specific, useful recommendations.\n"
+        "5: Highly actionable — specific, concrete insights the reader can immediately use."
+    ),
+)
+
+BALANCE = Dimension(
+    name="balance",
+    display_name="Balance & Objectivity",
+    description="Presentation of multiple perspectives, acknowledgment of limitations and counterarguments.",
+    rubric=(
+        "1: One-sided — no acknowledgment of alternatives or limitations.\n"
+        "2: Mostly one-sided with token mention of other views.\n"
+        "3: Acknowledges alternatives but doesn't explore them meaningfully.\n"
+        "4: Fair treatment of multiple perspectives with clear limitation acknowledgment.\n"
+        "5: Exemplary balance — thorough multi-perspective analysis with nuanced "
+        "limitation discussion."
+    ),
+)
+
 #: All evaluation dimensions in canonical order.
 DIMENSIONS: tuple[Dimension, ...] = (
     DEPTH,
@@ -122,6 +149,8 @@ DIMENSIONS: tuple[Dimension, ...] = (
     COMPLETENESS,
     GROUNDEDNESS,
     STRUCTURE,
+    PRACTICAL_VALUE,
+    BALANCE,
 )
 
 #: Lookup by name for quick access.

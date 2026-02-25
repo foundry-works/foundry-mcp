@@ -1,8 +1,8 @@
 """Research quality evaluation framework.
 
 Provides LLM-as-judge evaluation of completed deep research reports
-across six quality dimensions: Depth, Source Quality, Analytical Rigor,
-Completeness, Groundedness, and Structure.
+across eight quality dimensions: Depth, Source Quality, Analytical Rigor,
+Completeness, Groundedness, Structure, Practical Value, and Balance.
 
 Usage::
 
