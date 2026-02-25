@@ -186,6 +186,155 @@ def _build_structured_metadata_prompt(
     )
 
 
+# ------------------------------------------------------------------
+# Message-boundary-aware truncation for compression retries (Phase 5)
+# ------------------------------------------------------------------
+
+# Number of most-recent think message pairs to unconditionally preserve
+# during compression retry truncation.
+_PRESERVE_LAST_N_THINKS: int = 2
+
+
+def _classify_message_pair(
+    assistant_msg: dict[str, str],
+    tool_msg: dict[str, str] | None,
+) -> str:
+    """Classify a message pair by the tool used.
+
+    Returns one of: "think", "search", "research_complete", "other".
+    """
+    tool_name = ""
+    if tool_msg:
+        tool_name = tool_msg.get("tool", "")
+    if not tool_name and assistant_msg.get("content"):
+        # Try to infer from the assistant's tool call content
+        content = assistant_msg["content"]
+        if '"research_complete"' in content:
+            return "research_complete"
+        if '"think"' in content:
+            return "think"
+        if '"web_search"' in content:
+            return "search"
+
+    if tool_name == "think":
+        return "think"
+    elif tool_name == "web_search":
+        return "search"
+    elif tool_name == "research_complete":
+        return "research_complete"
+    return "other"
+
+
+def _group_message_pairs(
+    message_history: list[dict[str, str]],
+) -> list[tuple[str, list[dict[str, str]]]]:
+    """Group message history into (type, messages) pairs.
+
+    Groups consecutive assistant+tool messages into logical pairs.
+    Messages that don't fit the pattern are grouped as singles with
+    type "other".
+
+    Returns:
+        List of (message_type, message_list) tuples in chronological order.
+    """
+    pairs: list[tuple[str, list[dict[str, str]]]] = []
+    i = 0
+    while i < len(message_history):
+        msg = message_history[i]
+        if msg.get("role") == "assistant" and i + 1 < len(message_history):
+            next_msg = message_history[i + 1]
+            if next_msg.get("role") == "tool":
+                pair_type = _classify_message_pair(msg, next_msg)
+                pairs.append((pair_type, [msg, next_msg]))
+                i += 2
+                continue
+        # Single message (no pair partner)
+        pair_type = _classify_message_pair(msg, None)
+        pairs.append((pair_type, [msg]))
+        i += 1
+    return pairs
+
+
+def truncate_message_history_for_retry(
+    message_history: list[dict[str, str]],
+    attempt: int,
+    max_attempts: int = 3,
+) -> tuple[list[dict[str, str]], int]:
+    """Drop oldest complete message pairs for compression retry.
+
+    Implements ODR-inspired message-boundary-aware truncation: instead of
+    blanket percentage-based string truncation, this identifies logical
+    message pairs (assistant + tool response) and drops the oldest
+    non-protected pairs first.
+
+    **Protected messages** (never dropped):
+    - The most recent ``_PRESERVE_LAST_N_THINKS`` think message pairs
+    - The most recent search result pair (latest findings)
+    - The research_complete pair (if present, usually last)
+
+    Progressive removal per attempt:
+    - Attempt 1: Drop oldest 1/3 of droppable pairs
+    - Attempt 2: Drop oldest 2/3 of droppable pairs
+    - Attempt 3: Keep only protected pairs
+
+    Args:
+        message_history: Raw ReAct conversation messages.
+        attempt: Current retry attempt (1-based).
+        max_attempts: Maximum retry attempts (default 3).
+
+    Returns:
+        (truncated_history, messages_dropped) — the truncated message
+        list and the count of individual messages removed.
+    """
+    if not message_history or attempt < 1:
+        return message_history, 0
+
+    pairs = _group_message_pairs(message_history)
+    if len(pairs) <= 1:
+        return message_history, 0
+
+    # --- Identify protected pair indices ---
+    protected: set[int] = set()
+
+    # Protect the research_complete pair (usually the last one)
+    for idx in range(len(pairs) - 1, -1, -1):
+        if pairs[idx][0] == "research_complete":
+            protected.add(idx)
+            break
+
+    # Protect the most recent N think pairs
+    think_indices = [i for i, (t, _) in enumerate(pairs) if t == "think"]
+    for idx in think_indices[-_PRESERVE_LAST_N_THINKS:]:
+        protected.add(idx)
+
+    # Protect the most recent search pair
+    search_indices = [i for i, (t, _) in enumerate(pairs) if t == "search"]
+    if search_indices:
+        protected.add(search_indices[-1])
+
+    # --- Identify droppable pairs (not protected, ordered oldest first) ---
+    droppable = [i for i in range(len(pairs)) if i not in protected]
+
+    if not droppable:
+        return message_history, 0
+
+    # Progressive removal: attempt 1 → 1/3, attempt 2 → 2/3, attempt 3 → all
+    fraction = min(attempt / max_attempts, 1.0)
+    num_to_drop = max(1, int(len(droppable) * fraction))
+    pairs_to_drop: set[int] = set(droppable[:num_to_drop])
+
+    # --- Rebuild message list ---
+    result: list[dict[str, str]] = []
+    messages_dropped = 0
+    for idx, (_, msgs) in enumerate(pairs):
+        if idx in pairs_to_drop:
+            messages_dropped += len(msgs)
+        else:
+            result.extend(msgs)
+
+    return result, messages_dropped
+
+
 class CompressionMixin:
     """Per-topic compression methods. Mixed into DeepResearchWorkflow.
 
@@ -334,12 +483,18 @@ class CompressionMixin:
         # Build user prompt — prefer raw message history when available
         # ---------------------------------------------------------
 
-        if topic_result.message_history:
+        has_message_history = bool(topic_result.message_history)
+
+        if has_message_history:
             user_prompt = _build_message_history_prompt(
                 query_text=query_text,
                 message_history=topic_result.message_history,
                 topic_sources=topic_sources,
                 max_content_length=max_content_length,
+            )
+            # Record original message count for truncation metadata
+            topic_result.compression_original_message_count = len(
+                topic_result.message_history
             )
         else:
             # Fallback: build from structured metadata (backward compat)
@@ -352,10 +507,12 @@ class CompressionMixin:
 
         # ---------------------------------------------------------
         # LLM call with phase-specific outer retry on token-limit
-        # errors.  Each outer retry pre-truncates the user prompt
-        # (oldest content first) before handing it back to
-        # execute_llm_call (which has its own inner structural
-        # retries).
+        # errors.  When message_history is available, retries use
+        # message-boundary-aware truncation (dropping oldest
+        # complete message pairs while preserving the most recent
+        # think messages, search results, and research_complete
+        # summary).  Otherwise falls back to percentage-based
+        # prompt truncation.
         # ---------------------------------------------------------
         from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
             MAX_PHASE_TOKEN_RETRIES,
@@ -365,6 +522,7 @@ class CompressionMixin:
 
         current_user_prompt = user_prompt
         outer_retries = 0
+        total_messages_dropped = 0
 
         for outer_attempt in range(MAX_PHASE_TOKEN_RETRIES + 1):  # 0 = initial
             call_result = await execute_llm_call(
@@ -387,17 +545,54 @@ class CompressionMixin:
                     and outer_attempt < MAX_PHASE_TOKEN_RETRIES
                 ):
                     outer_retries += 1
-                    current_user_prompt = truncate_prompt_for_retry(
-                        user_prompt, outer_retries, MAX_PHASE_TOKEN_RETRIES,
-                    )
-                    logger.warning(
-                        "Compression outer retry %d/%d for topic %s: "
-                        "pre-truncating user prompt by %d%%",
-                        outer_retries,
-                        MAX_PHASE_TOKEN_RETRIES,
-                        topic_result.sub_query_id,
-                        int((0.1 + outer_retries * 0.1) * 100),
-                    )
+
+                    if has_message_history:
+                        # Message-boundary-aware truncation: drop
+                        # oldest complete message pairs, preserving
+                        # the most recent thinks, search results,
+                        # and research_complete summary.
+                        truncated_history, _ = (
+                            truncate_message_history_for_retry(
+                                topic_result.message_history,
+                                outer_retries,
+                                MAX_PHASE_TOKEN_RETRIES,
+                            )
+                        )
+                        total_messages_dropped = (
+                            len(topic_result.message_history)
+                            - len(truncated_history)
+                        )
+                        current_user_prompt = _build_message_history_prompt(
+                            query_text=query_text,
+                            message_history=truncated_history,
+                            topic_sources=topic_sources,
+                            max_content_length=max_content_length,
+                        )
+                        logger.warning(
+                            "Compression outer retry %d/%d for topic %s: "
+                            "message-boundary truncation dropped %d messages "
+                            "(%d remaining of %d original)",
+                            outer_retries,
+                            MAX_PHASE_TOKEN_RETRIES,
+                            topic_result.sub_query_id,
+                            total_messages_dropped,
+                            len(truncated_history),
+                            len(topic_result.message_history),
+                        )
+                    else:
+                        # Fallback: percentage-based prompt truncation
+                        # for structured metadata path
+                        current_user_prompt = truncate_prompt_for_retry(
+                            user_prompt, outer_retries, MAX_PHASE_TOKEN_RETRIES,
+                        )
+                        logger.warning(
+                            "Compression outer retry %d/%d for topic %s: "
+                            "pre-truncating user prompt by %d%%",
+                            outer_retries,
+                            MAX_PHASE_TOKEN_RETRIES,
+                            topic_result.sub_query_id,
+                            int((0.1 + outer_retries * 0.1) * 100),
+                        )
                     continue
 
                 # Non-retryable error or retries exhausted
@@ -407,6 +602,9 @@ class CompressionMixin:
                     outer_retries,
                     call_result.error,
                 )
+                # Record truncation metadata even on failure
+                topic_result.compression_retry_count = outer_retries
+                topic_result.compression_messages_dropped = total_messages_dropped
                 if outer_retries > 0:
                     self._write_audit_event(
                         state,
@@ -414,6 +612,8 @@ class CompressionMixin:
                         data={
                             "sub_query_id": topic_result.sub_query_id,
                             "outer_retries": outer_retries,
+                            "messages_dropped": total_messages_dropped,
+                            "original_message_count": topic_result.compression_original_message_count,
                             "error": call_result.error,
                         },
                         level="warning",
@@ -424,6 +624,9 @@ class CompressionMixin:
             result = call_result.result
             if result.success and result.content:
                 topic_result.compressed_findings = result.content
+                # Record truncation metadata
+                topic_result.compression_retry_count = outer_retries
+                topic_result.compression_messages_dropped = total_messages_dropped
                 if outer_retries > 0:
                     self._write_audit_event(
                         state,
@@ -431,6 +634,8 @@ class CompressionMixin:
                         data={
                             "sub_query_id": topic_result.sub_query_id,
                             "outer_retries": outer_retries,
+                            "messages_dropped": total_messages_dropped,
+                            "original_message_count": topic_result.compression_original_message_count,
                         },
                     )
                 return (result.input_tokens or 0, result.output_tokens or 0, True)

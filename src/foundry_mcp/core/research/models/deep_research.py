@@ -77,6 +77,30 @@ class TopicResearchResult(BaseModel):
             "format issues."
         ),
     )
+    compression_messages_dropped: int = Field(
+        default=0,
+        description=(
+            "Number of messages dropped from the ReAct message history during "
+            "compression retries due to token-limit errors. Higher values indicate "
+            "the compression model's context window was significantly exceeded."
+        ),
+    )
+    compression_retry_count: int = Field(
+        default=0,
+        description=(
+            "Number of compression retries needed due to token-limit errors. "
+            "Each retry drops the oldest messages from the history while "
+            "preserving the most recent think messages and search results."
+        ),
+    )
+    compression_original_message_count: int = Field(
+        default=0,
+        description=(
+            "Original number of messages in the ReAct history before any "
+            "compression truncation. Zero when message_history was empty "
+            "(structured metadata fallback path)."
+        ),
+    )
     early_completion: bool = Field(
         default=False,
         description="Whether the topic researcher signalled early research completion",
