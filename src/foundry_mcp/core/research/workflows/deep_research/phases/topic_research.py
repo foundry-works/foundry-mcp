@@ -738,6 +738,28 @@ class TopicResearchMixin:
         # significantly better than structured metadata alone.
         result.message_history = list(message_history)
 
+        # --- Build raw_notes from message history (Phase 1 ODR alignment) ---
+        # Capture unprocessed concatenation of all tool-result and assistant
+        # messages before compression. This provides a fallback when compression
+        # degrades or fails, and ground-truth evidence for the evaluator.
+        raw_notes_parts: list[str] = []
+        for msg in message_history:
+            if msg.get("role") in ("assistant", "tool"):
+                content = msg.get("content", "")
+                if content:
+                    raw_notes_parts.append(content)
+        if raw_notes_parts:
+            raw_notes_text = "\n".join(raw_notes_parts)
+            try:
+                max_raw_notes_len = int(
+                    getattr(self.config, "deep_research_max_content_length", 50_000)
+                )
+            except (TypeError, ValueError):
+                max_raw_notes_len = 50_000
+            if len(raw_notes_text) > max_raw_notes_len:
+                raw_notes_text = raw_notes_text[:max_raw_notes_len]
+            result.raw_notes = raw_notes_text
+
         # --- Compile per-topic summary ---
         # Merge accumulated tokens under lock
         async with state_lock:

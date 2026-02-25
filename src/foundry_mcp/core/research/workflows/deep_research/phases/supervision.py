@@ -359,6 +359,11 @@ class SupervisionPhaseMixin:
                         "content": content,
                     })
 
+            # --- Aggregate raw notes (Phase 1 ODR alignment) ---
+            for result in directive_results:
+                if result.raw_notes:
+                    state.raw_notes.append(result.raw_notes)
+
             # --- Step 4: Think-after-results (assess what was learned) ---
             post_think_output: Optional[str] = None
             if directive_results:
