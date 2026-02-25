@@ -278,15 +278,8 @@ Rules:
 - When "need_clarification" is false: provide your understanding of the query in "verification" — restate what you believe the user wants researched, including scope, domain, and focus
 - ALWAYS provide "verification" regardless of the decision — it documents your understanding
 
-Examples of vague queries needing clarification (need_clarification=true):
-- "How does AI work?" → Too broad, needs scope (ML? generative AI? robotics?)
-- "What's the best database?" → Missing context (use case, scale, budget)
-- "Tell me about climate change" → Needs focus (causes? solutions? policy? economics?)
-
-Examples of specific queries NOT needing clarification (need_clarification=false):
-- "Compare PostgreSQL vs MySQL for high-write OLTP workloads in 2024"
-- "What are the current FDA regulations for AI-based medical devices?"
-- "How does the Rust borrow checker prevent data races?"
+Example — needs clarification: "What's the best database?" → Missing context (use case, scale, budget)
+Example — does NOT need clarification: "Compare PostgreSQL vs MySQL for high-write OLTP workloads in 2024"
 
 IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 

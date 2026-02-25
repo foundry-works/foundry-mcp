@@ -19,10 +19,10 @@
 - [x] 2.5 Test: first-round decomposition still produces well-structured directives with diverse topics
 
 ## Phase 3 — Clarification Example Reduction
-- [ ] 3.1 Remove 4 of 6 examples, keep: "What's the best database?" (vague) and "Compare PostgreSQL vs MySQL for high-write OLTP workloads in 2024" (specific)
-- [ ] 3.2 Consolidate remaining examples into compact format (one line each)
-- [ ] 3.3 Test: vague queries still trigger clarification
-- [ ] 3.4 Test: specific queries still skip clarification
+- [x] 3.1 Remove 4 of 6 examples, keep: "What's the best database?" (vague) and "Compare PostgreSQL vs MySQL for high-write OLTP workloads in 2024" (specific)
+- [x] 3.2 Consolidate remaining examples into compact format (one line each)
+- [x] 3.3 Test: vague queries still trigger clarification
+- [x] 3.4 Test: specific queries still skip clarification
 
 ## Phase 4 — Brief Generation Meta-Commentary
 - [ ] 4.1 Remove "Do not include meta-commentary, greetings, or formatting markers in any field" sentence
