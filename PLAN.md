@@ -1,272 +1,341 @@
-# Supervisor-as-Sole-Orchestrator — Alignment Plan
+# Deep Research ODR Alignment — Four Targeted Improvements
 
-Completes the transition to a supervisor-owned orchestration model where
-SUPERVISION is the single phase responsible for both initial query decomposition
-and iterative gap-filling. Eliminates the vestigial GATHERING re-entry loop and
-folds PLANNING's self-critique quality gate into supervision round 0.
+Closes four feature gaps identified by comparing foundry-mcp's deep research
+workflow against open_deep_research (ODR). Each phase is independent and can
+ship separately. No phase degrades existing quality — all are additive.
 
-**Context:** The codebase is already ~70% aligned. BRIEF only does enrichment
-(no decomposition). New workflows skip PLANNING/GATHERING and jump to
-SUPERVISION after BRIEF. Supervision round 0 already performs initial
-decomposition into directives. The delegation model always returns
-`should_continue_gathering: False`. What remains is cleanup: removing the
-GATHERING loop from the orchestrator, adding the critique mechanism that
-PLANNING had, and marking legacy phases as deprecated.
-
-**Comparison with open_deep_research (ODR):**
-ODR has no separate planning or gathering phases. The supervisor is the sole
-orchestrator: think → delegate → research → compress → assess → iterate. This
-plan brings foundry-mcp to the same model.
+**Baseline:** Foundry-mcp already leads ODR on coverage heuristics, cost-tiered
+model routing, document digestion, source quality tracking, content dedup
+(Jaccard), research directives, and session management. These changes improve
+areas where ODR's patterns are genuinely better.
 
 ---
 
-## Phase 1: Self-Critique in Supervision Round 0
+## Phase 1: Extract-Content Visibility in ReAct Loop
 
-**Rationale:** PLANNING had a self-critique step (`_apply_critique_adjustments`
-in planning.py:656-741) that caught redundant sub-queries, missing perspectives,
-and scope issues. Supervision round 0 currently lacks this. Without it, the
-first-round decomposition may produce overlapping directives.
+**Problem:** When the researcher calls `extract_content`, the tool returns only
+a confirmation message ("Extracted content from 2 of 3 URL(s)."). The actual
+extracted markdown is stored in `state.sources` but the researcher LLM never
+sees it. This means the researcher can't reason about extracted content during
+its investigation — it can only search and think, not read.
 
-**ODR pattern:** ODR's supervisor uses natural heuristic judgment — the LLM
-reasons about redundancy and proportionality inline during delegation. No
-separate critique pass needed because the instructions embed it.
+**ODR pattern:** ODR's researchers see full content from extracted URLs (subject
+to `max_content_length` truncation), which lets them decide whether to dig
+deeper or move on.
 
-**Changes:**
+**Proposed change:** After successful extraction, summarize the extracted content
+using the existing `SourceSummarizer` (same path as search results) and return
+the formatted summary to the researcher. This mirrors what already happens for
+`web_search` results. The researcher sees structured blocks (SUMMARY + KEY
+EXCERPTS) for extracted URLs, not raw markdown dumps.
 
-### 1a. Three-call decompose → critique → revise pipeline for first-round delegation
+**Why not raw content?** Extracted pages can be 50k+ chars. Injecting raw
+content into the ReAct message history would blow the context budget. The
+SourceSummarizer already handles this for search results — reuse the same
+pipeline.
 
-Replace the single first-round delegation LLM call with a 3-call pipeline that
-mirrors PLANNING's separate critique step but keeps everything inside supervision
-round 0. This gives the LLM a genuine opportunity to reflect on its own output
-and revise, producing higher-quality directives than inline self-critique alone.
+### Changes
 
-**Call 1 — Generate:** The existing first-round delegation call produces initial
-directives (JSON). No prompt changes needed to the existing system/user prompts
-for this call.
+#### 1a. Summarize extracted content and return to researcher
 
-**Call 2 — Critique:** A new LLM call receives the initial directives and
-evaluates them against four criteria:
-1. **Redundancy:** Are any directives investigating the same topic from the same angle? Identify which to merge.
-2. **Coverage:** Is there a major dimension of the query that no directive addresses? Identify what's missing.
-3. **Proportionality:** For simple queries, could fewer directives suffice? Identify excess.
-4. **Specificity:** Are directives specific enough, or too broad/vague? Identify which need sharpening.
+- **File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py`
+- **Location:** `_handle_extract_tool()` (lines ~1092-1154)
+- After successful extraction, call `_summarize_search_results()` on the newly
+  extracted sources (same function used for search results)
+- Replace the confirmation-only response with `_format_search_results_batch()`
+  output (same format as search results: SOURCE N / URL / SUMMARY / KEY EXCERPTS)
+- Skip summarization for sources with content < 300 chars (same threshold as
+  search results)
+- Preserve the existing confirmation prefix so the researcher knows how many
+  URLs succeeded
 
-The critique call returns structured feedback (not revised directives).
+**Expected format change:**
+```
+Before: "Extracted content from 2 of 3 URL(s)."
+After:  "Extracted content from 2 of 3 URL(s).
 
-**Call 3 — Revise:** A new LLM call receives the original directives + the
-critique feedback and produces the final revised directive set as JSON. If the
-critique found no issues, this call may return the directives unchanged.
+--- SOURCE 1: [Title] ---
+URL: https://example.com/page
+SUMMARY:
+[Executive summary of extracted content]
 
-**Optimization:** If the critique indicates no issues (all four criteria pass),
-skip call 3 and use the original directives directly.
+KEY EXCERPTS:
+- "[relevant excerpt 1]"
+- "[relevant excerpt 2]"
 
-**Implementation:** Add a new method `_first_round_decompose_critique_revise()`
-that orchestrates the 3-call pipeline, called from `_supervision_delegate_step()`
-when `is_first_round` is True. New helper methods:
-- `_build_critique_system_prompt()` — system prompt for call 2
-- `_build_critique_user_prompt(directives)` — user prompt with initial directives
-- `_build_revision_system_prompt()` — system prompt for call 3
-- `_build_revision_user_prompt(directives, critique)` — user prompt with directives + critique feedback
-
-**File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
-- `_supervision_delegate_step()` (~line 563) — branch to new pipeline when first round
-- New methods for critique and revision prompts and orchestration
-
-### 1b. Log critique pipeline in audit trail
-
-Add audit events for each stage of the 3-call pipeline to provide observability
-into how the critique step affects directive quality:
-
-- **`first_round_generate`** — after call 1, records initial directive count and topics
-- **`first_round_critique`** — after call 2, records the critique findings (which criteria flagged issues)
-- **`first_round_revise`** — after call 3, records final directive count, directives added/removed/merged, and whether revision was skipped (no issues found)
-- **`first_round_decomposition`** — summary event with `initial_directive_count`, `final_directive_count`, `critique_triggered_revision: bool`, `query_complexity` fields
-
-**File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
-- Inside `_first_round_decompose_critique_revise()` after each call
-
----
-
-## Phase 2: Remove GATHERING from Active Workflow Loop
-
-**Rationale:** The delegation model (`_execute_supervision_delegation_async`)
-handles all research execution internally via `_execute_directives_async()` and
-always returns `should_continue_gathering: False` (supervision.py:466). The
-GATHERING ↔ SUPERVISION loop in the workflow orchestrator (workflow_execution.py
-lines 221-317) is dead code for the active path.
-
-**ODR pattern:** ODR's supervisor loop is self-contained — delegate, execute,
-assess, repeat. No external phase re-entry.
-
-**Changes:**
-
-### 2a. Simplify the iteration loop in workflow_execution.py
-
-Replace the `while True` GATHERING ↔ SUPERVISION loop (lines 221-317) with
-a linear SUPERVISION → SYNTHESIS progression. The supervision phase's internal
-multi-round loop (bounded by `max_supervision_rounds`) is the sole iteration
-mechanism.
-
-Before:
-```python
-while True:
-    if state.phase == DeepResearchPhase.GATHERING:
-        err = await self._run_phase(state, GATHERING, ...)
-    if state.phase == DeepResearchPhase.SUPERVISION:
-        err = await self._run_phase(state, SUPERVISION, ...)
-        if should_gather and has_pending and within_limit:
-            state.phase = GATHERING; continue
-        else:
-            state.phase = SYNTHESIS
-    if state.phase == DeepResearchPhase.SYNTHESIS:
-        ...; break
-    break
+--- SOURCE 2: [Title] ---
+..."
 ```
 
-After:
-```python
-# Legacy resume: if saved state is at GATHERING, run it once then proceed
-if state.phase == DeepResearchPhase.GATHERING:
-    err = await self._run_phase(state, GATHERING, ...)
-    if err: return err
-    state.phase = DeepResearchPhase.SUPERVISION
+#### 1b. Apply novelty scoring to extracted sources
 
-# SUPERVISION (handles decomposition + research + gap-fill internally)
-if state.phase == DeepResearchPhase.SUPERVISION:
-    state.metadata["iteration_in_progress"] = True
-    err = await self._run_phase(state, SUPERVISION, ..., skip_transition=True)
-    if err: return err
-    state.phase = DeepResearchPhase.SYNTHESIS
+- **File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py`
+- **Location:** `_handle_extract_tool()` after summarization
+- Call `compute_novelty_tag()` on extracted sources (same as search results)
+- Include novelty tags in the formatted output
+- This prevents the researcher from wasting tool calls re-extracting content
+  it already has from search
 
-# SYNTHESIS
-if state.phase == DeepResearchPhase.SYNTHESIS:
-    err = await self._run_phase(state, SYNTHESIS, ..., skip_transition=True)
-    if err: return err
-    # ... orchestrator transition, mark_completed, break
+#### 1c. Respect extract budget in summarization
+
+- Extraction is already capped at `deep_research_extract_max_per_iteration`
+  (default 2). Summarization should respect this — only summarize sources that
+  were actually newly extracted (not previously known URLs)
+- Add guard: skip summarization if source was already in `state.sources` before
+  extraction (dedup already handles this, but belt-and-suspenders for the
+  message formatting path)
+
+---
+
+## Phase 2: Supervisor-Optimized Research Summaries
+
+**Problem:** The supervisor sees a 2,000-char truncation of fidelity-preserved
+compressed findings. The compression prompt says "DO NOT summarize... rewrite
+findings verbatim." This is correct for synthesis (which needs raw information),
+but poor for the supervisor, which needs strategic gap analysis — what was
+covered, what angles were explored, what's still uncertain.
+
+The 2,000-char window is a hard truncation of whatever happens to appear first
+in the compressed output. There's no guarantee that the most strategically
+important findings are at the top.
+
+**ODR pattern:** ODR compresses each researcher's findings into a clean summary
+*designed for the supervisor* — structured, strategic, without noise. The
+supervisor receives these summaries as ToolMessage content.
+
+**Proposed change:** Add a second, lightweight compression output —
+`supervisor_summary` — alongside the existing `compressed_findings`. This
+summary is short (target: 1,500 chars), structured for gap analysis, and
+generated by the same compression LLM call with an additional instruction block.
+The existing fidelity-preserved compression is untouched.
+
+### Changes
+
+#### 2a. Add `supervisor_summary` field to TopicResearchResult
+
+- **File:** `src/foundry_mcp/core/research/models/deep_research.py`
+- **Location:** `TopicResearchResult` class (lines ~27-121)
+- Add field:
+  ```python
+  supervisor_summary: Optional[str] = Field(
+      default=None,
+      description=(
+          "Short, structured summary optimized for supervisor gap analysis. "
+          "Highlights what was covered, key findings, and remaining uncertainty. "
+          "Generated alongside compressed_findings but with different objectives."
+      ),
+  )
+  ```
+
+#### 2b. Generate supervisor_summary during compression
+
+- **File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/compression.py`
+- **Location:** Compression prompt construction and response parsing
+- Append an additional instruction block to the compression system prompt:
+
+  ```
+  After your detailed findings, add a section starting with
+  "## SUPERVISOR BRIEF" that contains a structured summary
+  (max 1500 characters) with:
+  1. COVERED: What specific aspects of the research topic were investigated
+  2. KEY FINDINGS: 3-5 most important facts or conclusions (with source attribution)
+  3. CONFIDENCE: How confident are you in the findings (high/medium/low) and why
+  4. GAPS: What aspects could not be adequately answered or need deeper investigation
+  ```
+
+- Parse the compression output to split `compressed_findings` (everything
+  before `## SUPERVISOR BRIEF`) from `supervisor_summary` (everything after)
+- If the supervisor brief section is missing (model didn't follow instructions),
+  fall back to existing behavior (no supervisor_summary)
+- Store both on TopicResearchResult
+
+#### 2c. Use supervisor_summary in coverage data
+
+- **File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
+- **Location:** `_build_per_query_coverage()` (lines ~2516-2600)
+- Replace `compressed_findings_excerpt` (first 2,000 chars of raw compression)
+  with `supervisor_summary` when available
+- Fall back to current behavior when supervisor_summary is None (resume
+  compatibility with older sessions)
+- Update the coverage prompt template to use the structured summary
+
+#### 2d. Use supervisor_summary in evidence inventory
+
+- **File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
+- **Location:** `_build_evidence_inventory()` (lines ~1235-1325)
+- Include supervisor_summary as a "Key findings" section in the evidence
+  inventory (replace or augment the current source-list-only format)
+- Keep the evidence inventory within its existing 500-char budget by
+  truncating the supervisor_summary to fit after source metadata
+
+---
+
+## Phase 3: Native Search Provider Support
+
+**Problem:** All search providers are external APIs (Tavily, Google, Perplexity,
+Semantic Scholar). Anthropic and OpenAI both offer native web search integrated
+into their model APIs, where the model controls query formulation and result
+selection. ODR supports all three backends.
+
+**Why it matters:** Native search can produce higher-quality results because the
+model formulates its own queries iteratively based on what it's finding. It's
+also simpler operationally — no separate Tavily API key needed if you're already
+using Anthropic or OpenAI.
+
+**Proposed change:** Implement two new SearchProvider subclasses that wrap native
+model search behind the existing SearchProvider ABC. The researcher's ReAct loop
+doesn't change — it still calls `web_search` and gets formatted results back.
+The difference is the backend that fulfills the search.
+
+### Changes
+
+#### 3a. Implement AnthropicNativeSearchProvider
+
+- **File:** `src/foundry_mcp/core/research/providers/anthropic_native.py` (new)
+- Extends `SearchProvider` ABC
+- `search(query, max_results)` implementation:
+  1. Call Anthropic Messages API with `web_search_20250305` tool
+  2. Construct a search-oriented prompt: "Search for: {query}. Return the most
+     relevant results with URLs, titles, and key content."
+  3. Parse the response to extract search result citations
+  4. Convert to `ResearchSource` objects (url, title, snippet, content)
+- Provider name: `"anthropic_native"`
+- Requires: `ANTHROPIC_API_KEY` (same as existing Anthropic provider usage)
+- Rate limit: inherit from config or default to 1.0 RPS
+
+#### 3b. Implement OpenAINativeSearchProvider
+
+- **File:** `src/foundry_mcp/core/research/providers/openai_native.py` (new)
+- Extends `SearchProvider` ABC
+- `search(query, max_results)` implementation:
+  1. Call OpenAI API with `web_search_preview` tool
+  2. Same search-oriented prompt pattern as Anthropic
+  3. Parse `tool_outputs` with type `web_search_call` for URLs and content
+  4. Convert to `ResearchSource` objects
+- Provider name: `"openai_native"`
+- Requires: `OPENAI_API_KEY`
+- Rate limit: inherit from config or default to 1.0 RPS
+
+#### 3c. Register providers and add config
+
+- **File:** `src/foundry_mcp/core/research/providers/__init__.py`
+- Export both new providers
+- **File:** `src/foundry_mcp/config/research.py`
+- Add `"anthropic_native"` and `"openai_native"` as valid values for
+  `deep_research_providers` list
+- **File:** `src/foundry_mcp/core/research/providers/resilience/config.py`
+- Add default resilience configs for both providers (1.0 RPS, burst=3,
+  circuit_failure_threshold=5)
+
+#### 3d. Add health check and error classification
+
+- Both providers implement `health_check()` to verify API key is set and
+  a simple API call succeeds
+- Both implement `classify_error()` for rate limit (429), auth (401/403),
+  and server error (5xx) classification
+- Map native search-specific errors (e.g., tool not available for model) to
+  appropriate ErrorType
+
+---
+
+## Phase 4: Evaluation Dimensions — Practical Value & Balance
+
+**Problem:** The evaluation framework has 6 dimensions but lacks two important
+quality signals from ODR's benchmark:
+- **Practical Value:** Are findings actionable and specific? Does the report
+  give the reader something they can use, or is it just information?
+- **Balance & Objectivity:** Does the report present multiple perspectives?
+  Does it acknowledge limitations and counterarguments?
+
+These dimensions capture quality aspects that DEPTH, COMPLETENESS, and STRUCTURE
+don't fully cover. A report can be deep, complete, and well-structured but still
+lack practical takeaways or present only one perspective.
+
+**ODR pattern:** ODR evaluates both as core dimensions (1-5 scale) with specific
+rubrics in its evaluation benchmark. The Deep Research Bench includes both in
+its RACE score.
+
+### Changes
+
+#### 4a. Add PRACTICAL_VALUE dimension
+
+- **File:** `src/foundry_mcp/core/research/evaluation/dimensions.py`
+- Add after STRUCTURE:
+  ```python
+  EvaluationDimension(
+      name="practical_value",
+      display_name="Practical Value",
+      description="Actionability, specificity of insights, and usefulness to the reader",
+      rubric={
+          1: "Abstract/generic — no actionable takeaways",
+          2: "Mostly generic with occasional specific points",
+          3: "Some actionable insights but lacks specificity in key areas",
+          4: "Mostly actionable with specific, useful recommendations",
+          5: "Highly actionable — specific, concrete insights the reader can immediately use",
+      },
+  )
+  ```
+- Add to `DIMENSIONS` tuple
+
+#### 4b. Add BALANCE dimension
+
+- **File:** `src/foundry_mcp/core/research/evaluation/dimensions.py`
+- Add after PRACTICAL_VALUE:
+  ```python
+  EvaluationDimension(
+      name="balance",
+      display_name="Balance & Objectivity",
+      description="Presentation of multiple perspectives, acknowledgment of limitations and counterarguments",
+      rubric={
+          1: "One-sided — no acknowledgment of alternatives or limitations",
+          2: "Mostly one-sided with token mention of other views",
+          3: "Acknowledges alternatives but doesn't explore them meaningfully",
+          4: "Fair treatment of multiple perspectives with clear limitation acknowledgment",
+          5: "Exemplary balance — thorough multi-perspective analysis with nuanced limitation discussion",
+      },
+  )
+  ```
+- Add to `DIMENSIONS` tuple
+
+#### 4c. Update composite scoring weights
+
+- **File:** `src/foundry_mcp/core/research/evaluation/scoring.py`
+- No code change needed — `compute_composite` already handles variable-length
+  dimension lists with equal weights by default (1/N)
+- New default weight: 1/8 = 0.125 per dimension (was 1/6 ~ 0.167)
+- Verify that `_parse_evaluation_response` handles 8 dimensions gracefully
+  (missing dimensions already default to score 3)
+
+#### 4d. Update evaluation prompt for new dimensions
+
+- **File:** `src/foundry_mcp/core/research/evaluation/evaluator.py`
+- **Location:** `_build_evaluation_prompt()`
+- The prompt already dynamically builds dimension rubrics from the DIMENSIONS
+  tuple, so adding new dimensions should work automatically
+- Verify the JSON response schema section lists all 8 dimension names
+- Test: Run evaluation on a completed research session and verify all 8
+  dimensions return scores
+
+---
+
+## Dependency & Ordering
+
+```
+Phase 1 (Extract Visibility)     — independent, no deps
+Phase 2 (Supervisor Summaries)   — independent, no deps
+Phase 3 (Native Search)          — independent, no deps
+Phase 4 (Eval Dimensions)        — independent, no deps
 ```
 
-**File:** `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py`
-- `_execute_workflow_async()` (lines 218-317)
-
-### 2b. Remove `should_continue_gathering` from supervision return metadata
-
-The delegation model's WorkflowResult always sets `should_continue_gathering: False`.
-Remove this field from the return metadata since it's no longer consumed by the
-orchestrator. Keep it in the `supervision_history` audit entries for observability.
-
-**File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
-- `_execute_supervision_delegation_async()` return value (~line 456-471)
-
-### 2c. Remove `pending_sub_queries()` / `should_continue_gathering` check from orchestrator
-
-The `has_pending = len(state.pending_sub_queries()) > 0` check (line 261) and
-`should_gather = last_hist.get("should_continue_gathering", False)` (line 260)
-are part of the GATHERING re-entry logic. Remove them from the orchestrator.
-`pending_sub_queries()` itself stays on the state model (used by coverage
-assessment internally).
-
-**File:** `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py`
-- Lines 258-266 (the should_gather / has_pending / within_limit block)
-
----
-
-## Phase 3: Deprecate PLANNING and GATHERING Phase Enum Values
-
-**Rationale:** New workflows never enter these phases. Marking them explicitly
-as deprecated prevents future code from accidentally routing through them and
-makes the architectural intent clear.
-
-**Changes:**
-
-### 3a. Add deprecation comments to phase enum
-
-Add inline comments to `DeepResearchPhase.GATHERING` marking it as
-legacy-resume-only. Note: there is no `PLANNING` value in the enum (it was
-already removed). Only GATHERING remains as a legacy phase.
-
-**File:** `src/foundry_mcp/core/research/models/deep_research.py`
-- `DeepResearchPhase` enum (~line 644)
-
-### 3b. Strengthen deprecation logging for GATHERING resume
-
-The legacy resume path (workflow_execution.py lines 198-214) already logs a
-warning. Ensure the audit event includes `deprecated_phase: true` for
-monitoring dashboards.
-
-**File:** `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py`
-
-### 3c. Remove unused PLANNING imports from workflow execution
-
-If `_execute_planning_async` or other planning-specific functions are imported
-in workflow_execution.py or the main workflow module, remove them from the
-active path. Planning.py itself stays for potential legacy resume use.
-
-**Files:**
-- `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py`
-- Any other files with unused planning imports
-
----
-
-## Dependency Graph
-
-```
-Phase 1 (supervision critique)  ← independent
-Phase 2 (remove GATHERING loop) ← independent
-Phase 3 (deprecate enum values) ← depends on Phase 2
-```
-
-Phases 1 and 2 can be implemented in parallel. Phase 3 is cleanup after Phase 2.
-
----
-
-## Files Modified
-
-| File | Phases | Description |
-|------|--------|-------------|
-| `phases/supervision.py` | 1a, 1b, 2b | 3-call decompose→critique→revise pipeline; audit events; remove should_continue_gathering from return |
-| `workflow_execution.py` | 2a, 2c, 3b, 3c | Simplify loop; remove GATHERING re-entry; deprecation audit; clean imports |
-| `models/deep_research.py` | 3a | Deprecation comments on phase enum |
-
-All paths relative to `src/foundry_mcp/core/research/workflows/deep_research/`.
-
----
-
-## What Is NOT Changed
-
-- **TopicResearchMixin** — unchanged, still the ReAct loop engine
-- **SubQuery model** — stays as the internal execution unit (directives convert to SubQuery via `state.add_sub_query()`)
-- **Compression pipeline** — unchanged
-- **Coverage assessment** — unchanged (operates on completed sub-queries internally)
-- **Synthesis** — unchanged
-- **Evaluation** — unchanged
-- **PLANNING phase code** (planning.py) — kept for legacy compat, not deleted
-- **GATHERING phase code** (gathering.py) — kept for legacy compat, not deleted
-- **Config parameters** — no new parameters needed
-
----
-
-## Verification
-
-1. **Unit tests**: Run existing deep research test suite for regressions
-2. **Integration test**: Execute a full deep research workflow and verify:
-   - BRIEF → SUPERVISION → SYNTHESIS (no GATHERING phase entered)
-   - Supervision round 0 produces directives with critique evidence in audit log
-   - Supervision rounds 1+ operate as before (gap-fill via directives)
-3. **Legacy resume**: Create a saved state at GATHERING phase, resume it, verify
-   it still works through the legacy path with deprecation warning logged
-4. **Audit trail**: Verify supervision_history entries no longer contain
-   `should_continue_gathering` in the WorkflowResult metadata
-
-```bash
-python -m pytest tests/ -x -q --timeout=120
-```
-
----
+All four phases can be developed and shipped in parallel. No phase modifies
+the same code paths as another (extract handling, compression, provider
+registration, and evaluation are disjoint subsystems).
 
 ## Risk Assessment
 
 | Phase | Risk | Mitigation |
 |-------|------|------------|
-| 1 | Inline critique adds tokens to first-round delegation prompt | Minimal — ~100 tokens of instruction; first-round prompt is not token-constrained |
-| 2 | Legacy saved states expect GATHERING in the loop | Legacy resume path preserved; only the active-path loop changes |
-| 3 | Code referencing `DeepResearchPhase.GATHERING` breaks | Enum values stay; only comments and routing change |
+| 1 | Summarization adds latency to extract tool | SourceSummarizer already proven fast; extraction is already rate-limited to 2/iteration |
+| 2 | Model may not follow SUPERVISOR BRIEF format | Graceful fallback to existing truncation; no behavioral change on parse failure |
+| 3 | Native search APIs may change format | Isolate parsing in provider; SearchProvider ABC provides consistent interface |
+| 4 | New dimensions change composite scores | Existing reports unchanged; only new evaluations include new dimensions |
