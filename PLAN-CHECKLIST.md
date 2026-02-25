@@ -36,13 +36,13 @@ All four phases are independent and can be developed in parallel.
 
 ## Phase 2: Supervisor-Optimized Research Summaries
 
-- [ ] **2a** Add `supervisor_summary` field to TopicResearchResult
+- [x] **2a** Add `supervisor_summary` field to TopicResearchResult
   - File: `src/foundry_mcp/core/research/models/deep_research.py`
   - Location: `TopicResearchResult` class (~lines 27-121)
   - New field: `supervisor_summary: Optional[str]` with description
   - Test: Field serializes/deserializes correctly in persistence
 
-- [ ] **2b** Generate supervisor_summary during compression
+- [x] **2b** Generate supervisor_summary during compression
   - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/compression.py`
   - Location: Compression system prompt and response parsing
   - Append "## SUPERVISOR BRIEF" instruction block to compression prompt
@@ -52,7 +52,7 @@ All four phases are independent and can be developed in parallel.
   - Test: Compression output contains SUPERVISOR BRIEF section
   - Test: Fallback works when model doesn't produce the section
 
-- [ ] **2c** Use supervisor_summary in coverage data
+- [x] **2c** Use supervisor_summary in coverage data
   - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
   - Location: `_build_per_query_coverage()` (~lines 2516-2600)
   - Prefer `supervisor_summary` over `compressed_findings[:2000]` when available
@@ -60,7 +60,7 @@ All four phases are independent and can be developed in parallel.
   - Test: Coverage data uses structured summary instead of raw truncation
   - Test: Resume compatibility — older sessions without supervisor_summary still work
 
-- [ ] **2d** Use supervisor_summary in evidence inventory
+- [x] **2d** Use supervisor_summary in evidence inventory
   - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
   - Location: `_build_evidence_inventory()` (~lines 1235-1325)
   - Include key findings from supervisor_summary in evidence inventory

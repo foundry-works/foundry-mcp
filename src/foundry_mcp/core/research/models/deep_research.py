@@ -78,6 +78,14 @@ class TopicResearchResult(BaseModel):
             "When present, analysis prefers this over raw source content."
         ),
     )
+    supervisor_summary: Optional[str] = Field(
+        default=None,
+        description=(
+            "Short, structured summary optimized for supervisor gap analysis. "
+            "Highlights what was covered, key findings, and remaining uncertainty. "
+            "Generated alongside compressed_findings but with different objectives."
+        ),
+    )
     tool_parse_failures: int = Field(
         default=0,
         description=(

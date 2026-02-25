@@ -335,6 +335,35 @@ def truncate_message_history_for_retry(
     return result, messages_dropped
 
 
+_SUPERVISOR_BRIEF_MARKER = "## SUPERVISOR BRIEF"
+
+
+def _split_supervisor_brief(content: str) -> tuple[str, str | None]:
+    """Split compression output into findings and supervisor brief.
+
+    Looks for a ``## SUPERVISOR BRIEF`` heading in the compression output.
+    Everything before it is the compressed findings; everything after
+    (up to 1500 chars) is the supervisor summary.
+
+    Args:
+        content: Raw compression LLM output.
+
+    Returns:
+        (compressed_findings, supervisor_summary) — supervisor_summary
+        is ``None`` if the marker was not found.
+    """
+    idx = content.find(_SUPERVISOR_BRIEF_MARKER)
+    if idx == -1:
+        return content, None
+
+    compressed = content[:idx].rstrip()
+    brief = content[idx + len(_SUPERVISOR_BRIEF_MARKER):].strip()
+    # Cap at 1500 chars to stay within the supervisor's context budget
+    if len(brief) > 1500:
+        brief = brief[:1500]
+    return compressed, brief
+
+
 class CompressionMixin:
     """Per-topic compression methods. Mixed into DeepResearchWorkflow.
 
@@ -476,7 +505,20 @@ class CompressionMixin:
             "Critical Reminder: It is extremely important that any "
             "information that is even remotely relevant to the research "
             "topic is preserved verbatim (e.g. don't rewrite it, don't "
-            "summarize it, don't paraphrase it)."
+            "summarize it, don't paraphrase it).\n\n"
+            "<Supervisor Brief>\n"
+            "After your detailed findings, add a section starting with "
+            "exactly '## SUPERVISOR BRIEF' that contains a structured "
+            "summary (max 1500 characters) with:\n"
+            "1. COVERED: What specific aspects of the research topic "
+            "were investigated\n"
+            "2. KEY FINDINGS: 3-5 most important facts or conclusions "
+            "(with source attribution)\n"
+            "3. CONFIDENCE: How confident are you in the findings "
+            "(high/medium/low) and why\n"
+            "4. GAPS: What aspects could not be adequately answered or "
+            "need deeper investigation\n"
+            "</Supervisor Brief>"
         )
 
         # ---------------------------------------------------------
@@ -623,7 +665,9 @@ class CompressionMixin:
             # Success path
             result = call_result.result
             if result.success and result.content:
-                topic_result.compressed_findings = result.content
+                findings, brief = _split_supervisor_brief(result.content)
+                topic_result.compressed_findings = findings
+                topic_result.supervisor_summary = brief
                 # Record truncation metadata
                 topic_result.compression_retry_count = outer_retries
                 topic_result.compression_messages_dropped = total_messages_dropped

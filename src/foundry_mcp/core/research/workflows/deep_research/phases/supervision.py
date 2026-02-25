@@ -1306,8 +1306,21 @@ Guidelines:
             parts.append(entry)
             remaining -= len(entry) + 1
 
+        # Key findings from supervisor summary (structured for gap analysis)
+        if topic_result.supervisor_summary:
+            # Truncate to fit within remaining budget
+            brief = topic_result.supervisor_summary
+            label = "Key findings: "
+            max_brief = remaining - len(label) - 1
+            if max_brief > 20:
+                if len(brief) > max_brief:
+                    brief = brief[:max_brief - 3] + "..."
+                findings_line = f"{label}{brief}"
+                parts.append(findings_line)
+                remaining -= len(findings_line) + 1
+
         # Data point estimate from raw notes (count paragraphs as proxy)
-        if topic_result.raw_notes:
+        if topic_result.raw_notes and remaining > 30:
             # Count non-empty lines as a rough data-point proxy
             lines = [
                 ln for ln in topic_result.raw_notes.split("\n")
@@ -2579,8 +2592,11 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             if topic_result:
                 if topic_result.per_topic_summary:
                     findings_summary = topic_result.per_topic_summary[:500]
-                # Include compressed findings when available (from inline compression)
-                if topic_result.compressed_findings:
+                # Prefer supervisor_summary (structured for gap analysis) over
+                # raw compressed_findings truncation when available.
+                if topic_result.supervisor_summary:
+                    compressed_findings_excerpt = topic_result.supervisor_summary
+                elif topic_result.compressed_findings:
                     compressed_findings_excerpt = topic_result.compressed_findings[:2000]
 
             coverage.append(
