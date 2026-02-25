@@ -18,6 +18,7 @@ import pytest
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
     DeepResearchState,
+    TopicResearchResult,
 )
 from foundry_mcp.core.research.models.enums import ConfidenceLevel
 from foundry_mcp.core.research.models.sources import (
@@ -28,6 +29,8 @@ from foundry_mcp.core.research.models.sources import (
 from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
     SynthesisPhaseMixin,
     _classify_query_type,
+    _SUPPLEMENTARY_HEADROOM_THRESHOLD,
+    _SUPPLEMENTARY_MAX_FRACTION,
 )
 
 # =============================================================================
@@ -530,3 +533,160 @@ class TestSynthesisPromptAlignment:
             assert expected_keyword in prompt, (
                 f"Missing '{expected_keyword}' for query '{query}'"
             )
+
+
+# =============================================================================
+# Tests: Phase 3a — Supplementary raw notes injection
+# =============================================================================
+
+
+class TestSupplementaryRawNotes:
+    """Tests for PLAN Phase 3a: injecting raw notes into synthesis prompt."""
+
+    def _make_state_with_raw_notes(
+        self,
+        raw_notes: list[str] | None = None,
+        num_findings: int = 2,
+    ) -> DeepResearchState:
+        """Create a state with raw_notes populated."""
+        state = _make_state(num_findings=num_findings)
+        if raw_notes is not None:
+            state.raw_notes = raw_notes
+        return state
+
+    def test_supplementary_section_appears_with_raw_notes(self) -> None:
+        """When raw_notes exist and headroom permits, supplementary section is added."""
+        stub = StubSynthesis()
+        state = self._make_state_with_raw_notes(
+            raw_notes=["Note about pricing from source A", "Note about features from source B"],
+        )
+        # Set a small model to ensure we have headroom (default is large context)
+        state.synthesis_model = "claude-sonnet-4-6"
+        prompt = stub._build_synthesis_user_prompt(state)
+        assert "Supplementary Research Notes" in prompt
+        assert "pricing" in prompt
+        assert "features" in prompt
+
+    def test_supplementary_section_absent_without_raw_notes(self) -> None:
+        """When raw_notes is empty, no supplementary section is added."""
+        stub = StubSynthesis()
+        state = self._make_state_with_raw_notes(raw_notes=[])
+        prompt = stub._build_synthesis_user_prompt(state)
+        assert "Supplementary Research Notes" not in prompt
+
+    def test_supplementary_section_absent_when_raw_notes_none(self) -> None:
+        """When raw_notes is not set (empty list default), no supplementary section."""
+        stub = StubSynthesis()
+        state = _make_state()
+        assert state.raw_notes == []
+        prompt = stub._build_synthesis_user_prompt(state)
+        assert "Supplementary Research Notes" not in prompt
+
+    def test_supplementary_notes_labeled_as_supplementary(self) -> None:
+        """Supplementary section instructs LLM to prefer compressed findings."""
+        stub = StubSynthesis()
+        state = self._make_state_with_raw_notes(
+            raw_notes=["Some raw data from researcher"],
+        )
+        state.synthesis_model = "claude-sonnet-4-6"
+        prompt = stub._build_synthesis_user_prompt(state)
+        assert "Prefer the compressed findings" in prompt
+
+    def test_supplementary_notes_separator_between_entries(self) -> None:
+        """Multiple raw notes entries are joined with separators."""
+        stub = StubSynthesis()
+        state = self._make_state_with_raw_notes(
+            raw_notes=["First note", "Second note", "Third note"],
+        )
+        state.synthesis_model = "claude-sonnet-4-6"
+        prompt = stub._build_synthesis_user_prompt(state)
+        assert "First note" in prompt
+        assert "Second note" in prompt
+        assert "Third note" in prompt
+
+
+# =============================================================================
+# Tests: Phase 3b — Degraded mode fallback to raw notes
+# =============================================================================
+
+
+class TestDegradedModeFallback:
+    """Tests for PLAN Phase 3b: synthesizing from raw notes when compressed findings empty."""
+
+    def test_degraded_mode_builds_prompt_from_raw_notes(self) -> None:
+        """When degraded_mode=True and raw_notes exist, prompt uses raw notes."""
+        stub = StubSynthesis()
+        state = DeepResearchState(
+            id="deepres-test-degraded",
+            original_query="Test query for degraded mode",
+            phase=DeepResearchPhase.SYNTHESIS,
+        )
+        state.raw_notes = ["Raw evidence about topic A", "Raw evidence about topic B"]
+        state.synthesis_model = "claude-sonnet-4-6"
+
+        prompt = stub._build_synthesis_user_prompt(state, degraded_mode=True)
+        assert "Research Notes (uncompressed)" in prompt
+        assert "Raw evidence about topic A" in prompt
+        assert "Raw evidence about topic B" in prompt
+        # Should NOT have findings sections
+        assert "Findings to Synthesize" not in prompt
+
+    def test_degraded_mode_includes_degraded_mode_note(self) -> None:
+        """Degraded mode prompt includes a note about compressed findings unavailability."""
+        stub = StubSynthesis()
+        state = DeepResearchState(
+            id="deepres-test-degraded-note",
+            original_query="Test query",
+            phase=DeepResearchPhase.SYNTHESIS,
+        )
+        state.raw_notes = ["Some raw notes"]
+        state.synthesis_model = "claude-sonnet-4-6"
+
+        prompt = stub._build_synthesis_user_prompt(state, degraded_mode=True)
+        assert "Compressed findings were not available" in prompt
+
+    def test_degraded_mode_still_includes_source_reference(self) -> None:
+        """Degraded mode prompt still includes source reference and instructions."""
+        stub = StubSynthesis()
+        state = DeepResearchState(
+            id="deepres-test-degraded-refs",
+            original_query="Test query",
+            phase=DeepResearchPhase.SYNTHESIS,
+        )
+        state.raw_notes = ["Some raw notes"]
+        state.synthesis_model = "claude-sonnet-4-6"
+        state.sources.append(
+            ResearchSource(
+                id="src-0",
+                title="Test Source",
+                url="https://example.com",
+                quality=SourceQuality.MEDIUM,
+                citation_number=1,
+            )
+        )
+
+        prompt = stub._build_synthesis_user_prompt(state, degraded_mode=True)
+        assert "Source Reference" in prompt
+        assert "Instructions" in prompt
+
+    def test_non_degraded_mode_without_findings_does_not_use_raw_notes_path(self) -> None:
+        """When degraded_mode=False, the raw notes path is NOT used even if raw_notes exist."""
+        stub = StubSynthesis()
+        state = DeepResearchState(
+            id="deepres-test-non-degraded",
+            original_query="Test query",
+            phase=DeepResearchPhase.SYNTHESIS,
+        )
+        state.raw_notes = ["Some raw notes"]
+        state.findings.append(
+            ResearchFinding(
+                id="find-0",
+                content="A finding",
+                confidence=ConfidenceLevel.MEDIUM,
+                source_ids=["src-0"],
+            )
+        )
+
+        prompt = stub._build_synthesis_user_prompt(state, degraded_mode=False)
+        assert "Research Notes (uncompressed)" not in prompt
+        assert "Findings to Synthesize" in prompt

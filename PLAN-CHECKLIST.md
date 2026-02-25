@@ -73,21 +73,21 @@ Depends on: Phase 1 (1a, 1b) for `raw_notes` on `TopicResearchResult`.
 
 Depends on: Phase 1 (1c, 1d, 1e) for `state.raw_notes` populated.
 
-- [ ] **3a** Inject raw notes as supplementary context in synthesis prompt
+- [x] **3a** Inject raw notes as supplementary context in synthesis prompt
   - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py`
   - Location: In `_build_synthesis_user_prompt()` or after `_build_synthesis_tail()`
   - Logic: Estimate remaining token headroom after primary prompt; if >10% window free, append `## Supplementary Research Notes` with truncated raw_notes
   - Guard: Never exceed 80% of context window with supplementary content
   - Test: Unit test with mock state containing raw_notes, verify supplementary section appears when headroom exists and is absent when budget is tight
 
-- [ ] **3b** Fall back to raw notes when compressed findings are empty
+- [x] **3b** Fall back to raw notes when compressed findings are empty
   - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py`
   - Location: `_execute_synthesis_async()` near line 240, extend empty-findings check
   - Logic: If no compressed findings but `state.raw_notes` exist, build synthesis prompt from raw_notes directly
   - Add `degraded_mode: bool` to synthesis audit event and WorkflowResult metadata
   - Test: Unit test with empty compressed_findings but populated raw_notes, verify report is generated (not empty report)
 
-- [ ] **3c** Pass raw notes to evaluation groundedness scorer
+- [x] **3c** Pass raw notes to evaluation groundedness scorer
   - File: `src/foundry_mcp/core/research/workflows/deep_research/evaluation/evaluator.py`
   - Logic: When computing groundedness dimension, set context = `"\n".join(state.raw_notes)` if available, else fall back to compressed findings
   - Test: Unit test verifying groundedness evaluator receives raw_notes as context

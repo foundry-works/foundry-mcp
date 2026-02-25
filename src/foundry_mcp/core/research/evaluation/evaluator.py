@@ -45,6 +45,7 @@ You MUST respond with ONLY a valid JSON object, no extra text."""
 
 _MAX_REPORT_CHARS = 80_000  # Truncate very long reports to fit context
 _MAX_SOURCES_IN_PROMPT = 30  # Limit source list size
+_MAX_RAW_NOTES_CHARS = 30_000  # Cap raw notes context for groundedness
 
 
 def _build_evaluation_prompt(
@@ -52,6 +53,8 @@ def _build_evaluation_prompt(
     report: str,
     sources: list[dict[str, Any]],
     dimensions: tuple[Dimension, ...] = DIMENSIONS,
+    *,
+    raw_notes: Optional[list[str]] = None,
 ) -> str:
     """Build the user prompt for LLM evaluation.
 
@@ -60,6 +63,9 @@ def _build_evaluation_prompt(
         report: Final research report text.
         sources: List of source dicts with title, url, quality fields.
         dimensions: Evaluation dimensions to score.
+        raw_notes: Optional raw notes from topic researchers, used as
+            ground-truth context for the groundedness dimension.
+            Matches ODR's ``eval_groundedness`` pattern.
 
     Returns:
         Formatted evaluation prompt.
@@ -83,6 +89,24 @@ def _build_evaluation_prompt(
         source_lines.append(line)
     sources_text = "\n".join(source_lines) if source_lines else "  (no sources listed)"
 
+    # Phase 3c (ODR alignment): Include raw notes as ground-truth context
+    # for the groundedness dimension.  This matches ODR's eval_groundedness
+    # which uses raw researcher output as the evidence baseline.
+    raw_notes_section = ""
+    if raw_notes:
+        raw_notes_text = "\n---\n".join(raw_notes)
+        if len(raw_notes_text) > _MAX_RAW_NOTES_CHARS:
+            raw_notes_text = raw_notes_text[:_MAX_RAW_NOTES_CHARS] + "\n\n[... notes truncated ...]"
+        raw_notes_section = f"""
+
+## Raw Research Evidence (ground truth for groundedness evaluation)
+The following are uncompressed research notes gathered by topic researchers.
+Use these as the ground-truth evidence base when scoring the **Groundedness**
+dimension — assess whether the report's claims are supported by this evidence.
+
+{raw_notes_text}
+"""
+
     # Format rubrics
     rubric_blocks = []
     for dim in dimensions:
@@ -104,7 +128,7 @@ Evaluate the following research report.
 
 ## Sources Used
 {sources_text}
-
+{raw_notes_section}
 ## Research Report
 {display_report}
 
@@ -246,6 +270,7 @@ async def evaluate_report(
         query=state.original_query,
         report=state.report,
         sources=source_dicts,
+        raw_notes=state.raw_notes if state.raw_notes else None,
     )
 
     # Audit: evaluation started

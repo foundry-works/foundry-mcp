@@ -130,6 +130,18 @@ _FINDINGS_START_MARKERS: list[str] = [
 # Marker that delineates the end of the findings section.
 _SOURCE_REF_MARKER: str = "## Source Reference"
 
+# ---------------------------------------------------------------------------
+# Supplementary raw notes injection (Phase 3 — ODR alignment)
+# ---------------------------------------------------------------------------
+
+# Minimum headroom (fraction of context window) required before injecting
+# supplementary raw notes into the synthesis prompt.
+_SUPPLEMENTARY_HEADROOM_THRESHOLD: float = 0.10  # 10% of context window
+
+# Maximum fraction of the context window that supplementary notes may occupy.
+# Prevents raw notes from dominating the prompt even when headroom is large.
+_SUPPLEMENTARY_MAX_FRACTION: float = 0.25  # 25% of context window
+
 
 def _truncate_findings_section(
     user_prompt: str,
@@ -237,35 +249,50 @@ class SynthesisPhaseMixin:
             tr.compressed_findings
             for tr in state.topic_research_results
         )
+        has_raw_notes = bool(state.raw_notes)
+        degraded_mode = False
+
         if not state.findings and not state.compressed_digest and not has_compressed:
-            logger.warning("No findings to synthesize")
-            # Generate a minimal report even without findings
-            state.report = self._generate_empty_report(state)
-            self._write_audit_event(
-                state,
-                "synthesis_result",
-                data={
-                    "provider_id": None,
-                    "model_used": None,
-                    "tokens_used": None,
-                    "duration_ms": None,
-                    "system_prompt": None,
-                    "user_prompt": None,
-                    "raw_response": None,
-                    "report": state.report,
-                    "empty_report": True,
-                },
-                level="warning",
-            )
-            return WorkflowResult(
-                success=True,
-                content=state.report,
-                metadata={
-                    "research_id": state.id,
-                    "finding_count": 0,
-                    "empty_report": True,
-                },
-            )
+            if has_raw_notes:
+                # Phase 3b (ODR alignment): Degraded mode — synthesize
+                # directly from raw notes when compression failed or
+                # produced no output.  This prevents the "empty report"
+                # path when raw researcher data exists.
+                degraded_mode = True
+                logger.warning(
+                    "No compressed findings available; falling back to raw "
+                    "notes for synthesis (degraded mode, %d note entries)",
+                    len(state.raw_notes),
+                )
+            else:
+                logger.warning("No findings to synthesize")
+                # Generate a minimal report even without findings
+                state.report = self._generate_empty_report(state)
+                self._write_audit_event(
+                    state,
+                    "synthesis_result",
+                    data={
+                        "provider_id": None,
+                        "model_used": None,
+                        "tokens_used": None,
+                        "duration_ms": None,
+                        "system_prompt": None,
+                        "user_prompt": None,
+                        "raw_response": None,
+                        "report": state.report,
+                        "empty_report": True,
+                    },
+                    level="warning",
+                )
+                return WorkflowResult(
+                    success=True,
+                    content=state.report,
+                    metadata={
+                        "research_id": state.id,
+                        "finding_count": 0,
+                        "empty_report": True,
+                    },
+                )
 
         logger.info(
             "Starting synthesis phase: %d findings, %d sources, %d topic results with compressed findings",
@@ -308,7 +335,9 @@ class SynthesisPhaseMixin:
 
         # Build the synthesis prompt with allocated content
         system_prompt = self._build_synthesis_system_prompt(state)
-        user_prompt = self._build_synthesis_user_prompt(state, allocation_result)
+        user_prompt = self._build_synthesis_user_prompt(
+            state, allocation_result, degraded_mode=degraded_mode,
+        )
 
         # Final-fit validation before provider dispatch
         valid, _preflight, system_prompt, user_prompt = final_fit_validate(
@@ -518,6 +547,7 @@ class SynthesisPhaseMixin:
             "duration_ms": result.duration_ms,
             "report_length": len(state.report),
             "citation_postprocess": citation_metadata,
+            "degraded_mode": degraded_mode,
         }
         if self.config.audit_verbosity == "full":
             synthesis_audit_data["system_prompt"] = system_prompt
@@ -554,6 +584,7 @@ class SynthesisPhaseMixin:
                 "source_count": len(state.sources),
                 "report_length": len(state.report),
                 "iteration": state.iteration,
+                "degraded_mode": degraded_mode,
             },
         )
 
@@ -620,12 +651,16 @@ REMEMBER: The research and brief may be in English, but the final report MUST be
         self,
         state: DeepResearchState,
         allocation_result: Optional[AllocationResult] = None,
+        *,
+        degraded_mode: bool = False,
     ) -> str:
         """Build user prompt with findings and sources for synthesis.
 
         Args:
             state: Current research state
             allocation_result: Optional budget allocation result for token-aware prompts
+            degraded_mode: When True, build prompt from raw_notes because no
+                compressed findings are available (Phase 3b ODR alignment).
 
         Returns:
             User prompt string
@@ -639,6 +674,33 @@ REMEMBER: The research and brief may be in English, but the final report MUST be
             f"## Research Brief\n{state.research_brief or 'Direct research on the query'}",
             "",
         ]
+
+        # Phase 3b (ODR alignment): Degraded mode — synthesize directly
+        # from raw notes when no compressed findings exist.
+        if degraded_mode and state.raw_notes:
+            prompt_parts.extend([
+                "## Research Notes (uncompressed)",
+                "",
+                "**Note:** Compressed findings were not available for this session. "
+                "The following are uncompressed research notes from topic researchers. "
+                "Synthesize a comprehensive report from these notes, extracting key "
+                "findings, identifying themes, and noting any gaps.",
+                "",
+            ])
+            # Join raw notes with separators, truncate to fit context
+            context_window = estimate_token_limit_for_model(
+                state.synthesis_model, MODEL_TOKEN_LIMITS,
+            ) or _FALLBACK_CONTEXT_WINDOW
+            # Reserve space for the rest of the prompt and output
+            max_notes_tokens = int(context_window * 0.60)
+            raw_notes_text = "\n---\n".join(state.raw_notes)
+            truncated = truncate_at_boundary(raw_notes_text, max_notes_tokens * 4)
+            prompt_parts.append(truncated)
+            prompt_parts.append("")
+
+            return self._build_synthesis_tail(
+                state, prompt_parts, id_to_citation, allocation_result,
+            )
 
         # When a global compressed digest is available, use it as the
         # primary findings source.  The digest already contains deduplicated
@@ -870,7 +932,89 @@ REMEMBER: The research and brief may be in English, but the final report MUST be
             ]
         )
 
-        return "\n".join(prompt_parts)
+        # Phase 3 (ODR alignment): Inject supplementary raw notes when
+        # token headroom permits.  This gives the synthesizer access to
+        # uncompressed researcher evidence that may have been lost during
+        # compression, improving report depth without risking token-limit
+        # failures.
+        prompt = "\n".join(prompt_parts)
+        prompt = self._inject_supplementary_raw_notes(state, prompt)
+        return prompt
+
+    def _inject_supplementary_raw_notes(
+        self,
+        state: DeepResearchState,
+        prompt: str,
+    ) -> str:
+        """Append supplementary raw notes when token headroom allows.
+
+        Calculates remaining token budget after the primary synthesis
+        prompt and injects a ``## Supplementary Research Notes`` section
+        with truncated raw notes if headroom exceeds the configured
+        threshold.  This matches the ODR pattern where ``raw_notes``
+        provides a safety net of uncompressed evidence for synthesis.
+
+        Args:
+            state: Current research state (with ``raw_notes`` populated
+                by Phase 1).
+            prompt: The already-built synthesis user prompt.
+
+        Returns:
+            Prompt with supplementary section appended, or the original
+            prompt if no raw notes exist or headroom is insufficient.
+        """
+        if not state.raw_notes:
+            return prompt
+
+        # Determine context window size for the synthesis model
+        context_window = estimate_token_limit_for_model(
+            state.synthesis_model, MODEL_TOKEN_LIMITS,
+        ) or _FALLBACK_CONTEXT_WINDOW
+
+        # Estimate current prompt size in tokens (4 chars ≈ 1 token heuristic)
+        current_tokens = len(prompt) // 4
+
+        # Available headroom = context_window - current_tokens - output_reserved
+        headroom_tokens = context_window - current_tokens - SYNTHESIS_OUTPUT_RESERVED
+        headroom_fraction = headroom_tokens / context_window
+
+        if headroom_fraction < _SUPPLEMENTARY_HEADROOM_THRESHOLD:
+            logger.debug(
+                "Skipping supplementary raw notes: headroom %.1f%% < threshold %.1f%%",
+                headroom_fraction * 100,
+                _SUPPLEMENTARY_HEADROOM_THRESHOLD * 100,
+            )
+            return prompt
+
+        # Cap supplementary budget at _SUPPLEMENTARY_MAX_FRACTION of context
+        max_supplementary_tokens = min(
+            headroom_tokens,
+            int(context_window * _SUPPLEMENTARY_MAX_FRACTION),
+        )
+
+        # Build the raw notes text
+        raw_notes_text = "\n---\n".join(state.raw_notes)
+        supplementary = truncate_at_boundary(
+            raw_notes_text,
+            max_supplementary_tokens * 4,  # tokens → chars
+        )
+
+        logger.info(
+            "Injecting supplementary raw notes: %d chars (headroom %.1f%%, budget %d tokens)",
+            len(supplementary),
+            headroom_fraction * 100,
+            max_supplementary_tokens,
+        )
+
+        return (
+            prompt
+            + "\n\n## Supplementary Research Notes\n"
+            + "The following are uncompressed research notes from topic researchers. "
+            + "Prefer the compressed findings above for accuracy; use these notes "
+            + "for additional detail, specific data points, or evidence not captured "
+            + "in the compressed summaries.\n\n"
+            + supplementary
+        )
 
     def _extract_markdown_report(self, content: str) -> Optional[str]:
         """Extract markdown report from LLM response.
