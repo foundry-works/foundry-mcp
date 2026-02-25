@@ -222,13 +222,10 @@ class BriefPhaseMixin:
             "as the user's query.\n\n"
             "Output your response as a JSON object with this schema:\n"
             "{\n"
-            '  "research_brief": "The detailed, structured research brief paragraph(s)",\n'
+            '  "research_brief": "Complete brief as one or two well-structured paragraphs",\n'
             '  "scope_boundaries": "What the research should include and exclude" or null,\n'
             '  "source_preferences": "Preferred source types" or null\n'
             "}\n\n"
-            "The research_brief field should contain the complete brief as a "
-            "well-structured paragraph (or two). Do not include meta-commentary, "
-            "greetings, or formatting markers in any field.\n\n"
             "IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."
         )
 

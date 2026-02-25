@@ -25,6 +25,6 @@
 - [x] 3.4 Test: specific queries still skip clarification
 
 ## Phase 4 — Brief Generation Meta-Commentary
-- [ ] 4.1 Remove "Do not include meta-commentary, greetings, or formatting markers in any field" sentence
-- [ ] 4.2 Move "complete brief as one or two well-structured paragraphs" into JSON schema description
-- [ ] 4.3 Test: brief generation output unchanged (no meta-commentary appears)
+- [x] 4.1 Remove "Do not include meta-commentary, greetings, or formatting markers in any field" sentence
+- [x] 4.2 Move "complete brief as one or two well-structured paragraphs" into JSON schema description
+- [x] 4.3 Test: brief generation output unchanged (no meta-commentary appears)
