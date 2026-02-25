@@ -98,7 +98,7 @@ class SupervisionPhaseMixin:
             timeout: Request timeout in seconds
 
         Returns:
-            WorkflowResult with metadata["should_continue_gathering"] flag
+            WorkflowResult with supervision round metadata
         """
         return await self._execute_supervision_delegation_async(
             state, provider_id, timeout,
@@ -133,7 +133,7 @@ class SupervisionPhaseMixin:
             timeout: Request timeout in seconds
 
         Returns:
-            WorkflowResult with should_continue_gathering=False (delegation
+            WorkflowResult with supervision round metadata (delegation
             handles its own gathering internally)
         """
         min_sources = getattr(
@@ -463,7 +463,6 @@ class SupervisionPhaseMixin:
                 "research_id": state.id,
                 "iteration": state.iteration,
                 "supervision_round": state.supervision_round,
-                "should_continue_gathering": False,
                 "total_directives_executed": total_directives_executed,
                 "total_new_sources": total_new_sources,
                 "model": "delegation",

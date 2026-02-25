@@ -1,8 +1,10 @@
 """Async workflow execution engine for deep research.
 
-Orchestrates the multi-phase workflow (clarification, brief, gathering,
-supervision, synthesis) with cancellation support, error handling, and
-resource cleanup.
+Orchestrates the multi-phase workflow (clarification, brief, supervision,
+synthesis) with cancellation support, error handling, and resource cleanup.
+
+GATHERING is a legacy-resume-only phase — new workflows jump directly
+from BRIEF to SUPERVISION (supervisor-owned decomposition).
 """
 
 from __future__ import annotations
@@ -196,8 +198,8 @@ class WorkflowExecutionMixin:
             # never enter them.  The supervisor handles both decomposition (round 0)
             # and gap-driven follow-up (rounds 1+).
             if state.phase == DeepResearchPhase.GATHERING:
-                # Legacy saved states may resume at GATHERING; let it proceed
-                # but log a deprecation warning.
+                # Legacy saved states may resume at GATHERING; run it once
+                # then advance to SUPERVISION.
                 logger.warning(
                     "GATHERING phase running from legacy saved state (research %s) "
                     "— new workflows use supervisor-owned decomposition via SUPERVISION phase",
@@ -212,109 +214,86 @@ class WorkflowExecutionMixin:
                     },
                     level="warning",
                 )
+                state.metadata["iteration_in_progress"] = True
+                err = await self._run_phase(
+                    state,
+                    DeepResearchPhase.GATHERING,
+                    self._execute_gathering_async(
+                        state=state,
+                        provider_id=provider_id,
+                        timeout=timeout_per_operation,
+                        max_concurrent=max_concurrent,
+                    ),
+                )
+                if err:
+                    return err
+                state.phase = DeepResearchPhase.SUPERVISION
             elif state.phase not in (DeepResearchPhase.SUPERVISION, DeepResearchPhase.SYNTHESIS):
                 state.phase = DeepResearchPhase.SUPERVISION
 
-            # Iterative loop for GATHERING ↔ SUPERVISION → SYNTHESIS.
-            # The loop supports the supervisor requesting additional gathering
-            # rounds before proceeding to synthesis.
-            while True:
-                if state.phase == DeepResearchPhase.GATHERING:
-                    # Mark the current iteration as in progress (for cancellation handling)
-                    state.metadata["iteration_in_progress"] = True
-                    err = await self._run_phase(
-                        state,
-                        DeepResearchPhase.GATHERING,
-                        self._execute_gathering_async(
-                            state=state,
-                            provider_id=provider_id,
-                            timeout=timeout_per_operation,
-                            max_concurrent=max_concurrent,
-                        ),
+            # SUPERVISION (handles decomposition + research + gap-fill internally)
+            if state.phase == DeepResearchPhase.SUPERVISION:
+                state.metadata["iteration_in_progress"] = True
+
+                err = await self._run_phase(
+                    state,
+                    DeepResearchPhase.SUPERVISION,
+                    self._execute_supervision_async(
+                        state=state,
+                        provider_id=resolve_phase_provider(self.config, "supervision", "reflection"),
+                        timeout=self.config.get_phase_timeout("supervision"),
+                    ),
+                    skip_transition=True,
+                )
+                if err:
+                    return err
+                state.phase = DeepResearchPhase.SYNTHESIS
+
+            # SYNTHESIS
+            if state.phase == DeepResearchPhase.SYNTHESIS:
+                err = await self._run_phase(
+                    state,
+                    DeepResearchPhase.SYNTHESIS,
+                    self._execute_synthesis_async(
+                        state=state,
+                        provider_id=state.synthesis_provider,
+                        timeout=self.config.get_phase_timeout("synthesis"),
+                    ),
+                    skip_transition=True,
+                )
+                if err:
+                    return err
+
+                # Phase-specific: custom orchestrator + iteration decision
+                try:
+                    self.orchestrator.evaluate_phase_completion(state, DeepResearchPhase.SYNTHESIS)
+                    self.orchestrator.decide_iteration(state)
+                    prompt = self.orchestrator.get_reflection_prompt(state, DeepResearchPhase.SYNTHESIS)
+                    self.hooks.think_pause(state, prompt)
+                    self.orchestrator.record_to_state(state)
+                except Exception as exc:
+                    logger.exception(
+                        "Orchestrator transition failed for synthesis, research %s: %s",
+                        state.id,
+                        exc,
                     )
-                    if err:
-                        return err
-
-                if state.phase == DeepResearchPhase.SUPERVISION:
-                    # Mark iteration as in progress if not already marked
-                    # (normally set by GATHERING, but supervisor-owned
-                    # decomposition may skip GATHERING on the first iteration)
-                    if not state.metadata.get("iteration_in_progress"):
-                        state.metadata["iteration_in_progress"] = True
-
-                    err = await self._run_phase(
+                    self._write_audit_event(
                         state,
-                        DeepResearchPhase.SUPERVISION,
-                        self._execute_supervision_async(
-                            state=state,
-                            provider_id=resolve_phase_provider(self.config, "supervision", "reflection"),
-                            timeout=self.config.get_phase_timeout("supervision"),
-                        ),
-                        skip_transition=True,  # We handle transition manually
+                        "orchestrator_error",
+                        data={
+                            "phase": "synthesis",
+                            "error": str(exc),
+                            "traceback": traceback.format_exc(),
+                        },
+                        level="error",
                     )
-                    if err:
-                        return err
+                    self._record_workflow_error(exc, state, "orchestrator_synthesis")
+                    raise
 
-                    # Check if supervisor wants more gathering
-                    last_hist = (state.metadata.get("supervision_history") or [{}])[-1]
-                    should_gather = last_hist.get("should_continue_gathering", False)
-                    has_pending = len(state.pending_sub_queries()) > 0
-                    within_limit = state.supervision_round < state.max_supervision_rounds
-
-                    if should_gather and has_pending and within_limit:
-                        state.phase = DeepResearchPhase.GATHERING
-                        continue  # Loop: re-enter GATHERING
-                    else:
-                        state.phase = DeepResearchPhase.SYNTHESIS
-
-                if state.phase == DeepResearchPhase.SYNTHESIS:
-                    err = await self._run_phase(
-                        state,
-                        DeepResearchPhase.SYNTHESIS,
-                        self._execute_synthesis_async(
-                            state=state,
-                            provider_id=state.synthesis_provider,
-                            timeout=self.config.get_phase_timeout("synthesis"),
-                        ),
-                        skip_transition=True,
-                    )
-                    if err:
-                        return err
-
-                    # Phase-specific: custom orchestrator + iteration decision
-                    try:
-                        self.orchestrator.evaluate_phase_completion(state, DeepResearchPhase.SYNTHESIS)
-                        self.orchestrator.decide_iteration(state)
-                        prompt = self.orchestrator.get_reflection_prompt(state, DeepResearchPhase.SYNTHESIS)
-                        self.hooks.think_pause(state, prompt)
-                        self.orchestrator.record_to_state(state)
-                    except Exception as exc:
-                        logger.exception(
-                            "Orchestrator transition failed for synthesis, research %s: %s",
-                            state.id,
-                            exc,
-                        )
-                        self._write_audit_event(
-                            state,
-                            "orchestrator_error",
-                            data={
-                                "phase": "synthesis",
-                                "error": str(exc),
-                                "traceback": traceback.format_exc(),
-                            },
-                            level="error",
-                        )
-                        self._record_workflow_error(exc, state, "orchestrator_synthesis")
-                        raise
-
-                    # No refinement — workflow complete
-                    state.metadata["iteration_in_progress"] = False
-                    state.metadata["last_completed_iteration"] = state.iteration
-                    state.mark_completed(report=state.report)
-                    break  # Exit iteration loop — workflow complete
-
-                # If we reach here without hitting SYNTHESIS, we're done
-                break
+                # No refinement — workflow complete
+                state.metadata["iteration_in_progress"] = False
+                state.metadata["last_completed_iteration"] = state.iteration
+                state.mark_completed(report=state.report)
 
             # Calculate duration
             duration_ms = (time.perf_counter() - start_time) * 1000

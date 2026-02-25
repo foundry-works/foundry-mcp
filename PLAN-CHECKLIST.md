@@ -38,21 +38,21 @@ legacy phases.
 
 Depends on: None (independent of Phase 1).
 
-- [ ] **2a** Simplify `_execute_workflow_async()` iteration loop
+- [x] **2a** Simplify `_execute_workflow_async()` iteration loop
   - File: `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py`
   - Replace: `while True` loop (lines 221-317) with linear SUPERVISION → SYNTHESIS
   - Keep: Legacy GATHERING entry (lines 198-214) for saved-state resume, but transition to SUPERVISION after it completes (not loop)
   - Test: Full workflow test — verify phases are CLARIFICATION → BRIEF → SUPERVISION → SYNTHESIS
   - Test: No GATHERING phase appears in phase_metrics for new workflows
 
-- [ ] **2b** Remove `should_continue_gathering` from supervision WorkflowResult metadata
+- [x] **2b** Remove `should_continue_gathering` from supervision WorkflowResult metadata
   - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
   - Location: `_execute_supervision_delegation_async()` return (~line 456-471)
   - Remove: `"should_continue_gathering": False` from metadata dict
   - Keep: `should_continue_gathering` in supervision_history audit entries (observability)
   - Test: Verify WorkflowResult metadata no longer contains the field
 
-- [ ] **2c** Remove GATHERING re-entry logic from orchestrator
+- [x] **2c** Remove GATHERING re-entry logic from orchestrator
   - File: `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py`
   - Remove: `should_gather` / `has_pending` / `within_limit` check block (lines 258-266)
   - Remove: `state.phase = DeepResearchPhase.GATHERING; continue` branch

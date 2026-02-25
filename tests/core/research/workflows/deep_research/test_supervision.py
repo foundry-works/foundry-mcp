@@ -503,7 +503,7 @@ class TestSupervisionIntegration:
             )
 
         assert result.success is True
-        assert result.metadata["should_continue_gathering"] is False
+        assert "should_continue_gathering" not in result.metadata
         assert result.metadata["model"] == "delegation"
         # Two directives executed in round 0
         assert result.metadata["total_directives_executed"] == 2
@@ -533,7 +533,7 @@ class TestSupervisionIntegration:
         )
 
         assert result.success is True
-        assert result.metadata["should_continue_gathering"] is False
+        assert "should_continue_gathering" not in result.metadata
         assert result.metadata["model"] == "delegation"
         assert state.supervision_round == 2  # incremented
         # History records the heuristic early-exit
@@ -595,7 +595,7 @@ class TestSupervisionIntegration:
             )
 
         assert result.success is True
-        assert result.metadata["should_continue_gathering"] is False
+        assert "should_continue_gathering" not in result.metadata
         assert result.metadata["total_directives_executed"] == 0
         # No new sub-queries added
         assert len(state.sub_queries) == 2
@@ -635,7 +635,7 @@ class TestSupervisionIntegration:
 
         assert result.success is True  # Graceful degradation
         assert result.metadata["model"] == "delegation"
-        assert result.metadata["should_continue_gathering"] is False
+        assert "should_continue_gathering" not in result.metadata
         assert result.metadata["total_directives_executed"] == 0
         # History recorded — no directives generated due to LLM failures
         history = state.metadata["supervision_history"]
@@ -1393,7 +1393,7 @@ class TestDelegationIntegration:
             )
 
         assert result.success is True
-        assert result.metadata["should_continue_gathering"] is False
+        assert "should_continue_gathering" not in result.metadata
         # Check history records completion
         history = state.metadata.get("supervision_history", [])
         assert len(history) == 1
