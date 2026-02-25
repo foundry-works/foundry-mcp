@@ -116,25 +116,86 @@ _SUPERVISION_HISTORY_BUDGET_FRACTION: float = 0.4
 # as open_deep_research and truncate_to_token_estimate).
 _CHARS_PER_TOKEN: int = 4
 
+# Type-aware budget allocation: reasoning messages (think + delegation) get
+# 60% of the budget; findings messages (tool_result / research_findings)
+# get 40%.  This preserves the supervisor's gap analyses and strategic
+# reasoning — the highest-value content for subsequent rounds.
+_REASONING_BUDGET_FRACTION: float = 0.6
+_FINDINGS_BUDGET_FRACTION: float = 0.4
+
+# Default number of most-recent think messages to unconditionally preserve
+# regardless of budget constraints.
+_DEFAULT_PRESERVE_LAST_N_THINKS: int = 2
+
+# When truncating findings message bodies, keep this many leading characters
+# as a header/summary before discarding the rest.  Enough to preserve the
+# first few lines of compressed findings.
+_FINDINGS_BODY_TRUNCATION_HEADER_CHARS: int = 300
+
+
+def _msg_content(msg: dict[str, Any]) -> str:
+    """Extract message content as a string (safe for ``len()``)."""
+    c = msg.get("content")
+    return c if isinstance(c, str) else ""
+
+
+def _is_reasoning_message(msg: dict[str, Any]) -> bool:
+    """Return True if the message is a reasoning message (think or delegation)."""
+    msg_type = msg.get("type", "")
+    return msg_type in ("think", "delegation")
+
+
+def _is_findings_message(msg: dict[str, Any]) -> bool:
+    """Return True if the message is a findings message (tool_result/research_findings)."""
+    return msg.get("role") == "tool_result" or msg.get("type") == "research_findings"
+
+
+def _truncate_findings_body(content: str) -> str:
+    """Truncate a findings message body, preserving the header/summary portion.
+
+    Keeps the first ``_FINDINGS_BODY_TRUNCATION_HEADER_CHARS`` characters and
+    appends an ellipsis marker.
+    """
+    if len(content) <= _FINDINGS_BODY_TRUNCATION_HEADER_CHARS:
+        return content
+    # Try to break at a newline boundary within the header region
+    cut_point = content.rfind("\n", 0, _FINDINGS_BODY_TRUNCATION_HEADER_CHARS)
+    if cut_point < _FINDINGS_BODY_TRUNCATION_HEADER_CHARS // 2:
+        cut_point = _FINDINGS_BODY_TRUNCATION_HEADER_CHARS
+    return content[:cut_point] + "\n[... truncated for context budget ...]"
+
 
 def truncate_supervision_messages(
     messages: list[dict[str, Any]],
     model: Optional[str],
     token_limits: Optional[dict[str, int]] = None,
+    preserve_last_n_thinks: int = _DEFAULT_PRESERVE_LAST_N_THINKS,
 ) -> list[dict[str, Any]]:
-    """Truncate supervision message history using oldest-first removal.
+    """Truncate supervision message history using type-aware budgeting.
 
-    When the accumulated supervision messages approach the model's context
-    limit, removes the oldest complete rounds first (preserving the most
-    recent rounds which contain the freshest research findings).
+    Implements a two-bucket truncation strategy that prioritises reasoning
+    context (think + delegation messages) over findings (tool_result messages):
 
-    The budget is ``model_context_window * _SUPERVISION_HISTORY_BUDGET_FRACTION``
-    tokens (converted to characters via the 4-chars/token heuristic).
+    - **Reasoning bucket (60%):** think and delegation messages containing gap
+      analyses and strategic reasoning — the highest-value content for
+      multi-round supervision quality.
+    - **Findings bucket (40%):** tool_result / research_findings messages
+      containing compressed research findings — re-derivable from state.
+
+    Within each bucket, oldest messages are removed first.  For findings
+    messages, message bodies are truncated (keeping headers/summaries) before
+    dropping entire messages.
+
+    The ``preserve_last_n_thinks`` parameter unconditionally preserves the N
+    most recent think messages regardless of budget, since the supervisor's
+    most recent gap analyses are critical for reasoning continuity.
 
     Args:
         messages: The supervision message history to potentially truncate.
         model: Model identifier for context-window lookup.
         token_limits: Token limit registry (defaults to ``MODEL_TOKEN_LIMITS``).
+        preserve_last_n_thinks: Number of most recent think messages to
+            unconditionally preserve (default: 2).
 
     Returns:
         The (possibly truncated) message list.  Returns the original list
@@ -151,45 +212,152 @@ def truncate_supervision_messages(
     budget_chars = int(max_tokens * _SUPERVISION_HISTORY_BUDGET_FRACTION * _CHARS_PER_TOKEN)
 
     # Compute total character count of all message contents
-    total_chars = sum(len(msg.get("content", "")) for msg in messages)
+    total_chars = sum(len(_msg_content(msg)) for msg in messages)
     if total_chars <= budget_chars:
         return messages
 
-    # Group messages by round for round-level removal
-    rounds: dict[int, list[int]] = {}
+    # --- Identify protected think messages (last N thinks) ---
+    think_indices: list[int] = [
+        idx for idx, msg in enumerate(messages)
+        if msg.get("type") == "think"
+    ]
+    protected_think_indices: set[int] = set(
+        think_indices[-preserve_last_n_thinks:]
+    ) if think_indices else set()
+
+    # --- Partition messages into reasoning and findings buckets ---
+    reasoning_indices: list[int] = []
+    findings_indices: list[int] = []
     for idx, msg in enumerate(messages):
-        r = msg.get("round", 0)
-        rounds.setdefault(r, []).append(idx)
+        if _is_reasoning_message(msg):
+            reasoning_indices.append(idx)
+        elif _is_findings_message(msg):
+            findings_indices.append(idx)
+        else:
+            # Unknown type — treat as findings (lower priority)
+            findings_indices.append(idx)
 
-    sorted_rounds = sorted(rounds.keys())
+    reasoning_budget = int(budget_chars * _REASONING_BUDGET_FRACTION)
+    findings_budget = int(budget_chars * _FINDINGS_BUDGET_FRACTION)
 
-    # Remove oldest rounds until we fit within budget.
-    # Always preserve the most recent round even if it exceeds the budget.
-    most_recent_round = sorted_rounds[-1]
-    indices_to_remove: set[int] = set()
-    for r in sorted_rounds:
-        if total_chars <= budget_chars:
-            break
-        if r == most_recent_round:
-            break  # Never remove the most recent round
-        for idx in rounds[r]:
-            total_chars -= len(messages[idx].get("content", ""))
-            indices_to_remove.add(idx)
+    reasoning_chars = sum(len(_msg_content(messages[i])) for i in reasoning_indices)
+    findings_chars = sum(len(_msg_content(messages[i])) for i in findings_indices)
 
-    if not indices_to_remove:
+    # --- Phase 1: Truncate findings bodies (keep headers) ---
+    # Before dropping whole messages, truncate long findings bodies.
+    body_truncated: dict[int, str] = {}  # idx -> truncated content
+
+    if findings_chars > findings_budget:
+        # Sort findings by round (oldest first) for truncation
+        findings_by_round = sorted(findings_indices, key=lambda i: messages[i].get("round", 0))
+        for idx in findings_by_round:
+            if findings_chars <= findings_budget:
+                break
+            content = _msg_content(messages[idx])
+            if len(content) > _FINDINGS_BODY_TRUNCATION_HEADER_CHARS:
+                truncated_content = _truncate_findings_body(content)
+                saved = len(content) - len(truncated_content)
+                findings_chars -= saved
+                body_truncated[idx] = truncated_content
+
+    # --- Phase 2: Drop oldest findings messages if still over budget ---
+    findings_to_remove: set[int] = set()
+    if findings_chars > findings_budget:
+        findings_by_round = sorted(findings_indices, key=lambda i: messages[i].get("round", 0))
+        for idx in findings_by_round:
+            if findings_chars <= findings_budget:
+                break
+            content_len = len(body_truncated.get(idx, _msg_content(messages[idx])))
+            findings_chars -= content_len
+            findings_to_remove.add(idx)
+
+    # --- Phase 3: Drop oldest reasoning messages if over budget ---
+    # Protected think messages are never removed.
+    reasoning_to_remove: set[int] = set()
+    if reasoning_chars > reasoning_budget:
+        reasoning_by_round = sorted(reasoning_indices, key=lambda i: messages[i].get("round", 0))
+        for idx in reasoning_by_round:
+            if reasoning_chars <= reasoning_budget:
+                break
+            if idx in protected_think_indices:
+                continue  # Never remove protected thinks
+            reasoning_chars -= len(_msg_content(messages[idx]))
+            reasoning_to_remove.add(idx)
+
+    # --- Phase 4: Rebalance — if one bucket is under budget, donate surplus ---
+    # If reasoning is still over after phase 3 (due to protected thinks),
+    # try to steal from unused findings budget, and vice versa.
+    reasoning_remaining = sum(
+        len(_msg_content(messages[i]))
+        for i in reasoning_indices if i not in reasoning_to_remove
+    )
+    findings_remaining = sum(
+        len(body_truncated.get(i, _msg_content(messages[i])))
+        for i in findings_indices if i not in findings_to_remove
+    )
+
+    if reasoning_remaining > reasoning_budget and findings_remaining < findings_budget:
+        # Donate unused findings budget to reasoning
+        surplus = findings_budget - findings_remaining
+        reasoning_budget += surplus
+        # Re-check: can we keep some reasoning messages we were going to remove?
+        restored = set()
+        for idx in sorted(reasoning_to_remove, key=lambda i: messages[i].get("round", 0), reverse=True):
+            msg_chars = len(_msg_content(messages[idx]))
+            if reasoning_remaining + msg_chars <= reasoning_budget:
+                reasoning_remaining += msg_chars
+                restored.add(idx)
+        reasoning_to_remove -= restored
+
+    elif findings_remaining > findings_budget and reasoning_remaining < reasoning_budget:
+        # Donate unused reasoning budget to findings
+        surplus = reasoning_budget - reasoning_remaining
+        findings_budget += surplus
+        # Re-check: can we keep some findings messages we were going to remove?
+        restored = set()
+        for idx in sorted(findings_to_remove, key=lambda i: messages[i].get("round", 0), reverse=True):
+            msg_chars = len(body_truncated.get(idx, _msg_content(messages[idx])))
+            if findings_remaining + msg_chars <= findings_budget:
+                findings_remaining += msg_chars
+                restored.add(idx)
+        findings_to_remove -= restored
+
+    # --- Build result ---
+    all_removed = findings_to_remove | reasoning_to_remove
+    if not all_removed and not body_truncated:
         return messages
 
-    truncated = [msg for idx, msg in enumerate(messages) if idx not in indices_to_remove]
-    removed_rounds = sorted({messages[idx].get("round", 0) for idx in indices_to_remove})
+    result: list[dict[str, Any]] = []
+    for idx, msg in enumerate(messages):
+        if idx in all_removed:
+            continue
+        if idx in body_truncated:
+            result.append({**msg, "content": body_truncated[idx]})
+        else:
+            result.append(msg)
+
+    removed_count = len(all_removed)
+    truncated_count = len(body_truncated) - len(body_truncated.keys() & all_removed)
+    result_chars = sum(len(_msg_content(m)) for m in result)
+
     logger.info(
-        "Truncated supervision message history: removed %d messages from rounds %s "
-        "(budget=%d chars, remaining=%d chars)",
-        len(indices_to_remove),
-        removed_rounds,
+        "Type-aware supervision truncation: removed %d messages, "
+        "truncated %d message bodies, protected %d think messages "
+        "(budget=%d chars, reasoning=%d/%d, findings=%d/%d, result=%d chars)",
+        removed_count,
+        truncated_count,
+        len(protected_think_indices),
         budget_chars,
-        sum(len(msg.get("content", "")) for msg in truncated),
+        sum(len(_msg_content(messages[i])) for i in reasoning_indices if i not in reasoning_to_remove),
+        int(budget_chars * _REASONING_BUDGET_FRACTION),
+        sum(
+            len(body_truncated.get(i, _msg_content(messages[i])))
+            for i in findings_indices if i not in findings_to_remove
+        ),
+        int(budget_chars * _FINDINGS_BUDGET_FRACTION),
+        result_chars,
     )
-    return truncated
+    return result
 
 
 # ---------------------------------------------------------------------------

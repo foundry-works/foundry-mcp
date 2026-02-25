@@ -30,13 +30,13 @@
 - [x] 3.8 Test: verify think injection references novelty context
 
 ## Phase 4 — Type-Aware Supervision Message Truncation
-- [ ] 4.1 Implement type-aware budgeting: 60% reasoning (think + delegation), 40% findings (tool_result)
-- [ ] 4.2 Within findings bucket, truncate message bodies (keep headers) before dropping whole messages
-- [ ] 4.3 Add `preserve_last_n_thinks` parameter (default: 2) to unconditionally keep recent think messages
-- [ ] 4.4 Replace or extend `truncate_supervision_messages` with new logic
-- [ ] 4.5 Test: verify think messages are preserved when findings messages are truncated
-- [ ] 4.6 Test: verify last N think messages survive aggressive truncation
-- [ ] 4.7 Test: verify total token usage stays within model limits after truncation
+- [x] 4.1 Implement type-aware budgeting: 60% reasoning (think + delegation), 40% findings (tool_result)
+- [x] 4.2 Within findings bucket, truncate message bodies (keep headers) before dropping whole messages
+- [x] 4.3 Add `preserve_last_n_thinks` parameter (default: 2) to unconditionally keep recent think messages
+- [x] 4.4 Replace or extend `truncate_supervision_messages` with new logic
+- [x] 4.5 Test: verify think messages are preserved when findings messages are truncated
+- [x] 4.6 Test: verify last N think messages survive aggressive truncation
+- [x] 4.7 Test: verify total token usage stays within model limits after truncation
 
 ## Phase 5 — Coverage Delta Injection for Supervisor Think Step
 - [ ] 5.1 Add `_compute_coverage_delta` helper comparing current vs previous round's per-query coverage

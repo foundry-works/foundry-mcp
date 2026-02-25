@@ -2507,6 +2507,309 @@ class TestSupervisionMessageTruncation:
 
 
 # ===========================================================================
+# Phase 4: Type-Aware Supervision Message Truncation
+# ===========================================================================
+
+
+class TestTypeAwareSupervisionTruncation:
+    """Tests for Phase 4: type-aware supervision message truncation.
+
+    Covers PLAN checklist items:
+    - 4.1: Type-aware budgeting (60% reasoning, 40% findings)
+    - 4.2: Findings body truncation before dropping whole messages
+    - 4.3: preserve_last_n_thinks parameter
+    - 4.5: Think messages preserved when findings are truncated
+    - 4.6: Last N think messages survive aggressive truncation
+    - 4.7: Total token usage within model limits after truncation
+    """
+
+    def test_think_messages_preserved_over_findings(self):
+        """4.5: Think message content is preserved while findings content is heavily truncated."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            truncate_supervision_messages,
+        )
+
+        messages = []
+        for r in range(3):
+            # Think message — smaller, high-value
+            messages.append({
+                "role": "assistant", "type": "think", "round": r,
+                "content": f"Gap analysis round {r}: " + "x" * 5_000,
+            })
+            # Findings message — larger, lower priority
+            messages.append({
+                "role": "tool_result", "type": "research_findings", "round": r,
+                "directive_id": f"d-{r}",
+                "content": f"Findings round {r}: " + "y" * 50_000,
+            })
+
+        original_think_chars = sum(
+            len(m["content"]) for m in messages if m["type"] == "think"
+        )
+        original_findings_chars = sum(
+            len(m["content"]) for m in messages if m["type"] == "research_findings"
+        )
+
+        # Budget that can hold thinks but not all findings
+        small_limits = {"test-model": 10_000}
+        result = truncate_supervision_messages(
+            messages, model="test-model", token_limits=small_limits,
+        )
+
+        # Measure surviving content by type
+        surviving_think_chars = sum(
+            len(m.get("content", "")) for m in result if m.get("type") == "think"
+        )
+        surviving_findings_chars = sum(
+            len(m.get("content", "")) for m in result if m.get("type") == "research_findings"
+        )
+
+        # Think messages should retain more of their content proportionally
+        think_retention = surviving_think_chars / original_think_chars if original_think_chars else 0
+        findings_retention = surviving_findings_chars / original_findings_chars if original_findings_chars else 0
+
+        assert think_retention > findings_retention, (
+            f"Think retention ({think_retention:.2%}) should exceed findings retention "
+            f"({findings_retention:.2%}) due to type-aware budgeting"
+        )
+        assert surviving_think_chars > 0, "At least some think content must survive"
+
+    def test_last_n_thinks_survive_aggressive_truncation(self):
+        """4.6: The most recent N think messages survive even under extreme budget pressure."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            truncate_supervision_messages,
+        )
+
+        messages = []
+        for r in range(5):
+            messages.append({
+                "role": "assistant", "type": "think", "round": r,
+                "content": f"Gap analysis round {r}: " + "x" * 20_000,
+            })
+            messages.append({
+                "role": "assistant", "type": "delegation", "round": r,
+                "content": f"Delegation round {r}: " + "d" * 10_000,
+            })
+            messages.append({
+                "role": "tool_result", "type": "research_findings", "round": r,
+                "directive_id": f"d-{r}",
+                "content": f"Findings round {r}: " + "y" * 40_000,
+            })
+
+        # Very small budget — forces aggressive truncation
+        tiny_limits = {"tiny": 5_000}
+        result = truncate_supervision_messages(
+            messages, model="tiny", token_limits=tiny_limits,
+            preserve_last_n_thinks=2,
+        )
+
+        # The 2 most recent think messages (rounds 3 and 4) must survive
+        surviving_thinks = [
+            m for m in result
+            if m.get("type") == "think"
+        ]
+        surviving_think_rounds = {m.get("round") for m in surviving_thinks}
+
+        assert 4 in surviving_think_rounds, "Most recent think (round 4) must survive"
+        assert 3 in surviving_think_rounds, "Second-most-recent think (round 3) must survive"
+        assert len(surviving_thinks) >= 2, (
+            f"At least 2 think messages must survive, got {len(surviving_thinks)}"
+        )
+
+    def test_findings_body_truncated_before_dropping(self):
+        """4.2: Findings bodies are truncated (keeping headers) before messages are dropped."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            truncate_supervision_messages,
+            _FINDINGS_BODY_TRUNCATION_HEADER_CHARS,
+        )
+
+        # One small think message + one large findings message
+        messages = [
+            {
+                "role": "assistant", "type": "think", "round": 0,
+                "content": "Short analysis",
+            },
+            {
+                "role": "tool_result", "type": "research_findings", "round": 0,
+                "directive_id": "d-0",
+                "content": "# Key Findings Header\nImportant summary line.\n\n" + "y" * 20_000,
+            },
+        ]
+
+        # Budget forces truncation but should keep the findings message
+        # (just with truncated body)
+        limits = {"test": 3_000}
+        result = truncate_supervision_messages(
+            messages, model="test", token_limits=limits,
+        )
+
+        # The findings message should still exist (not dropped)
+        findings_msgs = [m for m in result if m.get("type") == "research_findings"]
+        assert len(findings_msgs) >= 1, "Findings message should be truncated, not dropped"
+
+        # If it was truncated, it should contain the truncation marker and header
+        for fm in findings_msgs:
+            content = fm.get("content", "")
+            if len(content) < 20_000:  # Was truncated
+                assert "Key Findings Header" in content, (
+                    "Truncated findings should preserve the header"
+                )
+                assert len(content) <= _FINDINGS_BODY_TRUNCATION_HEADER_CHARS + 100, (
+                    "Truncated body should be roughly header-sized"
+                )
+
+    def test_total_chars_within_budget_after_truncation(self):
+        """4.7: Total message content stays within the model's token budget after truncation."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            truncate_supervision_messages,
+            _SUPERVISION_HISTORY_BUDGET_FRACTION,
+            _CHARS_PER_TOKEN,
+        )
+
+        messages = []
+        for r in range(4):
+            messages.append({
+                "role": "assistant", "type": "think", "round": r,
+                "content": f"Think {r}: " + "t" * 15_000,
+            })
+            messages.append({
+                "role": "tool_result", "type": "research_findings", "round": r,
+                "directive_id": f"d-{r}",
+                "content": f"Findings {r}: " + "f" * 30_000,
+            })
+
+        model_limit = 10_000  # tokens
+        limits = {"budget-test": model_limit}
+        budget_chars = int(model_limit * _SUPERVISION_HISTORY_BUDGET_FRACTION * _CHARS_PER_TOKEN)
+
+        result = truncate_supervision_messages(
+            messages, model="budget-test", token_limits=limits,
+        )
+
+        result_chars = sum(len(m.get("content", "")) for m in result)
+        # Allow protected thinks to exceed budget (by design), but total should
+        # be reasonable — within 2x budget at most
+        assert result_chars < budget_chars * 2, (
+            f"Result ({result_chars} chars) should be within 2x budget ({budget_chars} chars)"
+        )
+
+    def test_type_aware_budget_split(self):
+        """4.1: Verify the 60/40 reasoning/findings budget split is applied."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            truncate_supervision_messages,
+        )
+
+        # Create scenario where findings are much larger than reasoning
+        messages = []
+        for r in range(3):
+            messages.append({
+                "role": "assistant", "type": "think", "round": r,
+                "content": f"Think {r}: " + "t" * 8_000,
+            })
+            messages.append({
+                "role": "tool_result", "type": "research_findings", "round": r,
+                "directive_id": f"d-{r}",
+                "content": f"Findings {r}: " + "f" * 40_000,
+            })
+
+        limits = {"split-test": 10_000}
+        result = truncate_supervision_messages(
+            messages, model="split-test", token_limits=limits,
+        )
+
+        # Reasoning messages should be better preserved proportionally
+        think_chars = sum(
+            len(m.get("content", ""))
+            for m in result if m.get("type") == "think"
+        )
+        findings_chars = sum(
+            len(m.get("content", ""))
+            for m in result if m.get("type") == "research_findings"
+        )
+
+        total = think_chars + findings_chars
+        if total > 0:
+            think_ratio = think_chars / total
+            # Think messages should get a larger share than naive proportional
+            # (they were ~15% of original but should get ~60% of budget)
+            assert think_ratio > 0.3, (
+                f"Think ratio ({think_ratio:.2f}) should reflect priority budget allocation"
+            )
+
+    def test_preserve_last_n_thinks_custom_value(self):
+        """4.3: Custom preserve_last_n_thinks value is respected."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            truncate_supervision_messages,
+        )
+
+        messages = []
+        for r in range(6):
+            messages.append({
+                "role": "assistant", "type": "think", "round": r,
+                "content": f"Think {r}: " + "t" * 15_000,
+            })
+
+        tiny_limits = {"tiny": 3_000}
+        result = truncate_supervision_messages(
+            messages, model="tiny", token_limits=tiny_limits,
+            preserve_last_n_thinks=3,
+        )
+
+        surviving_rounds = sorted(m.get("round", -1) for m in result if m.get("type") == "think")
+        # Last 3 rounds (3, 4, 5) must survive
+        assert 5 in surviving_rounds, "Round 5 think must survive"
+        assert 4 in surviving_rounds, "Round 4 think must survive"
+        assert 3 in surviving_rounds, "Round 3 think must survive"
+
+    def test_delegation_messages_treated_as_reasoning(self):
+        """4.1: Delegation messages share the reasoning budget with think messages."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            truncate_supervision_messages,
+        )
+
+        messages = []
+        for r in range(3):
+            messages.append({
+                "role": "assistant", "type": "delegation", "round": r,
+                "content": f"Delegation {r}: " + "d" * 5_000,
+            })
+            messages.append({
+                "role": "tool_result", "type": "research_findings", "round": r,
+                "directive_id": f"d-{r}",
+                "content": f"Findings {r}: " + "f" * 50_000,
+            })
+
+        original_deleg_chars = sum(
+            len(m["content"]) for m in messages if m["type"] == "delegation"
+        )
+        original_findings_chars = sum(
+            len(m["content"]) for m in messages if m["type"] == "research_findings"
+        )
+
+        limits = {"deleg-test": 8_000}
+        result = truncate_supervision_messages(
+            messages, model="deleg-test", token_limits=limits,
+        )
+
+        # Delegation messages should retain more content than findings
+        surviving_deleg_chars = sum(
+            len(m.get("content", "")) for m in result if m.get("type") == "delegation"
+        )
+        surviving_findings_chars = sum(
+            len(m.get("content", "")) for m in result if m.get("type") == "research_findings"
+        )
+
+        deleg_retention = surviving_deleg_chars / original_deleg_chars if original_deleg_chars else 0
+        findings_retention = surviving_findings_chars / original_findings_chars if original_findings_chars else 0
+
+        assert surviving_deleg_chars > 0, "At least some delegation content should survive"
+        assert deleg_retention > findings_retention, (
+            f"Delegation retention ({deleg_retention:.2%}) should exceed "
+            f"findings retention ({findings_retention:.2%})"
+        )
+
+
+# ===========================================================================
 # Phase 6: Supervisor think_tool as Conversation
 # ===========================================================================
 
