@@ -4,17 +4,17 @@ Cross-reference: [PLAN.md](PLAN.md) for detailed rationale and file references.
 
 ## Phase 1: Cost-Tiered Model Defaults
 
-- [ ] **1a** Set `summarization_provider`/`summarization_model` defaults in `ModelRoleConfig` to a cheap-tier model
+- [x] **1a** Set `summarization_provider`/`summarization_model` defaults in `ModelRoleConfig` to a cheap-tier model
   - File: `src/foundry_mcp/config/research_sub_configs.py`
   - Verify: `SourceSummarizer` resolves to cheap model when no explicit override is set
   - Test: Unit test that `safe_resolve_model_for_role(config, "summarization")` returns cheap default
 
-- [ ] **1b** Evaluate and optionally set `compression_provider`/`compression_model` defaults to cheap tier
+- [x] **1b** Evaluate and optionally set `compression_provider`/`compression_model` defaults to cheap tier
   - File: `src/foundry_mcp/config/research_sub_configs.py`
   - Decision: Run compression quality comparison (cheap vs capable model) on 3-5 sample topics
   - If quality holds: set cheap default. If not: keep at research tier, document why.
 
-- [ ] **1c** Document cost-tier model strategy
+- [x] **1c** Document cost-tier model strategy
   - File: `dev_docs/guides/` (new guide or section)
   - Cover: which roles are cheap-eligible, example configs, cost/quality trade-offs
 
