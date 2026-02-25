@@ -101,6 +101,8 @@ class ResearchConfig:
     deep_research_enable_supervision: bool = True  # Master switch for iterative supervision loop
     deep_research_max_supervision_rounds: int = 6  # Max assess-delegate rounds per iteration
     deep_research_supervision_min_sources_per_query: int = 2  # Minimum sources for "sufficient" coverage
+    deep_research_coverage_confidence_threshold: float = 0.75  # Confidence score above which coverage is "sufficient"
+    deep_research_coverage_confidence_weights: Optional[dict] = None  # Dimension weights: {source_adequacy, domain_diversity, query_completion_rate}
 
     # Supervision LLM provider/model (uses reflection fallback if not set)
     deep_research_supervision_provider: Optional[str] = None
@@ -337,6 +339,10 @@ class ResearchConfig:
             deep_research_supervision_min_sources_per_query=int(
                 data.get("deep_research_supervision_min_sources_per_query", 2)
             ),
+            deep_research_coverage_confidence_threshold=float(
+                data.get("deep_research_coverage_confidence_threshold", 0.75)
+            ),
+            deep_research_coverage_confidence_weights=data.get("deep_research_coverage_confidence_weights"),
             deep_research_supervision_provider=data.get("deep_research_supervision_provider"),
             deep_research_supervision_model=data.get("deep_research_supervision_model"),
             # Supervisor delegation configuration

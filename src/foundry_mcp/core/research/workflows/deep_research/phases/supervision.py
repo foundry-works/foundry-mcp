@@ -197,7 +197,8 @@ class SupervisionPhaseMixin:
                 heuristic = self._assess_coverage_heuristic(state, min_sources)
                 if not heuristic["should_continue_gathering"]:
                     logger.info(
-                        "Supervision delegation: heuristic sufficient at round %d, advancing",
+                        "Supervision delegation: confidence %.2f >= threshold at round %d, advancing",
+                        heuristic.get("confidence", 0.0),
                         state.supervision_round,
                     )
                     self._write_audit_event(
@@ -1720,8 +1721,9 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             heuristic = self._assess_coverage_heuristic(state, min_sources)
             if not heuristic["should_continue_gathering"]:
                 logger.info(
-                    "Supervision heuristic: all queries sufficiently covered "
+                    "Supervision heuristic: confidence %.2f >= threshold "
                     "(round %d), advancing to analysis",
+                    heuristic.get("confidence", 0.0),
                     state.supervision_round,
                 )
                 self._write_audit_event(
@@ -2509,48 +2511,122 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         state: DeepResearchState,
         min_sources: int,
     ) -> dict[str, Any]:
-        """Assess coverage using simple heuristics (no LLM call).
+        """Assess coverage using multi-dimensional confidence scoring.
 
-        Used as a fallback when the LLM call fails. Checks whether each
-        completed sub-query has at least ``min_sources`` linked sources.
+        Computes a confidence score from three dimensions:
 
-        Returns ``should_continue_gathering=False`` conservatively — the
-        heuristic won't generate follow-up queries, so looping back to
-        gathering would be pointless without new queries.
+        - **Source adequacy**: average of ``min(1.0, sources / min_sources)``
+          across all completed sub-queries.
+        - **Domain diversity**: ``unique_domains / (query_count * 2)`` capped
+          at 1.0 — rewards breadth of sourcing.
+        - **Query completion rate**: ``completed / total`` sub-queries.
+
+        The overall confidence is a weighted mean (configurable via
+        ``deep_research_coverage_confidence_weights``).  When
+        ``confidence >= threshold`` (default 0.75), the heuristic declares
+        coverage sufficient and sets ``should_continue_gathering=False``.
 
         Args:
             state: Current research state
             min_sources: Minimum sources per sub-query for "sufficient" coverage
 
         Returns:
-            Dict with coverage assessment and should_continue_gathering flag
+            Dict with coverage assessment, confidence breakdown, and
+            should_continue_gathering flag
         """
         completed = state.completed_sub_queries()
+        total_queries = len(state.sub_queries)
+
         if not completed:
             return {
                 "overall_coverage": "insufficient",
                 "should_continue_gathering": False,
                 "queries_assessed": 0,
                 "queries_sufficient": 0,
+                "confidence": 0.0,
+                "confidence_dimensions": {
+                    "source_adequacy": 0.0,
+                    "domain_diversity": 0.0,
+                    "query_completion_rate": 0.0,
+                },
+                "dominant_factors": [],
+                "weak_factors": ["source_adequacy", "domain_diversity", "query_completion_rate"],
             }
 
+        # --- Dimension 1: Source adequacy ---
+        source_ratios: list[float] = []
         sufficient_count = 0
         for sq in completed:
             sq_sources = [s for s in state.sources if s.sub_query_id == sq.id]
-            if len(sq_sources) >= min_sources:
+            count = len(sq_sources)
+            ratio = min(1.0, count / min_sources) if min_sources > 0 else 1.0
+            source_ratios.append(ratio)
+            if count >= min_sources:
                 sufficient_count += 1
+        source_adequacy = sum(source_ratios) / len(source_ratios)
 
-        total = len(completed)
-        if sufficient_count == total:
+        # --- Dimension 2: Domain diversity ---
+        all_domains: set[str] = set()
+        for s in state.sources:
+            if s.url:
+                try:
+                    parsed = urlparse(s.url)
+                    if parsed.netloc:
+                        all_domains.add(parsed.netloc)
+                except Exception:
+                    pass
+        query_count = len(completed)
+        domain_diversity = min(1.0, len(all_domains) / (query_count * 2)) if query_count > 0 else 0.0
+
+        # --- Dimension 3: Query completion rate ---
+        query_completion_rate = len(completed) / total_queries if total_queries > 0 else 0.0
+
+        # --- Weighted confidence ---
+        weights = getattr(
+            self.config,
+            "deep_research_coverage_confidence_weights",
+            None,
+        ) or {"source_adequacy": 0.5, "domain_diversity": 0.2, "query_completion_rate": 0.3}
+        total_weight = sum(weights.values())
+        dimensions = {
+            "source_adequacy": source_adequacy,
+            "domain_diversity": domain_diversity,
+            "query_completion_rate": query_completion_rate,
+        }
+        confidence = sum(
+            dimensions[k] * weights.get(k, 0.0) for k in dimensions
+        ) / total_weight if total_weight > 0 else 0.0
+
+        # --- Factor classification ---
+        strong_threshold = 0.7
+        weak_threshold = 0.5
+        dominant_factors = [k for k, v in dimensions.items() if v >= strong_threshold]
+        weak_factors = [k for k, v in dimensions.items() if v < weak_threshold]
+
+        # --- Overall coverage label (backward-compatible) ---
+        if sufficient_count == query_count:
             overall = "sufficient"
         elif sufficient_count > 0:
             overall = "partial"
         else:
             overall = "insufficient"
 
+        # --- Confidence-based decision ---
+        threshold = getattr(
+            self.config,
+            "deep_research_coverage_confidence_threshold",
+            0.75,
+        )
+        should_continue = confidence < threshold
+
         return {
             "overall_coverage": overall,
-            "should_continue_gathering": False,
-            "queries_assessed": total,
+            "should_continue_gathering": should_continue,
+            "queries_assessed": query_count,
             "queries_sufficient": sufficient_count,
+            "confidence": round(confidence, 4),
+            "confidence_threshold": threshold,
+            "confidence_dimensions": dimensions,
+            "dominant_factors": dominant_factors,
+            "weak_factors": weak_factors,
         }

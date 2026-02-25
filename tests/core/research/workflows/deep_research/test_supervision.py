@@ -104,6 +104,8 @@ class StubSupervision(SupervisionPhaseMixin):
         self.config.deep_research_supervision_min_sources_per_query = 2
         self.config.deep_research_max_concurrent_research_units = 5
         self.config.deep_research_reflection_timeout = 60.0
+        self.config.deep_research_coverage_confidence_threshold = 0.75
+        self.config.deep_research_coverage_confidence_weights = None
         self.memory = MagicMock()
         self._audit_events: list[tuple[str, dict]] = []
 
@@ -434,6 +436,10 @@ class TestSupervisionIntegration:
         stub = StubSupervision()
         stub.config.deep_research_providers = ["tavily"]
         stub.config.deep_research_topic_max_tool_calls = 5
+        # Low confidence threshold so heuristic early-exits after round 0
+        # completes (round 1 check). The test focuses on directive generation,
+        # not heuristic sensitivity.
+        stub.config.deep_research_coverage_confidence_threshold = 0.1
         # sources_per_query=1 keeps coverage below min_sources=2 so heuristic
         # does not short-circuit on round=0.
         state = _make_state(num_completed=2, sources_per_query=1, supervision_round=0)
@@ -644,6 +650,8 @@ class TestSupervisionIntegration:
         stub.config.deep_research_max_concurrent_research_units = 1
         stub.config.deep_research_providers = ["tavily"]
         stub.config.deep_research_topic_max_tool_calls = 5
+        # Low threshold so heuristic early-exits after round 0
+        stub.config.deep_research_coverage_confidence_threshold = 0.1
 
         state = _make_state(num_completed=2, sources_per_query=1, supervision_round=0)
         state.max_sub_queries = 10
@@ -3489,3 +3497,284 @@ No JSON in this response."""
         think_msgs = [m for m in state.supervision_messages if m.get("type") == "think"]
         assert len(think_msgs) >= 1
         assert "Regulatory gap" in think_msgs[0]["content"]
+
+
+# ===========================================================================
+# Phase 6 (PLAN): Confidence-Scored Coverage Heuristic
+# ===========================================================================
+
+
+class TestConfidenceScoredCoverage:
+    """Tests for PLAN Phase 6: confidence-scored coverage heuristic.
+
+    Covers PLAN checklist items:
+    - 6.1: Multi-dimensional scoring (source adequacy, domain diversity, query completion rate)
+    - 6.2: Weighted confidence score with configurable weights
+    - 6.3: confidence, dominant_factors, weak_factors in return dict
+    - 6.4: confidence >= threshold for should_continue_gathering decision
+    - 6.5: Audit events contain confidence breakdown
+    - 6.6: Confidence score reflects actual coverage quality
+    - 6.7: Threshold-based decision matches expected behavior at boundary values
+    - 6.8: Audit events contain confidence breakdown
+    """
+
+    def _make_stub(self, threshold: float = 0.75, weights: dict | None = None):
+        stub = StubSupervision(delegation_model=True)
+        stub.config.deep_research_coverage_confidence_threshold = threshold
+        stub.config.deep_research_coverage_confidence_weights = weights
+        return stub
+
+    # ------------------------------------------------------------------
+    # 6.1 / 6.6: Multi-dimensional scoring reflects coverage quality
+    # ------------------------------------------------------------------
+
+    def test_high_coverage_yields_high_confidence(self):
+        """Fully covered queries with diverse domains score near 1.0."""
+        stub = self._make_stub()
+        # 3 completed queries, 3 sources each (>= min_sources=2), diverse domains
+        state = _make_state(num_completed=3, sources_per_query=3)
+
+        result = stub._assess_coverage_heuristic(state, min_sources=2)
+
+        assert result["confidence"] >= 0.8, f"Expected high confidence, got {result['confidence']}"
+        assert result["confidence_dimensions"]["source_adequacy"] == 1.0
+        assert result["confidence_dimensions"]["query_completion_rate"] == 1.0
+        assert result["overall_coverage"] == "sufficient"
+        assert result["queries_sufficient"] == 3
+
+    def test_low_coverage_yields_low_confidence(self):
+        """Insufficient sources yield low confidence."""
+        stub = self._make_stub()
+        # 2 completed queries but only 1 source each (< min_sources=3)
+        state = _make_state(num_completed=2, sources_per_query=1)
+
+        result = stub._assess_coverage_heuristic(state, min_sources=3)
+
+        assert result["confidence"] < 0.6, f"Expected low confidence, got {result['confidence']}"
+        assert result["confidence_dimensions"]["source_adequacy"] < 0.5
+        assert result["overall_coverage"] == "insufficient"
+
+    def test_partial_coverage_yields_medium_confidence(self):
+        """Mixed coverage produces intermediate confidence."""
+        stub = self._make_stub()
+        state = _make_state(num_completed=2, sources_per_query=2)
+        # Add a completed sub-query with no sources
+        state.sub_queries.append(
+            SubQuery(id="sq-nosrc", query="No sources query", status="completed")
+        )
+
+        result = stub._assess_coverage_heuristic(state, min_sources=2)
+
+        assert 0.3 < result["confidence"] < 0.9
+        assert result["overall_coverage"] == "partial"
+        assert result["queries_sufficient"] == 2
+
+    def test_no_completed_queries_yields_zero_confidence(self):
+        """No completed queries produce confidence=0.0."""
+        stub = self._make_stub()
+        state = _make_state(num_completed=0, num_pending=3)
+
+        result = stub._assess_coverage_heuristic(state, min_sources=2)
+
+        assert result["confidence"] == 0.0
+        assert result["overall_coverage"] == "insufficient"
+        assert result["queries_assessed"] == 0
+        assert len(result["weak_factors"]) == 3
+
+    def test_domain_diversity_dimension(self):
+        """Domain diversity reflects unique domain count vs query count."""
+        stub = self._make_stub()
+        state = _make_state(num_completed=2, sources_per_query=2)
+
+        result = stub._assess_coverage_heuristic(state, min_sources=2)
+
+        # 2 completed queries × 2 sources each, URLs are example0.com, example1.com
+        # diversity = unique_domains / (query_count * 2)
+        dims = result["confidence_dimensions"]
+        assert 0.0 < dims["domain_diversity"] <= 1.0
+
+    def test_query_completion_rate_dimension(self):
+        """Query completion rate = completed / total sub-queries."""
+        stub = self._make_stub()
+        state = _make_state(num_completed=2, num_pending=2, sources_per_query=3)
+
+        result = stub._assess_coverage_heuristic(state, min_sources=2)
+
+        # 2 completed out of 4 total → 0.5
+        assert result["confidence_dimensions"]["query_completion_rate"] == 0.5
+
+    # ------------------------------------------------------------------
+    # 6.2: Configurable weights
+    # ------------------------------------------------------------------
+
+    def test_custom_weights_affect_confidence(self):
+        """Custom weights shift the confidence score."""
+        # Weight heavily toward source_adequacy
+        stub_source_heavy = self._make_stub(
+            weights={"source_adequacy": 1.0, "domain_diversity": 0.0, "query_completion_rate": 0.0}
+        )
+        # Weight heavily toward domain_diversity
+        stub_domain_heavy = self._make_stub(
+            weights={"source_adequacy": 0.0, "domain_diversity": 1.0, "query_completion_rate": 0.0}
+        )
+
+        state = _make_state(num_completed=3, sources_per_query=3)
+
+        result_source = stub_source_heavy._assess_coverage_heuristic(state, min_sources=2)
+        result_domain = stub_domain_heavy._assess_coverage_heuristic(state, min_sources=2)
+
+        # Source adequacy is 1.0, domain diversity varies — different scores
+        assert result_source["confidence"] == 1.0
+        assert result_domain["confidence"] != result_source["confidence"]
+
+    # ------------------------------------------------------------------
+    # 6.3: Return dict structure
+    # ------------------------------------------------------------------
+
+    def test_return_dict_contains_confidence_fields(self):
+        """Return dict includes confidence, dimensions, factors."""
+        stub = self._make_stub()
+        state = _make_state(num_completed=2, sources_per_query=2)
+
+        result = stub._assess_coverage_heuristic(state, min_sources=2)
+
+        assert "confidence" in result
+        assert "confidence_threshold" in result
+        assert "confidence_dimensions" in result
+        assert "dominant_factors" in result
+        assert "weak_factors" in result
+        assert isinstance(result["confidence"], float)
+        assert isinstance(result["confidence_dimensions"], dict)
+        assert isinstance(result["dominant_factors"], list)
+        assert isinstance(result["weak_factors"], list)
+
+        dims = result["confidence_dimensions"]
+        assert "source_adequacy" in dims
+        assert "domain_diversity" in dims
+        assert "query_completion_rate" in dims
+
+    def test_dominant_and_weak_factors_classification(self):
+        """Factors are classified as dominant (>= 0.7) or weak (< 0.5)."""
+        stub = self._make_stub()
+        # High source coverage, all queries completed
+        state = _make_state(num_completed=3, sources_per_query=4)
+
+        result = stub._assess_coverage_heuristic(state, min_sources=2)
+
+        # source_adequacy = 1.0 → dominant
+        assert "source_adequacy" in result["dominant_factors"]
+        # query_completion_rate = 1.0 → dominant
+        assert "query_completion_rate" in result["dominant_factors"]
+
+    # ------------------------------------------------------------------
+    # 6.4 / 6.7: Threshold-based decision at boundary values
+    # ------------------------------------------------------------------
+
+    def test_confidence_above_threshold_stops_gathering(self):
+        """When confidence >= threshold, should_continue_gathering=False."""
+        stub = self._make_stub(threshold=0.5)
+        state = _make_state(num_completed=3, sources_per_query=3)
+
+        result = stub._assess_coverage_heuristic(state, min_sources=2)
+
+        assert result["confidence"] >= 0.5
+        assert result["should_continue_gathering"] is False
+
+    def test_confidence_below_threshold_continues_gathering(self):
+        """When confidence < threshold, should_continue_gathering=True."""
+        stub = self._make_stub(threshold=0.99)
+        # Limited sources and incomplete queries
+        state = _make_state(num_completed=1, num_pending=3, sources_per_query=1)
+
+        result = stub._assess_coverage_heuristic(state, min_sources=3)
+
+        assert result["confidence"] < 0.99
+        assert result["should_continue_gathering"] is True
+
+    def test_boundary_at_exactly_threshold(self):
+        """At exactly the threshold, should_continue_gathering=False (>= check)."""
+        stub = self._make_stub()
+        state = _make_state(num_completed=3, sources_per_query=3)
+
+        result = stub._assess_coverage_heuristic(state, min_sources=2)
+
+        # Force threshold to exactly match confidence
+        exact_threshold = result["confidence"]
+        stub.config.deep_research_coverage_confidence_threshold = exact_threshold
+
+        result2 = stub._assess_coverage_heuristic(state, min_sources=2)
+        assert result2["should_continue_gathering"] is False
+
+    def test_high_threshold_prevents_early_exit(self):
+        """A very high threshold (0.99) prevents premature early-exit."""
+        stub = self._make_stub(threshold=0.99)
+        state = _make_state(num_completed=2, sources_per_query=2)
+
+        result = stub._assess_coverage_heuristic(state, min_sources=2)
+
+        # Even with decent coverage, 0.99 threshold is hard to meet
+        assert result["should_continue_gathering"] is True
+
+    def test_low_threshold_allows_early_exit(self):
+        """A very low threshold (0.1) allows early exit with minimal coverage."""
+        stub = self._make_stub(threshold=0.1)
+        state = _make_state(num_completed=1, sources_per_query=1)
+
+        result = stub._assess_coverage_heuristic(state, min_sources=2)
+
+        # Even with minimal coverage, 0.1 threshold should be met
+        assert result["confidence"] >= 0.1
+        assert result["should_continue_gathering"] is False
+
+    # ------------------------------------------------------------------
+    # 6.5 / 6.8: Audit events contain confidence breakdown
+    # ------------------------------------------------------------------
+
+    def test_audit_event_includes_confidence_breakdown(self):
+        """Audit event data includes the full confidence breakdown."""
+        stub = self._make_stub()
+        state = _make_state(
+            num_completed=3, sources_per_query=3, supervision_round=1,
+        )
+
+        heuristic = stub._assess_coverage_heuristic(state, min_sources=2)
+
+        # Simulate what the delegation loop does: write audit event with heuristic
+        stub._write_audit_event(
+            state,
+            "supervision_result",
+            data={
+                "reason": "heuristic_sufficient",
+                "supervision_round": state.supervision_round,
+                "coverage_summary": heuristic,
+            },
+        )
+
+        assert len(stub._audit_events) == 1
+        event_name, event_kwargs = stub._audit_events[0]
+        assert event_name == "supervision_result"
+
+        coverage_summary = event_kwargs["data"]["coverage_summary"]
+        assert "confidence" in coverage_summary
+        assert "confidence_dimensions" in coverage_summary
+        assert "dominant_factors" in coverage_summary
+        assert "weak_factors" in coverage_summary
+        assert isinstance(coverage_summary["confidence"], float)
+        assert "source_adequacy" in coverage_summary["confidence_dimensions"]
+
+    # ------------------------------------------------------------------
+    # Backward compatibility
+    # ------------------------------------------------------------------
+
+    def test_backward_compatible_keys_preserved(self):
+        """Original keys (overall_coverage, queries_assessed, etc.) still present."""
+        stub = self._make_stub()
+        state = _make_state(num_completed=2, sources_per_query=2)
+
+        result = stub._assess_coverage_heuristic(state, min_sources=2)
+
+        assert "overall_coverage" in result
+        assert "should_continue_gathering" in result
+        assert "queries_assessed" in result
+        assert "queries_sufficient" in result
+        assert result["overall_coverage"] in ("sufficient", "partial", "insufficient")
