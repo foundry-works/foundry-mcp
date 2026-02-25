@@ -68,6 +68,15 @@ class TopicResearchResult(BaseModel):
             "When present, analysis prefers this over raw source content."
         ),
     )
+    tool_parse_failures: int = Field(
+        default=0,
+        description=(
+            "Number of times the researcher LLM returned a response that could "
+            "not be parsed as valid tool-call JSON. Retried with a clarifying "
+            "suffix up to 2 times per turn. High values indicate model/prompt "
+            "format issues."
+        ),
+    )
     early_completion: bool = Field(
         default=False,
         description="Whether the topic researcher signalled early research completion",
@@ -434,6 +443,14 @@ class ResearcherResponse(BaseModel):
         default=None,
         description="Optional brief reasoning before tool calls",
     )
+    parse_failed: bool = Field(
+        default=False,
+        description=(
+            "True when the LLM returned non-empty content that could not be "
+            "parsed as valid tool-call JSON. Used by the ReAct loop to trigger "
+            "retry with a clarifying suffix instead of stopping."
+        ),
+    )
 
 
 #: Registry mapping tool names to their Pydantic schema classes.
@@ -453,15 +470,18 @@ def parse_researcher_response(content: str) -> ResearcherResponse:
 
     Extracts JSON from the LLM response (handling markdown code blocks
     and surrounding text), then validates against the ResearcherResponse
-    schema. Returns an empty-tool-calls response on parse failure (signals
-    the loop to stop gracefully).
+    schema.
+
+    On parse failure of non-empty content, returns a response with
+    ``parse_failed=True`` so the caller can retry with a clarifying suffix.
+    Empty/blank content returns an empty response (graceful stop, no retry).
 
     Args:
         content: Raw LLM response text
 
     Returns:
-        Validated ResearcherResponse instance. On parse failure, returns
-        a response with no tool calls (graceful stop).
+        Validated ResearcherResponse instance. Check ``parse_failed`` to
+        distinguish parse errors (retryable) from genuine empty responses.
     """
     import json as _json
 
@@ -474,13 +494,13 @@ def parse_researcher_response(content: str) -> ResearcherResponse:
 
     json_str = extract_json(content)
     if not json_str:
-        return ResearcherResponse()
+        return ResearcherResponse(parse_failed=True)
 
     try:
         data = _json.loads(json_str)
         return ResearcherResponse.model_validate(data)
     except (_json.JSONDecodeError, ValueError, TypeError):
-        return ResearcherResponse()
+        return ResearcherResponse(parse_failed=True)
 
 
 class Contradiction(BaseModel):

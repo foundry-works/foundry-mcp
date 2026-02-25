@@ -392,16 +392,69 @@ class TopicResearchMixin:
                 )
                 break
 
-            # Parse tool calls from LLM response
+            # Parse tool calls from LLM response, retrying on parse failure
             raw_content = llm_result.content or ""
             response = parse_researcher_response(raw_content)
 
-            # No tool calls = model chose to stop
-            if not response.tool_calls:
-                logger.info(
-                    "Topic %r researcher returned no tool calls on turn %d, stopping",
+            # Retry on parse failure: re-prompt the LLM with a clarifying suffix
+            # up to 2 times (matching ODR's stop_after_attempt=3 total attempts).
+            parse_retries = 0
+            while response.parse_failed and parse_retries < 2:
+                parse_retries += 1
+                result.tool_parse_failures += 1
+                logger.warning(
+                    "Topic %r researcher returned unparseable JSON on turn %d "
+                    "(retry %d/2), re-prompting with format clarification",
                     sub_query.id,
                     turn + 1,
+                    parse_retries,
+                )
+                # Append the failed response + clarification to history
+                message_history.append({"role": "assistant", "content": raw_content})
+                message_history.append({
+                    "role": "tool",
+                    "tool": "system",
+                    "content": (
+                        "Your previous response was not valid JSON. Please respond "
+                        "with ONLY a JSON object in the exact format:\n"
+                        '{"tool_calls": [{"tool": "tool_name", "arguments": {...}}]}\n'
+                        "Do not include any text outside the JSON object."
+                    ),
+                })
+                retry_user_prompt = _build_react_user_prompt(
+                    topic=sub_query.query,
+                    message_history=message_history,
+                    budget_remaining=budget_remaining,
+                    budget_total=max_searches,
+                )
+                try:
+                    retry_result = await self._execute_provider_async(
+                        prompt=retry_user_prompt,
+                        provider_id=provider_id,
+                        model=researcher_model,
+                        system_prompt=system_prompt,
+                        timeout=self.config.deep_research_reflection_timeout,
+                        temperature=0.2,  # lower temp for format compliance
+                        phase="topic_research",
+                        fallback_providers=[],
+                        max_retries=1,
+                        retry_delay=2.0,
+                    )
+                    if not retry_result.success:
+                        break
+                    local_tokens_used += retry_result.tokens_used or 0
+                    raw_content = retry_result.content or ""
+                    response = parse_researcher_response(raw_content)
+                except (asyncio.TimeoutError, OSError, ValueError, RuntimeError):
+                    break
+
+            # No tool calls = model chose to stop (or all retries exhausted)
+            if not response.tool_calls:
+                logger.info(
+                    "Topic %r researcher returned no tool calls on turn %d%s, stopping",
+                    sub_query.id,
+                    turn + 1,
+                    f" (after {parse_retries} parse retries)" if parse_retries > 0 else "",
                 )
                 break
 
@@ -631,6 +684,7 @@ class TopicResearchMixin:
                 "extract_enabled": extract_enabled,
                 "turns_used": len([m for m in message_history if m.get("role") == "assistant"]),
                 "reflection_injections": reflection_injections,
+                "tool_parse_failures": result.tool_parse_failures,
             },
         )
 

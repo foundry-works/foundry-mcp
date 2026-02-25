@@ -32,13 +32,13 @@ Cross-reference: [PLAN.md](PLAN.md) for detailed rationale and file references.
 
 ## Phase 3: Researcher Tool-Call Parse Resilience
 
-- [ ] **3a** Add retry-on-parse-failure to researcher ReAct loop
+- [x] **3a** Add retry-on-parse-failure to researcher ReAct loop
   - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py`
   - Max retries: 2 (matching ODR's `stop_after_attempt=3` total)
   - Retry prompt suffix: clarify expected JSON format
   - Test: Unit test with mock LLM that returns invalid JSON on first call, valid on retry
 
-- [ ] **3b** Add `tool_parse_failures` counter to topic research metrics
+- [x] **3b** Add `tool_parse_failures` counter to topic research metrics
   - File: `src/foundry_mcp/core/research/models/deep_research.py`
   - Expose in audit artifacts for observability
 

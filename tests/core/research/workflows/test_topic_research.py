@@ -195,6 +195,7 @@ class TestTopicResearchResult:
         assert result.reflection_notes == []
         assert result.refined_queries == []
         assert result.source_ids == []
+        assert result.tool_parse_failures == 0
 
     def test_field_updates(self) -> None:
         result = TopicResearchResult(sub_query_id="sq-1")
@@ -246,20 +247,30 @@ class TestParseResearcherResponse:
         assert len(resp.tool_calls) == 2
         assert resp.tool_calls[0].tool == "web_search"
         assert resp.tool_calls[1].tool == "think"
+        assert resp.parse_failed is False
 
     def test_empty_content_returns_empty(self) -> None:
         resp = parse_researcher_response("")
         assert resp.tool_calls == []
+        assert resp.parse_failed is False  # empty is not a parse failure
 
     def test_malformed_json_returns_empty(self) -> None:
         resp = parse_researcher_response("This is not JSON")
         assert resp.tool_calls == []
+        assert resp.parse_failed is True  # non-empty content that fails to parse
+
+    def test_invalid_json_structure_flags_parse_failed(self) -> None:
+        """Non-empty content with unparseable JSON sets parse_failed."""
+        resp = parse_researcher_response('{"invalid": "not tool_calls format"')
+        assert resp.tool_calls == []
+        assert resp.parse_failed is True
 
     def test_json_in_code_block(self) -> None:
         content = '```json\n{"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "done"}}]}\n```'
         resp = parse_researcher_response(content)
         assert len(resp.tool_calls) == 1
         assert resp.tool_calls[0].tool == "research_complete"
+        assert resp.parse_failed is False
 
     def test_research_complete_parsed(self) -> None:
         content = _react_response(_complete_call("All done"))
@@ -267,6 +278,7 @@ class TestParseResearcherResponse:
         assert len(resp.tool_calls) == 1
         assert resp.tool_calls[0].tool == "research_complete"
         assert resp.tool_calls[0].arguments["summary"] == "All done"
+        assert resp.parse_failed is False
 
 
 # =============================================================================
@@ -936,6 +948,213 @@ class TestReActLoop:
         )
 
         assert state.total_tokens_used == 175  # 100 + 75
+
+
+# =============================================================================
+# Unit tests: parse failure retry (Phase 3 PLAN)
+# =============================================================================
+
+
+class TestParseFailureRetry:
+    """Tests for retry-on-parse-failure in the ReAct loop.
+
+    When the researcher LLM returns non-empty content that fails JSON parsing,
+    the loop retries up to 2 times with a clarifying prompt suffix. Matches
+    ODR's ``with_retry(stop_after_attempt=3)`` pattern.
+    """
+
+    @pytest.mark.asyncio
+    async def test_retry_succeeds_on_second_attempt(self) -> None:
+        """Invalid JSON on first call, valid on retry → loop continues."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+        provider = _make_mock_provider("tavily")
+
+        call_count = 0
+
+        async def mock_llm(**kwargs: Any) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 50
+            result.error = None
+
+            if call_count == 1:
+                # First call: return malformed JSON
+                result.content = "Sure, here is my research plan..."
+            elif call_count == 2:
+                # Retry: return valid JSON after clarification
+                result.content = _react_response(
+                    _think_call("Reflecting on findings")
+                )
+            else:
+                # Complete
+                result.content = _react_response(
+                    _complete_call("Done after retry")
+                )
+            return result
+
+        mixin._provider_async_fn = mock_llm
+
+        topic_result = await mixin._execute_topic_research_async(
+            sub_query=sq, state=state, available_providers=[provider],
+            max_searches=3, timeout=30.0,
+            seen_urls=set(), seen_titles={},
+            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+        )
+
+        assert topic_result.tool_parse_failures == 1
+        assert topic_result.early_completion is True
+        assert call_count == 3  # original + retry + completion
+
+    @pytest.mark.asyncio
+    async def test_retry_exhausted_stops_loop(self) -> None:
+        """All 3 attempts return invalid JSON → loop stops gracefully."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+        provider = _make_mock_provider("tavily")
+
+        call_count = 0
+
+        async def mock_llm(**kwargs: Any) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 30
+            result.error = None
+            # Always return invalid content
+            result.content = "I'm not sure how to format this as JSON"
+            return result
+
+        mixin._provider_async_fn = mock_llm
+
+        topic_result = await mixin._execute_topic_research_async(
+            sub_query=sq, state=state, available_providers=[provider],
+            max_searches=3, timeout=30.0,
+            seen_urls=set(), seen_titles={},
+            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+        )
+
+        assert topic_result.tool_parse_failures == 2  # 2 retries
+        assert call_count == 3  # 1 original + 2 retries
+        assert topic_result.early_completion is False
+
+    @pytest.mark.asyncio
+    async def test_parse_failure_tracked_in_audit(self) -> None:
+        """tool_parse_failures appears in the audit event data."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+        provider = _make_mock_provider("tavily")
+
+        call_count = 0
+
+        async def mock_llm(**kwargs: Any) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 40
+            result.error = None
+
+            if call_count == 1:
+                result.content = "not json at all"
+            else:
+                result.content = _react_response(
+                    _complete_call("Done")
+                )
+            return result
+
+        mixin._provider_async_fn = mock_llm
+
+        await mixin._execute_topic_research_async(
+            sub_query=sq, state=state, available_providers=[provider],
+            max_searches=3, timeout=30.0,
+            seen_urls=set(), seen_titles={},
+            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+        )
+
+        # Check audit event includes parse failure count
+        audit_events = [
+            (name, data)
+            for name, data in mixin._audit_events
+            if name == "topic_research_complete"
+        ]
+        assert len(audit_events) == 1
+        event_data = audit_events[0][1]["data"]
+        assert event_data["tool_parse_failures"] == 1
+
+    @pytest.mark.asyncio
+    async def test_retry_uses_lower_temperature(self) -> None:
+        """Retry LLM calls should use lower temperature for format compliance."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+        provider = _make_mock_provider("tavily")
+
+        captured_temps: list[float] = []
+
+        async def mock_llm(**kwargs: Any) -> MagicMock:
+            captured_temps.append(kwargs.get("temperature", -1))
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 40
+            result.error = None
+            if len(captured_temps) <= 1:
+                result.content = "not valid json"
+            else:
+                result.content = _react_response(_complete_call("Done"))
+            return result
+
+        mixin._provider_async_fn = mock_llm
+
+        await mixin._execute_topic_research_async(
+            sub_query=sq, state=state, available_providers=[provider],
+            max_searches=3, timeout=30.0,
+            seen_urls=set(), seen_titles={},
+            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+        )
+
+        # First call: normal temp (0.3), retry: lower temp (0.2)
+        assert len(captured_temps) >= 2
+        assert captured_temps[0] == 0.3
+        assert captured_temps[1] == 0.2
+
+    @pytest.mark.asyncio
+    async def test_no_retry_on_empty_content(self) -> None:
+        """Empty content (model chose silence) should NOT trigger retry."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+        provider = _make_mock_provider("tavily")
+
+        call_count = 0
+
+        async def mock_llm(**kwargs: Any) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 20
+            result.error = None
+            result.content = ""  # empty = model chose to stop
+            return result
+
+        mixin._provider_async_fn = mock_llm
+
+        topic_result = await mixin._execute_topic_research_async(
+            sub_query=sq, state=state, available_providers=[provider],
+            max_searches=3, timeout=30.0,
+            seen_urls=set(), seen_titles={},
+            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+        )
+
+        assert call_count == 1  # no retry
+        assert topic_result.tool_parse_failures == 0
 
 
 # =============================================================================
