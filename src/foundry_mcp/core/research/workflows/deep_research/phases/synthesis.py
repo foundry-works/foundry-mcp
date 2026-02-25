@@ -639,6 +639,12 @@ Include analysis of Conflicting Information and Limitations where they exist, bu
 - Distinguish between high-confidence findings (well-supported) and lower-confidence insights.
 - Citations are extremely important. Pay careful attention to getting these right. Users will often use citations to find more information on specific points.
 
+## Language
+
+CRITICAL: The report MUST be written in the same language as the original research query.
+If the query is in English, write in English. If the query is in Chinese, write entirely in Chinese. If in Spanish, write entirely in Spanish.
+The research and findings may be in English, but you must translate information to match the query language.
+
 IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
 
     def _build_synthesis_user_prompt(

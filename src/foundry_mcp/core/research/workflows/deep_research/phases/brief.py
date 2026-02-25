@@ -226,6 +226,8 @@ class BriefPhaseMixin:
             "websites.\n"
             "   - Language-specific queries → prioritize sources published "
             "in that language.\n"
+            "   If the user's query is written in a non-English language, "
+            "prioritize sources published in that language.\n"
             "4. **Define scope boundaries**: State what the research should "
             "include AND what it should exclude to prevent scope creep.\n\n"
             "Output your response as a JSON object with this schema:\n"

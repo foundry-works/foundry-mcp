@@ -16,12 +16,12 @@
 
 ## Phase 3: Language preservation in synthesis and brief
 
-- [ ] Edit `_build_synthesis_system_prompt()` in `phases/synthesis.py` (~line 606) to add language matching instruction before the closing IMPORTANT line
-- [ ] Edit `_build_brief_system_prompt()` in `phases/brief.py` (~line 218) to add language-specific source guidance
-- [ ] Verify both prompts render correctly
-- [ ] Run tests: `pytest tests/ -k "synthesis or brief"` (if applicable)
+- [x] Edit `_build_synthesis_system_prompt()` in `phases/synthesis.py` (~line 606) to add language matching instruction before the closing IMPORTANT line
+- [x] Edit `_build_brief_system_prompt()` in `phases/brief.py` (~line 218) to add language-specific source guidance
+- [x] Verify both prompts render correctly
+- [x] Run tests: `pytest tests/ -k "synthesis or brief"` (if applicable)
 
 ## Final Validation
 
-- [ ] Run full deep research test suite
-- [ ] Verify no prompt regressions by spot-checking key prompt strings
+- [x] Run full deep research test suite
+- [x] Verify no prompt regressions by spot-checking key prompt strings
