@@ -1773,7 +1773,7 @@ Your response MUST be valid JSON with this exact structure:
             "research_topic": "Detailed paragraph-length description of what to investigate...",
             "perspective": "What angle or perspective to approach from",
             "evidence_needed": "What specific evidence, data, or sources to seek",
-            "priority": 1
+            "priority": 1  // 1=critical, 2=important, 3=supplementary
         }
     ],
     "rationale": "Why this decomposition strategy was chosen"
@@ -1785,17 +1785,8 @@ Decomposition Guidelines:
 - For COMPARISONS: create one directive per comparison element (e.g., "Product A vs Product B" → one directive for each product)
 - For LISTS/RANKINGS: single directive if straightforward; one per category if the list spans diverse domains
 - For COMPLEX multi-dimensional topics: 3-5 directives covering different facets (technical, economic, regulatory, user impact, etc.)
-
-Quality Guidelines:
-- Each directive's "research_topic" MUST be a detailed paragraph (2-4 sentences) specifying:
-  - The specific topic or facet to investigate
-  - The research approach (compare, investigate, validate, survey, etc.)
-  - What the researcher should focus on and what to exclude
-- Each directive should be SPECIFIC enough to yield targeted search results
+- Directives should be SPECIFIC enough to yield targeted search results
 - Directives must cover DISTINCT aspects — no two should investigate substantially the same ground
-- "perspective" should specify the angle: technical, comparative, historical, regulatory, user-focused, economic, etc.
-- "evidence_needed" should name concrete evidence types: statistics, case studies, expert opinions, benchmarks, official documentation, etc.
-- "priority": 1=critical (core to answering the query), 2=important (improves comprehensiveness), 3=nice-to-have (supplementary context)
 
 IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 

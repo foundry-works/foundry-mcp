@@ -12,11 +12,11 @@
 - [x] 1.9 Test: synthetic reflection injection still fires when model skips think
 
 ## Phase 2 — First-Round Delegation Schema Duplication
-- [ ] 2.1 Remove `Quality Guidelines:` section (lines 1789-1799) from first-round delegation prompt
-- [ ] 2.2 Add "Directives should be SPECIFIC enough to yield targeted search results" to Decomposition Guidelines
-- [ ] 2.3 Add "Directives must cover DISTINCT aspects — no two should investigate substantially the same ground" to Decomposition Guidelines
-- [ ] 2.4 Add priority definitions as inline comment in JSON schema: `// 1=critical, 2=important, 3=supplementary`
-- [ ] 2.5 Test: first-round decomposition still produces well-structured directives with diverse topics
+- [x] 2.1 Remove `Quality Guidelines:` section (lines 1789-1799) from first-round delegation prompt
+- [x] 2.2 Add "Directives should be SPECIFIC enough to yield targeted search results" to Decomposition Guidelines
+- [x] 2.3 Add "Directives must cover DISTINCT aspects — no two should investigate substantially the same ground" to Decomposition Guidelines
+- [x] 2.4 Add priority definitions as inline comment in JSON schema: `// 1=critical, 2=important, 3=supplementary`
+- [x] 2.5 Test: first-round decomposition still produces well-structured directives with diverse topics
 
 ## Phase 3 — Clarification Example Reduction
 - [ ] 3.1 Remove 4 of 6 examples, keep: "What's the best database?" (vague) and "Compare PostgreSQL vs MySQL for high-write OLTP workloads in 2024" (specific)
