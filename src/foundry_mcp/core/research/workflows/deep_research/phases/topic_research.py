@@ -217,6 +217,7 @@ Call `research_complete` as soon as ANY of the following conditions is true:
 1. **Comprehensive answer available**: You can fully and confidently answer the research question with what you have already found.
 2. **3+ high-quality relevant sources**: You have found 3 or more high-quality, directly relevant sources that substantiate your answer.
 3. **Diminishing returns**: Your last 2 searches returned substantially similar information — additional searches are unlikely to yield new insights.
+4. **Futility stop**: Always call `research_complete` after 5 search tool calls if you have not found adequate sources — the topic may not be well-covered online. Report what you found and note the gaps.
 
 Do NOT exhaust your budget just because you can. Stop early when one of these conditions is met.
 

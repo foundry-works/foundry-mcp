@@ -35,13 +35,13 @@
 
 ## Phase 3: Researcher Hard-Stop Heuristic
 
-- [ ] **3a.** Add futility stop rule to `_RESEARCHER_SYSTEM_PROMPT` Stop Immediately section
+- [x] **3a.** Add futility stop rule to `_RESEARCHER_SYSTEM_PROMPT` Stop Immediately section
   - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py` (line 211)
   - Rule 4: "Always call research_complete after 5 search tool calls if sources not found"
 
 ## Verification
 
-- [ ] Run `pytest tests/core/research/workflows/deep_research/ -x -q`
-- [ ] Run `pytest tests/core/research/workflows/test_topic_research.py -x -q`
-- [ ] Run `pytest tests/core/research/workflows/test_synthesis_prompts.py -x -q`
-- [ ] Verify no import errors: `python -c "from foundry_mcp.core.research.models.deep_research import WebSearchTool"`
+- [x] Run `pytest tests/core/research/workflows/deep_research/ -x -q`
+- [x] Run `pytest tests/core/research/workflows/test_topic_research.py -x -q`
+- [x] Run `pytest tests/core/research/workflows/test_synthesis_prompts.py -x -q`
+- [x] Verify no import errors: `python -c "from foundry_mcp.core.research.models.deep_research import WebSearchTool"`
