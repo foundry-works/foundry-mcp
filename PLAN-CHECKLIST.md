@@ -44,12 +44,12 @@ Cross-reference: [PLAN.md](PLAN.md) for detailed rationale and file references.
 
 ## Phase 4: Search Result Presentation Format
 
-- [ ] **4a** Standardize numbered-source format in researcher search tool responses
+- [x] **4a** Standardize numbered-source format in researcher search tool responses
   - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py`
   - Format: `--- SOURCE N: Title ---\nURL: ...\nNOVELTY: [tag]\nSUMMARY: ...\nKEY EXCERPTS: ...`
   - Test: Snapshot test of formatted search result output
 
-- [ ] **4b** Add batch header to search results (count, domains, novelty summary)
+- [x] **4b** Add batch header to search results (count, domains, novelty summary)
   - File: `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py`
   - Format: `Found N results from M domains. N new, M related.`
 

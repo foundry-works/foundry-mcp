@@ -2103,3 +2103,295 @@ class TestPerResultSummarization:
 
         # 200 input + 100 output = 300 tokens tracked
         assert state.total_tokens_used == 300
+
+
+# =============================================================================
+# Phase 4: Search Result Presentation Format Tests
+# =============================================================================
+
+
+class TestSearchResultPresentationFormat:
+    """Tests for Phase 4: structured, citation-friendly search result formatting."""
+
+    def test_format_source_block_with_summary_and_excerpts(self) -> None:
+        """Summarized source shows separate SUMMARY and KEY EXCERPTS sections."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            NoveltyTag,
+        )
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            _format_source_block,
+        )
+
+        src = ResearchSource(
+            id="src-fmt-1",
+            title="Deep Learning Survey",
+            url="https://arxiv.org/abs/2301.00001",
+            content="<summary>A comprehensive survey of deep learning.</summary>\n\n<key_excerpts>\"Quote one\", \"Quote two\"</key_excerpts>",
+            quality=SourceQuality.HIGH,
+            metadata={
+                "summarized": True,
+                "excerpts": ["Quote one", "Quote two"],
+            },
+        )
+        tag = NoveltyTag(tag="[NEW]", category="new", similarity=0.0, matched_title=None)
+
+        result = _format_source_block(1, src, tag)
+
+        # Verify structure
+        assert "--- SOURCE 1: Deep Learning Survey ---" in result
+        assert "URL: https://arxiv.org/abs/2301.00001" in result
+        assert "NOVELTY: [NEW]" in result
+        assert "SUMMARY:" in result
+        assert "A comprehensive survey of deep learning." in result
+        assert "KEY EXCERPTS:" in result
+        assert '- "Quote one"' in result
+        assert '- "Quote two"' in result
+        # XML tags should be stripped
+        assert "<summary>" not in result
+        assert "<key_excerpts>" not in result
+
+    def test_format_source_block_with_snippet_fallback(self) -> None:
+        """Non-summarized source with snippet shows SNIPPET section."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            NoveltyTag,
+        )
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            _format_source_block,
+        )
+
+        src = ResearchSource(
+            id="src-fmt-2",
+            title="Quick Result",
+            url="https://example.com/quick",
+            snippet="A brief snippet about the topic.",
+            quality=SourceQuality.MEDIUM,
+        )
+        tag = NoveltyTag(tag="[RELATED: Other Source]", category="related", similarity=0.5, matched_title="Other Source")
+
+        result = _format_source_block(2, src, tag)
+
+        assert "--- SOURCE 2: Quick Result ---" in result
+        assert "NOVELTY: [RELATED: Other Source]" in result
+        assert "SNIPPET:" in result
+        assert "A brief snippet about the topic." in result
+        assert "SUMMARY:" not in result
+
+    def test_format_source_block_with_truncated_content(self) -> None:
+        """Source with long raw content is truncated to 500 chars."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            NoveltyTag,
+        )
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            _format_source_block,
+        )
+
+        long_content = "X" * 1000
+        src = ResearchSource(
+            id="src-fmt-3",
+            title="Long Content",
+            url="https://example.com/long",
+            content=long_content,
+            quality=SourceQuality.LOW,
+        )
+        tag = NoveltyTag(tag="[DUPLICATE]", category="duplicate", similarity=0.9, matched_title="Original")
+
+        result = _format_source_block(3, src, tag)
+
+        assert "CONTENT:" in result
+        assert "NOVELTY: [DUPLICATE]" in result
+        assert "..." in result
+        # Content should be truncated
+        content_section = result.split("CONTENT:\n")[1]
+        assert len(content_section) == 503  # 500 chars + "..."
+
+    def test_format_source_block_summarized_without_excerpts(self) -> None:
+        """Summarized source without excerpts metadata strips XML tags cleanly."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            NoveltyTag,
+        )
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            _format_source_block,
+        )
+
+        src = ResearchSource(
+            id="src-fmt-4",
+            title="No Excerpts",
+            url="https://example.com/noexc",
+            content="<summary>Just a summary</summary>\n\n<key_excerpts></key_excerpts>",
+            quality=SourceQuality.MEDIUM,
+            metadata={"summarized": True},
+        )
+        tag = NoveltyTag(tag="[NEW]", category="new", similarity=0.0, matched_title=None)
+
+        result = _format_source_block(1, src, tag)
+
+        assert "SUMMARY:" in result
+        assert "Just a summary" in result
+        assert "KEY EXCERPTS:" not in result
+        assert "<summary>" not in result
+
+    def test_format_search_results_batch_header(self) -> None:
+        """Batch header includes source count, domain count, and novelty summary."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            NoveltyTag,
+        )
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            _format_search_results_batch,
+        )
+
+        sources = [
+            ResearchSource(
+                id="src-b1",
+                title="Source A",
+                url="https://arxiv.org/abs/1",
+                snippet="Snippet A",
+                quality=SourceQuality.HIGH,
+            ),
+            ResearchSource(
+                id="src-b2",
+                title="Source B",
+                url="https://arxiv.org/abs/2",
+                snippet="Snippet B",
+                quality=SourceQuality.HIGH,
+            ),
+            ResearchSource(
+                id="src-b3",
+                title="Source C",
+                url="https://example.com/c",
+                snippet="Snippet C",
+                quality=SourceQuality.MEDIUM,
+            ),
+        ]
+        tags = [
+            NoveltyTag(tag="[NEW]", category="new", similarity=0.0, matched_title=None),
+            NoveltyTag(tag="[NEW]", category="new", similarity=0.0, matched_title=None),
+            NoveltyTag(tag="[RELATED: Prev]", category="related", similarity=0.4, matched_title="Prev"),
+        ]
+        novelty_header = "Novelty: 2 new, 1 related, 0 duplicate out of 3 results"
+
+        result = _format_search_results_batch(sources, tags, novelty_header)
+
+        # Batch header with domain count
+        assert "Found 3 new source(s) from 2 domain(s)." in result
+        assert "Novelty: 2 new, 1 related, 0 duplicate out of 3 results" in result
+        # All sources present
+        assert "--- SOURCE 1: Source A ---" in result
+        assert "--- SOURCE 2: Source B ---" in result
+        assert "--- SOURCE 3: Source C ---" in result
+
+    def test_format_search_results_batch_single_domain(self) -> None:
+        """Batch with all results from same domain shows 1 domain."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            NoveltyTag,
+        )
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            _format_search_results_batch,
+        )
+
+        sources = [
+            ResearchSource(
+                id="src-sd1",
+                title="Paper 1",
+                url="https://arxiv.org/abs/1",
+                snippet="Snippet 1",
+                quality=SourceQuality.HIGH,
+            ),
+            ResearchSource(
+                id="src-sd2",
+                title="Paper 2",
+                url="https://arxiv.org/abs/2",
+                snippet="Snippet 2",
+                quality=SourceQuality.HIGH,
+            ),
+        ]
+        tags = [
+            NoveltyTag(tag="[NEW]", category="new", similarity=0.0, matched_title=None),
+            NoveltyTag(tag="[NEW]", category="new", similarity=0.0, matched_title=None),
+        ]
+
+        result = _format_search_results_batch(sources, tags, "Novelty: 2 new, 0 related, 0 duplicate out of 2 results")
+
+        assert "Found 2 new source(s) from 1 domain(s)." in result
+
+    def test_format_search_results_batch_no_url(self) -> None:
+        """Sources without URLs still format correctly."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            NoveltyTag,
+        )
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            _format_search_results_batch,
+        )
+
+        sources = [
+            ResearchSource(
+                id="src-nu1",
+                title="No URL Source",
+                url=None,
+                snippet="Some snippet",
+                quality=SourceQuality.UNKNOWN,
+            ),
+        ]
+        tags = [
+            NoveltyTag(tag="[NEW]", category="new", similarity=0.0, matched_title=None),
+        ]
+
+        result = _format_search_results_batch(sources, tags, "Novelty: 1 new, 0 related, 0 duplicate out of 1 results")
+
+        assert "from 0 domain(s)" in result
+        assert "URL:" not in result
+        assert "SOURCE 1: No URL Source" in result
+
+    @pytest.mark.asyncio
+    async def test_handle_web_search_uses_new_format(self) -> None:
+        """Full integration: _handle_web_search_tool produces structured format."""
+        mixin = StubTopicResearch()
+        mixin.config.deep_research_summarization_min_content_length = 300
+        mixin.config.deep_research_summarization_timeout = 30
+        mixin.config.deep_research_max_content_length = 50000
+
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        sources = [
+            ResearchSource(
+                id="src-int-1",
+                title="Result Alpha",
+                url="https://alpha.example.com/page",
+                snippet="Alpha snippet text.",
+                quality=SourceQuality.MEDIUM,
+            ),
+            ResearchSource(
+                id="src-int-2",
+                title="Result Beta",
+                url="https://beta.example.com/page",
+                snippet="Beta snippet text.",
+                quality=SourceQuality.HIGH,
+            ),
+        ]
+        provider = _make_mock_provider("tavily", sources)
+
+        tool_call = ResearcherToolCall(
+            tool="web_search",
+            arguments={"query": sq.query, "max_results": 5},
+        )
+        result_text = await mixin._handle_web_search_tool(
+            tool_call=tool_call,
+            sub_query=sq,
+            state=state,
+            result=TopicResearchResult(sub_query_id=sq.id),
+            available_providers=[provider],
+            max_sources_per_provider=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
+        )
+
+        # Verify new format elements
+        assert "from 2 domain(s)" in result_text
+        assert "NOVELTY:" in result_text
+        assert "--- SOURCE 1:" in result_text
+        assert "--- SOURCE 2:" in result_text
+        assert "URL: https://alpha.example.com/page" in result_text
+        assert "URL: https://beta.example.com/page" in result_text

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -28,11 +29,130 @@ from foundry_mcp.core.research.models.deep_research import (
 )
 from foundry_mcp.core.research.models.sources import SourceQuality, SubQuery
 from foundry_mcp.core.research.workflows.deep_research.source_quality import (
+    _extract_domain,
     _normalize_title,
     get_domain_quality,
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ------------------------------------------------------------------
+# Search result formatting helpers (Phase 4 ODR alignment)
+# ------------------------------------------------------------------
+
+
+def _format_source_block(
+    idx: int,
+    src: Any,
+    novelty_tag: Any,
+) -> str:
+    """Format a single source into a structured, citation-friendly block.
+
+    Produces a numbered-source layout that makes it easy for the researcher
+    to reference specific sources and for the compression step to preserve
+    citations — matching the ODR presentation pattern.
+
+    Args:
+        idx: 1-based source index within the search batch.
+        src: ResearchSource object.
+        novelty_tag: NoveltyTag for this source.
+
+    Returns:
+        Formatted multi-line string for one source.
+    """
+    lines: list[str] = []
+    lines.append(f"--- SOURCE {idx}: {src.title} ---")
+    if src.url:
+        lines.append(f"URL: {src.url}")
+    lines.append(f"NOVELTY: {novelty_tag.tag}")
+
+    # Content presentation: prefer structured summary with separate excerpts,
+    # fall back to snippet, then truncated raw content.
+    if src.metadata.get("summarized") and src.content:
+        # Extract the executive summary from the XML-tagged content.
+        # The raw excerpts list is stored in metadata by _summarize_search_results.
+        summary_text = src.content
+        # If we have structured excerpts in metadata, present them separately
+        # rather than embedded in XML tags within the content.
+        excerpts = src.metadata.get("excerpts")
+        if excerpts:
+            # Strip the <key_excerpts>...</key_excerpts> from the content to
+            # avoid duplication — the summary tag is left for the SUMMARY block.
+            summary_text = re.sub(
+                r"\n*<key_excerpts>.*?</key_excerpts>",
+                "",
+                summary_text,
+                flags=re.DOTALL,
+            ).strip()
+            # Also strip the <summary> tags for cleaner presentation
+            summary_text = re.sub(
+                r"</?summary>", "", summary_text
+            ).strip()
+            lines.append(f"\nSUMMARY:\n{summary_text}")
+            excerpt_lines = "\n".join(f'- "{e}"' for e in excerpts)
+            lines.append(f"\nKEY EXCERPTS:\n{excerpt_lines}")
+        else:
+            # No separate excerpts — show the full summarized content
+            summary_text = re.sub(
+                r"</?summary>", "", summary_text
+            ).strip()
+            summary_text = re.sub(
+                r"</?key_excerpts>", "", summary_text
+            ).strip()
+            lines.append(f"\nSUMMARY:\n{summary_text}")
+    elif src.snippet:
+        lines.append(f"\nSNIPPET:\n{src.snippet}")
+    elif src.content:
+        truncated = src.content[:500]
+        if len(src.content) > 500:
+            truncated += "..."
+        lines.append(f"\nCONTENT:\n{truncated}")
+
+    return "\n".join(lines)
+
+
+def _format_search_results_batch(
+    sources: list[Any],
+    novelty_tags: list[Any],
+    novelty_header: str,
+) -> str:
+    """Format a batch of search results with header and numbered sources.
+
+    Produces a structured, citation-friendly presentation matching the
+    ODR pattern: batch header with domain summary, then numbered source
+    blocks with novelty annotations.
+
+    Args:
+        sources: List of ResearchSource objects from this search.
+        novelty_tags: Parallel list of NoveltyTag objects.
+        novelty_header: Pre-built novelty summary string.
+
+    Returns:
+        Complete formatted string for the tool response message.
+    """
+    sources_count = len(sources)
+
+    # Compute unique domains for the batch header (Phase 4b)
+    domains: set[str] = set()
+    for src in sources:
+        domain = _extract_domain(src.url) if src.url else None
+        if domain:
+            domains.add(domain)
+    domain_count = len(domains)
+
+    # Build batch header
+    header = (
+        f"Found {sources_count} new source(s) from {domain_count} domain(s).\n"
+        f"{novelty_header}"
+    )
+
+    # Build per-source blocks
+    blocks: list[str] = [header]
+    for idx, (src, ntag) in enumerate(zip(sources, novelty_tags), 1):
+        blocks.append(_format_source_block(idx, src, ntag))
+
+    return "\n\n".join(blocks)
 
 
 # ------------------------------------------------------------------
@@ -939,27 +1059,13 @@ class TopicResearchMixin:
             src.metadata["novelty_tag"] = tag.category
             src.metadata["novelty_similarity"] = tag.similarity
 
-        # Format results with novelty annotations
+        # Format results with novelty annotations (Phase 4 ODR alignment)
         novelty_header = build_novelty_summary(novelty_tags)
-        lines: list[str] = [
-            f"Found {sources_added} new source(s):",
-            novelty_header,
-        ]
-        for idx, (src, ntag) in enumerate(zip(recent_sources, novelty_tags), 1):
-            lines.append(f"\n--- SOURCE {idx}: {src.title} {ntag.tag} ---")
-            if src.url:
-                lines.append(f"URL: {src.url}")
-            if src.metadata.get("summarized") and src.content:
-                lines.append(f"\nSUMMARY:\n{src.content}")
-            elif src.snippet:
-                lines.append(f"\nSNIPPET:\n{src.snippet}")
-            elif src.content:
-                truncated = src.content[:500]
-                if len(src.content) > 500:
-                    truncated += "..."
-                lines.append(f"\nCONTENT:\n{truncated}")
-
-        return "\n".join(lines)
+        return _format_search_results_batch(
+            sources=recent_sources,
+            novelty_tags=novelty_tags,
+            novelty_header=novelty_header,
+        )
 
     async def _handle_extract_tool(
         self,
