@@ -30,6 +30,7 @@ from foundry_mcp.core.research.models.sources import SubQuery
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research._helpers import (
     extract_json,
+    sanitize_external_content,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
     StructuredLLMCallResult,
@@ -824,6 +825,11 @@ Guidelines:
                 msg_round = msg.get("round", "?")
                 msg_type = msg.get("type", "unknown")
                 msg_content = msg.get("content", "")
+                # Sanitize tool_result content (derived from web-scraped
+                # sources) to strip prompt-injection vectors before
+                # interpolating into the supervision prompt.
+                if msg.get("role") == "tool_result":
+                    msg_content = sanitize_external_content(msg_content)
                 if msg.get("role") == "assistant" and msg_type == "think":
                     parts.append(f"### [Round {msg_round}] Your Gap Analysis")
                     parts.append(msg_content)
@@ -1237,8 +1243,8 @@ Guidelines:
         parts: list[str] = []
         remaining = max_chars
         for src in topic_sources:
-            content = src.content or src.snippet or ""
-            title = src.title or "Untitled"
+            content = sanitize_external_content(src.content or src.snippet or "")
+            title = sanitize_external_content(src.title or "Untitled")
             if content:
                 entry = f"- {title}: {content[:200]}"
             else:
@@ -1324,7 +1330,7 @@ Guidelines:
                     domain = urlparse(src.url).netloc
                 except Exception:
                     pass
-            title = (src.title or "Untitled")[:60]
+            title = sanitize_external_content((src.title or "Untitled"))[:60]
             entry = f"- [{idx}] \"{title}\""
             if domain:
                 entry += f" ({domain})"
@@ -1508,6 +1514,11 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                 msg_round = msg.get("round", "?")
                 msg_type = msg.get("type", "unknown")
                 msg_content = msg.get("content", "")
+                # Sanitize tool_result content (derived from web-scraped
+                # sources) to strip prompt-injection vectors before
+                # interpolating into the supervision prompt.
+                if msg.get("role") == "tool_result":
+                    msg_content = sanitize_external_content(msg_content)
                 if msg.get("role") == "assistant" and msg_type == "think":
                     parts.append(f"### [Round {msg_round}] Your Gap Analysis")
                     parts.append(msg_content)

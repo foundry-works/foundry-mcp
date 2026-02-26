@@ -69,12 +69,12 @@
 
 ## Phase 5: Prompt Injection Surface Reduction
 
-- [ ] **5A.1** Add `sanitize_external_content()` function to `_helpers.py`
+- [x] **5A.1** Add `sanitize_external_content()` function to `_helpers.py`
   - Strip XML-like instruction tags (`<system>`, `<instructions>`, `<tool_use>`, `<human>`, `<assistant>`)
   - Strip markdown heading injection patterns (`# SYSTEM`, `## INSTRUCTIONS`)
-- [ ] **5A.2** Apply sanitizer to source titles/snippets in supervision message rendering
-- [ ] **5A.3** Apply sanitizer in `_build_directive_fallback_summary` for source-derived content
-- [ ] **5A.4** Add unit tests for sanitizer (confirm tags stripped, normal content preserved)
+- [x] **5A.2** Apply sanitizer to source titles/snippets in supervision message rendering
+- [x] **5A.3** Apply sanitizer in `_build_directive_fallback_summary` for source-derived content
+- [x] **5A.4** Add unit tests for sanitizer (confirm tags stripped, normal content preserved)
 
 ---
 

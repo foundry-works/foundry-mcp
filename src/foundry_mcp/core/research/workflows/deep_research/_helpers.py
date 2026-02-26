@@ -785,6 +785,46 @@ def compute_novelty_tag(
         return NoveltyTag(tag="[NEW]", category="new", similarity=best_sim)
 
 
+# ---------------------------------------------------------------------------
+# Prompt injection surface reduction
+# ---------------------------------------------------------------------------
+
+# XML-like tags that could override LLM instructions when injected via
+# web-scraped content.  Matched case-insensitively.
+_INJECTION_TAG_PATTERN: re.Pattern[str] = re.compile(
+    r"<\s*/?\s*(?:system|instructions|tool_use|tool_result|human|assistant|function_calls|(?:antml:)?invoke|prompt)\b[^>]*>",
+    re.IGNORECASE,
+)
+
+# Markdown headings that mimic system-level sections.
+_INJECTION_HEADING_PATTERN: re.Pattern[str] = re.compile(
+    r"^#{1,3}\s+(?:SYSTEM|INSTRUCTIONS|TOOL[_ ]USE|HUMAN|ASSISTANT)\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def sanitize_external_content(text: str) -> str:
+    """Strip prompt-injection vectors from web-scraped content.
+
+    Removes XML-like tags and markdown headings that could override LLM
+    instructions when external content is interpolated into supervision
+    prompts.  Normal content (citations, formatting, data) is preserved.
+
+    Args:
+        text: Raw external content (source title, snippet, etc.)
+
+    Returns:
+        Sanitized text with injection vectors removed.
+    """
+    if not text:
+        return text
+    # Strip XML-like instruction/override tags
+    sanitized = _INJECTION_TAG_PATTERN.sub("", text)
+    # Strip markdown heading injection patterns
+    sanitized = _INJECTION_HEADING_PATTERN.sub("", sanitized)
+    return sanitized
+
+
 def build_novelty_summary(
     tags: list[NoveltyTag],
 ) -> str:
