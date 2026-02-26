@@ -53,6 +53,12 @@ _MAX_DIRECTIVES_PER_ROUND = 5
 # Only the most recent directives are kept; older ones are pruned.
 _MAX_STORED_DIRECTIVES = 30
 
+# Cap raw_notes entries to prevent unbounded state growth.
+# With 6 rounds × 5 researchers, notes can grow to MBs unchecked.
+# When exceeded, oldest entries are dropped and an audit event is logged.
+_MAX_RAW_NOTES = 50
+_MAX_RAW_NOTES_CHARS = 500_000
+
 
 class SupervisionPhaseMixin:
     """Supervision phase methods. Mixed into DeepResearchWorkflow.
@@ -162,12 +168,43 @@ class SupervisionPhaseMixin:
 
         # --- Delegation loop ---
         # Each iteration: think → delegate → execute → assess
-        # Bounded by max_supervision_rounds.
+        # Bounded by max_supervision_rounds and wall-clock timeout.
         total_directives_executed = 0
         total_new_sources = 0
 
+        wall_clock_start = time.monotonic()
+        wall_clock_limit: float = getattr(
+            self.config, "deep_research_supervision_wall_clock_timeout", 1800.0,
+        )
+
         while state.supervision_round < state.max_supervision_rounds:
             self._check_cancellation(state)
+
+            # --- Wall-clock timeout guard ---
+            elapsed = time.monotonic() - wall_clock_start
+            if elapsed >= wall_clock_limit:
+                logger.warning(
+                    "Supervision phase wall-clock timeout: %.0fs elapsed >= %.0fs limit. "
+                    "Exiting after %d rounds.",
+                    elapsed,
+                    wall_clock_limit,
+                    state.supervision_round,
+                )
+                state.metadata["supervision_wall_clock_exit"] = {
+                    "elapsed_seconds": round(elapsed, 1),
+                    "limit_seconds": wall_clock_limit,
+                    "rounds_completed": state.supervision_round,
+                }
+                self._write_audit_event(
+                    state,
+                    "supervision_wall_clock_timeout",
+                    data={
+                        "elapsed_seconds": round(elapsed, 1),
+                        "limit_seconds": wall_clock_limit,
+                        "rounds_completed": state.supervision_round,
+                    },
+                )
+                break
 
             logger.info(
                 "Supervision delegation round %d/%d: %d completed sub-queries, %d sources",
@@ -369,6 +406,38 @@ class SupervisionPhaseMixin:
             for result in directive_results:
                 if result.raw_notes:
                     state.raw_notes.append(result.raw_notes)
+
+            # --- Trim raw_notes if they exceed the cap ---
+            notes_trimmed = 0
+            while len(state.raw_notes) > _MAX_RAW_NOTES:
+                state.raw_notes.pop(0)
+                notes_trimmed += 1
+            # Also enforce character budget: drop oldest until under limit
+            total_chars = sum(len(n) for n in state.raw_notes)
+            while state.raw_notes and total_chars > _MAX_RAW_NOTES_CHARS:
+                removed = state.raw_notes.pop(0)
+                total_chars -= len(removed)
+                notes_trimmed += 1
+            if notes_trimmed > 0:
+                logger.warning(
+                    "Trimmed %d oldest raw_notes entries (count cap=%d, char cap=%d). "
+                    "%d entries remain (%d chars).",
+                    notes_trimmed,
+                    _MAX_RAW_NOTES,
+                    _MAX_RAW_NOTES_CHARS,
+                    len(state.raw_notes),
+                    total_chars,
+                )
+                self._write_audit_event(
+                    state,
+                    "raw_notes_trimmed",
+                    data={
+                        "entries_trimmed": notes_trimmed,
+                        "entries_remaining": len(state.raw_notes),
+                        "chars_remaining": total_chars,
+                        "round": state.supervision_round,
+                    },
+                )
 
             # --- Append evidence inventories (Phase 2 ODR alignment) ---
             # Gives the supervisor a compact evidence reference alongside
@@ -1143,12 +1212,13 @@ Guidelines:
 
         async def compress_one(topic_result: TopicResearchResult) -> bool:
             try:
-                _, _, success = await asyncio.wait_for(
-                    self._compress_single_topic_async(
-                        topic_result=topic_result,
-                        state=state,
-                        timeout=compression_timeout,
-                    ),
+                # Rely on the inner timeout within _compress_single_topic_async
+                # rather than double-wrapping with asyncio.wait_for (which uses
+                # the same timeout value and can leave resources inconsistent
+                # on outer cancellation).
+                _, _, success = await self._compress_single_topic_async(
+                    topic_result=topic_result,
+                    state=state,
                     timeout=compression_timeout,
                 )
                 return success

@@ -577,20 +577,24 @@ class TestDirectiveResultsInlineCompression:
 
     @pytest.mark.asyncio
     async def test_compression_timeout_guard(self):
-        """2.3: Per-result compression timeout prevents blocking."""
+        """2.3: Per-result compression timeout prevents blocking.
+
+        The inner _compress_single_topic_async handles its own timeout
+        (no outer asyncio.wait_for). Simulate the inner function raising
+        asyncio.TimeoutError when the compression exceeds its budget.
+        """
         state = _make_state(num_sub_queries=1)
         results = _add_topic_results(state, compressed=False)
 
         stub = StubSupervisionWithCompression()
         stub.config.deep_research_compression_timeout = 0.1  # Very short timeout
 
-        async def slow_compress(*args, **kwargs):
-            await asyncio.sleep(10)  # Will be cancelled by timeout
-            return (0, 0, True)
+        async def timeout_compress(*args, **kwargs):
+            raise asyncio.TimeoutError("compression exceeded budget")
 
         with patch.object(
             stub, "_compress_single_topic_async",
-            side_effect=slow_compress,
+            side_effect=timeout_compress,
         ):
             stats = await stub._compress_directive_results_inline(
                 state=state,

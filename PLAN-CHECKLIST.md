@@ -46,14 +46,14 @@
 
 ## Phase 3: State Growth & Resource Guards
 
-- [ ] **3A.1** Add `_MAX_RAW_NOTES` constant to `supervision.py` (count or char budget)
-- [ ] **3A.2** Trim oldest `raw_notes` entries when cap exceeded after appending
-- [ ] **3A.3** Add audit log entry when raw notes are trimmed
-- [ ] **3B.1** Record `phase_start = time.monotonic()` at start of `execute_supervision_phase`
-- [ ] **3B.2** Add `max_phase_wall_clock` config (default 1800s)
-- [ ] **3B.3** Check elapsed time at top of each supervision round; break with warning if exceeded
-- [ ] **3B.4** Log early exit reason in state metadata
-- [ ] **3C.1** Remove outer `asyncio.wait_for` in `_compress_directive_results_inline` (or inner timeout) — use one mechanism, not both
+- [x] **3A.1** Add `_MAX_RAW_NOTES` constant to `supervision.py` (count or char budget)
+- [x] **3A.2** Trim oldest `raw_notes` entries when cap exceeded after appending
+- [x] **3A.3** Add audit log entry when raw notes are trimmed
+- [x] **3B.1** Record `phase_start = time.monotonic()` at start of `execute_supervision_phase`
+- [x] **3B.2** Add `max_phase_wall_clock` config (default 1800s)
+- [x] **3B.3** Check elapsed time at top of each supervision round; break with warning if exceeded
+- [x] **3B.4** Log early exit reason in state metadata
+- [x] **3C.1** Remove outer `asyncio.wait_for` in `_compress_directive_results_inline` (or inner timeout) — use one mechanism, not both
 
 ---
 

@@ -106,6 +106,7 @@ class StubSupervision(SupervisionPhaseMixin):
         self.config.deep_research_reflection_timeout = 60.0
         self.config.deep_research_coverage_confidence_threshold = 0.75
         self.config.deep_research_coverage_confidence_weights = None
+        self.config.deep_research_supervision_wall_clock_timeout = 1800.0
         self.memory = MagicMock()
         self._audit_events: list[tuple[str, dict]] = []
 
