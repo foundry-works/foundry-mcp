@@ -500,19 +500,12 @@ class ActionHandlersMixin:
             )
 
         if bg_task.cancel():
-            state = self.memory.load_deep_research(research_id)
-            if state:
-                state.mark_cancelled(phase_state=f"phase={state.phase.value}, iteration={state.iteration}")
-                self.memory.save_deep_research(state)
-                self._write_audit_event(
-                    state,
-                    "workflow_cancelled",
-                    data={
-                        "cancelled": True,
-                        "terminal_status": "cancelled",
-                    },
-                    level="warning",
-                )
+            # Only set the cancel flag on the BackgroundTask.
+            # The workflow's own CancelledError handler in _execute_workflow_async()
+            # is the sole writer of terminal state — it performs iteration rollback
+            # and partial-result discard before marking cancelled and saving.
+            # Writing state here would race with that handler and could overwrite
+            # the careful rollback logic with a simpler snapshot.
             return WorkflowResult(
                 success=True,
                 content=f"Research '{research_id}' cancelled",

@@ -96,17 +96,23 @@ class BackgroundTaskMixin:
                             return await asyncio.wait_for(coro, timeout=task_timeout)
                         return await coro
                     except asyncio.CancelledError:
-                        state.mark_cancelled(phase_state=f"phase={state.phase.value}, iteration={state.iteration}")
-                        workflow.memory.save_deep_research(state)
-                        workflow._write_audit_event(
-                            state,
-                            "workflow_cancelled",
-                            data={
-                                "cancelled": True,
-                                "terminal_status": "cancelled",
-                            },
-                            level="warning",
-                        )
+                        # Safety net: only mark cancelled if the inner handler
+                        # in _execute_workflow_async() hasn't already terminated
+                        # the state (which sets completed_at). This avoids
+                        # overwriting the inner handler's careful iteration
+                        # rollback and partial-result discard.
+                        if state.completed_at is None:
+                            state.mark_cancelled(phase_state=f"phase={state.phase.value}, iteration={state.iteration}")
+                            workflow.memory.save_deep_research(state)
+                            workflow._write_audit_event(
+                                state,
+                                "workflow_cancelled",
+                                data={
+                                    "cancelled": True,
+                                    "terminal_status": "cancelled",
+                                },
+                                level="warning",
+                            )
                         return WorkflowResult(
                             success=False,
                             content="",

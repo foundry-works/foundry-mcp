@@ -62,11 +62,11 @@ Track completion of each fix. Mark `[x]` when implemented and verified.
 
 ## Phase 3 — Major: Cancellation Race Conditions
 
-- [ ] **3.1** Fix triple `mark_cancelled` race
-  - [ ] `_cancel_research()`: remove direct `load/mark_cancelled/save` — only set cancel flag on `BackgroundTask`
-  - [ ] `_execute_workflow_async()`: return failure `WorkflowResult` instead of re-raising `CancelledError`
-  - [ ] `background_tasks.py`: guard `mark_cancelled()` with `if state.completed_at is None`
-  - [ ] Add test: cancellation preserves the inner handler's partial-result discard state
+- [x] **3.1** Fix triple `mark_cancelled` race
+  - [x] `_cancel_research()`: remove direct `load/mark_cancelled/save` — only set cancel flag on `BackgroundTask`
+  - [x] `_execute_workflow_async()`: return failure `WorkflowResult` instead of re-raising `CancelledError`
+  - [x] `background_tasks.py`: guard `mark_cancelled()` with `if state.completed_at is None`
+  - [x] Add test: cancellation preserves the inner handler's partial-result discard state
 
 ---
 

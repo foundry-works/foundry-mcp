@@ -443,8 +443,22 @@ class WorkflowExecutionMixin:
                 },
                 level="warning",
             )
-            # Re-raise to propagate cancellation to caller
-            raise
+            # Return failure result instead of re-raising CancelledError.
+            # This prevents the outer background_tasks.py handler from
+            # overwriting the careful iteration rollback and partial-result
+            # discard that was performed above.
+            return WorkflowResult(
+                success=False,
+                content="",
+                error="Research cancelled",
+                metadata={
+                    "research_id": state.id,
+                    "cancelled": True,
+                    "phase": state.phase.value,
+                    "iteration": state.iteration,
+                    "discarded_iteration": state.metadata.get("discarded_iteration"),
+                },
+            )
         except Exception as exc:
             tb_str = traceback.format_exc()
             logger.exception(
