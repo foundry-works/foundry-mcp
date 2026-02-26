@@ -72,7 +72,8 @@ def _format_source_block(
     lines: list[str] = []
     lines.append(f"--- SOURCE {idx}: {safe_title} ---")
     if src.url:
-        lines.append(f"URL: {src.url}")
+        safe_url = sanitize_external_content(src.url)
+        lines.append(f"URL: {safe_url}")
     lines.append(f"NOVELTY: {novelty_tag.tag}")
 
     # Content presentation: prefer structured summary with separate excerpts,
@@ -238,6 +239,89 @@ You have {remaining} of {total} tool calls remaining (web_search and extract_con
 
 Today's date is {date}.
 """
+
+
+# ------------------------------------------------------------------
+# Shared dedup helper for _topic_search and _topic_extract
+# ------------------------------------------------------------------
+
+
+async def _dedup_and_add_source(
+    source: Any,
+    sub_query: SubQuery,
+    state: "DeepResearchState",
+    seen_urls: set[str],
+    seen_titles: dict[str, str],
+    state_lock: asyncio.Lock,
+    content_dedup_enabled: bool = True,
+    dedup_threshold: float = 0.8,
+) -> bool:
+    """Deduplicate a source and add it to state if novel.
+
+    Performs URL dedup, title dedup, and optional content-similarity dedup
+    using the three-phase lock pattern (fast check → unlocked comparison →
+    final commit). Used by both ``_topic_search`` and ``_topic_extract``.
+
+    Returns True if the source was added, False if it was a duplicate.
+    """
+    from foundry_mcp.core.research.workflows.deep_research._helpers import (
+        content_similarity,
+    )
+
+    # --- Phase 1: fast checks under lock (URL + title dedup) ---
+    async with state_lock:
+        if source.url and source.url in seen_urls:
+            return False
+
+        normalized_title = _normalize_title(source.title)
+        if normalized_title and len(normalized_title) > 20:
+            if normalized_title in seen_titles:
+                return False
+
+        # Snapshot existing sources for content-similarity check
+        # outside the lock to avoid O(n^2) contention.
+        if (
+            content_dedup_enabled
+            and source.content
+            and len(source.content) > 100
+        ):
+            sources_snapshot = list(state.sources)
+        else:
+            sources_snapshot = None
+
+    # --- Phase 2: content-similarity dedup outside the lock ---
+    if sources_snapshot is not None:
+        for existing_src in sources_snapshot:
+            if existing_src.content and len(existing_src.content) > 100:
+                sim = content_similarity(source.content, existing_src.content)
+                if sim >= dedup_threshold:
+                    logger.debug(
+                        "Content dedup: %r (%.2f similar to %r)",
+                        source.url or source.title,
+                        sim,
+                        existing_src.url or existing_src.title,
+                    )
+                    return False
+
+    # --- Phase 3: final add-or-skip under lock (re-check for races) ---
+    async with state_lock:
+        if source.url and source.url in seen_urls:
+            return False
+
+        normalized_title = _normalize_title(source.title)
+        if normalized_title and len(normalized_title) > 20:
+            if normalized_title in seen_titles:
+                return False
+            seen_titles[normalized_title] = source.url or ""
+
+        if source.url:
+            seen_urls.add(source.url)
+            if source.quality == SourceQuality.UNKNOWN:
+                source.quality = get_domain_quality(source.url, state.research_mode)
+
+        state.append_source(source)
+        sub_query.source_ids.append(source.id)
+        return True
 
 
 def _build_researcher_system_prompt(
@@ -512,13 +596,6 @@ class TopicResearchMixin:
                 self.config, "topic_reflection", "reflection"
             )
 
-        # Build researcher system prompt
-        system_prompt = _build_researcher_system_prompt(
-            budget_total=max_searches,
-            budget_remaining=budget_remaining,
-            extract_enabled=extract_enabled,
-        )
-
         # Message history for multi-turn conversation
         message_history: list[dict[str, str]] = []
 
@@ -541,6 +618,13 @@ class TopicResearchMixin:
                     max_searches,
                 )
                 break
+
+            # Rebuild system prompt each turn so the budget counter stays current
+            system_prompt = _build_researcher_system_prompt(
+                budget_total=max_searches,
+                budget_remaining=budget_remaining,
+                extract_enabled=extract_enabled,
+            )
 
             # Truncate history to fit model context window before building prompt
             truncated_history = _truncate_researcher_history(message_history, researcher_model)
@@ -1387,9 +1471,6 @@ class TopicResearchMixin:
         Returns the number of new (deduplicated) sources added to state.
         """
         from foundry_mcp.core.research.providers import SearchProviderError
-        from foundry_mcp.core.research.workflows.deep_research._helpers import (
-            content_similarity,
-        )
 
         effective_max_results = (
             max_sources_per_provider if max_sources_per_provider is not None else state.max_sources_per_query
@@ -1435,69 +1516,17 @@ class TopicResearchMixin:
                     )
 
                     for source in sources:
-                        # --- Fast checks under lock (URL + title dedup) ---
-                        async with state_lock:
-                            if source.url and source.url in seen_urls:
-                                continue
-
-                            normalized_title = _normalize_title(source.title)
-                            if normalized_title and len(normalized_title) > 20:
-                                if normalized_title in seen_titles:
-                                    continue
-
-                            # Snapshot existing sources for content-similarity
-                            # check outside the lock to avoid O(n^2) contention.
-                            if (
-                                content_dedup_enabled
-                                and source.content
-                                and len(source.content) > 100
-                            ):
-                                sources_snapshot = list(state.sources)
-                            else:
-                                sources_snapshot = None
-
-                        # --- Content-similarity dedup outside the lock ---
-                        if sources_snapshot is not None:
-                            is_content_dup = False
-                            for existing_src in sources_snapshot:
-                                if (
-                                    existing_src.content
-                                    and len(existing_src.content) > 100
-                                ):
-                                    sim = content_similarity(
-                                        source.content, existing_src.content
-                                    )
-                                    if sim >= dedup_threshold:
-                                        logger.debug(
-                                            "Content dedup: %r (%.2f similar to %r)",
-                                            source.url or source.title,
-                                            sim,
-                                            existing_src.url or existing_src.title,
-                                        )
-                                        is_content_dup = True
-                                        break
-                            if is_content_dup:
-                                continue
-
-                        # --- Final add-or-skip under lock (re-check URL for races) ---
-                        async with state_lock:
-                            if source.url and source.url in seen_urls:
-                                continue
-
-                            # Commit title dedup entry
-                            normalized_title = _normalize_title(source.title)
-                            if normalized_title and len(normalized_title) > 20:
-                                if normalized_title in seen_titles:
-                                    continue
-                                seen_titles[normalized_title] = source.url or ""
-
-                            if source.url:
-                                seen_urls.add(source.url)
-                                if source.quality == SourceQuality.UNKNOWN:
-                                    source.quality = get_domain_quality(source.url, state.research_mode)
-
-                            state.append_source(source)
-                            sub_query.source_ids.append(source.id)
+                        was_added = await _dedup_and_add_source(
+                            source=source,
+                            sub_query=sub_query,
+                            state=state,
+                            seen_urls=seen_urls,
+                            seen_titles=seen_titles,
+                            state_lock=state_lock,
+                            content_dedup_enabled=content_dedup_enabled,
+                            dedup_threshold=dedup_threshold,
+                        )
+                        if was_added:
                             added += 1
 
                     # Track search provider query count
@@ -1594,32 +1623,30 @@ class TopicResearchMixin:
                     timeout=timeout,
                 )
 
+                # Read dedup config
+                content_dedup_enabled = getattr(
+                    self.config, "deep_research_enable_content_dedup", True
+                )
+                dedup_threshold = getattr(
+                    self.config, "deep_research_content_dedup_threshold", 0.8
+                )
+
                 for source in extracted_sources:
-                    async with state_lock:
-                        # URL dedup
-                        if source.url and source.url in seen_urls:
-                            continue
+                    # Tag as extracted source before dedup (metadata preserved)
+                    source.sub_query_id = sub_query.id
+                    source.metadata["extract_source"] = True
 
-                        # Title dedup
-                        normalized_title = _normalize_title(source.title)
-                        if normalized_title and len(normalized_title) > 20:
-                            if normalized_title in seen_titles:
-                                continue
-                            seen_titles[normalized_title] = source.url or ""
-
-                        if source.url:
-                            seen_urls.add(source.url)
-                            if source.quality == SourceQuality.UNKNOWN:
-                                source.quality = get_domain_quality(
-                                    source.url, state.research_mode
-                                )
-
-                        # Tag as extracted source
-                        source.sub_query_id = sub_query.id
-                        source.metadata["extract_source"] = True
-
-                        state.append_source(source)
-                        sub_query.source_ids.append(source.id)
+                    was_added = await _dedup_and_add_source(
+                        source=source,
+                        sub_query=sub_query,
+                        state=state,
+                        seen_urls=seen_urls,
+                        seen_titles=seen_titles,
+                        state_lock=state_lock,
+                        content_dedup_enabled=content_dedup_enabled,
+                        dedup_threshold=dedup_threshold,
+                    )
+                    if was_added:
                         added += 1
 
                 logger.info(

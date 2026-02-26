@@ -71,10 +71,6 @@ from foundry_mcp.core.research.workflows.deep_research.phases.gathering import (
     GatheringPhaseMixin,
 )
 
-# Phase mixins (PlanningPhaseMixin: DEPRECATED — kept for legacy resume compat only)
-from foundry_mcp.core.research.workflows.deep_research.phases.planning import (
-    PlanningPhaseMixin,
-)
 from foundry_mcp.core.research.workflows.deep_research.phases.refinement import (
     RefinementPhaseMixin,
 )
@@ -113,7 +109,6 @@ class DeepResearchWorkflow(
     WorkflowExecutionMixin,
     ClarificationPhaseMixin,
     BriefPhaseMixin,
-    PlanningPhaseMixin,  # DEPRECATED: legacy resume compat only
     GatheringPhaseMixin,  # DEPRECATED: legacy resume compat only
     TopicResearchMixin,
     SupervisionPhaseMixin,

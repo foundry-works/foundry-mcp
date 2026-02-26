@@ -134,65 +134,6 @@ class TestHeartbeatTiming:
     """Tests verifying heartbeat is updated BEFORE provider calls."""
 
     @pytest.mark.asyncio
-    async def test_planning_phase_heartbeat_before_provider_call(self, mock_config, mock_memory, sample_state):
-        """Should update heartbeat BEFORE making provider call in planning phase."""
-        workflow = DeepResearchWorkflow(mock_config, mock_memory)
-
-        # Track operation order
-        operation_order = []
-        heartbeat_at_provider_call: Optional[datetime] = None
-
-        def track_save(*args, **kwargs):
-            # Record when save_deep_research is called (heartbeat update)
-            if args and hasattr(args[0], "last_heartbeat_at"):
-                state = args[0]
-                if state.last_heartbeat_at is not None:
-                    operation_order.append(("heartbeat_save", state.last_heartbeat_at))
-
-        mock_memory.save_deep_research.side_effect = track_save
-
-        async def track_provider(*args, **kwargs):
-            nonlocal heartbeat_at_provider_call
-            # Record when provider is called
-            operation_order.append(("provider_call", datetime.now(timezone.utc)))
-            # Capture the heartbeat value at the time of provider call
-            heartbeat_at_provider_call = sample_state.last_heartbeat_at
-            # Return WorkflowResult (what _execute_provider_async returns)
-            return WorkflowResult(
-                success=True,
-                content='{"sub_queries": [{"query": "test", "rationale": "test", "priority": 1}]}',
-                provider_id="test-provider",
-                model_used="test-model",
-                tokens_used=30,
-                duration_ms=100.0,
-            )
-
-        with patch.object(workflow, "_execute_provider_async", side_effect=track_provider):
-            with patch.object(workflow, "_check_cancellation"):
-                await workflow._execute_planning_async(
-                    state=sample_state,
-                    provider_id=None,
-                    timeout=60.0,
-                )
-
-        # Verify heartbeat was set before provider call
-        assert heartbeat_at_provider_call is not None, "Heartbeat should be set before provider call"
-
-        # Verify operation order: heartbeat save should come before provider call
-        heartbeat_saves = [op for op in operation_order if op[0] == "heartbeat_save"]
-        provider_calls = [op for op in operation_order if op[0] == "provider_call"]
-
-        assert len(heartbeat_saves) >= 1, "Should have at least one heartbeat save"
-        assert len(provider_calls) >= 1, "Should have at least one provider call"
-
-        # The first heartbeat save should be before the first provider call
-        first_heartbeat = heartbeat_saves[0][1]
-        first_provider = provider_calls[0][1]
-        assert first_heartbeat <= first_provider, (
-            f"Heartbeat ({first_heartbeat}) should be updated before provider call ({first_provider})"
-        )
-
-    @pytest.mark.asyncio
     async def test_synthesis_phase_heartbeat_before_provider_call(self, mock_config, mock_memory):
         """Should update heartbeat BEFORE making provider call in synthesis phase."""
         workflow = DeepResearchWorkflow(mock_config, mock_memory)
@@ -324,9 +265,21 @@ class TestHeartbeatTiming:
         assert saved_state.last_heartbeat_at is not None
 
     @pytest.mark.asyncio
-    async def test_heartbeat_provides_progress_visibility(self, mock_config, mock_memory, sample_state):
+    async def test_heartbeat_provides_progress_visibility(self, mock_config, mock_memory):
         """Heartbeat should enable progress visibility during long operations."""
         workflow = DeepResearchWorkflow(mock_config, mock_memory)
+
+        # Create synthesis state for testing (planning phase is removed from MRO)
+        state = DeepResearchState(
+            id="deepres-progress-heartbeat",
+            original_query="Test progress heartbeat",
+            phase=DeepResearchPhase.SYNTHESIS,
+        )
+        state.add_finding(
+            content="Test finding for progress visibility",
+            confidence=ConfidenceLevel.HIGH,
+            source_ids=[],
+        )
 
         # Simulate a slow provider call
         provider_delay = 0.1  # 100ms
@@ -334,9 +287,9 @@ class TestHeartbeatTiming:
 
         def capture_heartbeat(*args, **kwargs):
             if args and hasattr(args[0], "last_heartbeat_at"):
-                state = args[0]
-                if state.last_heartbeat_at is not None:
-                    heartbeat_times.append(state.last_heartbeat_at)
+                s = args[0]
+                if s.last_heartbeat_at is not None:
+                    heartbeat_times.append(s.last_heartbeat_at)
 
         mock_memory.save_deep_research.side_effect = capture_heartbeat
 
@@ -344,7 +297,7 @@ class TestHeartbeatTiming:
             await asyncio.sleep(provider_delay)
             return WorkflowResult(
                 success=True,
-                content='{"sub_queries": []}',
+                content="# Synthesis Report\nTest synthesis output.",
                 provider_id="test-provider",
                 model_used="test-model",
                 tokens_used=30,
@@ -354,8 +307,8 @@ class TestHeartbeatTiming:
         with patch.object(workflow, "_execute_provider_async", side_effect=slow_provider):
             with patch.object(workflow, "_check_cancellation"):
                 start_time = datetime.now(timezone.utc)
-                await workflow._execute_planning_async(
-                    state=sample_state,
+                await workflow._execute_synthesis_async(
+                    state=state,
                     provider_id=None,
                     timeout=60.0,
                 )

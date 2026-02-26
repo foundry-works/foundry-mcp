@@ -111,20 +111,20 @@ Track completion of each fix. Mark `[x]` when implemented and verified.
 
 ## Phase 6 — Minor: Cleanup & Hardening
 
-- [ ] **6.1** Sanitize URLs in topic researcher prompt
-  - [ ] Apply `sanitize_external_content()` to `src.url` in `_format_source_block()`
-- [ ] **6.2** Add content-similarity dedup to `_topic_extract`
-  - [ ] Factor dedup logic into shared `_dedup_and_add_source()` helper
-  - [ ] Call from both `_topic_search` and `_topic_extract`
-- [ ] **6.3** Rebuild topic researcher system prompt each turn
-  - [ ] Move `system_prompt = _build_researcher_system_prompt(...)` inside the turn loop
-  - [ ] Pass current `budget_remaining`
-- [ ] **6.4** Remove dead `PlanningPhaseMixin` from class hierarchy
-  - [ ] Remove from `DeepResearchWorkflow` MRO in `core.py`
-- [ ] **6.5** Remove `idea.md` (copyrighted content)
-  - [ ] Delete `idea.md`
-- [ ] **6.6** Stage deletion of `PLAN-BG-CHECKLIST.md` and `PLAN-BG.md`
-  - [ ] Include in fix commit
+- [x] **6.1** Sanitize URLs in topic researcher prompt
+  - [x] Apply `sanitize_external_content()` to `src.url` in `_format_source_block()`
+- [x] **6.2** Add content-similarity dedup to `_topic_extract`
+  - [x] Factor dedup logic into shared `_dedup_and_add_source()` helper
+  - [x] Call from both `_topic_search` and `_topic_extract`
+- [x] **6.3** Rebuild topic researcher system prompt each turn
+  - [x] Move `system_prompt = _build_researcher_system_prompt(...)` inside the turn loop
+  - [x] Pass current `budget_remaining`
+- [x] **6.4** Remove dead `PlanningPhaseMixin` from class hierarchy
+  - [x] Remove from `DeepResearchWorkflow` MRO in `core.py`
+- [x] **6.5** Remove `idea.md` (copyrighted content)
+  - [x] Already deleted in prior phase
+- [x] **6.6** Stage deletion of `PLAN-BG-CHECKLIST.md` and `PLAN-BG.md`
+  - [x] Already deleted and not tracked by git
 
 ---
 
@@ -132,8 +132,8 @@ Track completion of each fix. Mark `[x]` when implemented and verified.
 
 After all phases:
 
-- [ ] Full test suite passes: `pytest tests/ -x --timeout=120`
-- [ ] Research-specific tests pass: `pytest tests/core/research/ -x --timeout=120`
-- [ ] No new `grep -r "global _active_research_memory" src/` hits in `core.py`
-- [ ] `sanitize_external_content` grep shows coverage at all prompt interpolation sites
-- [ ] Blocking execution respects `task_timeout` (manual or integration test)
+- [x] Full test suite passes: `pytest tests/ -x --timeout=120` (6625 passed, 48 skipped)
+- [x] Research-specific tests pass: `pytest tests/core/research/ -x --timeout=120` (2472 passed, 6 skipped)
+- [x] No new `grep -r "global _active_research_memory" src/` hits in `core.py`
+- [x] `sanitize_external_content` grep shows coverage at all prompt interpolation sites
+- [x] Blocking execution respects `task_timeout` (manual or integration test)
