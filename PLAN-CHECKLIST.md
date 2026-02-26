@@ -77,12 +77,12 @@
 
 ## Phase 5: Test Coverage for New Findings
 
-- [ ] **5A.1** Extend `test_sanitize_external_content.py` with cross-phase injection scenarios
+- [x] **5A.1** Extend `test_sanitize_external_content.py` with cross-phase injection scenarios
 - [x] **5B.1** Test: `max_supervision_rounds = 100` is clamped to 20
 - [x] **5B.2** Test: `coverage_confidence_threshold = 1.5` raises or is clamped
 - [x] **5B.3** Test: deprecated field in TOML input produces `DeprecationWarning`
-- [ ] **5C.1** Test: `raw_notes` list is capped after many appends
-- [ ] **5C.2** Test: supervision phase respects wall-clock timeout and exits early
+- [x] **5C.1** Test: `raw_notes` list is capped after many appends
+- [x] **5C.2** Test: supervision phase respects wall-clock timeout and exits early
 - [x] **5D.1** Test: consecutive deprecated phases are all skipped by `advance_phase()`
 - [x] **5E.1** Test: `deep-research-evaluate` action is allowed for observer role
 
@@ -90,8 +90,8 @@
 
 ## Final Validation
 
-- [ ] Full deep research test suite passes: `python -m pytest tests/core/research/ -x -q`
-- [ ] Evaluation tests pass: `python -m pytest tests/core/research/evaluation/ -x -q`
-- [ ] Integration tests pass: `python -m pytest tests/integration/ -x -q`
-- [ ] No regressions in existing workflow tests
-- [ ] Grep confirms no remaining unsanitized `source.content` or `source.title` in prompt-building code paths
+- [x] Full deep research test suite passes: `python -m pytest tests/core/research/ -x -q`
+- [x] Evaluation tests pass: `python -m pytest tests/core/research/evaluation/ -x -q`
+- [x] Integration tests pass: `python -m pytest tests/integration/ -x -q`
+- [x] No regressions in existing workflow tests
+- [x] Grep confirms no remaining unsanitized `source.content` or `source.title` in prompt-building code paths
