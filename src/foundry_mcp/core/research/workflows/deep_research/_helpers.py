@@ -792,8 +792,15 @@ def compute_novelty_tag(
 # XML-like tags that could override LLM instructions when injected via
 # web-scraped content.  Matched case-insensitively.
 _INJECTION_TAG_PATTERN: re.Pattern[str] = re.compile(
-    r"<\s*/?\s*(?:system|instructions|tool_use|tool_result|human|assistant|function_calls|(?:antml:)?invoke|prompt)\b[^>]*>",
+    r"<\s*/?\s*(?:system|instructions|tool_use|tool_result|human|assistant"
+    r"|function_calls|(?:antml:)?invoke|prompt"
+    r"|message|messages|context|document|thinking|reflection)\b[^>]*>",
     re.IGNORECASE,
+)
+
+# OpenAI-family special tokens (e.g. <|im_start|>, <|im_end|>, <|endoftext|>).
+_SPECIAL_TOKEN_PATTERN: re.Pattern[str] = re.compile(
+    r"<\|.*?\|>",
 )
 
 # Markdown headings that mimic system-level sections.
@@ -806,9 +813,10 @@ _INJECTION_HEADING_PATTERN: re.Pattern[str] = re.compile(
 def sanitize_external_content(text: str) -> str:
     """Strip prompt-injection vectors from web-scraped content.
 
-    Removes XML-like tags and markdown headings that could override LLM
-    instructions when external content is interpolated into supervision
-    prompts.  Normal content (citations, formatting, data) is preserved.
+    Removes XML-like tags, special tokens, and markdown headings that could
+    override LLM instructions when external content is interpolated into
+    supervision prompts.  Normal content (citations, formatting, data) is
+    preserved.
 
     Args:
         text: Raw external content (source title, snippet, etc.)
@@ -820,6 +828,8 @@ def sanitize_external_content(text: str) -> str:
         return text
     # Strip XML-like instruction/override tags
     sanitized = _INJECTION_TAG_PATTERN.sub("", text)
+    # Strip OpenAI-family special tokens
+    sanitized = _SPECIAL_TOKEN_PATTERN.sub("", sanitized)
     # Strip markdown heading injection patterns
     sanitized = _INJECTION_HEADING_PATTERN.sub("", sanitized)
     return sanitized

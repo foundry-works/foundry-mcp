@@ -21,6 +21,9 @@ from foundry_mcp.core.research.models.deep_research import (
     parse_brief_output,
 )
 from foundry_mcp.core.research.workflows.base import WorkflowResult
+from foundry_mcp.core.research.workflows.deep_research._helpers import (
+    sanitize_external_content,
+)
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
     execute_structured_llm_call,
     finalize_phase,
@@ -258,12 +261,12 @@ class BriefPhaseMixin:
             User prompt string
         """
         parts: list[str] = [
-            f"Research request:\n{state.original_query}",
+            f"Research request:\n{sanitize_external_content(state.original_query)}",
         ]
 
         if state.system_prompt:
             parts.append(
-                f"\nAdditional context provided by the user:\n{state.system_prompt}"
+                f"\nAdditional context provided by the user:\n{sanitize_external_content(state.system_prompt)}"
             )
 
         if state.clarification_constraints:
@@ -271,7 +274,7 @@ class BriefPhaseMixin:
                 "\nClarification constraints (already confirmed with the user):"
             )
             for key, value in state.clarification_constraints.items():
-                parts.append(f"- {key}: {value}")
+                parts.append(f"- {sanitize_external_content(key)}: {sanitize_external_content(value)}")
 
         # Temporal context helps the brief scope time-sensitive research
         parts.append(

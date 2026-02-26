@@ -22,6 +22,7 @@ from foundry_mcp.core.research.workflows.deep_research._helpers import (
     ClarificationDecision,
     extract_json,
     parse_clarification_decision,
+    sanitize_external_content,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
     execute_structured_llm_call,
@@ -292,10 +293,10 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         Returns:
             User prompt string
         """
-        prompt = f"Research Query: {state.original_query}"
+        prompt = f"Research Query: {sanitize_external_content(state.original_query)}"
 
         if state.system_prompt:
-            prompt += f"\n\nAdditional context provided by user: {state.system_prompt}"
+            prompt += f"\n\nAdditional context provided by user: {sanitize_external_content(state.system_prompt)}"
 
         return prompt
 

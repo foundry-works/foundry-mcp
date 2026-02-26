@@ -1645,7 +1645,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                     "## Gap Analysis",
                     "",
                     "<gap_analysis>",
-                    think_output.strip(),
+                    sanitize_external_content(think_output.strip()),
                     "</gap_analysis>",
                     "",
                     "Generate research directives that DIRECTLY address the gaps "
@@ -1946,7 +1946,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                 "## Decomposition Strategy",
                 "",
                 "<decomposition_strategy>",
-                think_output.strip(),
+                sanitize_external_content(think_output.strip()),
                 "</decomposition_strategy>",
                 "",
                 "Generate research directives that implement the decomposition "
@@ -2602,9 +2602,9 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                 "follow_ups_added": new_sub_queries,
                 "should_continue_gathering": should_continue,
                 "overall_coverage": parsed.get("overall_coverage", "unknown"),
-                "system_prompt": system_prompt,
-                "user_prompt": user_prompt,
-                "raw_response": result.content,
+                "system_prompt_length": len(system_prompt),
+                "user_prompt_length": len(user_prompt),
+                "response_length": len(result.content) if result.content else 0,
             },
         )
 

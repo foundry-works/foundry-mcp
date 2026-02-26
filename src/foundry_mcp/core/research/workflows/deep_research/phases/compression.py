@@ -62,12 +62,12 @@ def _build_message_history_prompt(
         content = msg.get("content", "")
 
         if role == "assistant":
-            history_lines.append(f"[Assistant]\n{content}")
+            history_lines.append(f"[Assistant]\n{sanitize_external_content(content)}")
         elif role == "tool":
             label = f"[Tool: {tool_name}]" if tool_name else "[Tool Result]"
             history_lines.append(f"{label}\n{sanitize_external_content(content)}")
         else:
-            history_lines.append(f"[{role}]\n{content}")
+            history_lines.append(f"[{role}]\n{sanitize_external_content(content)}")
 
     history_block = "\n\n".join(history_lines)
 
@@ -908,7 +908,7 @@ class CompressionMixin:
                     continue
 
             topic_sections.append(
-                f"### Topic: {query_text}\n\n{content}"
+                f"### Topic: {sanitize_external_content(query_text)}\n\n{sanitize_external_content(content)}"
             )
 
         if not topic_sections:

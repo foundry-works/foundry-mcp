@@ -934,3 +934,35 @@ class TestDeepResearchTimeoutConfig:
                 start_call_kwargs = mock_workflow.execute.call_args_list[0].kwargs
                 assert start_call_kwargs["task_timeout"] == 600.0
                 assert result["success"] is True
+
+
+class TestDeepResearchInputValidation:
+    """Tests for deep research input validation (Phase 2 — 2.7)."""
+
+    def test_oversized_system_prompt_returns_validation_error(self, mock_config, mock_memory):
+        """system_prompt exceeding MAX_PROMPT_LENGTH is rejected."""
+        from foundry_mcp.tools.unified.research import _handle_deep_research
+
+        oversized_prompt = "x" * 200_001  # MAX_PROMPT_LENGTH is 200_000
+
+        with patch(
+            "foundry_mcp.tools.unified.research_handlers.handlers_deep_research.DeepResearchWorkflow"
+        ) as MockWorkflow:
+            mock_workflow = MagicMock()
+            mock_workflow.execute.return_value = WorkflowResult(
+                success=False,
+                content="",
+                error="Input validation failed: system_prompt length 200001 exceeds maximum 200000 characters",
+                metadata={"validation_errors": ["system_prompt length 200001 exceeds maximum 200000 characters"]},
+            )
+            MockWorkflow.return_value = mock_workflow
+
+            result = _handle_deep_research(
+                query="valid query",
+                deep_research_action="start",
+                system_prompt=oversized_prompt,
+            )
+
+            # The workflow's execute should have been called and returned the validation error
+            assert result["success"] is False
+            assert "system_prompt" in result.get("error", "")

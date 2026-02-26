@@ -26,37 +26,37 @@ Track completion of each fix. Mark `[x]` when implemented and verified.
 
 ## Phase 2 — Critical: Authorization & Prompt Injection Sanitization
 
-- [ ] **2.1** Fix `UnboundLocalError` in authorization denial path
-  - [ ] Move `raw_action = (action or "").lower()` above the `if not tool_name:` block in `authorization.py`
-  - [ ] Add unit test: denial with `tool_name` truthy and `normalized_action` falsy doesn't crash
-- [ ] **2.2** Sanitize user query and system_prompt in clarification and brief phases
-  - [ ] Wrap `state.original_query` in `sanitize_external_content()` in `_build_clarification_user_prompt()`
-  - [ ] Wrap `state.system_prompt` in `sanitize_external_content()` in `_build_clarification_user_prompt()`
-  - [ ] Wrap `state.original_query` in `sanitize_external_content()` in `_build_brief_user_prompt()`
-  - [ ] Wrap `state.system_prompt` in `sanitize_external_content()` in `_build_brief_user_prompt()`
-  - [ ] Sanitize `clarification_constraints` keys and values in `brief.py`
-- [ ] **2.3** Sanitize `think_output` in supervision prompts
-  - [ ] Apply `sanitize_external_content()` before `<gap_analysis>` tag interpolation
-  - [ ] Apply `sanitize_external_content()` before `<decomposition_strategy>` tag interpolation
-- [ ] **2.4** Sanitize assistant messages and global compression content
-  - [ ] Apply `sanitize_external_content()` to assistant message content in `_build_message_history_prompt()`
-  - [ ] Apply `sanitize_external_content()` to default/unknown role content in `_build_message_history_prompt()`
-  - [ ] Wrap `content` and `query_text` in `sanitize_external_content()` in `_execute_global_compression_async()`
-- [ ] **2.5** Sanitize contradiction/gap fields in synthesis prompt
-  - [ ] Apply `sanitize_external_content()` to `contradiction.severity`, `.description`, `.resolution`
-  - [ ] Apply `sanitize_external_content()` to `gap.description` and related fields
-- [ ] **2.6** Expand injection tag pattern coverage
-  - [ ] Add `message|messages|context|document|thinking|reflection` to `_INJECTION_TAG_PATTERN`
-  - [ ] Add `_SPECIAL_TOKEN_PATTERN` for `<\|.*?\|>` (OpenAI-family special tokens)
-  - [ ] Relax `_INJECTION_HEADING_PATTERN` `$` anchor to `\s*$`
-  - [ ] Apply new pattern in `sanitize_external_content()`
-  - [ ] Add unit tests for new patterns (message tags, special tokens, heading with trailing whitespace)
-- [ ] **2.7** Add `system_prompt` length validation
-  - [ ] Add `system_prompt` length check alongside `query` validation in `_start_research()`
-  - [ ] Add unit test: oversized system_prompt returns validation error
-- [ ] **2.8** Remove full prompt/response logging from legacy supervision audit path
-  - [ ] Replace `system_prompt`, `user_prompt`, `raw_response` with bounded summaries in audit data
-  - [ ] Keep structured fields (coverage_outcome, model, token counts)
+- [x] **2.1** Fix `UnboundLocalError` in authorization denial path
+  - [x] Move `raw_action = (action or "").lower()` above the `if not tool_name:` block in `authorization.py`
+  - [x] Add unit test: denial with `tool_name` truthy and `normalized_action` falsy doesn't crash
+- [x] **2.2** Sanitize user query and system_prompt in clarification and brief phases
+  - [x] Wrap `state.original_query` in `sanitize_external_content()` in `_build_clarification_user_prompt()`
+  - [x] Wrap `state.system_prompt` in `sanitize_external_content()` in `_build_clarification_user_prompt()`
+  - [x] Wrap `state.original_query` in `sanitize_external_content()` in `_build_brief_user_prompt()`
+  - [x] Wrap `state.system_prompt` in `sanitize_external_content()` in `_build_brief_user_prompt()`
+  - [x] Sanitize `clarification_constraints` keys and values in `brief.py`
+- [x] **2.3** Sanitize `think_output` in supervision prompts
+  - [x] Apply `sanitize_external_content()` before `<gap_analysis>` tag interpolation
+  - [x] Apply `sanitize_external_content()` before `<decomposition_strategy>` tag interpolation
+- [x] **2.4** Sanitize assistant messages and global compression content
+  - [x] Apply `sanitize_external_content()` to assistant message content in `_build_message_history_prompt()`
+  - [x] Apply `sanitize_external_content()` to default/unknown role content in `_build_message_history_prompt()`
+  - [x] Wrap `content` and `query_text` in `sanitize_external_content()` in `_execute_global_compression_async()`
+- [x] **2.5** Sanitize contradiction/gap fields in synthesis prompt
+  - [x] Apply `sanitize_external_content()` to `contradiction.severity`, `.description`, `.resolution`
+  - [x] Apply `sanitize_external_content()` to `gap.description` and related fields
+- [x] **2.6** Expand injection tag pattern coverage
+  - [x] Add `message|messages|context|document|thinking|reflection` to `_INJECTION_TAG_PATTERN`
+  - [x] Add `_SPECIAL_TOKEN_PATTERN` for `<\|.*?\|>` (OpenAI-family special tokens)
+  - [x] Relax `_INJECTION_HEADING_PATTERN` `$` anchor to `\s*$` (already present)
+  - [x] Apply new pattern in `sanitize_external_content()`
+  - [x] Add unit tests for new patterns (message tags, special tokens, heading with trailing whitespace)
+- [x] **2.7** Add `system_prompt` length validation
+  - [x] Add `system_prompt` length check alongside `query` validation in `_start_research()`
+  - [x] Add unit test: oversized system_prompt returns validation error
+- [x] **2.8** Remove full prompt/response logging from legacy supervision audit path
+  - [x] Replace `system_prompt`, `user_prompt`, `raw_response` with bounded summaries in audit data
+  - [x] Keep structured fields (coverage_outcome, model, token counts)
 
 ---
 

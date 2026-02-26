@@ -87,6 +87,8 @@ class ActionHandlersMixin:
         violations: list[str] = []
         if len(query) > MAX_PROMPT_LENGTH:
             violations.append(f"query length {len(query)} exceeds maximum {MAX_PROMPT_LENGTH} characters")
+        if system_prompt and len(system_prompt) > MAX_PROMPT_LENGTH:
+            violations.append(f"system_prompt length {len(system_prompt)} exceeds maximum {MAX_PROMPT_LENGTH} characters")
         if max_iterations > MAX_ITERATIONS:
             violations.append(f"max_iterations {max_iterations} exceeds maximum {MAX_ITERATIONS}")
         if max_sub_queries > MAX_SUB_QUERIES:

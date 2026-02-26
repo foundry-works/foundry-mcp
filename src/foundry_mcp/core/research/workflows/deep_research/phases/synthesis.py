@@ -813,11 +813,11 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                 "Address these explicitly in the report's 'Conflicting Information' section."
             )
             for contradiction in state.contradictions:
-                severity_label = contradiction.severity.upper()
-                prompt_parts.append(f"- [{severity_label}] {contradiction.description}")
+                severity_label = sanitize_external_content(contradiction.severity).upper()
+                prompt_parts.append(f"- [{severity_label}] {sanitize_external_content(contradiction.description)}")
                 prompt_parts.append(f"  Conflicting findings: {', '.join(contradiction.finding_ids)}")
                 if contradiction.resolution:
-                    prompt_parts.append(f"  Suggested resolution: {contradiction.resolution}")
+                    prompt_parts.append(f"  Suggested resolution: {sanitize_external_content(contradiction.resolution)}")
                 if contradiction.preferred_source_id:
                     cn = id_to_citation.get(contradiction.preferred_source_id)
                     if cn is not None:
@@ -828,7 +828,7 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
             prompt_parts.append("## Knowledge Gaps Identified")
             for gap in state.gaps:
                 status = "addressed" if gap.resolved else "unresolved"
-                prompt_parts.append(f"- [{status}] {gap.description}")
+                prompt_parts.append(f"- [{status}] {sanitize_external_content(gap.description)}")
             prompt_parts.append("")
 
     def _build_synthesis_tail(

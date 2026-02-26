@@ -330,11 +330,13 @@ def check_action_allowed(
             configured_role=role,
         )
 
+    # raw_action is always needed for denial logging below, define before branch.
+    raw_action = (action or "").lower()
+
     # Check raw action name as fallback, but ONLY when no tool_name is provided.
     # When tool_name is present, only the normalized "tool-action" form is checked
     # to prevent generic action names like "list" or "get" from matching any tool.
     if not tool_name:
-        raw_action = (action or "").lower()
         if raw_action in allowlist:
             return AuthzResult(
                 allowed=True,
