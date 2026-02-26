@@ -887,3 +887,101 @@ class TestSupervisionMessageGrowthReduction:
         assert compressed_total < raw_total
         # At least 50% reduction (in practice much more)
         assert compressed_total < raw_total * 0.5
+
+
+# =============================================================================
+# Cancellation propagation tests (PLAN Phase 6B)
+# =============================================================================
+
+
+class TestCompressionCancellationPropagation:
+    """Tests that cancellation propagates correctly during compression gather.
+
+    The batch compression in compression.py uses
+    ``asyncio.gather(*tasks, return_exceptions=True)`` followed by a manual
+    check for ``CancelledError`` results.  These tests verify that pattern.
+    """
+
+    @pytest.mark.asyncio
+    async def test_cancelled_error_propagates_from_compression_gather(self):
+        """CancelledError during compression gather is re-raised upward."""
+        state = _make_state(num_sub_queries=2)
+        _add_topic_results(state, compressed=False)
+
+        stub = StubCompression()
+        stub._cancelled = False
+
+        call_count = {"value": 0}
+
+        async def mock_compress(*args, **kwargs):
+            call_count["value"] += 1
+            if call_count["value"] == 1:
+                return (100, 50, True)  # First succeeds
+            raise asyncio.CancelledError()  # Second cancelled
+
+        with patch.object(stub, "_compress_single_topic_async", side_effect=mock_compress):
+            with pytest.raises(asyncio.CancelledError):
+                await stub._compress_topic_findings_async(
+                    state=state,
+                    max_concurrent=3,
+                    timeout=120.0,
+                )
+
+    @pytest.mark.asyncio
+    async def test_non_cancellation_exception_counted_as_failed(self):
+        """Non-CancelledError exceptions in compression are counted as failures, not propagated."""
+        state = _make_state(num_sub_queries=2)
+        _add_topic_results(state, compressed=False)
+
+        stub = StubCompression()
+
+        call_count = {"value": 0}
+
+        async def mock_compress(*args, **kwargs):
+            call_count["value"] += 1
+            if call_count["value"] == 1:
+                return (100, 50, True)  # First succeeds
+            raise RuntimeError("unexpected error")  # Second fails
+
+        with patch.object(stub, "_compress_single_topic_async", side_effect=mock_compress):
+            result = await stub._compress_topic_findings_async(
+                state=state,
+                max_concurrent=3,
+                timeout=120.0,
+            )
+
+        assert result["topics_compressed"] == 1
+        assert result["topics_failed"] == 1
+
+    @pytest.mark.asyncio
+    async def test_partial_compression_results_preserved_before_cancellation(self):
+        """Completed compressions are preserved even when cancellation fires mid-batch."""
+        state = _make_state(num_sub_queries=3)
+        results = _add_topic_results(state, compressed=False)
+
+        stub = StubCompression()
+
+        call_count = {"value": 0}
+
+        async def mock_compress(topic_result, *args, **kwargs):
+            call_count["value"] += 1
+            if call_count["value"] <= 2:
+                # First two succeed — set compressed_findings
+                topic_result.compressed_findings = f"Compressed {call_count['value']}"
+                return (100, 50, True)
+            # Third is cancelled
+            raise asyncio.CancelledError()
+
+        with patch.object(stub, "_compress_single_topic_async", side_effect=mock_compress):
+            with pytest.raises(asyncio.CancelledError):
+                await stub._compress_topic_findings_async(
+                    state=state,
+                    max_concurrent=3,
+                    timeout=120.0,
+                )
+
+        # At least some results got compressed before cancellation
+        compressed_count = sum(
+            1 for tr in results if tr.compressed_findings is not None
+        )
+        assert compressed_count >= 1

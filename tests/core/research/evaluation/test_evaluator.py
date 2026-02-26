@@ -15,7 +15,7 @@ Tests cover:
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -718,32 +718,51 @@ class TestRawNotesGroundedness:
     @pytest.mark.asyncio
     async def test_evaluate_report_passes_raw_notes(self):
         """evaluate_report() passes state.raw_notes to the prompt builder."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            LLMCallResult,
+        )
+
         state = _make_state()
         state.raw_notes = ["Evidence from researcher 1", "Evidence from researcher 2"]
         response = _make_valid_eval_response()
         workflow = _make_workflow_mock(response)
 
-        result = await evaluate_report(
-            workflow=workflow,
-            state=state,
-            provider_id=None,
-            model=None,
-            timeout=360.0,
-        )
+        captured_prompts: list[str] = []
+
+        async def mock_execute_llm_call(**kwargs):
+            captured_prompts.append(kwargs.get("user_prompt", ""))
+            return LLMCallResult(
+                result=WorkflowResult(
+                    success=True,
+                    content=response,
+                    provider_id="gemini",
+                    model_used="gemini-2.5-pro",
+                    duration_ms=1500.0,
+                    input_tokens=2000,
+                    output_tokens=500,
+                    tokens_used=2500,
+                ),
+                llm_call_duration_ms=1500.0,
+            )
+
+        with patch(
+            "foundry_mcp.core.research.evaluation.evaluator.execute_llm_call",
+            side_effect=mock_execute_llm_call,
+        ):
+            result = await evaluate_report(
+                workflow=workflow,
+                state=state,
+                provider_id=None,
+                model=None,
+                timeout=360.0,
+            )
 
         assert isinstance(result, EvaluationResult)
-        # Verify the LLM was called with a prompt containing raw notes
-        call_args = workflow._execute_provider_async.call_args
-        # The user_prompt is passed as a keyword arg
-        user_prompt = call_args.kwargs.get("user_prompt", "")
-        if not user_prompt and len(call_args.args) > 0:
-            # Try positional args — check all string args for raw notes
-            for arg in call_args.args:
-                if isinstance(arg, str) and "Evidence from researcher" in arg:
-                    user_prompt = arg
-                    break
+        assert len(captured_prompts) == 1
+        user_prompt = captured_prompts[0]
         # The prompt should contain the raw notes evidence
-        assert "Evidence from researcher" in user_prompt or True  # provider mock may not capture full prompt
+        assert "Evidence from researcher 1" in user_prompt
+        assert "Evidence from researcher 2" in user_prompt
 
     @pytest.mark.asyncio
     async def test_evaluate_report_no_raw_notes(self):

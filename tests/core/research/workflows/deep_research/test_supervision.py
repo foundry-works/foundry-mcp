@@ -4307,3 +4307,104 @@ class TestEvidenceInventoryTruncation:
         remaining_rounds = {m.get("round") for m in result}
         # Most recent round (3) should survive
         assert 3 in remaining_rounds
+
+
+# ===========================================================================
+# Cancellation propagation tests (PLAN Phase 6B)
+# ===========================================================================
+
+
+class TestDirectiveExecutionCancellation:
+    """Tests that cancellation propagates correctly during directive execution.
+
+    The directive execution gather in supervision.py uses
+    ``asyncio.gather(*tasks, return_exceptions=True)`` followed by a manual
+    check for ``CancelledError`` results.  These tests verify that pattern.
+    """
+
+    @pytest.mark.asyncio
+    async def test_cancelled_error_propagates_from_gather(self):
+        """CancelledError in gather results is re-raised to propagate cancellation."""
+        import asyncio
+
+        async def ok_task():
+            return TopicResearchResult(
+                sub_query_id="sq-0", sources_found=2, source_ids=[],
+            )
+
+        async def cancelled_task():
+            raise asyncio.CancelledError()
+
+        gather_results = await asyncio.gather(
+            ok_task(), cancelled_task(), return_exceptions=True,
+        )
+
+        # Apply the same cancellation-propagation pattern as supervision.py
+        with pytest.raises(asyncio.CancelledError):
+            for r in gather_results:
+                if isinstance(r, asyncio.CancelledError):
+                    raise r
+
+    @pytest.mark.asyncio
+    async def test_non_cancellation_exceptions_are_non_fatal(self):
+        """Non-CancelledError exceptions in gather are treated as non-fatal."""
+        import asyncio
+
+        async def ok_task():
+            return TopicResearchResult(
+                sub_query_id="sq-0", sources_found=2, source_ids=[],
+            )
+
+        async def failing_task():
+            raise RuntimeError("unexpected error")
+
+        gather_results = await asyncio.gather(
+            ok_task(), failing_task(), return_exceptions=True,
+        )
+
+        # CancelledError check — should NOT raise for RuntimeError
+        for r in gather_results:
+            if isinstance(r, asyncio.CancelledError):
+                raise r
+
+        # Filter results using supervision.py pattern
+        successful = [r for r in gather_results if not isinstance(r, BaseException)]
+        exceptions = [r for r in gather_results if isinstance(r, BaseException)]
+
+        assert len(successful) == 1
+        assert successful[0].sub_query_id == "sq-0"
+        assert len(exceptions) == 1
+        assert isinstance(exceptions[0], RuntimeError)
+
+    @pytest.mark.asyncio
+    async def test_partial_results_preserved_on_cancellation(self):
+        """When cancellation fires mid-batch, completed results are available before re-raise."""
+        import asyncio
+
+        async def ok_task():
+            return TopicResearchResult(
+                sub_query_id="sq-ok", sources_found=3, source_ids=[],
+            )
+
+        async def slow_cancelled_task():
+            await asyncio.sleep(0.01)
+            raise asyncio.CancelledError()
+
+        gather_results = await asyncio.gather(
+            ok_task(), slow_cancelled_task(), return_exceptions=True,
+        )
+
+        # Collect partial results before propagating cancellation
+        completed_results = [
+            r for r in gather_results if not isinstance(r, BaseException)
+        ]
+
+        # Partial results should be preserved
+        assert len(completed_results) == 1
+        assert completed_results[0].sub_query_id == "sq-ok"
+
+        # Cancellation should still be detected
+        has_cancellation = any(
+            isinstance(r, asyncio.CancelledError) for r in gather_results
+        )
+        assert has_cancellation

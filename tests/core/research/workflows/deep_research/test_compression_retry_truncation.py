@@ -659,3 +659,120 @@ class TestCompressionRetryWithMessageBoundary:
         assert "messages_dropped" in event_data
         assert "original_message_count" in event_data
         assert event_data["outer_retries"] == 1
+
+
+# =============================================================================
+# Context-window error detection regression tests (PLAN Phase 6C)
+# =============================================================================
+
+
+class TestContextWindowErrorDetection:
+    """Regression tests for _is_context_window_error.
+
+    Ensures the tightened patterns (Phase 1B) correctly reject false positives
+    while still matching genuine context-window errors.
+    """
+
+    def _make_exception(self, cls_name: str, message: str) -> Exception:
+        """Create an exception with a custom class name."""
+        exc_cls = type(cls_name, (Exception,), {})
+        return exc_cls(message)
+
+    def test_auth_token_not_classified_as_context_window(self):
+        """'invalid authentication token' must NOT be classified as context-window error."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _is_context_window_error,
+        )
+
+        exc = self._make_exception("BadRequestError", "invalid authentication token")
+        assert _is_context_window_error(exc) is False
+
+    def test_context_parameter_not_classified_as_context_window(self):
+        """'context parameter is required' must NOT be classified as context-window error."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _is_context_window_error,
+        )
+
+        exc = self._make_exception("BadRequestError", "context parameter is required")
+        assert _is_context_window_error(exc) is False
+
+    def test_length_must_be_positive_not_classified(self):
+        """'length must be positive' must NOT be classified as context-window error."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _is_context_window_error,
+        )
+
+        exc = self._make_exception("BadRequestError", "length must be positive")
+        assert _is_context_window_error(exc) is False
+
+    def test_maximum_context_length_exceeded_is_classified(self):
+        """'maximum context length exceeded' IS a context-window error."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _is_context_window_error,
+        )
+
+        exc = self._make_exception("BadRequestError", "maximum context length exceeded")
+        assert _is_context_window_error(exc) is True
+
+    def test_token_limit_exceeded_is_classified(self):
+        """'token limit exceeded' IS a context-window error."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _is_context_window_error,
+        )
+
+        exc = self._make_exception("BadRequestError", "token limit exceeded")
+        assert _is_context_window_error(exc) is True
+
+    def test_prompt_too_long_is_classified(self):
+        """'prompt is too long' IS a context-window error."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _is_context_window_error,
+        )
+
+        exc = self._make_exception("BadRequestError", "prompt is too long")
+        assert _is_context_window_error(exc) is True
+
+    def test_too_many_tokens_is_classified(self):
+        """'too many tokens' IS a context-window error."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _is_context_window_error,
+        )
+
+        exc = self._make_exception("BadRequestError", "too many tokens in input")
+        assert _is_context_window_error(exc) is True
+
+    def test_invalid_argument_non_token_message_not_classified(self):
+        """InvalidArgument with non-token message must NOT be classified as context-window error."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _is_context_window_error,
+        )
+
+        exc = self._make_exception("InvalidArgument", "field 'temperature' must be between 0 and 2")
+        assert _is_context_window_error(exc) is False
+
+    def test_invalid_argument_with_token_limit_is_classified(self):
+        """InvalidArgument with token-related message IS a context-window error."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _is_context_window_error,
+        )
+
+        exc = self._make_exception("InvalidArgument", "token limit exceeded for model")
+        assert _is_context_window_error(exc) is True
+
+    def test_resource_exhausted_always_classified(self):
+        """ResourceExhausted is always a context-window error (Google/gRPC convention)."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _is_context_window_error,
+        )
+
+        exc = self._make_exception("ResourceExhausted", "some unrelated message")
+        assert _is_context_window_error(exc) is True
+
+    def test_generic_exception_no_match(self):
+        """A generic Exception without matching patterns is not a context-window error."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _is_context_window_error,
+        )
+
+        exc = Exception("something went wrong with the request")
+        assert _is_context_window_error(exc) is False

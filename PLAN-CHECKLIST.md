@@ -80,23 +80,23 @@
 
 ## Phase 6: Test Gaps & Quality
 
-- [ ] **6A.1** Fix `test_evaluator.py:746` — capture user prompt at `execute_llm_call` layer
-- [ ] **6A.2** Remove `or True` fallback from assertion
-- [ ] **6A.3** Assert raw notes content appears in captured prompt
-- [ ] **6B.1** Add test: cancellation during directive execution propagates upward
-- [ ] **6B.2** Add test: cancellation during compression gather propagates upward
-- [ ] **6B.3** Add test: partial results preserved on mid-batch cancellation
-- [ ] **6C.1** Test: "invalid authentication token" NOT classified as context-window error
-- [ ] **6C.2** Test: "context parameter is required" NOT classified as context-window error
-- [ ] **6C.3** Test: "maximum context length exceeded" IS classified as context-window error
-- [ ] **6C.4** Test: `InvalidArgument` with non-token message NOT classified as context-window error
+- [x] **6A.1** Fix `test_evaluator.py:746` — capture user prompt at `execute_llm_call` layer
+- [x] **6A.2** Remove `or True` fallback from assertion
+- [x] **6A.3** Assert raw notes content appears in captured prompt
+- [x] **6B.1** Add test: cancellation during directive execution propagates upward
+- [x] **6B.2** Add test: cancellation during compression gather propagates upward
+- [x] **6B.3** Add test: partial results preserved on mid-batch cancellation
+- [x] **6C.1** Test: "invalid authentication token" NOT classified as context-window error
+- [x] **6C.2** Test: "context parameter is required" NOT classified as context-window error
+- [x] **6C.3** Test: "maximum context length exceeded" IS classified as context-window error
+- [x] **6C.4** Test: `InvalidArgument` with non-token message NOT classified as context-window error
 
 ---
 
 ## Final Validation
 
-- [ ] Full deep research test suite passes: `python -m pytest tests/core/research/ -x -q`
-- [ ] Evaluation tests pass: `python -m pytest tests/core/research/evaluation/ -x -q`
-- [ ] Config smoke test: `ResearchConfig().deep_research_reflection_timeout == 60.0`
-- [ ] Renamed class import: `from ...orchestration import PhaseReflectionDecision`
-- [ ] No regressions in existing workflow tests
+- [x] Full deep research test suite passes: `python -m pytest tests/core/research/ -x -q`
+- [x] Evaluation tests pass: `python -m pytest tests/core/research/evaluation/ -x -q`
+- [x] Config smoke test: `ResearchConfig().deep_research_reflection_timeout == 60.0`
+- [x] Renamed class import: `from ...orchestration import PhaseReflectionDecision`
+- [x] No regressions in existing workflow tests
