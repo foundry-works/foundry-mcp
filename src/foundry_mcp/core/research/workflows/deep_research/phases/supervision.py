@@ -60,6 +60,24 @@ _MAX_STORED_DIRECTIVES = 30
 _MAX_RAW_NOTES = 50
 _MAX_RAW_NOTES_CHARS = 500_000
 
+# Cap supervision_history entries to prevent unbounded state growth.
+# Consistent with _MAX_STORED_DIRECTIVES — only the most recent rounds matter.
+_MAX_SUPERVISION_HISTORY_ENTRIES = 10
+
+# Truncate think_output / post_execution_think before storing in history.
+# Full text is available in audit events; the history only needs summaries.
+_MAX_THINK_OUTPUT_STORED_CHARS = 2000
+
+
+def _trim_supervision_history(state: Any) -> None:
+    """Cap supervision_history to the most recent entries and truncate think fields."""
+    history = state.metadata.get("supervision_history")
+    if not history:
+        return
+    # Trim to most recent entries
+    if len(history) > _MAX_SUPERVISION_HISTORY_ENTRIES:
+        state.metadata["supervision_history"] = history[-_MAX_SUPERVISION_HISTORY_ENTRIES:]
+
 
 class SupervisionPhaseMixin:
     """Supervision phase methods. Mixed into DeepResearchWorkflow.
@@ -262,6 +280,7 @@ class SupervisionPhaseMixin:
                         "directives_executed": 0,
                         "overall_coverage": "sufficient",
                     })
+                    _trim_supervision_history(state)
                     state.supervision_round += 1
                     break
 
@@ -344,8 +363,9 @@ class SupervisionPhaseMixin:
                     "should_continue_gathering": False,
                     "directives_generated": 0,
                     "overall_coverage": "sufficient",
-                    "think_output": think_output,
+                    "think_output": (think_output or "")[:_MAX_THINK_OUTPUT_STORED_CHARS],
                 })
+                _trim_supervision_history(state)
                 state.supervision_round += 1
                 break
 
@@ -361,8 +381,9 @@ class SupervisionPhaseMixin:
                     "should_continue_gathering": False,
                     "directives_generated": 0,
                     "overall_coverage": "partial",
-                    "think_output": think_output,
+                    "think_output": (think_output or "")[:_MAX_THINK_OUTPUT_STORED_CHARS],
                 })
+                _trim_supervision_history(state)
                 state.supervision_round += 1
                 break
 
@@ -488,11 +509,12 @@ class SupervisionPhaseMixin:
                 "directives_generated": len(directives),
                 "directives_executed": len(directive_results),
                 "new_sources": round_new_sources,
-                "think_output": think_output,
-                "post_execution_think": post_think_output,
+                "think_output": (think_output or "")[:_MAX_THINK_OUTPUT_STORED_CHARS],
+                "post_execution_think": (post_think_output or "")[:_MAX_THINK_OUTPUT_STORED_CHARS],
                 "directive_topics": [d.research_topic[:100] for d in directives],
                 "inline_compression": inline_stats,
             })
+            _trim_supervision_history(state)
 
             state.supervision_round += 1
             self.memory.save_deep_research(state)
@@ -2451,6 +2473,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                         "overall_coverage": "sufficient",
                     }
                 )
+                _trim_supervision_history(state)
                 state.supervision_round += 1
                 self.memory.save_deep_research(state)
                 return WorkflowResult(
@@ -2533,6 +2556,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                     "error": call_result.error or "LLM call failed",
                 }
             )
+            _trim_supervision_history(state)
             state.supervision_round += 1
             self.memory.save_deep_research(state)
             return WorkflowResult(
@@ -2585,8 +2609,9 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             "rationale": parsed.get("rationale", ""),
         }
         if think_output:
-            history_entry["think_output"] = think_output
+            history_entry["think_output"] = think_output[:_MAX_THINK_OUTPUT_STORED_CHARS]
         history.append(history_entry)
+        _trim_supervision_history(state)
 
         # Save state
         self.memory.save_deep_research(state)

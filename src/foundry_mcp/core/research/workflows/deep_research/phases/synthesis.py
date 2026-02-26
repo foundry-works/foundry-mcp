@@ -200,6 +200,29 @@ def _truncate_findings_section(
     return header + truncated_findings + "\n\n" + tail, chars_dropped
 
 
+def _estimate_findings_section_length(user_prompt: str) -> int:
+    """Return the character length of the findings section in the synthesis prompt.
+
+    Falls back to the full prompt length when the findings section cannot be
+    identified, so callers always get a usable value.
+    """
+    source_ref_idx = user_prompt.find(_SOURCE_REF_MARKER)
+    if source_ref_idx == -1:
+        return len(user_prompt)
+
+    findings_start = -1
+    for marker in _FINDINGS_START_MARKERS:
+        idx = user_prompt.find(marker)
+        if idx != -1:
+            findings_start = idx
+            break
+
+    if findings_start == -1:
+        return len(user_prompt)
+
+    return source_ref_idx - findings_start
+
+
 class SynthesisPhaseMixin:
     """Synthesis phase methods. Mixed into DeepResearchWorkflow.
 
@@ -411,15 +434,13 @@ class SynthesisPhaseMixin:
                 ):
                     findings_retries += 1
 
-                    # Determine findings char budget
+                    # Determine findings char budget based on actual content
                     if max_findings_chars is None:
-                        # First retry: model_token_limit * 4 chars
-                        model_token_limit = estimate_token_limit_for_model(
-                            state.synthesis_model, MODEL_TOKEN_LIMITS,
-                        ) or _FALLBACK_CONTEXT_WINDOW
-                        max_findings_chars = model_token_limit * 4
+                        # First retry: 30% cut from actual findings length
+                        findings_section_len = _estimate_findings_section_length(user_prompt)
+                        max_findings_chars = int(findings_section_len * 0.7)
                     else:
-                        # Subsequent retries: reduce by 10%
+                        # Subsequent retries: reduce by 10% from previous budget
                         max_findings_chars = int(
                             max_findings_chars * _FINDINGS_TRUNCATION_FACTOR,
                         )

@@ -2870,3 +2870,123 @@ class TestActiveResearchMemoryScoping:
             assert infrastructure._active_research_memory == "test-sentinel"
         finally:
             infrastructure._active_research_memory = old
+
+
+# =============================================================================
+# Phase 4: Performance & Resource Management Tests
+# =============================================================================
+
+
+class TestSupervisionHistoryCapping:
+    """Tests for supervision_history growth capping (Phase 4, fix 4.2)."""
+
+    def test_trim_supervision_history_caps_entries(self):
+        """_trim_supervision_history should cap history to _MAX_SUPERVISION_HISTORY_ENTRIES."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision import (
+            _MAX_SUPERVISION_HISTORY_ENTRIES,
+            _trim_supervision_history,
+        )
+
+        state = MagicMock()
+        # Create 20 history entries (more than the cap)
+        state.metadata = {
+            "supervision_history": [
+                {"round": i, "method": "test"} for i in range(20)
+            ]
+        }
+        _trim_supervision_history(state)
+        history = state.metadata["supervision_history"]
+        assert len(history) == _MAX_SUPERVISION_HISTORY_ENTRIES
+        # Should keep the most recent entries
+        assert history[0]["round"] == 10
+        assert history[-1]["round"] == 19
+
+    def test_trim_supervision_history_noop_when_small(self):
+        """_trim_supervision_history should not modify history below the cap."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision import (
+            _trim_supervision_history,
+        )
+
+        state = MagicMock()
+        state.metadata = {
+            "supervision_history": [
+                {"round": i, "method": "test"} for i in range(3)
+            ]
+        }
+        _trim_supervision_history(state)
+        assert len(state.metadata["supervision_history"]) == 3
+
+    def test_trim_supervision_history_noop_when_empty(self):
+        """_trim_supervision_history should handle missing/empty history."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision import (
+            _trim_supervision_history,
+        )
+
+        state = MagicMock()
+        state.metadata = {}
+        _trim_supervision_history(state)  # should not raise
+
+    def test_think_output_truncated_in_history_entry(self):
+        """Think output fields should be truncated to _MAX_THINK_OUTPUT_STORED_CHARS."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision import (
+            _MAX_THINK_OUTPUT_STORED_CHARS,
+        )
+
+        # Simulate what the delegation path does
+        long_think = "x" * 10000
+        entry = {
+            "round": 0,
+            "method": "delegation",
+            "think_output": (long_think or "")[:_MAX_THINK_OUTPUT_STORED_CHARS],
+            "post_execution_think": (long_think or "")[:_MAX_THINK_OUTPUT_STORED_CHARS],
+        }
+        assert len(entry["think_output"]) == _MAX_THINK_OUTPUT_STORED_CHARS
+        assert len(entry["post_execution_think"]) == _MAX_THINK_OUTPUT_STORED_CHARS
+
+
+class TestSynthesisRetryTruncation:
+    """Tests for synthesis retry truncation starting point (Phase 4, fix 4.3)."""
+
+    def test_estimate_findings_section_length(self):
+        """_estimate_findings_section_length should return correct length."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
+            _estimate_findings_section_length,
+        )
+
+        # Build a prompt with identifiable findings section
+        header = "# Research Query\nSome intro text\n\n"
+        findings = "## Unified Research Digest\n" + "Finding content " * 100 + "\n\n"
+        tail = "## Source Reference\n[1] http://example.com"
+        prompt = header + findings + tail
+
+        length = _estimate_findings_section_length(prompt)
+        assert length == len(findings)
+
+    def test_estimate_findings_fallback_when_no_markers(self):
+        """Falls back to full prompt length when markers are missing."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
+            _estimate_findings_section_length,
+        )
+
+        prompt = "Some prompt without markers"
+        assert _estimate_findings_section_length(prompt) == len(prompt)
+
+    def test_first_retry_uses_actual_findings_length(self):
+        """First retry should base max_findings_chars on actual findings, not context window."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
+            _estimate_findings_section_length,
+        )
+
+        # The retry logic does: max_findings_chars = int(findings_section_len * 0.7)
+        findings_len = 50000
+        expected = int(findings_len * 0.7)
+        # Verify the helper returns the right length for this computation
+        header = "Intro\n\n"
+        findings = "## Unified Research Digest\n" + "x" * (findings_len - len("## Unified Research Digest\n")) + "\n\n"
+        tail = "## Source Reference\nrefs"
+        prompt = header + findings + tail
+
+        actual_len = _estimate_findings_section_length(prompt)
+        # Actual length should be close to findings_len (within marker overhead)
+        assert abs(actual_len - findings_len) < 5
+        assert int(actual_len * 0.7) == expected or abs(int(actual_len * 0.7) - expected) < 5

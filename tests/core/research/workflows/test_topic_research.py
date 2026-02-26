@@ -2901,3 +2901,90 @@ class TestBatchSearchBudgetAccounting:
         )
         assert "queries" in prompt
         assert "batch" in prompt.lower()
+
+
+# =============================================================================
+# Phase 4: Performance & Resource Management Tests
+# =============================================================================
+
+
+class TestTruncateResearcherHistoryPerformance:
+    """Tests for O(n) history truncation (Phase 4, fix 4.4)."""
+
+    def test_truncation_drops_oldest(self) -> None:
+        """Truncation should drop oldest messages and maintain correct total."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            _truncate_researcher_history,
+        )
+
+        # Create messages that exceed budget — each 10000 chars, 20 messages = 200k
+        messages = [{"role": "user", "content": "x" * 10000} for _ in range(20)]
+        # With a small model, budget_chars will be small enough to force truncation
+        result = _truncate_researcher_history(messages, "gpt-3.5-turbo")
+        assert len(result) < len(messages)
+        # The preserved messages should be the most recent ones
+        assert result[-1] is messages[-1]
+
+    def test_no_truncation_when_within_budget(self) -> None:
+        """Short histories should pass through unchanged."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            _truncate_researcher_history,
+        )
+
+        messages = [{"role": "user", "content": "short"} for _ in range(3)]
+        result = _truncate_researcher_history(messages, "gpt-4")
+        assert len(result) == len(messages)
+
+
+class TestContentDedupOutsideLock:
+    """Tests for content-similarity dedup outside async lock (Phase 4, fix 4.1)."""
+
+    @pytest.mark.asyncio
+    async def test_concurrent_dedup_does_not_block(self) -> None:
+        """Multiple concurrent topic researchers should not block each other during dedup.
+
+        This verifies the restructured _topic_search doesn't hold the lock during
+        content similarity computation. We check this indirectly by running two
+        concurrent searches and verifying they both complete (no deadlock).
+        """
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=2)
+        sub_query = SubQuery(
+            id="sq-1", query="test query", rationale="test", priority=1,
+        )
+
+        # Create a mock provider that returns sources with content
+        mock_provider = AsyncMock()
+        mock_provider.get_provider_name.return_value = "tavily"
+        source1 = ResearchSource(
+            title="Source A", url="https://example.com/a",
+            content="unique content about topic A " * 50,
+        )
+        source2 = ResearchSource(
+            title="Source B", url="https://example.com/b",
+            content="unique content about topic B " * 50,
+        )
+        mock_provider.search.return_value = [source1, source2]
+
+        lock = asyncio.Lock()
+        semaphore = asyncio.Semaphore(2)
+
+        # Run two concurrent _topic_search calls
+        seen_urls: set[str] = set()
+        seen_titles: dict[str, str] = {}
+        results = await asyncio.gather(
+            mixin._topic_search(
+                "query 1", sub_query, state, [mock_provider],
+                max_sources_per_provider=5, timeout=30,
+                seen_urls=seen_urls, seen_titles=seen_titles,
+                state_lock=lock, semaphore=semaphore,
+            ),
+            mixin._topic_search(
+                "query 2", sub_query, state, [mock_provider],
+                max_sources_per_provider=5, timeout=30,
+                seen_urls=seen_urls, seen_titles=seen_titles,
+                state_lock=lock, semaphore=semaphore,
+            ),
+        )
+        # Both should complete without deadlock; exact count depends on dedup
+        assert all(isinstance(r, int) for r in results)

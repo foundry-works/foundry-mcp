@@ -382,11 +382,9 @@ def _truncate_researcher_history(
 
     # Drop oldest turns until within budget, preserving the most recent ones
     result = list(message_history)
-    while len(result) > _MIN_PRESERVE_RECENT_TURNS:
-        total_chars = sum(len(msg.get("content", "")) for msg in result)
-        if total_chars <= budget_chars:
-            break
-        result.pop(0)
+    while len(result) > _MIN_PRESERVE_RECENT_TURNS and total_chars > budget_chars:
+        dropped_msg = result.pop(0)
+        total_chars -= len(dropped_msg.get("content", ""))
 
     if len(result) < len(message_history):
         dropped = len(message_history) - len(result)
@@ -1428,58 +1426,76 @@ class TopicResearchMixin:
                         timeout=timeout,
                     )
 
+                    # Read dedup config once outside the per-source loop
+                    content_dedup_enabled = getattr(
+                        self.config, "deep_research_enable_content_dedup", True
+                    )
+                    dedup_threshold = getattr(
+                        self.config, "deep_research_content_dedup_threshold", 0.8
+                    )
+
                     for source in sources:
+                        # --- Fast checks under lock (URL + title dedup) ---
                         async with state_lock:
-                            # URL-based deduplication
                             if source.url and source.url in seen_urls:
                                 continue
 
-                            # Title-based deduplication
+                            normalized_title = _normalize_title(source.title)
+                            if normalized_title and len(normalized_title) > 20:
+                                if normalized_title in seen_titles:
+                                    continue
+
+                            # Snapshot existing sources for content-similarity
+                            # check outside the lock to avoid O(n^2) contention.
+                            if (
+                                content_dedup_enabled
+                                and source.content
+                                and len(source.content) > 100
+                            ):
+                                sources_snapshot = list(state.sources)
+                            else:
+                                sources_snapshot = None
+
+                        # --- Content-similarity dedup outside the lock ---
+                        if sources_snapshot is not None:
+                            is_content_dup = False
+                            for existing_src in sources_snapshot:
+                                if (
+                                    existing_src.content
+                                    and len(existing_src.content) > 100
+                                ):
+                                    sim = content_similarity(
+                                        source.content, existing_src.content
+                                    )
+                                    if sim >= dedup_threshold:
+                                        logger.debug(
+                                            "Content dedup: %r (%.2f similar to %r)",
+                                            source.url or source.title,
+                                            sim,
+                                            existing_src.url or existing_src.title,
+                                        )
+                                        is_content_dup = True
+                                        break
+                            if is_content_dup:
+                                continue
+
+                        # --- Final add-or-skip under lock (re-check URL for races) ---
+                        async with state_lock:
+                            if source.url and source.url in seen_urls:
+                                continue
+
+                            # Commit title dedup entry
                             normalized_title = _normalize_title(source.title)
                             if normalized_title and len(normalized_title) > 20:
                                 if normalized_title in seen_titles:
                                     continue
                                 seen_titles[normalized_title] = source.url or ""
 
-                            # Content-similarity deduplication
-                            content_dedup_enabled = getattr(
-                                self.config, "deep_research_enable_content_dedup", True
-                            )
-                            dedup_threshold = getattr(
-                                self.config, "deep_research_content_dedup_threshold", 0.8
-                            )
-                            if (
-                                content_dedup_enabled
-                                and source.content
-                                and len(source.content) > 100
-                            ):
-                                is_content_dup = False
-                                for existing_src in state.sources:
-                                    if (
-                                        existing_src.content
-                                        and len(existing_src.content) > 100
-                                    ):
-                                        sim = content_similarity(
-                                            source.content, existing_src.content
-                                        )
-                                        if sim >= dedup_threshold:
-                                            logger.debug(
-                                                "Content dedup: %r (%.2f similar to %r)",
-                                                source.url or source.title,
-                                                sim,
-                                                existing_src.url or existing_src.title,
-                                            )
-                                            is_content_dup = True
-                                            break
-                                if is_content_dup:
-                                    continue
-
                             if source.url:
                                 seen_urls.add(source.url)
                                 if source.quality == SourceQuality.UNKNOWN:
                                     source.quality = get_domain_quality(source.url, state.research_mode)
 
-                            # Add source to state (centralised citation assignment)
                             state.append_source(source)
                             sub_query.source_ids.append(source.id)
                             added += 1
