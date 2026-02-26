@@ -1228,6 +1228,7 @@ class DeepResearchState(BaseModel):
         self.updated_at = datetime.now(timezone.utc)
         self.metadata["failed"] = True
         self.metadata["failure_error"] = error
+        self.metadata["terminal_status"] = "failed"
 
     def mark_cancelled(self, *, phase_state: Optional[str] = None) -> None:
         """Mark the research session as cancelled by user request.

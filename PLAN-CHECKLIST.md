@@ -94,18 +94,18 @@ Track completion of each fix. Mark `[x]` when implemented and verified.
 
 ## Phase 5 — Major: Config & Model Correctness
 
-- [ ] **5.1** Fix Semantic Scholar rate limit value
-  - [ ] Change `"semantic_scholar": 100` to `"semantic_scholar": 20`
-  - [ ] Update comment to `# Semantic Scholar: ~20 req/min (100 req/5min unauthenticated)`
-- [ ] **5.2** Clarify `deep_research_timeout` semantics
-  - [ ] Update class docstring to say "wall-clock timeout for entire workflow"
-  - [ ] Update field comment at line ~172 to match
-  - [ ] Add cross-reference to per-phase timeout fields
-- [ ] **5.3** Fix `gpt-4.1-*` token limit typo
-  - [ ] Verify actual value against OpenAI docs
-  - [ ] Update `model_token_limits.json` (likely `1047576` → `1048576`)
-- [ ] **5.4** Add `terminal_status` to `mark_failed`
-  - [ ] Add `self.metadata["terminal_status"] = "failed"` to `mark_failed()` in `deep_research.py`
+- [x] **5.1** Fix Semantic Scholar rate limit value
+  - [x] Change `"semantic_scholar": 100` to `"semantic_scholar": 20`
+  - [x] Update comment to `# Semantic Scholar: ~20 req/min (100 req/5min unauthenticated)`
+- [x] **5.2** Clarify `deep_research_timeout` semantics
+  - [x] Update class docstring to say "wall-clock timeout for entire workflow"
+  - [x] Update field comment at line ~172 to match
+  - [x] Add cross-reference to per-phase timeout fields
+- [x] **5.3** Fix `gpt-4.1-*` token limit typo
+  - [x] Verify actual value against OpenAI docs
+  - [x] Update `model_token_limits.json` (likely `1047576` → `1048576`)
+- [x] **5.4** Add `terminal_status` to `mark_failed`
+  - [x] Add `self.metadata["terminal_status"] = "failed"` to `mark_failed()` in `deep_research.py`
 
 ---
 

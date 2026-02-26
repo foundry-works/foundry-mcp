@@ -466,7 +466,7 @@ class TestStatusDistinction:
         # Each should have a unique terminal_status
         assert interrupted.metadata.get("terminal_status") == "interrupted"
         assert cancelled.metadata.get("terminal_status") == "cancelled"
-        assert failed.metadata.get("terminal_status") is None  # mark_failed doesn't set terminal_status
+        assert failed.metadata.get("terminal_status") == "failed"
 
         # Each should have unique boolean flags
         assert interrupted.metadata.get("interrupted") is True

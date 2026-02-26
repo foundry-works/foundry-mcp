@@ -42,7 +42,7 @@ class ResearchConfig:
         deep_research_max_sub_queries: Maximum sub-queries for query decomposition
         deep_research_max_sources: Maximum sources per sub-query
         deep_research_follow_links: Whether to follow and extract content from links
-        deep_research_timeout: Default timeout per operation in seconds
+        deep_research_timeout: Default wall-clock timeout for the entire deep research workflow in seconds (see also deep_research_planning_timeout, deep_research_synthesis_timeout for per-phase overrides)
         deep_research_max_concurrent: Maximum concurrent operations
         deep_research_providers: Ordered list of search providers for deep research
         deep_research_audit_artifacts: Whether to write per-run audit artifacts
@@ -169,7 +169,7 @@ class ResearchConfig:
     deep_research_max_sub_queries: int = 5
     deep_research_max_sources: int = 5
     deep_research_follow_links: bool = True
-    deep_research_timeout: float = 600.0  # Whole workflow timeout
+    deep_research_timeout: float = 600.0  # Wall-clock timeout for the entire deep research workflow (see deep_research_planning_timeout / deep_research_synthesis_timeout for per-phase overrides)
     deep_research_max_concurrent: int = 3
     # Per-phase timeout overrides (seconds) - uses deep_research_timeout if not set
     deep_research_planning_timeout: float = 360.0
@@ -196,7 +196,7 @@ class ResearchConfig:
             "tavily": 60,  # Tavily free tier: ~1 req/sec
             "perplexity": 60,  # Perplexity: ~1 req/sec (pricing: $5/1k requests)
             "google": 100,  # Google CSE: 100 queries/day free, ~100/min paid
-            "semantic_scholar": 100,  # Semantic Scholar: 100 req/5min unauthenticated
+            "semantic_scholar": 20,  # Semantic Scholar: ~20 req/min (100 req/5min unauthenticated)
         }
     )
     # Search provider API keys (all optional, read from env vars if not set)
