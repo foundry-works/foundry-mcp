@@ -1542,7 +1542,9 @@ class TestDelegationIntegration:
         assert result.success is True
         assert result.metadata["total_directives_executed"] == 0
         history = state.metadata["supervision_history"]
-        assert history[0]["method"] == "delegation_no_directives"
+        # Validator now forces research_complete=True when directives are empty,
+        # so the loop takes the "delegation_complete" path instead of "no_directives"
+        assert history[0]["method"] == "delegation_complete"
 
 
 # ===========================================================================

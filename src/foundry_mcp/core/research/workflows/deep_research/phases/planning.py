@@ -207,9 +207,7 @@ class PlanningPhaseMixin:
         # ---------------------------------------------------------------
         # Step 3: Self-critique of sub-query decomposition
         # ---------------------------------------------------------------
-        enable_critique = getattr(
-            self.config, "deep_research_enable_planning_critique", True
-        )
+        enable_critique = self.config.deep_research_enable_planning_critique
         if enable_critique and len(state.sub_queries) > 0:
             original_queries = [
                 {"query": sq.query, "rationale": sq.rationale, "priority": sq.priority}
@@ -468,11 +466,16 @@ Generate the research plan as JSON."""
             if len(result["sub_queries"]) >= state.max_sub_queries:
                 break
 
+            try:
+                priority = min(max(int(sq.get("priority", i + 1)), 1), 10)
+            except (ValueError, TypeError):
+                priority = i + 1
+
             result["sub_queries"].append(
                 {
                     "query": query,
                     "rationale": sq.get("rationale", ""),
-                    "priority": min(max(int(sq.get("priority", i + 1)), 1), 10),
+                    "priority": priority,
                 }
             )
 

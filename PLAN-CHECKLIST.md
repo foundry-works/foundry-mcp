@@ -67,24 +67,24 @@ Track completion of each fix. Mark `[x]` when implemented and verified.
 
 ## Phase 3: Validation & Config Hardening
 
-- [ ] **3A.1** Add `model_validator` to `DelegationResponse`: if `not research_complete` and `not directives`, set `research_complete = True`
-- [ ] **3A.2** Add `model_validator` to `ReflectionDecision`: if `research_complete`, force `continue_searching = False`
-- [ ] **3A.3** Add tests for both validators
-- [ ] **3B.1** Add `deep_research_enable_planning_critique: bool = True` to `ResearchConfig`
-- [ ] **3B.2** Add corresponding entry in `from_toml_dict()`
-- [ ] **3B.3** Replace `getattr` in `planning.py` (~line 211) with direct access
-- [ ] **3C.1** Compute `unknown_keys` after processing all known/deprecated fields in `from_toml_dict()`
-- [ ] **3C.2** Log warning for each unknown key
-- [ ] **3C.3** Add test with typo'd key verifying warning fires
-- [ ] **3D.1** Wrap priority extraction in `_parse_planning_response` (~line 475) in try/except `(ValueError, TypeError)`
-- [ ] **3D.2** Add test with `"priority": "high"` input
-- [ ] **3E.1** Add `validate_extract_url()` function to `_helpers.py`
-- [ ] **3E.2** Block non-HTTP(S) schemes, private IPs, loopback, cloud metadata, link-local
-- [ ] **3E.3** Call `validate_extract_url` in `_handle_extract_tool`
-- [ ] **3E.4** Call `validate_extract_url` in `ReflectionDecision._coerce_urls`
-- [ ] **3E.5** Add tests for each blocked URL pattern
+- [x] **3A.1** Add `model_validator` to `DelegationResponse`: if `not research_complete` and `not directives`, set `research_complete = True`
+- [x] **3A.2** Add `model_validator` to `ReflectionDecision`: if `research_complete`, force `continue_searching = False`
+- [x] **3A.3** Add tests for both validators
+- [x] **3B.1** Add `deep_research_enable_planning_critique: bool = True` to `ResearchConfig`
+- [x] **3B.2** Add corresponding entry in `from_toml_dict()`
+- [x] **3B.3** Replace `getattr` in `planning.py` (~line 211) with direct access
+- [x] **3C.1** Compute `unknown_keys` after processing all known/deprecated fields in `from_toml_dict()`
+- [x] **3C.2** Log warning for each unknown key
+- [x] **3C.3** Add test with typo'd key verifying warning fires
+- [x] **3D.1** Wrap priority extraction in `_parse_planning_response` (~line 475) in try/except `(ValueError, TypeError)`
+- [x] **3D.2** Add test with `"priority": "high"` input
+- [x] **3E.1** Add `validate_extract_url()` function to `_helpers.py`
+- [x] **3E.2** Block non-HTTP(S) schemes, private IPs, loopback, cloud metadata, link-local
+- [x] **3E.3** Call `validate_extract_url` in `_handle_extract_tool`
+- [x] **3E.4** Call `validate_extract_url` in `ReflectionDecision._coerce_urls`
+- [x] **3E.5** Add tests for each blocked URL pattern
 
-**Verification:** `pytest tests/core/research/ tests/unit/ -x -q --tb=short`
+**Verification:** `pytest tests/core/research/ tests/unit/ -x -q --tb=short` ✅ 5801 passed, 6 skipped
 
 ---
 
@@ -134,6 +134,6 @@ Track completion of each fix. Mark `[x]` when implemented and verified.
 |-------|--------|-------------|
 | Phase 1: Sanitization | ✅ Complete | 2026-02-26 |
 | Phase 2: State Bugs | ✅ Complete | 2026-02-26 |
-| Phase 3: Validation | ⬜ Not started | |
+| Phase 3: Validation | ✅ Complete | 2026-02-26 |
 | Phase 4: Tests | ⬜ Not started | |
 | Phase 5: Performance | ⬜ Not started | |

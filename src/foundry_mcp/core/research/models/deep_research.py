@@ -1,11 +1,14 @@
 """Deep research workflow models (multi-phase iterative research)."""
 
+import logging
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, ClassVar, Literal, Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+logger = logging.getLogger(__name__)
 
 from foundry_mcp.core.research.models.digest import make_fragment_id, parse_fragment_id
 from foundry_mcp.core.research.models.enums import ConfidenceLevel
@@ -204,6 +207,17 @@ class DelegationResponse(BaseModel):
         description="Why these directives were chosen or why research is complete",
     )
 
+    @model_validator(mode="after")
+    def _fix_incomplete_without_directives(self) -> "DelegationResponse":
+        """If not research_complete and no directives, force research_complete=True."""
+        if not self.research_complete and not self.directives:
+            logger.warning(
+                "DelegationResponse has research_complete=False with empty directives; "
+                "forcing research_complete=True"
+            )
+            self.research_complete = True
+        return self
+
 
 class ReflectionDecision(BaseModel):
     """Structured output schema for topic researcher reflection LLM calls.
@@ -242,7 +256,11 @@ class ReflectionDecision(BaseModel):
     @field_validator("urls_to_extract", mode="before")
     @classmethod
     def _coerce_urls(cls, v: Any) -> list[str]:
-        """Accept null/None as empty list, filter to valid HTTP URLs."""
+        """Accept null/None as empty list, filter to valid HTTP URLs with SSRF protection."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            validate_extract_url,
+        )
+
         if v is None:
             return []
         if not isinstance(v, list):
@@ -250,8 +268,19 @@ class ReflectionDecision(BaseModel):
         return [
             str(u).strip()
             for u in v
-            if isinstance(u, str) and u.strip().startswith("http")
+            if isinstance(u, str) and validate_extract_url(u.strip())
         ][:5]  # hard cap for safety
+
+    @model_validator(mode="after")
+    def _fix_contradictory_flags(self) -> "ReflectionDecision":
+        """If research_complete is True, force continue_searching to False."""
+        if self.research_complete and self.continue_searching:
+            logger.warning(
+                "ReflectionDecision has both research_complete=True and "
+                "continue_searching=True; forcing continue_searching=False"
+            )
+            self.continue_searching = False
+        return self
 
 
 class ResearchBriefOutput(BaseModel):

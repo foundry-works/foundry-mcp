@@ -119,6 +119,9 @@ class ResearchConfig:
     deep_research_delegation_provider: Optional[str] = None  # LLM provider for delegation prompt (uses supervision fallback)
     deep_research_delegation_model_name: Optional[str] = None  # Model override for delegation prompt
 
+    # Deep research planning critique (self-assessment of sub-query decomposition)
+    deep_research_enable_planning_critique: bool = True  # Enable LLM self-critique of planning decomposition
+
     # Deep research parallel topic researcher agents
     deep_research_topic_max_tool_calls: int = 10  # Max tool calls (search + extract) per topic (ReAct loop limit)
     deep_research_topic_reflection_provider: Optional[str] = None  # Uses default_provider if not set
@@ -421,6 +424,8 @@ class ResearchConfig:
             ),
             deep_research_delegation_provider=data.get("deep_research_delegation_provider"),
             deep_research_delegation_model_name=data.get("deep_research_delegation_model_name"),
+            # Deep research planning critique
+            deep_research_enable_planning_critique=_parse_bool(data.get("deep_research_enable_planning_critique", True)),
             # Deep research parallel topic researcher agents
             deep_research_topic_max_tool_calls=int(
                 data.get(
@@ -559,6 +564,20 @@ class ResearchConfig:
         )
         config.tavily_search_depth_configured = "tavily_search_depth" in data
         config.tavily_chunks_per_source_configured = "tavily_chunks_per_source" in data
+
+        # Warn on unknown TOML keys (likely typos)
+        import dataclasses as _dc
+
+        known_keys = {f.name for f in _dc.fields(cls)} | set(cls._DEPRECATED_FIELDS)
+        # Backward-compat aliases that are also accepted
+        known_keys.add("deep_research_topic_max_searches")
+        unknown_keys = set(data.keys()) - known_keys
+        for key in sorted(unknown_keys):
+            logger.warning(
+                "Unknown config key '%s' in [research] section — check for typos",
+                key,
+            )
+
         return config
 
     @property

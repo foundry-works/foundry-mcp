@@ -1160,3 +1160,91 @@ class TestResearcherTopicSanitization:
         result = _build_react_user_prompt("quantum computing", history, budget_remaining=4, budget_total=10)
         assert "<instructions>" not in result
         assert "Search results here" in result
+
+
+# ===========================================================================
+# SSRF protection: validate_extract_url
+# ===========================================================================
+
+
+class TestValidateExtractUrl:
+    """Tests for validate_extract_url() SSRF protection."""
+
+    def test_valid_https_url(self):
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+        assert validate_extract_url("https://example.com/page") is True
+
+    def test_valid_http_url(self):
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+        assert validate_extract_url("http://example.com/page") is True
+
+    def test_rejects_ftp_scheme(self):
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+        assert validate_extract_url("ftp://example.com/file") is False
+
+    def test_rejects_file_scheme(self):
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+        assert validate_extract_url("file:///etc/passwd") is False
+
+    def test_rejects_javascript_scheme(self):
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+        assert validate_extract_url("javascript:alert(1)") is False
+
+    def test_rejects_private_10_x(self):
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+        assert validate_extract_url("http://10.0.0.1/admin") is False
+
+    def test_rejects_private_172_16(self):
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+        assert validate_extract_url("http://172.16.0.1/admin") is False
+
+    def test_rejects_private_192_168(self):
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+        assert validate_extract_url("http://192.168.1.1/admin") is False
+
+    def test_rejects_loopback_127(self):
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+        assert validate_extract_url("http://127.0.0.1:8080/api") is False
+
+    def test_rejects_localhost(self):
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+        assert validate_extract_url("http://localhost:3000/") is False
+
+    def test_rejects_cloud_metadata(self):
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+        assert validate_extract_url("http://169.254.169.254/latest/meta-data/") is False
+
+    def test_rejects_link_local(self):
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+        assert validate_extract_url("http://169.254.1.1/") is False
+
+    def test_rejects_ipv6_loopback(self):
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+        assert validate_extract_url("http://[::1]/admin") is False
+
+    def test_rejects_empty_string(self):
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+        assert validate_extract_url("") is False
+
+    def test_rejects_none(self):
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+        assert validate_extract_url(None) is False  # type: ignore[arg-type]
+
+    def test_rejects_no_host(self):
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+        assert validate_extract_url("http://") is False
+
+
+class TestReflectionDecisionSSRF:
+    """ReflectionDecision._coerce_urls blocks SSRF URLs."""
+
+    def test_private_ip_filtered(self):
+        from foundry_mcp.core.research.models.deep_research import ReflectionDecision
+        resp = ReflectionDecision.model_validate({
+            "urls_to_extract": [
+                "https://example.com/good",
+                "http://169.254.169.254/latest/meta-data/",
+                "http://10.0.0.1/internal",
+            ],
+        })
+        assert resp.urls_to_extract == ["https://example.com/good"]

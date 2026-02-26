@@ -1028,3 +1028,53 @@ class TestBriefRefinement:
         # Sub-queries should still be extracted from the planning response
         assert len(state.sub_queries) == 1
         assert "React vs Vue" in state.sub_queries[0].query
+
+
+# ===========================================================================
+# Planning priority parse robustness
+# ===========================================================================
+
+
+class TestPlanningPriorityParsing:
+    """_parse_planning_response handles non-numeric priority gracefully."""
+
+    def test_non_numeric_priority_uses_fallback(self):
+        """LLM returning priority='high' doesn't crash — uses positional fallback."""
+        stub = StubWorkflow()
+        state = DeepResearchState(
+            id="test-priority",
+            original_query="test",
+            max_sub_queries=5,
+        )
+        response = json.dumps({
+            "research_brief": "Brief",
+            "sub_queries": [
+                {"query": "First query", "rationale": "r1", "priority": "high"},
+                {"query": "Second query", "rationale": "r2", "priority": "medium"},
+            ],
+        })
+        parsed = stub._parse_planning_response(response, state)
+        assert parsed["success"] is True
+        assert len(parsed["sub_queries"]) == 2
+        # Fallback: priority = i + 1 (1-indexed position)
+        assert parsed["sub_queries"][0]["priority"] == 1
+        assert parsed["sub_queries"][1]["priority"] == 2
+
+    def test_numeric_priority_still_works(self):
+        """Normal numeric priorities are parsed correctly."""
+        stub = StubWorkflow()
+        state = DeepResearchState(
+            id="test-priority-num",
+            original_query="test",
+            max_sub_queries=5,
+        )
+        response = json.dumps({
+            "research_brief": "Brief",
+            "sub_queries": [
+                {"query": "First", "priority": 3},
+                {"query": "Second", "priority": 1},
+            ],
+        })
+        parsed = stub._parse_planning_response(response, state)
+        assert parsed["sub_queries"][0]["priority"] == 3
+        assert parsed["sub_queries"][1]["priority"] == 1

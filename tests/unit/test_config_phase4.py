@@ -4,6 +4,8 @@ Covers:
 - 4.1: per_provider_rate_limits default consistency between constructors
 - 4.2: deep_research_mode validation
 - 4.3: Gemini 2.0 model entries in token limits
+- 4.4: Unknown TOML key warnings
+- 4.5: deep_research_enable_planning_critique config field
 """
 
 from __future__ import annotations
@@ -132,3 +134,47 @@ class TestGemini20ModelEntries:
         result = estimate_token_limit_for_model("gemini-2.0-flash-001", json_limits)
         assert result is not None
         assert result == 1048576
+
+
+# ===========================================================================
+# 4.4 Unknown TOML key warnings
+# ===========================================================================
+
+
+class TestUnknownTomlKeyWarning:
+    """from_toml_dict warns on unknown keys (catches typos)."""
+
+    def test_typo_key_logs_warning(self, caplog):
+        """A typo'd key produces a warning log."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="foundry_mcp.config.research"):
+            ResearchConfig.from_toml_dict({"deep_research_max_interations": 5})
+        assert any("deep_research_max_interations" in r.message for r in caplog.records)
+
+    def test_known_key_no_warning(self, caplog):
+        """Valid keys produce no unknown-key warnings."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="foundry_mcp.config.research"):
+            ResearchConfig.from_toml_dict({"deep_research_max_iterations": 5})
+        assert not any("Unknown config key" in r.message for r in caplog.records)
+
+
+# ===========================================================================
+# 4.5 deep_research_enable_planning_critique config field
+# ===========================================================================
+
+
+class TestPlanningCritiqueConfig:
+    """deep_research_enable_planning_critique is a real config field."""
+
+    def test_default_is_true(self):
+        config = ResearchConfig()
+        assert config.deep_research_enable_planning_critique is True
+
+    def test_from_toml_dict_override(self):
+        config = ResearchConfig.from_toml_dict(
+            {"deep_research_enable_planning_critique": False}
+        )
+        assert config.deep_research_enable_planning_critique is False

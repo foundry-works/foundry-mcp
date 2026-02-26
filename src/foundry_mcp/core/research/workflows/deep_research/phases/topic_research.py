@@ -1355,6 +1355,10 @@ class TopicResearchMixin:
             Formatted tool result string with extracted content summaries
             and novelty annotations.
         """
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            validate_extract_url,
+        )
+
         try:
             extract_args = ExtractContentTool.model_validate(tool_call.arguments)
             urls = extract_args.urls[:extract_max]
@@ -1364,6 +1368,9 @@ class TopicResearchMixin:
                 urls = [str(u) for u in raw_urls if isinstance(u, str)][:extract_max]
             else:
                 return "Invalid URLs argument."
+
+        # SSRF protection: filter out private/internal URLs
+        urls = [u for u in urls if validate_extract_url(u)]
 
         if not urls:
             return "No valid URLs provided for extraction."

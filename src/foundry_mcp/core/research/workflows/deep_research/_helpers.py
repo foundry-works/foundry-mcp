@@ -787,6 +787,77 @@ def compute_novelty_tag(
 
 
 # ---------------------------------------------------------------------------
+# SSRF protection for extract URLs
+# ---------------------------------------------------------------------------
+
+import ipaddress
+from urllib.parse import urlparse
+
+# Private/reserved IPv4 networks that must be blocked.
+_BLOCKED_NETWORKS: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = [
+    ipaddress.IPv4Network("10.0.0.0/8"),
+    ipaddress.IPv4Network("172.16.0.0/12"),
+    ipaddress.IPv4Network("192.168.0.0/16"),
+    ipaddress.IPv4Network("127.0.0.0/8"),
+    ipaddress.IPv4Network("169.254.0.0/16"),  # link-local + cloud metadata
+    ipaddress.IPv6Network("::1/128"),
+    ipaddress.IPv6Network("fc00::/7"),  # unique local
+    ipaddress.IPv6Network("fe80::/10"),  # link-local
+]
+
+
+def validate_extract_url(url: str) -> bool:
+    """Validate a URL is safe for server-side extraction (SSRF protection).
+
+    Rejects:
+    - Non-HTTP(S) schemes
+    - Private IP ranges (10.x, 172.16-31.x, 192.168.x)
+    - Loopback (127.x, localhost, ::1)
+    - Cloud metadata endpoint (169.254.169.254)
+    - Link-local addresses (169.254.x)
+    - IPv6 unique-local and link-local ranges
+
+    Args:
+        url: URL string to validate
+
+    Returns:
+        True if the URL is safe for extraction, False otherwise
+    """
+    if not url or not isinstance(url, str):
+        return False
+
+    try:
+        parsed = urlparse(url.strip())
+    except Exception:
+        return False
+
+    # Require HTTP(S) scheme
+    if parsed.scheme not in ("http", "https"):
+        return False
+
+    hostname = parsed.hostname
+    if not hostname:
+        return False
+
+    # Block localhost by name
+    if hostname in ("localhost", "localhost.localdomain"):
+        return False
+
+    # Try to parse as IP address and check against blocked networks
+    try:
+        addr = ipaddress.ip_address(hostname)
+        for network in _BLOCKED_NETWORKS:
+            if addr in network:
+                return False
+    except ValueError:
+        # Not an IP literal — hostname is fine (DNS resolution happens
+        # server-side at fetch time; we block the obvious cases here)
+        pass
+
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Prompt injection surface reduction
 # ---------------------------------------------------------------------------
 

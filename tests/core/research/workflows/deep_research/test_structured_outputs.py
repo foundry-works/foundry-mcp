@@ -35,9 +35,10 @@ class TestDelegationResponseSchema:
     """DelegationResponse Pydantic model tests."""
 
     def test_defaults(self):
-        """All fields have sensible defaults."""
+        """All fields have sensible defaults; validator forces research_complete=True when no directives."""
         resp = DelegationResponse(rationale="test")
-        assert resp.research_complete is False
+        # Validator forces research_complete=True when directives is empty
+        assert resp.research_complete is True
         assert resp.directives == []
         assert resp.rationale == "test"
 
@@ -77,6 +78,24 @@ class TestDelegationResponseSchema:
         assert len(resp.directives) == 2
         assert resp.directives[0].perspective == ""  # default
         assert resp.directives[1].priority == 1
+
+    def test_validator_forces_complete_when_no_directives(self):
+        """Validator forces research_complete=True when directives empty."""
+        resp = DelegationResponse(
+            research_complete=False, directives=[], rationale="test"
+        )
+        assert resp.research_complete is True
+
+    def test_validator_does_not_override_when_directives_present(self):
+        """Validator leaves research_complete=False when directives present."""
+        resp = DelegationResponse(
+            research_complete=False,
+            directives=[
+                ResearchDirective(research_topic="topic", priority=1),
+            ],
+            rationale="test",
+        )
+        assert resp.research_complete is False
 
 
 class TestReflectionDecisionSchema:
@@ -135,6 +154,26 @@ class TestReflectionDecisionSchema:
         )
         assert resp.research_complete is True
         assert resp.continue_searching is False
+
+    def test_validator_forces_continue_false_when_complete(self):
+        """Validator forces continue_searching=False when research_complete=True."""
+        resp = ReflectionDecision(
+            research_complete=True,
+            continue_searching=True,
+            rationale="Contradictory flags",
+        )
+        assert resp.research_complete is True
+        assert resp.continue_searching is False
+
+    def test_validator_allows_continue_when_not_complete(self):
+        """Validator does not touch continue_searching when research_complete=False."""
+        resp = ReflectionDecision(
+            research_complete=False,
+            continue_searching=True,
+            rationale="Still searching",
+        )
+        assert resp.research_complete is False
+        assert resp.continue_searching is True
 
 
 class TestResearchBriefOutputSchema:
@@ -200,7 +239,8 @@ class TestParseDelegationResponse:
             "Let me know if you need more."
         )
         resp = parse_delegation_response(content)
-        assert resp.research_complete is False
+        # Validator forces research_complete=True when directives empty
+        assert resp.research_complete is True
 
     def test_no_json_raises(self):
         with pytest.raises(ValueError, match="No JSON"):
