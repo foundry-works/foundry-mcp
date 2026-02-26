@@ -166,7 +166,19 @@ class WorkflowExecutionMixin:
         start_time = time.perf_counter()
 
         try:
-            # Phase execution based on current state
+            # Phase transition table (new workflows):
+            #   CLARIFICATION → BRIEF → SUPERVISION → SYNTHESIS
+            #
+            # PLANNING and GATHERING are legacy-resume-only phases — new
+            # workflows never enter them.  The supervisor handles both
+            # decomposition (round 0) and gap-driven follow-up (rounds 1+).
+            #
+            # Legacy saved states may resume at GATHERING; this is handled
+            # below by running GATHERING once and then advancing to
+            # SUPERVISION.  The ``elif … not in (SUPERVISION, SYNTHESIS)``
+            # guard after the GATHERING block skips any other intermediate
+            # phases that may exist in the enum but are no longer active.
+
             if state.phase == DeepResearchPhase.CLARIFICATION:
                 err = await self._run_phase(
                     state,

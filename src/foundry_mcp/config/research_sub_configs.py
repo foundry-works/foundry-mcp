@@ -104,11 +104,15 @@ class ModelRoleConfig:
 
 
 @dataclass(frozen=True)
-class DeepResearchConfig:
+class DeepResearchSettings:
     """Deep research workflow configuration.
 
     Groups workflow settings and tuning knobs from the ``deep_research_*``
     namespace on ResearchConfig.
+
+    Named ``DeepResearchSettings`` to avoid collision with the per-request
+    ``DeepResearchConfig`` Pydantic model in
+    ``core.research.models.deep_research``.
     """
 
     # Clarification / supervision toggles

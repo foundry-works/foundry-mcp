@@ -39,6 +39,9 @@ from foundry_mcp.core.research.workflows.deep_research.phases.compression import
 from foundry_mcp.core.research.workflows.deep_research.phases.supervision import (
     SupervisionPhaseMixin,
 )
+from foundry_mcp.core.research.workflows.deep_research.phases.supervision_legacy import (
+    LegacySupervisionMixin,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +139,7 @@ class StubCompression(CompressionMixin):
             raise asyncio.CancelledError()
 
 
-class StubSupervision(SupervisionPhaseMixin):
+class StubSupervision(SupervisionPhaseMixin, LegacySupervisionMixin):
     """Concrete class for testing SupervisionPhaseMixin in isolation."""
 
     def __init__(self) -> None:

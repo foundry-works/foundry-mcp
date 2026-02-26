@@ -1461,11 +1461,11 @@ class ResearchConfig:
         )
 
     @property
-    def deep_research_config(self) -> "DeepResearchConfig":
+    def deep_research_config(self) -> "DeepResearchSettings":
         """Grouped deep research workflow configuration."""
-        from foundry_mcp.config.research_sub_configs import DeepResearchConfig
+        from foundry_mcp.config.research_sub_configs import DeepResearchSettings
 
-        return DeepResearchConfig(
+        return DeepResearchSettings(
             allow_clarification=self.deep_research_allow_clarification,
             enable_supervision=self.deep_research_enable_supervision,
             max_supervision_rounds=self.deep_research_max_supervision_rounds,

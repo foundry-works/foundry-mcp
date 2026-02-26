@@ -36,6 +36,9 @@ from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import 
 )
 from foundry_mcp.core.research.workflows.deep_research.phases.supervision import (
     SupervisionPhaseMixin,
+)
+from foundry_mcp.core.research.workflows.deep_research.phases.supervision_legacy import (
+    LegacySupervisionMixin,
     _MAX_FOLLOW_UPS_PER_ROUND,
 )
 
@@ -96,7 +99,7 @@ def _make_state(
     return state
 
 
-class StubSupervision(SupervisionPhaseMixin):
+class StubSupervision(SupervisionPhaseMixin, LegacySupervisionMixin):
     """Concrete class for testing SupervisionPhaseMixin in isolation."""
 
     def __init__(self, *, delegation_model: bool = False) -> None:

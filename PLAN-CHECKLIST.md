@@ -121,25 +121,27 @@ Track completion of each fix. Mark `[x]` when implemented and verified.
 
 ## Phase 5 — Cleanup: Code Quality
 
-- [ ] **5.1** Rename `DeepResearchConfig` sub-config to avoid collision
-  - [ ] Rename class to `DeepResearchSettings` in `research_sub_configs.py`
-  - [ ] Update all import references
-  - [ ] Verify no test breakage
-- [ ] **5.2** Isolate legacy supervision query-generation model
-  - [ ] Create `phases/supervision_legacy.py`
-  - [ ] Move `_execute_supervision_query_generation_async` (~253 lines)
-  - [ ] Move legacy prompt builders (`_build_supervision_system_prompt`, `_build_supervision_user_prompt`)
-  - [ ] Move `_parse_supervision_response`
-  - [ ] Import conditionally from `supervision.py`
-- [ ] **5.3** Add explicit phase transition table comment
-  - [ ] Add phase transition documentation in `workflow_execution.py`
-  - [ ] Document legacy GATHERING → SUPERVISION auto-advance
-- [ ] **5.4** Add `Protocol` class for mixin interface (nice-to-have)
-  - [ ] Create `phases/_protocols.py` with `DeepResearchWorkflowProtocol`
-  - [ ] Define `config`, `memory`, `_write_audit_event`, `_check_cancellation`, `_execute_provider_async`
-  - [ ] Update mixin TYPE_CHECKING stubs to reference protocol
+- [x] **5.1** Rename `DeepResearchConfig` sub-config to avoid collision
+  - [x] Rename class to `DeepResearchSettings` in `research_sub_configs.py`
+  - [x] Update all import references (research.py property)
+  - [x] Verify no test breakage
+- [x] **5.2** Isolate legacy supervision query-generation model
+  - [x] Create `phases/supervision_legacy.py` with `LegacySupervisionMixin`
+  - [x] Move `_execute_supervision_query_generation_async` (~253 lines)
+  - [x] Move legacy prompt builders (`build_supervision_system_prompt`, `build_supervision_user_prompt`)
+  - [x] Move `_parse_supervision_response`
+  - [x] Move legacy thin wrappers (`_build_supervision_system_prompt`, `_build_supervision_user_prompt`)
+  - [x] Update test StubSupervision classes to inherit `LegacySupervisionMixin`
+  - [x] supervision.py: 2293 → 1918 lines; supervision_prompts.py: 983 → 820 lines
+- [x] **5.3** Add explicit phase transition table comment
+  - [x] Add phase transition documentation in `workflow_execution.py`
+  - [x] Document legacy GATHERING → SUPERVISION auto-advance
+- [x] **5.4** Add `Protocol` class for mixin interface (nice-to-have)
+  - [x] Create `phases/_protocols.py` with `DeepResearchWorkflowProtocol`
+  - [x] Define `config`, `memory`, `_write_audit_event`, `_check_cancellation`, `_execute_provider_async`
+  - [x] Protocol defined as `@runtime_checkable` for optional isinstance checks
 
-**Verification:** `pytest tests/ -x -q --tb=short` (full suite)
+**Verification:** `pytest tests/core/research/ -x -q --tb=short` → 2498 passed, 6 skipped
 
 ---
 
