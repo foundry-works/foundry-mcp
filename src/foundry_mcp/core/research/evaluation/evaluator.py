@@ -19,7 +19,10 @@ from foundry_mcp.core.research.evaluation.scoring import (
 )
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.workflows.base import WorkflowResult
-from foundry_mcp.core.research.workflows.deep_research._helpers import extract_json
+from foundry_mcp.core.research.workflows.deep_research._helpers import (
+    extract_json,
+    sanitize_external_content,
+)
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
     LLMCallResult,
     execute_llm_call,
@@ -75,10 +78,10 @@ def _build_evaluation_prompt(
     if len(report) > _MAX_REPORT_CHARS:
         display_report = report[:_MAX_REPORT_CHARS] + "\n\n[... report truncated for evaluation ...]"
 
-    # Format source list
+    # Format source list (sanitize web-derived titles)
     source_lines = []
     for i, src in enumerate(sources[:_MAX_SOURCES_IN_PROMPT], 1):
-        title = src.get("title", "Untitled")
+        title = sanitize_external_content(src.get("title", "Untitled"))
         url = src.get("url", "")
         quality = src.get("quality", "")
         line = f"  {i}. {title}"
@@ -94,7 +97,9 @@ def _build_evaluation_prompt(
     # which uses raw researcher output as the evidence baseline.
     raw_notes_section = ""
     if raw_notes:
-        raw_notes_text = "\n---\n".join(raw_notes)
+        raw_notes_text = "\n---\n".join(
+            sanitize_external_content(note) for note in raw_notes
+        )
         if len(raw_notes_text) > _MAX_RAW_NOTES_CHARS:
             raw_notes_text = raw_notes_text[:_MAX_RAW_NOTES_CHARS] + "\n\n[... notes truncated ...]"
         raw_notes_section = f"""

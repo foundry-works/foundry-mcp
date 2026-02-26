@@ -709,21 +709,23 @@ class TestSummarizationPromptContent:
         """Prompt instructs LLM to produce JSON with summary + key_excerpts."""
         from foundry_mcp.core.research.providers.shared import _SOURCE_SUMMARIZATION_PROMPT
 
-        assert '"summary"' in _SOURCE_SUMMARIZATION_PROMPT
-        assert '"key_excerpts"' in _SOURCE_SUMMARIZATION_PROMPT
-        assert "JSON" in _SOURCE_SUMMARIZATION_PROMPT
+        prompt_text = _SOURCE_SUMMARIZATION_PROMPT.template
+        assert '"summary"' in prompt_text
+        assert '"key_excerpts"' in prompt_text
+        assert "JSON" in prompt_text
 
     def test_prompt_includes_content_type_guidance(self):
         """Prompt includes guidance for news, scientific, opinion, product content."""
         from foundry_mcp.core.research.providers.shared import _SOURCE_SUMMARIZATION_PROMPT
 
-        assert "News articles" in _SOURCE_SUMMARIZATION_PROMPT
-        assert "Scientific" in _SOURCE_SUMMARIZATION_PROMPT
-        assert "Opinion" in _SOURCE_SUMMARIZATION_PROMPT
-        assert "Product" in _SOURCE_SUMMARIZATION_PROMPT
+        prompt_text = _SOURCE_SUMMARIZATION_PROMPT.template
+        assert "News articles" in prompt_text
+        assert "Scientific" in prompt_text
+        assert "Opinion" in prompt_text
+        assert "Product" in prompt_text
 
     def test_prompt_includes_target_length(self):
         """Prompt specifies 25-30% target length."""
         from foundry_mcp.core.research.providers.shared import _SOURCE_SUMMARIZATION_PROMPT
 
-        assert "25-30%" in _SOURCE_SUMMARIZATION_PROMPT
+        assert "25-30%" in _SOURCE_SUMMARIZATION_PROMPT.template

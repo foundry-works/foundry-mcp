@@ -28,6 +28,9 @@ from foundry_mcp.core.research.models.deep_research import (
     parse_researcher_response,
 )
 from foundry_mcp.core.research.models.sources import SourceQuality, SubQuery
+from foundry_mcp.core.research.workflows.deep_research._helpers import (
+    sanitize_external_content,
+)
 from foundry_mcp.core.research.workflows.deep_research.source_quality import (
     _extract_domain,
     _normalize_title,
@@ -61,18 +64,23 @@ def _format_source_block(
     Returns:
         Formatted multi-line string for one source.
     """
+    # Sanitize web-derived fields before interpolation into LLM prompts
+    safe_title = sanitize_external_content(src.title)
+    safe_snippet = sanitize_external_content(src.snippet) if src.snippet else ""
+    safe_content = sanitize_external_content(src.content) if src.content else ""
+
     lines: list[str] = []
-    lines.append(f"--- SOURCE {idx}: {src.title} ---")
+    lines.append(f"--- SOURCE {idx}: {safe_title} ---")
     if src.url:
         lines.append(f"URL: {src.url}")
     lines.append(f"NOVELTY: {novelty_tag.tag}")
 
     # Content presentation: prefer structured summary with separate excerpts,
     # fall back to snippet, then truncated raw content.
-    if src.metadata.get("summarized") and src.content:
+    if src.metadata.get("summarized") and safe_content:
         # Extract the executive summary from the XML-tagged content.
         # The raw excerpts list is stored in metadata by _summarize_search_results.
-        summary_text = src.content
+        summary_text = safe_content
         # If we have structured excerpts in metadata, present them separately
         # rather than embedded in XML tags within the content.
         excerpts = src.metadata.get("excerpts")
@@ -90,7 +98,8 @@ def _format_source_block(
                 r"</?summary>", "", summary_text
             ).strip()
             lines.append(f"\nSUMMARY:\n{summary_text}")
-            excerpt_lines = "\n".join(f'- "{e}"' for e in excerpts)
+            safe_excerpts = [sanitize_external_content(e) for e in excerpts]
+            excerpt_lines = "\n".join(f'- "{e}"' for e in safe_excerpts)
             lines.append(f"\nKEY EXCERPTS:\n{excerpt_lines}")
         else:
             # No separate excerpts — show the full summarized content
@@ -101,11 +110,11 @@ def _format_source_block(
                 r"</?key_excerpts>", "", summary_text
             ).strip()
             lines.append(f"\nSUMMARY:\n{summary_text}")
-    elif src.snippet:
-        lines.append(f"\nSNIPPET:\n{src.snippet}")
-    elif src.content:
-        truncated = src.content[:500]
-        if len(src.content) > 500:
+    elif safe_snippet:
+        lines.append(f"\nSNIPPET:\n{safe_snippet}")
+    elif safe_content:
+        truncated = safe_content[:500]
+        if len(safe_content) > 500:
             truncated += "..."
         lines.append(f"\nCONTENT:\n{truncated}")
 

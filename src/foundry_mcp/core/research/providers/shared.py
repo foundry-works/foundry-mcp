@@ -30,6 +30,7 @@ import asyncio
 import logging
 import os
 import re
+import string
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import (
@@ -667,18 +668,18 @@ def resolve_provider_settings(
 # Fetch-time source summarization (Phase 1)
 # ---------------------------------------------------------------------------
 
-_SOURCE_SUMMARIZATION_PROMPT = """\
+_SOURCE_SUMMARIZATION_PROMPT = string.Template("""\
 You are a research assistant. Summarize the following web page content for \
 a researcher who needs to quickly assess relevance and extract key facts.
 
 Produce a JSON object with two fields:
 
-{{
+{
   "summary": "A concise narrative summary (roughly 25-30% of original length). \
 Capture main points, key arguments, conclusions, and important context.",
   "key_excerpts": ["up to 5 verbatim quotes from the original text that are \
 most important for citation"]
-}}
+}
 
 Content-type-specific guidance:
 - News articles: preserve who, what, when, where, why, how (5W1H)
@@ -698,7 +699,7 @@ names, locations
 - Return ONLY valid JSON, no additional text
 
 Content to summarize:
-{content}"""
+$content""")
 
 _SUMMARIZATION_TIMEOUT: float = 60.0  # seconds per source
 _DEFAULT_MAX_CONTENT_LENGTH: int = 50_000  # chars; matches open_deep_research
@@ -786,7 +787,15 @@ class SourceSummarizer:
         if self._max_content_length and len(content) > self._max_content_length:
             content = content[: self._max_content_length]
 
-        prompt = _SOURCE_SUMMARIZATION_PROMPT.format(content=content)
+        # Use safe_substitute to prevent KeyError from Python format
+        # string patterns in web content (e.g., "{system}", "{__class__}").
+        # Also sanitize web content to strip prompt-injection vectors.
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            sanitize_external_content,
+        )
+
+        content = sanitize_external_content(content)
+        prompt = _SOURCE_SUMMARIZATION_PROMPT.safe_substitute(content=content)
 
         # Note: no timeout here — the caller (summarize_sources) wraps this
         # in asyncio.wait_for() for cancellation.  Duplicating the timeout

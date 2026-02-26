@@ -7,27 +7,27 @@
 
 ## Phase 1: Prompt Injection — Complete Sanitization Coverage
 
-- [ ] **1A.1** Import `sanitize_external_content` in `topic_research.py`
-- [ ] **1A.2** Sanitize search result titles/snippets/content in `_handle_web_search_tool` before appending to `message_history`
-- [ ] **1A.3** Sanitize extracted page content in `_handle_extract_tool` before appending to `message_history`
-- [ ] **1A.4** Sanitize source fields in `_format_source_block`
-- [ ] **1B.1** Import `sanitize_external_content` in `synthesis.py`
-- [ ] **1B.2** Sanitize `tr.compressed_findings` before interpolation into synthesis prompt
-- [ ] **1B.3** Sanitize `state.raw_notes` entries before joining into prompt
-- [ ] **1B.4** Sanitize source titles/snippets in synthesis source-listing sections
-- [ ] **1C.1** Import `sanitize_external_content` in `compression.py`
-- [ ] **1C.2** Sanitize all source-derived content (`content`, `snippet`, `title`) in compression prompts
-- [ ] **1C.3** Sanitize raw notes content in compression prompts
-- [ ] **1D.1** Import `sanitize_external_content` in `brief.py`
-- [ ] **1D.2** Sanitize source content feeding into brief generation prompt
-- [ ] **1D.3** Import `sanitize_external_content` in `evaluation/evaluator.py`
-- [ ] **1D.4** Sanitize source titles, raw notes, and web-derived content in evaluation prompt
-- [ ] **1E.1** Replace `.format(content=content)` in `providers/shared.py` with safe interpolation (e.g., `string.Template.safe_substitute` or concatenation)
-- [ ] **1E.2** Apply `sanitize_external_content()` to content before prompt interpolation in `shared.py`
-- [ ] **1F.1** Add test: injection payload in search results is stripped before reaching topic researcher LLM
-- [ ] **1F.2** Add test: injection payload in source content is stripped in synthesis prompt
-- [ ] **1F.3** Add test: injection payload in source content is stripped in compression prompt
-- [ ] **1F.4** Add test: `.format()` injection in summarization content is handled safely
+- [x] **1A.1** Import `sanitize_external_content` in `topic_research.py`
+- [x] **1A.2** Sanitize search result titles/snippets/content in `_handle_web_search_tool` before appending to `message_history`
+- [x] **1A.3** Sanitize extracted page content in `_handle_extract_tool` before appending to `message_history`
+- [x] **1A.4** Sanitize source fields in `_format_source_block`
+- [x] **1B.1** Import `sanitize_external_content` in `synthesis.py`
+- [x] **1B.2** Sanitize `tr.compressed_findings` before interpolation into synthesis prompt
+- [x] **1B.3** Sanitize `state.raw_notes` entries before joining into prompt
+- [x] **1B.4** Sanitize source titles/snippets in synthesis source-listing sections
+- [x] **1C.1** Import `sanitize_external_content` in `compression.py`
+- [x] **1C.2** Sanitize all source-derived content (`content`, `snippet`, `title`) in compression prompts
+- [x] **1C.3** Sanitize raw notes content in compression prompts
+- [N/A] **1D.1** Import `sanitize_external_content` in `brief.py` — brief phase uses only user query, no web-derived content
+- [N/A] **1D.2** Sanitize source content feeding into brief generation prompt — not applicable (no sources in brief)
+- [x] **1D.3** Import `sanitize_external_content` in `evaluation/evaluator.py`
+- [x] **1D.4** Sanitize source titles, raw notes, and web-derived content in evaluation prompt
+- [x] **1E.1** Replace `.format(content=content)` in `providers/shared.py` with safe interpolation (e.g., `string.Template.safe_substitute` or concatenation)
+- [x] **1E.2** Apply `sanitize_external_content()` to content before prompt interpolation in `shared.py`
+- [x] **1F.1** Add test: injection payload in search results is stripped before reaching topic researcher LLM
+- [x] **1F.2** Add test: injection payload in source content is stripped in synthesis prompt
+- [x] **1F.3** Add test: injection payload in source content is stripped in compression prompt
+- [x] **1F.4** Add test: `.format()` injection in summarization content is handled safely
 
 ---
 

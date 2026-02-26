@@ -18,6 +18,9 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from foundry_mcp.core.research.models.deep_research import DeepResearchState, TopicResearchResult
+from foundry_mcp.core.research.workflows.deep_research._helpers import (
+    sanitize_external_content,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +53,8 @@ def _build_message_history_prompt(
     Returns:
         Formatted user prompt string.
     """
-    # Format each message in chronological order
+    # Format each message in chronological order, sanitizing tool results
+    # which contain web-sourced content that could inject into prompts.
     history_lines: list[str] = []
     for msg in message_history:
         role = msg.get("role", "unknown")
@@ -61,7 +65,7 @@ def _build_message_history_prompt(
             history_lines.append(f"[Assistant]\n{content}")
         elif role == "tool":
             label = f"[Tool: {tool_name}]" if tool_name else "[Tool Result]"
-            history_lines.append(f"{label}\n{content}")
+            history_lines.append(f"{label}\n{sanitize_external_content(content)}")
         else:
             history_lines.append(f"[{role}]\n{content}")
 
@@ -90,7 +94,8 @@ def _build_message_history_prompt(
     source_ref_lines: list[str] = []
     for idx, src in enumerate(topic_sources, 1):
         url_part = f": {src.url}" if src.url else ""
-        source_ref_lines.append(f"[{idx}] {src.title}{url_part}")
+        safe_title = sanitize_external_content(src.title)
+        source_ref_lines.append(f"[{idx}] {safe_title}{url_part}")
     source_ref = "\n".join(source_ref_lines)
 
     return (
@@ -170,10 +175,11 @@ def _build_structured_metadata_prompt(
     sources_included = 0
     for idx, src in enumerate(topic_sources, 1):
         entry_lines: list[str] = []
-        entry_lines.append(f"[{idx}] Title: {src.title}")
+        safe_title = sanitize_external_content(src.title)
+        entry_lines.append(f"[{idx}] Title: {safe_title}")
         if src.url:
             entry_lines.append(f"    URL: {src.url}")
-        content = src.content or src.snippet or ""
+        content = sanitize_external_content(src.content or src.snippet or "")
         if content:
             if len(content) > max_content_length:
                 content = content[:max_content_length] + "..."

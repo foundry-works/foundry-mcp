@@ -23,6 +23,7 @@ from foundry_mcp.core.research.workflows.deep_research._constants import (
 from foundry_mcp.core.research.workflows.deep_research._helpers import (
     estimate_token_limit_for_model,
     fidelity_level_from_score,
+    sanitize_external_content,
     truncate_at_boundary,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._citation_postprocess import (
@@ -693,7 +694,9 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
             ) or _FALLBACK_CONTEXT_WINDOW
             # Reserve space for the rest of the prompt and output
             max_notes_tokens = int(context_window * 0.60)
-            raw_notes_text = "\n---\n".join(state.raw_notes)
+            raw_notes_text = "\n---\n".join(
+                sanitize_external_content(note) for note in state.raw_notes
+            )
             truncated = truncate_at_boundary(raw_notes_text, max_notes_tokens * 4)
             prompt_parts.append(truncated)
             prompt_parts.append("")
@@ -710,7 +713,7 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
             prompt_parts.extend([
                 "## Unified Research Digest",
                 "",
-                state.compressed_digest,
+                sanitize_external_content(state.compressed_digest),
                 "",
             ])
             # Still include the source reference and instructions below
@@ -741,7 +744,7 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                 topic_label = sq.query if sq else tr.sub_query_id
                 prompt_parts.append(f"### {topic_label}")
                 prompt_parts.append("")
-                prompt_parts.append(tr.compressed_findings or "")
+                prompt_parts.append(sanitize_external_content(tr.compressed_findings or ""))
                 prompt_parts.append("")
 
             # Add contradictions and gaps (may still be populated from supervision)
@@ -866,7 +869,8 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                 cn = source.citation_number
                 label = f"[{cn}]" if cn is not None else f"[{source.id}]"
                 quality = source.quality.value if hasattr(source.quality, "value") else str(source.quality)
-                prompt_parts.append(f"- **{label}**: {source.title} [{quality}]")
+                safe_title = sanitize_external_content(source.title)
+                prompt_parts.append(f"- **{label}**: {safe_title} [{quality}]")
                 if source.url:
                     prompt_parts.append(f"  URL: {source.url}")
 
@@ -875,15 +879,17 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                     # Compressed: use allocated tokens to estimate character limit (~4 chars/token)
                     char_limit = max(50, item.allocated_tokens * 4)
                     if source.snippet:
-                        snippet = source.snippet[:char_limit]
-                        if len(source.snippet) > char_limit:
+                        safe_snippet = sanitize_external_content(source.snippet)
+                        snippet = safe_snippet[:char_limit]
+                        if len(safe_snippet) > char_limit:
                             snippet += "..."
                         prompt_parts.append(f"  Snippet: {snippet}")
                 else:
                     # Full fidelity: include snippet up to 200 chars
                     if source.snippet:
-                        snippet = source.snippet[:200]
-                        if len(source.snippet) > 200:
+                        safe_snippet = sanitize_external_content(source.snippet)
+                        snippet = safe_snippet[:200]
+                        if len(safe_snippet) > 200:
                             snippet += "..."
                         prompt_parts.append(f"  Snippet: {snippet}")
 
@@ -900,7 +906,8 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                 cn = source.citation_number
                 label = f"[{cn}]" if cn is not None else f"[{source.id}]"
                 quality = source.quality.value if hasattr(source.quality, "value") else str(source.quality)
-                prompt_parts.append(f"- {label}: {source.title} [{quality}]")
+                safe_title = sanitize_external_content(source.title)
+                prompt_parts.append(f"- {label}: {safe_title} [{quality}]")
                 if source.url:
                     prompt_parts.append(f"  URL: {source.url}")
 
@@ -992,8 +999,10 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
             int(context_window * _SUPPLEMENTARY_MAX_FRACTION),
         )
 
-        # Build the raw notes text
-        raw_notes_text = "\n---\n".join(state.raw_notes)
+        # Build the raw notes text (sanitize web-sourced content)
+        raw_notes_text = "\n---\n".join(
+            sanitize_external_content(note) for note in state.raw_notes
+        )
         supplementary = truncate_at_boundary(
             raw_notes_text,
             max_supplementary_tokens * 4,  # tokens → chars
