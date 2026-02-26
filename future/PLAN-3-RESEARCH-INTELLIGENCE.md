@@ -2,17 +2,22 @@
 
 > **Goal**: Add capabilities that produce meaningfully richer academic outputs — influence-aware source ranking, structured landscape metadata, explicit research gaps sections, cross-study comparison tables, and reference export (BibTeX/RIS).
 >
-> **Estimated scope**: ~900-1300 LOC across 8-10 files
+> **Estimated scope**: ~900-1300 LOC implementation + ~350-500 LOC tests across 8-10 files
 >
-> **Dependencies**: PLAN-1 items 1 (profiles), 3 (literature_review type), 4 (APA citations); PLAN-2 item 1 (OpenAlex for richer metadata)
+> **Dependencies (relaxed)**:
+> - **Hard dependency**: PLAN-0 (supervision refactoring for item 1), PLAN-1 item 6 (structured output for landscape/export data)
+> - **Soft dependency**: PLAN-1 items 1, 3, 4 and PLAN-2 item 1 — these *enhance* results but are not required. Each item works with whatever metadata is available from existing providers (Semantic Scholar already provides citation_count, year, venue, authors). When upstream plans ship, these items automatically produce richer output.
+>
+> **Design change**: Items are designed to work with existing Semantic Scholar metadata and degrade gracefully when richer metadata (from OpenAlex, profiles, etc.) is unavailable. This decouples PLAN-3 from the PLAN-1/PLAN-2 critical path.
 
 ---
 
 ## Design Principles
 
-1. **Use data already collected.** Most of these features transform metadata that the Semantic Scholar and OpenAlex providers already store — citation counts, venues, years, fields of study, authors. The cost is computation, not API calls.
-2. **Academic features are profile-gated.** Influence scoring, landscape metadata, and comparison tables only activate when the profile enables them. General-mode behavior is completely unchanged.
-3. **Structured data complements prose.** The landscape metadata, study comparisons, and export formats are part of the structured output (PLAN-1 item 6), not replacements for the report.
+1. **Use data already collected.** Most of these features transform metadata that Semantic Scholar already stores — citation counts, venues, years, fields of study, authors. OpenAlex enriches this further when available. The cost is computation, not API calls.
+2. **Work with whatever metadata exists.** Every item gracefully handles missing metadata fields. BibTeX export works with just title+URL; it produces richer entries when authors/year/venue are present. Influence scoring falls back to equal weighting when citation counts are absent. No item hard-requires OpenAlex or profiles.
+3. **Academic features activate conditionally.** When research profiles (PLAN-1) are available, features are profile-gated. Without profiles, features activate based on `research_mode == ACADEMIC` (existing enum) or explicit request parameters. General-mode behavior is completely unchanged.
+4. **Structured data complements prose.** The landscape metadata, study comparisons, and export formats are part of the structured output (PLAN-1 item 6), not replacements for the report. If structured output isn't available yet, these features produce their data but don't surface it in the response until PLAN-1 item 6 ships.
 
 ---
 
@@ -39,7 +44,7 @@ This counts sources without regard to impact. 3 blog posts score the same as 3 s
 
 ### Changes
 
-**File: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`**
+**File: `phases/supervision_coverage.py`** (refactored in PLAN-0)
 
 #### 1a. Add influence-weighted source adequacy dimension
 
@@ -61,7 +66,7 @@ def _compute_source_influence(self, state: DeepResearchState) -> float:
 
 #### 1b. Integrate into coverage weights
 
-When profile has `source_quality_mode == ACADEMIC`:
+When academic mode is active (via profile `source_quality_mode == ACADEMIC` if PLAN-1 is available, or via legacy `research_mode == ACADEMIC`):
 ```python
 # ACADEMIC weights (influence matters):
 {"source_adequacy": 0.3, "domain_diversity": 0.15, "query_completion_rate": 0.2, "source_influence": 0.35}
@@ -69,6 +74,8 @@ When profile has `source_quality_mode == ACADEMIC`:
 # Default weights (unchanged):
 {"source_adequacy": 0.5, "domain_diversity": 0.2, "query_completion_rate": 0.3}
 ```
+
+Detection logic: `state.research_profile.source_quality_mode == ACADEMIC` (when PLAN-1 profiles exist) OR `state.research_mode == ResearchMode.ACADEMIC` (existing enum fallback).
 
 #### 1c. Surface influence data in supervisor brief
 
@@ -226,7 +233,7 @@ Unresolved gaps represent genuine research frontiers.
 
 #### 3a. Inject gaps into synthesis prompt
 
-In `_build_synthesis_user_prompt()`, when `query_type == "literature_review"`:
+In `_build_synthesis_user_prompt()`, when `query_type == "literature_review"` (PLAN-1 item 3) OR when `research_mode == ACADEMIC` (existing enum, pre-PLAN-1 fallback):
 
 ```python
 unresolved_gaps = [g for g in state.gaps if not g.resolved]
@@ -269,9 +276,10 @@ Unresolved gaps are already part of `StructuredResearchOutput.gaps` (PLAN-1 item
 
 ### Testing
 
-- Unit test: unresolved gaps are injected into synthesis prompt for literature_review
+- Unit test: unresolved gaps are injected into synthesis prompt for literature_review query type
+- Unit test: unresolved gaps are injected into synthesis prompt for ACADEMIC research_mode (pre-PLAN-1 fallback)
 - Unit test: resolved gaps are included with resolution notes
-- Unit test: gaps are NOT injected for non-literature_review query types
+- Unit test: gaps are NOT injected for non-academic general queries
 - Unit test: empty gaps list → no gap section in prompt
 - Verify synthesis report includes "Research Gaps" section
 
@@ -427,14 +435,25 @@ structured_output.exports = {
 
 ---
 
+## Testing Budget
+
+| Item | Impl LOC | Test LOC | Test Focus |
+|------|----------|----------|------------|
+| 1. Influence Ranking | ~150-200 | ~80-100 | Score computation, weight integration, mode detection |
+| 2. Research Landscape | ~150-200 | ~80-100 | Aggregation, sorting, empty/mixed sources |
+| 3. Research Gaps | ~80-120 | ~50-70 | Injection logic, mode fallback, empty gaps |
+| 4. Comparison Tables | ~80-120 | ~40-60 | Prompt injection, table parsing |
+| 5. BibTeX/RIS Export | ~200-300 | ~100-130 | Format generation, escaping, edge cases |
+| **Total** | **~660-940** | **~350-460** | |
+
 ## File Impact Summary
 
 | File | Change Type | Items |
 |------|-------------|-------|
-| `phases/supervision.py` | Modify | 1 (influence scoring, supervisor brief enrichment) |
+| `phases/supervision_coverage.py` | Modify | 1 (influence scoring) — refactored in PLAN-0 |
 | `phases/synthesis.py` | Modify | 2 (landscape builder), 3 (gap injection), 4 (comparison tables) |
 | `phases/compression.py` | Modify | 1 (citation count in supervisor brief) |
-| `models/deep_research.py` | Modify | 2 (ResearchLandscape, StudyComparison) |
+| `models/deep_research.py` | Modify | 2 (ResearchLandscape, StudyComparison) — via ResearchExtensions |
 | `config/research.py` | Modify | 1 (influence thresholds) |
 | `export/__init__.py` | **New** | 5 |
 | `export/bibtex.py` | **New** | 5 |
@@ -445,15 +464,20 @@ structured_output.exports = {
 ## Dependency Graph
 
 ```
-[1. Influence-Aware Ranking] (independent — uses existing metadata)
-
-[2. Research Landscape] (independent — pure data transformation)
+[PLAN-0: Prerequisites] (supervision refactoring for item 1)
        │
-       └──▶ [4. Cross-Study Comparison Tables] (extends landscape model)
-
-[3. Research Gaps Section] (independent — uses existing state.gaps)
-
-[5. BibTeX/RIS Export] (independent — uses existing source metadata)
+       ├──▶ [1. Influence-Aware Ranking] (uses existing Semantic Scholar metadata)
+       │         Enhanced by: PLAN-2 item 1 (OpenAlex richer citation data)
+       │
+       ├──▶ [2. Research Landscape] (pure data transformation)
+       │         │
+       │         └──▶ [4. Cross-Study Comparison Tables] (extends landscape model)
+       │
+       ├──▶ [3. Research Gaps Section] (uses existing state.gaps)
+       │         Enhanced by: PLAN-1 item 3 (literature_review query type)
+       │
+       └──▶ [5. BibTeX/RIS Export] (uses existing source metadata)
+                 Enhanced by: PLAN-1 item 4 (APA formatting), PLAN-2 item 3 (Crossref metadata)
 ```
 
-All items are largely independent and can be developed in any order. Item 4 extends item 2's model.
+All items are largely independent and can be developed in any order after PLAN-0. Item 4 extends item 2's model. Upstream plans enhance output quality but are not required — items work with existing Semantic Scholar metadata.

@@ -2,13 +2,19 @@
 
 > **Goal**: Capabilities that make deep research competitive with dedicated academic tools like Elicit, Research Rabbit, and Undermind — full-text PDF analysis, citation network graph construction, methodology quality assessment, and integration with remote academic MCP servers (Scite, Consensus, PubMed).
 >
-> **Estimated scope**: ~2000-3000 LOC, significant new infrastructure
+> **Estimated scope**: ~1500-2200 LOC implementation + ~600-800 LOC tests (reduced from original ~2000-3000 after scope revisions)
 >
-> **Dependencies**: PLAN-1 (all items), PLAN-2 items 1-5 (providers and citation tools), PLAN-3 items 1-2 (influence ranking and landscape)
+> **Dependencies**: PLAN-0 (prerequisites), PLAN-1 items 1 and 6 (profiles, structured output), PLAN-2 item 1 (OpenAlex)
 >
 > **Risk**: Higher implementation complexity, API rate limiting, PDF parsing reliability, LLM accuracy for methodology extraction
 >
 > **All features in this plan are opt-in** (disabled by default in profiles) to avoid impacting existing behavior.
+>
+> **Scope revisions from review**:
+> - Item 1 (PDF): **Extends existing `pdf_extractor.py`** instead of creating a duplicate module. No new `pymupdf` dependency.
+> - Item 2 (Citation Network): **Deferred to explicit user-triggered tool** — not an automatic pipeline step. Reduces API call volume.
+> - Item 3 (Methodology): **Demoted to experimental/opt-in** with strong caveats about reliability.
+> - Item 4 (MCP Bridge): **Contingent on server availability** — infrastructure only built after validating at least one target server exists.
 
 ---
 
@@ -27,25 +33,36 @@
 
 Academic papers are primarily distributed as PDFs. The current pipeline fetches abstracts from Semantic Scholar and web page content via Tavily, but cannot read actual paper content. When a topic researcher discovers a paper, it only gets the abstract (~200-300 words). The full paper (methods, results, discussion) remains inaccessible.
 
-### Current State
+### Current State — Existing Infrastructure
 
-- `pdf_extractor.py` exists at `src/foundry_mcp/core/research/pdf_extractor.py` but its capabilities are unclear
-- Semantic Scholar stores `metadata.pdf_url` (OA PDF link) when available
-- PLAN-2's Unpaywall provider can resolve DOIs to OA PDF URLs
+The existing `pdf_extractor.py` (833 lines) at `src/foundry_mcp/core/research/pdf_extractor.py` is **production-ready** and provides:
+
+- **Libraries**: `pypdf` (primary) with `pdfminer.six` fallback — no new dependencies needed
+- **SSRF protection**: URL validation blocking localhost, internal IPs, cloud metadata endpoints, with redirect loop detection (max 5)
+- **Security**: Magic byte validation (`%PDF-`), content-type checking, streaming download with size limits (default 10MB)
+- **Page extraction**: Page-by-page text extraction with character offset tracking (`page_offsets` list)
+- **Graceful fallback**: pypdf → pdfminer.six (per-page) → pdfminer.six (full document)
+- **Observability**: Prometheus metrics (`foundry_mcp_pdf_extraction_duration_seconds`, `foundry_mcp_pdf_extraction_pages_total`)
+- **Error handling**: Custom exceptions (`InvalidPDFError`, `PDFSecurityError`, `PDFSizeError`, `SSRFError`)
+
+Additional existing infrastructure:
 - `DigestPayload` model supports page-based locators (`page:n:char:start-end`)
 - Config field `deep_research_digest_fetch_pdfs: bool = False` exists but is disabled
+- Semantic Scholar stores `metadata.pdf_url` (OA PDF link) when available
+
+**Decision: Extend the existing `pdf_extractor.py` rather than creating a parallel module.** No new `pymupdf` dependency.
 
 ### Architecture
 
 ```
 Topic Researcher discovers paper via Semantic Scholar / OpenAlex
     ↓
-Paper has DOI → Unpaywall resolves to OA PDF URL
+Paper has DOI → OpenAlex oa_url OR Unpaywall resolves to OA PDF URL
     ↓ (or direct pdf_url from provider metadata)
-PDFExtractProvider:
-    1. Download PDF (respect Content-Type, handle redirects, size limit)
-    2. Extract text via pymupdf (fitz) with page boundary preservation
-    3. Return structured text with page numbers
+Existing PDFExtractor.extract_from_url():
+    1. SSRF-validated download (already implemented)
+    2. Extract text via pypdf + pdfminer fallback (already implemented)
+    3. Return PDFExtractionResult with page boundaries (already implemented)
     ↓
 Standard summarization/digest pipeline processes extracted text
     ↓
@@ -54,65 +71,38 @@ Evidence snippets with page-based locators (page:3:char:150-320)
 
 ### Changes
 
-**File: `src/foundry_mcp/core/research/providers/pdf_extract.py`** (NEW)
+**File: `src/foundry_mcp/core/research/pdf_extractor.py`** (EXTEND — not new)
 
-#### 1a. PDF extraction provider
+#### 1a. Add academic paper section detection
 
 ```python
-class PDFExtractProvider:
-    """Download and extract text from academic PDFs.
+def detect_sections(self, result: PDFExtractionResult) -> dict[str, tuple[int, int]]:
+    """Detect standard academic paper sections from extracted text.
 
-    Supports:
-    - Direct PDF URLs (e.g., arxiv.org/pdf/2301.12345)
-    - DOI redirects to publisher PDF pages
-    - Open Access PDF links from Semantic Scholar / Unpaywall metadata
+    Returns section name → (start_char, end_char) mapping for:
+    Abstract, Introduction, Methods/Methodology, Results, Discussion,
+    Conclusion, References.
 
-    Text extraction via pymupdf (fitz) with page boundary preservation.
+    Uses regex patterns for common section headers.
+    Falls back gracefully — returns empty dict if no sections detected.
     """
-
-    async def extract(
-        self,
-        url: str,
-        max_pages: int = 50,
-        timeout: float = 30.0,
-        max_size_mb: float = 50.0,
-    ) -> PDFExtractionResult:
-        """Download PDF and extract text with page boundaries.
-
-        Steps:
-        1. Stream-download with size limit check
-        2. Verify Content-Type is application/pdf
-        3. Extract text via pymupdf, preserving page structure
-        4. Return structured result with page boundaries
-        """
-
-    def _extract_text_with_pages(
-        self,
-        pdf_bytes: bytes,
-        max_pages: int,
-    ) -> list[PDFPage]:
-        """Extract text from PDF bytes, preserving page structure.
-
-        Detects scanned PDFs (pages with no extractable text) and skips them.
-        """
 ```
 
-#### 1b. PDF data models
+#### 1b. Add prioritized extraction mode
 
 ```python
-class PDFPage(BaseModel):
-    """Single page of extracted PDF text."""
-    page_number: int
-    text: str
-    char_offset: int  # Cumulative character offset from start of document
+def extract_prioritized(
+    self,
+    result: PDFExtractionResult,
+    max_chars: int = 50000,
+    priority_sections: list[str] = ["methods", "results", "discussion"],
+) -> str:
+    """Extract text prioritizing specific sections for academic papers.
 
-class PDFExtractionResult(BaseModel):
-    """Result of PDF text extraction."""
-    pages: list[PDFPage]
-    total_pages: int
-    total_chars: int
-    metadata: dict  # PDF metadata (title, author, creation date from PDF properties)
-    is_scanned: bool  # True if most pages had no extractable text
+    When full text exceeds max_chars, prioritizes abstract + priority_sections
+    over introduction/references. Useful for feeding into digest pipeline
+    without exceeding context limits.
+    """
 ```
 
 **File: `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py`**
@@ -120,11 +110,11 @@ class PDFExtractionResult(BaseModel):
 #### 1c. Integrate PDF extraction into extract_content tool
 
 When `extract_content` is called with a URL that resolves to a PDF (detected by URL pattern `*.pdf`, `arxiv.org/pdf/*`, or Content-Type response header):
-1. Route to `PDFExtractProvider` instead of Tavily Extract
-2. Convert `PDFExtractionResult` to the standard content format
+1. Route to existing `PDFExtractor.extract_from_url()` instead of Tavily Extract
+2. Use `extract_prioritized()` to get section-aware content within context limits
 3. Preserve page boundaries in source metadata for locator support
 
-#### 1d. PDF-aware Unpaywall enrichment (optional dedicated tool)
+#### 1d. PDF-aware tool (optional, profile-gated)
 
 When profile has `enable_pdf_extraction == True`, add an `extract_pdf` tool:
 
@@ -143,51 +133,59 @@ not just the abstract. Only works for open-access papers.
 #### 1e. Page-aware digest
 
 When digesting PDF-extracted content:
-- Use `page:N:char:start-end` locators for evidence snippets
-- Prioritize Methods, Results, and Discussion sections
+- Use `page:N:char:start-end` locators for evidence snippets (existing `page_offsets` from `PDFExtractionResult`)
+- Use `detect_sections()` to prioritize Methods, Results, and Discussion
 - Handle academic paper structure (Abstract, Introduction, Methods, Results, Discussion, References)
 
 ### Dependencies
 
-- `pymupdf` (fitz) for PDF text extraction
-- PLAN-2 item 2 (Unpaywall) for DOI → PDF URL resolution
+- **No new dependencies.** Uses existing `pypdf` + `pdfminer.six` already in the dependency tree.
+- PLAN-2 item 1 (OpenAlex `oa_url`) for DOI → PDF URL resolution. Optionally enhanced by Unpaywall (Tier 2).
 
 ### Risks & Mitigations
 
 | Risk | Mitigation |
 |------|-----------|
-| Paywall PDFs | Only attempt OA PDFs (from Unpaywall/provider metadata) |
-| Large PDFs | Cap at `max_pages` (default 50), skip appendices/supplementary |
-| Scanned PDFs | Detect via text-per-page threshold, skip gracefully |
+| Paywall PDFs | Only attempt OA PDFs (from OpenAlex oa_url / Unpaywall / provider metadata) |
+| Large PDFs | Existing `max_pages` config (default 500, override to 50 for deep research) |
+| Scanned PDFs | Existing detection via text-per-page threshold in `PDFExtractor` |
 | Publisher rate limiting | Respect robots.txt patterns, add 1s delay between downloads |
-| Large file size | Stream download with size limit (default 50MB) |
+| Large file size | Existing streaming download with size limit (default 10MB, configurable) |
 | Extraction failures | Log in provenance, continue with abstract-only |
 
 ### Testing
 
-- Unit test: PDF text extraction from test PDF file
-- Unit test: page boundary preservation and char offset calculation
-- Unit test: PDF URL detection (arxiv.org/pdf/*, *.pdf extension)
-- Unit test: scanned PDF detection (empty text pages)
-- Unit test: graceful failure for non-PDF URLs, corrupted files
-- Unit test: size limit enforcement
+- Unit test: section detection from synthetic academic PDF text
+- Unit test: prioritized extraction respects max_chars and section ordering
+- Unit test: PDF URL routing in extract_content tool
+- Unit test: graceful fallback when section detection finds nothing
+- Existing tests for PDFExtractor core functionality remain unchanged
 - Integration test: topic researcher extracts PDF and includes in findings
+- ~80-120 LOC new tests
 
 ---
 
-## 2. Citation Network / Connected Papers Graph
+## 2. Citation Network / Connected Papers Graph (User-Triggered)
 
 ### Problem
 
 Academic research involves understanding how papers relate to each other through citation chains. A seminal paper can spawn multiple research threads. Understanding these threads is central to a good literature review. Currently, each source is treated as independent — there's no representation of inter-source relationships.
 
+### Scope Revision
+
+**Changed from automatic post-synthesis step to explicit user-triggered tool.** Building a citation network requires 2 API calls per source (references + citations). For 15 sources, that's 30+ API calls returning potentially 600+ nodes. This is expensive and slow — not appropriate as an automatic pipeline step.
+
+Instead, citation network building is exposed as a dedicated `deep-research-network` action that users invoke on a completed research session when they specifically need citation graph analysis.
+
 ### Architecture
 
 ```
-After synthesis (post-synthesis enrichment step):
+User completes deep research session (produces report + sources)
+    ↓
+User explicitly requests: research action=deep-research-network research_id=<id>
     ↓
 For each academic source in state.sources with a paper ID:
-    - Fetch references (papers it cites) via OpenAlex / Semantic Scholar
+    - Fetch references (papers it cites) via OpenAlex (10 RPS)
     - Fetch citations (papers that cite it) via OpenAlex / OpenCitations
     ↓
 Build citation adjacency graph:
@@ -199,7 +197,7 @@ Identify structure:
     - Papers that cite many discovered papers → "recent extensions"
     - Connected components → "research threads"
     ↓
-Output: CitationNetwork in state + structured output
+Output: CitationNetwork in structured output
 ```
 
 ### Changes
@@ -314,31 +312,50 @@ class CitationNetworkBuilder:
         """
 ```
 
-#### 2d. Integration point
+#### 2d. Integration point — dedicated action handler
 
-Call network builder as a post-synthesis enrichment step:
+**File: `src/foundry_mcp/tools/unified/research_handlers/handlers_deep_research.py`**
+
+Expose as a dedicated action, not an automatic pipeline step:
 
 ```python
-if state.research_profile.enable_citation_network:
+def _handle_deep_research_network(
+    research_id: str,
+    max_references_per_paper: int = 20,
+    max_citations_per_paper: int = 20,
+) -> dict:
+    """Build citation network for a completed research session.
+
+    User-triggered — not automatic. Requires a completed session.
+    Returns network graph data for visualization tools.
+    """
+    state = load_state(research_id)
     academic_sources = [s for s in state.sources if s.source_type == SourceType.ACADEMIC]
-    if len(academic_sources) >= 3:  # Not worth building for tiny sets
-        network = await CitationNetworkBuilder().build_network(
-            sources=academic_sources,
-            providers=available_providers,
-        )
-        state.citation_network = network
+    if len(academic_sources) < 3:
+        return {"status": "skipped", "reason": "fewer than 3 academic sources"}
+
+    network = await CitationNetworkBuilder().build_network(
+        sources=academic_sources,
+        providers=available_providers,
+        max_references_per_paper=max_references_per_paper,
+        max_citations_per_paper=max_citations_per_paper,
+    )
+    state.extensions.citation_network = network
+    save_state(state)
+    return network.model_dump()
 ```
 
-Include in structured output for downstream visualization tools.
+Wire up `"deep-research-network"` action in the research action router.
 
 ### Risks & Mitigations
 
 | Risk | Mitigation |
 |------|-----------|
 | API rate limiting | Use OpenAlex (10 RPS) as primary; Semantic Scholar as fallback. Parallelize within limits. |
-| Graph explosion | Cap `max_references_per_paper` and `max_citations_per_paper` |
+| Graph explosion | Cap `max_references_per_paper` and `max_citations_per_paper` (default 20 each) |
 | Missing paper IDs | Only build for sources with paper_id or DOI in metadata |
-| Slow execution | Run as post-synthesis (non-blocking). 15 sources × 2 calls × 10 RPS = ~3s with OpenAlex |
+| Execution time | User-triggered, so latency is expected. 15 sources × 2 calls ÷ 10 RPS = ~3s with OpenAlex. Progress tracking via action response. |
+| Cost visibility | Action response includes API call count and elapsed time |
 
 ### Testing
 
@@ -347,28 +364,34 @@ Include in structured output for downstream visualization tools.
 - Unit test: research thread detection with known graph
 - Unit test: role classification
 - Unit test: graceful handling when no academic sources exist
-- Unit test: graceful handling when < 3 academic sources (skip network)
+- Unit test: graceful handling when < 3 academic sources (returns skipped)
+- Unit test: action handler wiring and response format
 - Integration test: 5 academic sources → network with edges
+- ~100-140 LOC new tests
 
 ---
 
-## 3. Methodology Quality Assessment
+## 3. Methodology Quality Assessment (Experimental — Strong Caveats)
+
+> **Status: Experimental.** This feature produces approximate heuristics, not validated psychometric instruments. The numeric rigor score is fundamentally unreliable when derived from abstracts alone (~80% of cases). It should be treated as a rough sorting signal for internal synthesis weighting, never as a displayed metric or a basis for excluding studies.
+>
+> **Recommendation**: Implement the study design classification and metadata extraction (useful, relatively reliable) but **do not compute or store a numeric rigor score**. Instead, provide the extracted metadata to the synthesis LLM and let it make qualitative judgments.
 
 ### Problem
 
-Not all studies are equal. An RCT with N=1000 carries more weight than a case study with N=5. Currently, source quality assessment is purely domain-based (is this from a journal or social media?). It doesn't assess the methodological rigor of individual studies.
+Not all studies are equal. An RCT with N=1000 carries more weight than a case study with N=5. Currently, source quality assessment is purely domain-based (is this from a journal or social media?). It doesn't assess the methodological characteristics of individual studies.
 
-### Architecture
+### Architecture (Revised — No Numeric Score)
 
 ```
 After topic researchers gather findings (during compression or post-synthesis):
     ↓
 For each academic source with sufficient content (abstract + any extracted text):
-    - LLM extracts methodology metadata
+    - LLM extracts methodology metadata (study design, sample, effect size)
     ↓
-Methodology quality scoring (heuristic, not a validated instrument)
+Structured methodology metadata (NO numeric score)
     ↓
-Output: MethodologyAssessment per source, fed into synthesis prompt
+Output: MethodologyAssessment per source, fed into synthesis prompt as context
 ```
 
 ### Changes
@@ -394,10 +417,11 @@ class StudyDesign(str, Enum):
     UNKNOWN = "unknown"
 
 class MethodologyAssessment(BaseModel):
-    """Assessment of a study's methodological quality.
+    """Structured methodology metadata extracted from source content.
 
-    Generated by LLM extraction from source content. The rigor_score
-    is an approximate heuristic, not a validated psychometric instrument.
+    Generated by LLM extraction. Provides qualitative metadata for
+    synthesis weighting — NO numeric rigor score. The synthesis LLM
+    uses this context to make informed qualitative judgments.
     """
     source_id: str
     study_design: StudyDesign = StudyDesign.UNKNOWN
@@ -407,7 +431,8 @@ class MethodologyAssessment(BaseModel):
     statistical_significance: Optional[str] = None  # e.g., "p<0.001"
     limitations_noted: list[str] = Field(default_factory=list)
     potential_biases: list[str] = Field(default_factory=list)
-    rigor_score: float = 0.0                 # 0.0-1.0 composite
+    # NO rigor_score — removed per review. Numeric scoring from abstracts
+    # is unreliable and invites misuse. Qualitative metadata is sufficient.
     confidence: str = "low"                  # "high" | "medium" | "low"
     content_basis: str = "abstract"          # "abstract" | "full_text"
 ```
@@ -436,26 +461,15 @@ class MethodologyAssessor:
         provider_id: Optional[str] = None,
         timeout: float = 60.0,
     ) -> list[MethodologyAssessment]:
-        """Assess methodology for academic sources with sufficient content.
+        """Extract methodology metadata for academic sources with sufficient content.
 
         Filters to sources with source_type == ACADEMIC and content > 200 chars.
         Uses a single batched LLM call where possible.
-        """
-
-    def _compute_rigor_score(self, assessment: MethodologyAssessment) -> float:
-        """Compute composite rigor score from study characteristics.
-
-        Weights:
-        - Study design hierarchy: 40% (meta_analysis=1.0 → opinion=0.1)
-        - Sample size adequacy: 20% (log-scaled, domain-dependent)
-        - Statistical reporting: 20% (effect size + significance reported)
-        - Limitation acknowledgment: 10%
-        - Bias awareness: 10%
-
-        Score is capped at 0.6 when content_basis == "abstract" to reflect
-        the inherent uncertainty of assessing methodology from limited text.
+        Returns structured metadata — no numeric scoring.
         """
 ```
+
+**Removed**: `_compute_rigor_score()` — numeric scoring from abstracts is unreliable. The synthesis LLM receives the structured metadata and makes qualitative weighting decisions.
 
 #### 3c. LLM extraction prompt
 
@@ -499,46 +513,56 @@ methodology_assessments: list[MethodologyAssessment] = Field(
 When assessments are available, include in synthesis prompt:
 
 ```
-## Methodology Quality Assessments
-The following sources have been assessed for methodological rigor.
-Rigor scores are approximate heuristics, not validated instruments.
+## Methodology Context
+The following sources have methodology metadata extracted.
+Use this context to inform your qualitative weighting when findings conflict.
 
-[1] Smith et al. (2021) — RCT, N=450, rigor: 0.85/1.0 (from full text)
-    Design: Randomized controlled trial
+[1] Smith et al. (2021) — Randomized controlled trial, N=450
     Effect: d=0.45 (p<0.001)
     Limitations: Single institution, self-report measures
+    (extracted from: full text)
 
-[2] Jones (2023) — Qualitative, N=12, rigor: 0.45/1.0 (from abstract)
-    Design: Semi-structured interviews
+[2] Jones (2023) — Semi-structured interviews, N=12
     Limitations: Small sample, researcher bias possible
+    (extracted from: abstract — treat with lower confidence)
 
-When synthesizing findings, consider study rigor when findings conflict.
-Note methodological limitations when reporting findings from lower-rigor studies.
-Do NOT present rigor scores to the reader — use them to inform your weighting,
-not as displayed numbers.
+When synthesizing findings, consider study design and sample size when
+findings conflict. Note methodological limitations when appropriate.
+Present the methodology context naturally in your synthesis — do not
+create a separate "methodology scores" section.
 ```
 
 ### Risks & Mitigations
 
 | Risk | Mitigation |
 |------|-----------|
-| LLM accuracy from abstracts | Force `confidence="low"` and cap rigor_score at 0.6 for abstract-only |
+| LLM accuracy from abstracts | Force `confidence="low"` for abstract-only. Metadata extraction is more reliable than numeric scoring. |
 | Cost (1 LLM call per source) | Use lightweight model. Batch where possible. Only assess sources with ACADEMIC type. |
-| False precision | Present scores as "approximate heuristic" in all outputs. Don't display scores in report — use for internal weighting only. |
+| Over-reliance on extracted metadata | Synthesis prompt frames metadata as "context" not "ground truth". LLM makes final judgment. |
 | Scope creep | Only assess sources with >200 chars of content |
 
 ### Testing
 
-- Unit test: `_compute_rigor_score()` with various study designs
-- Unit test: rigor_score capped at 0.6 for abstract-only content
 - Unit test: LLM extraction prompt parsing with mocked responses
+- Unit test: StudyDesign classification from various abstracts
 - Unit test: graceful handling for sources without sufficient content
 - Unit test: assessment data correctly injected into synthesis prompt
+- Unit test: confidence forced to "low" for abstract-only content
 - Integration test: end-to-end assessment of 5 academic sources
+- ~80-100 LOC new tests
 
 ---
 
-## 4. Remote MCP Server Bridge
+## 4. Remote MCP Server Bridge (Contingent — Requires Validation)
+
+> **Status: Contingent.** This item should NOT be implemented until at least one target MCP server URL has been validated as accessible and functional. The URLs listed below (`scite.ai/mcp`, `consensus.app/mcp`, `pubmed.mcp.claude.com/mcp`) are **speculative** — they may not exist or may require authentication not documented here.
+>
+> **Pre-implementation gate**: Before writing any bridge code, validate:
+> 1. At least one target server responds to MCP `tools/list` requests
+> 2. The response format matches standard MCP protocol
+> 3. Authentication requirements are understood and documented
+>
+> If no target servers are validated, defer this item entirely.
 
 ### Problem
 
@@ -766,32 +790,29 @@ core_enabled: bool = False           # Opt-in (rate-limited without key)
 
 ### New Dependencies
 
-- `pymupdf` (fitz) — for PDF text extraction (item 1)
-- `mcp` — MCP client library for bridge (item 4) — check if already a dependency
+- **No new dependencies for item 1** (PDF). Uses existing `pypdf` + `pdfminer.six`.
+- `mcp` — MCP client library for bridge (item 4) — check if already a dependency. **Only needed if item 4 passes validation gate.**
 
 ### Configuration Surface
 
 ```python
-# PDF extraction
-deep_research_pdf_max_pages: int = 50
-deep_research_pdf_max_size_mb: float = 50.0
-deep_research_pdf_timeout: float = 30.0
+# PDF extraction (extends existing PDFExtractor config)
+deep_research_pdf_max_pages: int = 50          # Override default 500 for deep research
+deep_research_pdf_priority_sections: list[str] = ["methods", "results", "discussion"]
 
-# Citation network
+# Citation network (user-triggered, not automatic)
 deep_research_citation_network_max_refs_per_paper: int = 20
 deep_research_citation_network_max_cites_per_paper: int = 20
 
-# Methodology assessment
+# Methodology assessment (experimental)
 deep_research_methodology_assessment_provider: Optional[str] = None  # Lightweight model
 deep_research_methodology_assessment_timeout: float = 60.0
 
-# Remote MCP servers
-scite_mcp_url: str = "https://api.scite.ai/mcp"
-scite_mcp_enabled: bool = False
-consensus_mcp_url: str = "https://mcp.consensus.app/mcp"
-consensus_mcp_enabled: bool = False
-pubmed_mcp_url: str = "https://pubmed.mcp.claude.com/mcp"
-pubmed_mcp_enabled: bool = False
+# Remote MCP servers (contingent — only configure after validation)
+# scite_mcp_url: str = "https://api.scite.ai/mcp"      # VALIDATE FIRST
+# scite_mcp_enabled: bool = False
+# consensus_mcp_url: str = "https://mcp.consensus.app/mcp"  # VALIDATE FIRST
+# consensus_mcp_enabled: bool = False
 
 # CORE
 core_api_key: Optional[str] = None
@@ -800,48 +821,64 @@ core_enabled: bool = False
 
 ### Performance Impact
 
-| Feature | API Calls | LLM Calls | Added Latency |
-|---------|-----------|-----------|---------------|
-| PDF extraction | 1 download per PDF | 0 (text extraction only) | 5-15s per paper |
-| Citation network | 2 calls per source (OpenAlex) | 0 (graph analysis) | 3-10s total |
-| Methodology assessment | 0 | 1 per academic source (batched) | 15-30s total |
-| Scite enrichment | 1 MCP call per source with DOI | 0 | 5-15s total |
-| Consensus queries | 1 MCP call per yes/no question | 0 | 3-10s per query |
-| CORE search | 1 per search query | 0 | 1-3s per query |
+| Feature | API Calls | LLM Calls | Added Latency | Trigger |
+|---------|-----------|-----------|---------------|---------|
+| PDF extraction | 1 download per PDF | 0 (text extraction only) | 5-15s per paper | Automatic (profile-gated) |
+| Citation network | 2 calls per source (OpenAlex) | 0 (graph analysis) | 5-20s total | **User-triggered** |
+| Methodology assessment | 0 | 1 per academic source (batched) | 15-30s total | Automatic (experimental, profile-gated) |
+| MCP bridge | 1 call per operation | 0 | 3-10s per call | **Contingent on validation** |
+| CORE search | 1 per search query | 0 | 1-3s per query | Automatic (profile-gated) |
+
+### Testing Budget
+
+| Item | Impl LOC | Test LOC | Test Focus |
+|------|----------|----------|------------|
+| 1. PDF Analysis (extend) | ~150-200 | ~80-120 | Section detection, prioritization, routing |
+| 2. Citation Network | ~400-500 | ~100-140 | Graph building, role classification, action handler |
+| 3. Methodology (experimental) | ~250-350 | ~80-100 | LLM extraction parsing, synthesis injection |
+| 4. MCP Bridge (contingent) | ~300-400 | ~100-140 | Connection, tool discovery, error handling |
+| 5. CORE Provider | ~150-200 | ~60-80 | Search, full text, rate limiting |
+| **Total** | **~1250-1650** | **~420-580** | |
+
+Note: Item 4 LOC estimate is contingent — if no MCP servers validate, this is 0 LOC.
 
 ### File Impact Summary
 
 | File | Type | Items |
 |------|------|-------|
-| `providers/pdf_extract.py` | **New** | 1 |
+| `pdf_extractor.py` | **Extend** (not new!) | 1 (section detection, prioritized extraction) |
 | `phases/topic_research.py` | Modify | 1 (PDF extraction routing) |
 | `document_digest/digestor.py` | Modify | 1 (page-aware digest) |
 | `phases/citation_network.py` | **New** | 2 |
-| `models/deep_research.py` | Modify | 2 (CitationNetwork), 3 (MethodologyAssessment in state) |
+| `models/deep_research.py` | Modify | 2 (CitationNetwork) — via ResearchExtensions |
 | `models/sources.py` | Modify | 3 (StudyDesign, MethodologyAssessment) |
 | `phases/methodology_assessment.py` | **New** | 3 |
 | `phases/synthesis.py` | Modify | 3 (assessment injection into prompt) |
-| `providers/mcp_bridge.py` | **New** | 4 |
+| `handlers_deep_research.py` | Modify | 2 (network action), 5 (export if needed) |
+| `providers/mcp_bridge.py` | **New** (contingent) | 4 |
 | `providers/core_oa.py` | **New** | 5 |
 | `config/research.py` | Modify | All (new config fields) |
 
-### Dependency Graph
+### Dependency Graph (Revised)
 
 ```
-[1. PDF Extraction]─────────────────────────────────────────┐
-    (depends on PLAN-2 Unpaywall for DOI→PDF resolution)     │
+[1. PDF Analysis]───────────────────────────────────────────┐
+    Extends existing pdf_extractor.py                        │
+    Enhanced by: PLAN-2 item 1 (OpenAlex oa_url)             │
                                                               │
-[2. Citation Network]───────────────────────────────────────┤
-    (depends on PLAN-2 OpenAlex/OpenCitations providers)     │
+[2. Citation Network] (USER-TRIGGERED)──────────────────────┤
+    Depends on: PLAN-2 item 1 (OpenAlex)                     │
+    Enhanced by: PLAN-2 item 4 (OpenCitations)               │
                                                               │
-[3. Methodology Assessment]─────────────────────────────────┤
-    (independent, but better with item 1 for full-text)      │
+[3. Methodology Assessment] (EXPERIMENTAL)──────────────────┤
+    Independent. Better with item 1 for full-text.           │
+    No numeric scoring — qualitative metadata only.          │
                                                               │
-[4. MCP Bridge + Scite/Consensus/PubMed]────────────────────┤
-    (independent infrastructure)                              │
+[4. MCP Bridge] (CONTINGENT — requires server validation)───┤
+    Blocked until validation gate passes.                     │
                                                               │
 [5. CORE Provider]──────────────────────────────────────────┘
-    (independent)
+    Independent.
 ```
 
-All items are largely independent. Item 3 produces better results when item 1 (PDF extraction) is available (full text vs. abstract-only assessment).
+Items 1, 3, and 5 can proceed independently. Item 2 is user-triggered (not automatic). Item 4 is gated on validation.

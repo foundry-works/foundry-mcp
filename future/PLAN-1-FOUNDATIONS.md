@@ -2,9 +2,11 @@
 
 > **Goal**: Establish the structural foundations that all subsequent plans build on — research profiles (replacing the monolithic `research_mode`), a provenance audit trail (addressing reproducibility), and the core academic output improvements (literature review synthesis, APA citations, structured output).
 >
-> **Estimated scope**: ~1000-1400 LOC across 10-14 files
+> **Estimated scope**: ~1000-1400 LOC implementation + ~400-550 LOC tests across 10-14 files
 >
-> **Dependencies**: None (all changes build on existing code)
+> **Dependencies**: PLAN-0 (ResearchExtensions container model, supervision.py refactoring)
+>
+> **Note on state model**: All new state fields (`research_profile`, `provenance`, `structured_output`) are stored on `state.extensions` (introduced in PLAN-0 item 2), not directly on `DeepResearchState`. Convenience property accessors on the state object keep downstream code clean.
 
 ---
 
@@ -80,14 +82,16 @@ class ResearchProfile(BaseModel):
 
 Add `ResearchProfile` as defined above, after the existing `DeepResearchPhase` enum.
 
-#### 1b. Add profile field to DeepResearchState
+#### 1b. Add profile field to ResearchExtensions
 
 ```python
-# In DeepResearchState (after research_mode field):
-research_profile: ResearchProfile = Field(
-    default_factory=ResearchProfile,
-    description="Active research profile for this session",
-)
+# In ResearchExtensions (PLAN-0 item 2):
+research_profile: Optional[ResearchProfile] = None
+
+# Convenience accessor on DeepResearchState:
+@property
+def research_profile(self) -> ResearchProfile:
+    return self.extensions.research_profile or ResearchProfile()
 ```
 
 **File: `src/foundry_mcp/config/research.py`**
@@ -217,16 +221,19 @@ class ProvenanceLog(BaseModel):
 
 Add `ProvenanceEntry` and `ProvenanceLog` models as defined above.
 
-#### 2b. Add provenance field to DeepResearchState
+#### 2b. Add provenance field to ResearchExtensions
 
 ```python
-# In DeepResearchState:
-provenance: ProvenanceLog = Field(
-    default_factory=lambda: ProvenanceLog(session_id="", query="", profile="general", profile_config={}, started_at=""),
-    description="Audit trail of research decisions and actions",
-    exclude=True,  # Excluded from default serialization to keep state compact
-)
+# In ResearchExtensions (PLAN-0 item 2):
+provenance: Optional[ProvenanceLog] = None
+
+# Convenience accessor on DeepResearchState:
+@property
+def provenance(self) -> Optional[ProvenanceLog]:
+    return self.extensions.provenance
 ```
+
+Provenance is persisted separately (item 2g) and excluded from main state serialization via the extensions container's `exclude_none` behavior.
 
 #### 2c. Initialize provenance at session creation
 
@@ -248,16 +255,16 @@ state.provenance.append(
 )
 ```
 
-**File: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`**
+**Files: `phases/supervision_delegation.py`, `phases/supervision_coverage.py`** (refactored in PLAN-0)
 
 #### 2e. Log supervision events
 
-Instrument the following points:
-1. After `_generate_delegation_response()` — log `decomposition` event with directives
+Instrument the following points (in refactored modules from PLAN-0 item 1):
+1. In `supervision_delegation.py`: after delegation response — log `decomposition` event with directives
 2. In topic researcher after each provider search — log `provider_query` event
 3. When sources are added to state — log `source_discovered` event
 4. When deduplication occurs — log `source_deduplicated` event
-5. After `_assess_coverage_heuristic()` — log `coverage_assessment` with scores and decision
+5. In `supervision_coverage.py`: after `_assess_coverage_heuristic()` — log `coverage_assessment` with scores and decision
 6. When gaps are added — log `gap_identified`
 7. When gaps are resolved — log `gap_resolved`
 8. At end of each supervision round — log `iteration_complete`
@@ -598,7 +605,8 @@ Add `_build_structured_output()` method that transforms state into the structure
 #### 6c. Include structured output in report response
 
 ```python
-response["structured"] = state.structured_output.model_dump() if state.structured_output else None
+structured = state.extensions.structured_output
+response["structured"] = structured.model_dump() if structured else None
 ```
 
 This is always present in the response. Consumers that want just the report ignore it; consumers that want structured data use it.
@@ -613,16 +621,30 @@ This is always present in the response. Consumers that want just the report igno
 
 ---
 
+## Testing Budget
+
+| Item | Impl LOC | Test LOC | Test Focus |
+|------|----------|----------|------------|
+| 1. Research Profiles | ~200-250 | ~120-150 | Profile resolution, backward compat, config loading |
+| 2. Provenance Audit Trail | ~300-400 | ~100-130 | Append, serialize, persist, load |
+| 3. Literature Review Query Type | ~100-150 | ~60-80 | Classification patterns, no regression |
+| 4. APA Citations | ~150-200 | ~80-100 | Format variants, metadata completeness |
+| 5. Academic Brief Enrichment | ~100-150 | ~40-50 | Prompt injection, profile gating |
+| 6. Structured Output | ~150-200 | ~50-70 | Transform, serialize, response inclusion |
+| **Total** | **~1000-1350** | **~450-580** | |
+
 ## File Impact Summary
 
 | File | Change Type | Items |
 |------|-------------|-------|
-| `models/deep_research.py` | Modify | 1 (ResearchProfile), 2 (ProvenanceLog), 6 (StructuredResearchOutput) |
+| `models/deep_research.py` | Modify | 1 (ResearchProfile), 2 (ProvenanceLog), 6 (StructuredResearchOutput) — all via ResearchExtensions |
 | `config/research.py` | Modify | 1 (profile registry, default profile) |
 | `phases/synthesis.py` | Modify | 3 (literature_review type), 6 (structured output) |
 | `phases/_citation_postprocess.py` | Modify | 4 (APA formatting) |
 | `phases/brief.py` | Modify | 5 (profile-aware brief) |
-| `phases/supervision.py` | Modify | 2 (provenance logging), 5 (profile-aware decomposition) |
+| `phases/supervision_delegation.py` | Modify | 2 (provenance logging) — refactored in PLAN-0 |
+| `phases/supervision_coverage.py` | Modify | 2 (provenance logging) — refactored in PLAN-0 |
+| `phases/supervision_first_round.py` | Modify | 5 (profile-aware decomposition) — refactored in PLAN-0 |
 | `phases/topic_research.py` | Modify | 2 (provenance logging for provider queries) |
 | `memory.py` | Modify | 2 (provenance persistence) |
 | `handlers_deep_research.py` | Modify | 1 (profile parameter), 2 (provenance endpoint), 6 (structured output in response) |
@@ -631,15 +653,17 @@ This is always present in the response. Consumers that want just the report igno
 ## Dependency Graph
 
 ```
-[1. Research Profiles]
+[PLAN-0: Prerequisites]
        │
-       ├──▶ [3. Literature Review Query Type] (uses profile.synthesis_template)
-       ├──▶ [4. APA Citations] (uses profile.citation_style)
-       ├──▶ [5. Academic Brief Enrichment] (uses profile fields)
+       ├──▶ [1. Research Profiles]
+       │           │
+       │           ├──▶ [3. Literature Review Query Type] (uses profile.synthesis_template)
+       │           ├──▶ [4. APA Citations] (uses profile.citation_style)
+       │           ├──▶ [5. Academic Brief Enrichment] (uses profile fields)
        │
-[2. Provenance Audit Trail] (independent, can be done in parallel with 1)
+       ├──▶ [2. Provenance Audit Trail] (independent, can be done in parallel with 1)
        │
-[6. Structured Output Mode] (independent, can be done in parallel with 1-5)
+       └──▶ [6. Structured Output Mode] (independent, can be done in parallel with 1-5)
 ```
 
-Items 1, 2, and 6 are independent foundations. Items 3-5 depend on item 1 (profiles) for configuration.
+Items 1, 2, and 6 are independent foundations (all require PLAN-0). Items 3-5 depend on item 1 (profiles) for configuration.

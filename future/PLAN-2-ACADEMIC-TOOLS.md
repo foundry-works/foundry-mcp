@@ -2,9 +2,11 @@
 
 > **Goal**: Expand the research pipeline's academic capabilities with citation graph tools, new academic providers (OpenAlex, Unpaywall, Crossref, OpenCitations), adaptive provider selection from the brief phase, and strategic research primitives that improve how topic researchers navigate the literature.
 >
-> **Estimated scope**: ~1500-2000 LOC across 12-16 files
+> **Estimated scope**: ~1500-2000 LOC implementation + ~600-800 LOC tests (including mock fixtures) across 12-16 files
 >
-> **Dependencies**: PLAN-1 item 1 (Research Profiles) for profile-driven provider selection
+> **Dependencies**: PLAN-0 (supervision refactoring), PLAN-1 item 1 (Research Profiles) for profile-driven provider selection
+>
+> **Provider tiers**: Providers are split into **Tier 1** (OpenAlex — highest value, free, broad index) and **Tier 2** (Unpaywall, Crossref, OpenCitations — optional enrichment). Tier 1 is implemented first and is the only hard dependency for items 5-7. Tier 2 providers enhance but are not required.
 
 ---
 
@@ -17,11 +19,11 @@
 
 ---
 
-## 1. OpenAlex Provider
+## 1. OpenAlex Provider (Tier 1 — Required)
 
 ### Why First
 
-OpenAlex is the single most impactful provider addition. It covers discovery, citations, full-text PDF links, and metadata enrichment in one API. Its index (450M+ works) is the broadest available, it's completely free (CC0), and its API is designed for programmatic consumption.
+OpenAlex is the single most impactful provider addition. It covers discovery, citations, full-text PDF links, and metadata enrichment in one API. Its index (450M+ works) is the broadest available, it's completely free (CC0), and its API is designed for programmatic consumption. **This is the only provider that items 5-7 depend on.** Tier 2 providers enhance results but are not blocking.
 
 ### API Details
 
@@ -153,11 +155,11 @@ ERROR_CLASSIFIERS = {
 
 ---
 
-## 2. Unpaywall Provider
+## 2. Unpaywall Provider (Tier 2 — Optional Enrichment)
 
 ### Why Second
 
-Single-endpoint, zero-complexity addition that directly unlocks PDF access for PLAN-4's full-text analysis. One DOI in, best open-access PDF URL out.
+Single-endpoint, zero-complexity addition that directly unlocks PDF access for PLAN-4's full-text analysis. One DOI in, best open-access PDF URL out. **Optional**: OpenAlex also provides `open_access.oa_url` for many papers, so Unpaywall is a complementary fallback for broader OA coverage.
 
 ### API Details
 
@@ -214,11 +216,11 @@ class UnpaywallProvider:
 
 ---
 
-## 3. Crossref Provider
+## 3. Crossref Provider (Tier 2 — Optional Enrichment)
 
 ### Why Third
 
-Authoritative metadata enrichment. When Semantic Scholar or OpenAlex metadata is incomplete (missing volume, issue, pages for APA formatting), Crossref is the definitive fallback. This directly supports PLAN-1's APA citation formatting.
+Authoritative metadata enrichment. When Semantic Scholar or OpenAlex metadata is incomplete (missing volume, issue, pages for APA formatting), Crossref is the definitive fallback. This directly supports PLAN-1's APA citation formatting. **Optional**: OpenAlex provides sufficient metadata for most APA formatting; Crossref fills gaps for edge cases.
 
 ### API Details
 
@@ -264,11 +266,11 @@ class CrossrefProvider:
 
 ---
 
-## 4. OpenCitations Provider
+## 4. OpenCitations Provider (Tier 2 — Optional Enrichment)
 
 ### Why Fourth
 
-Complete open citation graph with 2B+ DOI-to-DOI links. Unlike Semantic Scholar (citation counts and limited lists), OpenCitations provides the full wiring with metadata about each citation link (date, self-citation flags). This is essential for PLAN-4's citation network feature.
+Complete open citation graph with 2B+ DOI-to-DOI links. Unlike Semantic Scholar (citation counts and limited lists), OpenCitations provides the full wiring with metadata about each citation link (date, self-citation flags). This enriches PLAN-4's citation network feature. **Optional**: OpenAlex's `cites` filter provides citation traversal; OpenCitations adds self-citation metadata and more complete graph edges.
 
 ### API Details
 
@@ -543,7 +545,7 @@ if not profile.providers_explicitly_set:
 
 If the profile explicitly specifies providers, respect that — hints are only for auto-configuration.
 
-**File: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`**
+**File: `phases/supervision_delegation.py`** (refactored in PLAN-0)
 
 #### 7c. Use active providers in delegation
 
@@ -627,37 +629,59 @@ crossref_enabled: bool = True             # Free, on by default
 
 ---
 
+## Testing Budget
+
+| Item | Impl LOC | Test LOC | Test Focus |
+|------|----------|----------|------------|
+| 1. OpenAlex (Tier 1) | ~250-350 | ~150-200 | Mock API responses, metadata mapping, abstract reconstruction, rate limiting |
+| 2. Unpaywall (Tier 2) | ~100-150 | ~60-80 | Mock responses, DOI resolution, enrichment |
+| 3. Crossref (Tier 2) | ~100-150 | ~50-70 | Mock responses, field extraction, enrichment |
+| 4. OpenCitations (Tier 2) | ~80-120 | ~40-60 | Mock responses, self-citation parsing |
+| 5. Citation Graph Tools | ~200-250 | ~100-130 | Tool dispatch, dedup, provider fallback |
+| 6. Strategic Primitives | ~80-100 | ~30-40 | Prompt inclusion, profile gating |
+| 7. Adaptive Selection | ~100-150 | ~60-80 | Hint extraction, provider augmentation |
+| 8. Rate Limiting | ~50-80 | ~30-40 | Config loading, override behavior |
+| **Shared fixtures** | — | ~80-100 | Mock HTTP responses for all 4 APIs |
+| **Total** | **~960-1350** | **~600-800** | |
+
+**Note**: Each new provider requires dedicated mock fixtures (~20-25 LOC each) simulating successful responses, empty results, rate limit errors, and unavailability. These are shared across provider tests and integration tests.
+
 ## File Impact Summary
 
 | File | Type | Items |
 |------|------|-------|
-| `providers/openalex.py` | **New** | 1 |
-| `providers/unpaywall.py` | **New** | 2 |
-| `providers/crossref.py` | **New** | 3 |
-| `providers/opencitations.py` | **New** | 4 |
+| `providers/openalex.py` | **New** (Tier 1) | 1 |
+| `providers/unpaywall.py` | **New** (Tier 2) | 2 |
+| `providers/crossref.py` | **New** (Tier 2) | 3 |
+| `providers/opencitations.py` | **New** (Tier 2) | 4 |
 | `providers/semantic_scholar.py` | Modify | 5 (citation search, recommendations, paper lookup) |
 | `models/deep_research.py` | Modify | 5 (CitationSearchTool, RelatedPapersTool) |
 | `phases/topic_research.py` | Modify | 5 (tool injection, dispatch), 6 (strategic primitives) |
 | `phases/brief.py` | Modify | 7 (provider hint extraction) |
-| `phases/supervision.py` | Modify | 7 (active providers in delegation) |
+| `phases/supervision_delegation.py` | Modify | 7 (active providers in delegation) — refactored in PLAN-0 |
 | `providers/resilience/config.py` | Modify | 8 (rate limits for new providers) |
 | `config/research.py` | Modify | 8 (new provider config fields) |
 
 ## Dependency Graph
 
 ```
+Tier 1 (required):
 [1. OpenAlex Provider]──────────────────────────────────────┐
-[2. Unpaywall Provider]─────────────────────────────────────┤
-[3. Crossref Provider]──────────────────────────────────────┤
-[4. OpenCitations Provider]─────────────────────────────────┤
                                                              │
-[5. Citation Graph Tools] (needs Semantic Scholar changes)──┤
+Tier 2 (optional enrichment, can be deferred):               │
+[2. Unpaywall Provider]─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─┤
+[3. Crossref Provider]─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤
+[4. OpenCitations Provider]─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤
                                                              │
-[6. Strategic Research Primitives] (needs item 5 tools)     │
+[5. Citation Graph Tools] (needs Semantic Scholar + OpenAlex)┤
                                                              │
-[7. Adaptive Provider Selection] (needs items 1-4 registered)
+[6. Strategic Research Primitives] (needs item 5 tools)      │
                                                              │
-[8. Per-Provider Rate Limiting] (parallel with all above)───┘
+[7. Adaptive Provider Selection] (needs item 1; enhanced by 2-4)
+                                                             │
+[8. Per-Provider Rate Limiting] (parallel with all above)────┘
 ```
 
-Items 1-4 (providers) and 8 (rate limiting) can be developed in parallel. Item 5 (tools) depends on Semantic Scholar changes. Item 6 (primitives) depends on item 5. Item 7 (adaptive selection) depends on items 1-4 being registered.
+**Tier 1 critical path**: Item 1 (OpenAlex) → Items 5, 7 → Item 6. This is the minimum viable academic pipeline.
+
+**Tier 2 providers** (items 2-4) can be added independently at any point after item 8 (rate limiting config). They enhance results but don't block core functionality. Item 7 (adaptive selection) works with just OpenAlex; Tier 2 providers expand the hint vocabulary.
