@@ -376,7 +376,7 @@ class ResearchConfig:
                 "tavily": 60,
                 "perplexity": 60,
                 "google": 100,
-                "semantic_scholar": 100,
+                "semantic_scholar": 20,  # ~20 req/min unauthenticated
             },
         )
         if isinstance(per_provider_rate_limits, dict):
@@ -573,8 +573,11 @@ class ResearchConfig:
     def deep_research_topic_max_searches(self, value: int) -> None:
         self.deep_research_topic_max_tool_calls = value
 
+    _VALID_DEEP_RESEARCH_MODES: ClassVar[frozenset] = frozenset({"general", "academic", "technical"})
+
     def __post_init__(self) -> None:
         """Validate configuration fields after initialization."""
+        self._validate_deep_research_mode()
         self._validate_supervision_config()
         self._validate_tavily_config()
         self._validate_perplexity_config()
@@ -582,6 +585,15 @@ class ResearchConfig:
         self._validate_status_persistence_config()
         self._validate_audit_verbosity_config()
         self._validate_digest_config()
+
+    def _validate_deep_research_mode(self) -> None:
+        """Validate deep_research_mode is one of the allowed values."""
+        if self.deep_research_mode not in self._VALID_DEEP_RESEARCH_MODES:
+            raise ValueError(
+                f"deep_research_mode must be one of "
+                f"{sorted(self._VALID_DEEP_RESEARCH_MODES)}, "
+                f"got {self.deep_research_mode!r}"
+            )
 
     def _validate_supervision_config(self) -> None:
         """Validate deep research supervision configuration fields.

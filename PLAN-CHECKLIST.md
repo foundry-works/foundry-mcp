@@ -102,20 +102,20 @@ Track completion of each fix. Mark `[x]` when implemented and verified.
 
 ## Phase 4 — Config & Data Model Bugs
 
-- [ ] **4.1** Fix `per_provider_rate_limits` default mismatch
-  - [ ] Change `from_toml_dict()` line 379: `"semantic_scholar": 100` → `"semantic_scholar": 20`
-  - [ ] Change `samples/foundry-mcp.toml` line 650: `semantic_scholar = 100` → `semantic_scholar = 20`
-  - [ ] Add unit test: `ResearchConfig()` and `ResearchConfig.from_toml_dict({})` produce same `semantic_scholar` limit
-- [ ] **4.2** Add `deep_research_mode` validation
-  - [ ] Add `_validate_deep_research_mode()` to `__post_init__` chain
-  - [ ] Validate against `{"general", "academic", "technical"}`
-  - [ ] Add unit test: invalid mode raises `ValueError`
-- [ ] **4.3** Add missing Gemini 2.0 model entries
-  - [ ] Add `"gemini-2.0-pro": 1048576` to `model_token_limits.json`
-  - [ ] Add `"gemini-2.0-flash": 1048576` to `model_token_limits.json`
-  - [ ] Add matching entries to `_FALLBACK_MODEL_TOKEN_LIMITS` in `_lifecycle.py`
+- [x] **4.1** Fix `per_provider_rate_limits` default mismatch
+  - [x] Change `from_toml_dict()` line 379: `"semantic_scholar": 100` → `"semantic_scholar": 20`
+  - [x] Change `samples/foundry-mcp.toml` line 650: `semantic_scholar = 100` → `semantic_scholar = 20`
+  - [x] Add unit test: `ResearchConfig()` and `ResearchConfig.from_toml_dict({})` produce same `semantic_scholar` limit
+- [x] **4.2** Add `deep_research_mode` validation
+  - [x] Add `_validate_deep_research_mode()` to `__post_init__` chain
+  - [x] Validate against `{"general", "academic", "technical"}`
+  - [x] Add unit test: invalid mode raises `ValueError`
+- [x] **4.3** Add missing Gemini 2.0 model entries
+  - [x] Add `"gemini-2.0-pro": 1048576` to `model_token_limits.json`
+  - [x] Add `"gemini-2.0-flash": 1048576` to `model_token_limits.json`
+  - [x] Add matching entries to `_FALLBACK_MODEL_TOKEN_LIMITS` in `_lifecycle.py`
 
-**Verification:** `pytest tests/unit/test_config_supervision.py tests/core/research/workflows/test_model_routing.py -x -q`
+**Verification:** `pytest tests/unit/test_config_supervision.py tests/core/research/workflows/test_model_routing.py tests/unit/test_config_phase4.py -x -q` → 97 passed
 
 ---
 

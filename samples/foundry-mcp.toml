@@ -647,7 +647,7 @@ content_archive_ttl_hours = 168
 [research.per_provider_rate_limits]
 tavily = 60
 perplexity = 60
-semantic_scholar = 100
+semantic_scholar = 20
 
 # -----------------------------------------------------------------------------
 # Tavily Search Provider Configuration
