@@ -45,26 +45,26 @@ Track completion of each fix. Mark `[x]` when implemented and verified.
 
 ## Phase 2 — Security: Sanitization Consistency
 
-- [ ] **2.1** Sanitize `state.original_query` in supervision prompt builders
-  - [ ] `_build_delegation_user_prompt`: wrap `state.original_query` in `sanitize_external_content()`
-  - [ ] `_build_combined_think_delegate_user_prompt`: same
-  - [ ] `_build_first_round_think_prompt`: same
-  - [ ] `_build_first_round_delegation_user_prompt`: same
-  - [ ] `_build_critique_user_prompt`: same
-  - [ ] `_build_revision_user_prompt`: same
-  - [ ] `_build_think_prompt`: same
-  - [ ] Also sanitize `state.research_brief` where interpolated in supervision prompts
-  - [ ] Also sanitize `state.system_prompt` where interpolated in supervision prompts
-- [ ] **2.2** Sanitize `state.original_query` in planning prompt builders
-  - [ ] `_build_brief_refinement_prompt` (line 357): wrap `state.original_query`
-  - [ ] `_build_brief_refinement_prompt` (lines 361, 365-366): wrap `state.system_prompt` and constraints
-  - [ ] `_build_planning_user_prompt` (line 386): wrap `state.research_brief`
-  - [ ] `_build_planning_user_prompt` (line 400): wrap `state.system_prompt`
-  - [ ] `_build_decomposition_critique_prompt` (line 535): wrap `state.research_brief or state.original_query`
-- [ ] **2.3** Sanitize second-order injection vectors in supervision
-  - [ ] Sanitize `entry['query']` in `_build_delegation_user_prompt` coverage section (line 1640)
-  - [ ] Sanitize `entry['query']` in `_build_combined_think_delegate_user_prompt` (line 950)
-  - [ ] Sanitize `d.research_topic` in "Previously Executed Directives" (lines 1683, 962)
+- [x] **2.1** Sanitize `state.original_query` in supervision prompt builders
+  - [x] `_build_delegation_user_prompt`: wrap `state.original_query` in `sanitize_external_content()`
+  - [x] `_build_combined_think_delegate_user_prompt`: same
+  - [x] `_build_first_round_think_prompt`: same
+  - [x] `_build_first_round_delegation_user_prompt`: same
+  - [x] `_build_critique_user_prompt`: same
+  - [x] `_build_revision_user_prompt`: same
+  - [x] `_build_think_prompt`: same
+  - [x] Also sanitize `state.research_brief` where interpolated in supervision prompts
+  - [x] Also sanitize `state.system_prompt` where interpolated in supervision prompts
+- [x] **2.2** Sanitize `state.original_query` in planning prompt builders
+  - [x] `_build_brief_refinement_prompt` (line 357): wrap `state.original_query`
+  - [x] `_build_brief_refinement_prompt` (lines 361, 365-366): wrap `state.system_prompt` and constraints
+  - [x] `_build_planning_user_prompt` (line 386): wrap `state.research_brief`
+  - [x] `_build_planning_user_prompt` (line 400): wrap `state.system_prompt`
+  - [x] `_build_decomposition_critique_prompt` (line 535): wrap `state.research_brief or state.original_query`
+- [x] **2.3** Sanitize second-order injection vectors in supervision
+  - [x] Sanitize `entry['query']` in `_build_delegation_user_prompt` coverage section (line 1640)
+  - [x] Sanitize `entry['query']` in `_build_combined_think_delegate_user_prompt` (line 950)
+  - [x] Sanitize `d.research_topic` in "Previously Executed Directives" (lines 1683, 962)
 
 **Verification:** `pytest tests/core/research/workflows/deep_research/test_sanitize_external_content.py -x -q`
 

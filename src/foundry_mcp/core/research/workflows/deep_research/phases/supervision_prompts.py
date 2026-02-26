@@ -154,14 +154,14 @@ def build_combined_think_delegate_user_prompt(
 ) -> str:
     """Build user prompt for the combined think+delegate step."""
     parts = [
-        f"# Research Query\n{state.original_query}",
+        f"# Research Query\n{sanitize_external_content(state.original_query)}",
         "",
     ]
 
     if state.research_brief and state.research_brief != state.original_query:
         parts.extend([
             "## Research Brief",
-            state.research_brief,
+            sanitize_external_content(state.research_brief),
             "",
         ])
 
@@ -192,7 +192,7 @@ def build_combined_think_delegate_user_prompt(
     if coverage_data:
         parts.append("## Current Research Coverage")
         for entry in coverage_data:
-            parts.append(f"\n### {entry['query']}")
+            parts.append(f"\n### {sanitize_external_content(entry['query'])}")
             parts.append(f"**Sources:** {entry['source_count']} | **Domains:** {entry['unique_domains']}")
             if entry.get("compressed_findings_excerpt"):
                 parts.append(f"**Key findings:**\n{entry['compressed_findings_excerpt']}")
@@ -204,7 +204,7 @@ def build_combined_think_delegate_user_prompt(
     if state.directives:
         parts.append("## Previously Executed Directives (DO NOT repeat)")
         for d in state.directives[-10:]:
-            parts.append(f"- [P{d.priority}] {d.research_topic[:120]}")
+            parts.append(f"- [P{d.priority}] {sanitize_external_content(d.research_topic[:120])}")
         parts.append("")
 
     parts.extend([
@@ -285,14 +285,14 @@ def build_delegation_user_prompt(
         User prompt string
     """
     parts = [
-        f"# Research Query\n{state.original_query}",
+        f"# Research Query\n{sanitize_external_content(state.original_query)}",
         "",
     ]
 
     if state.research_brief and state.research_brief != state.original_query:
         parts.extend([
             "## Research Brief",
-            state.research_brief,
+            sanitize_external_content(state.research_brief),
             "",
         ])
 
@@ -335,7 +335,7 @@ def build_delegation_user_prompt(
     if coverage_data:
         parts.append("## Current Research Coverage")
         for entry in coverage_data:
-            parts.append(f"\n### {entry['query']}")
+            parts.append(f"\n### {sanitize_external_content(entry['query'])}")
             parts.append(f"**Sources:** {entry['source_count']} | **Domains:** {entry['unique_domains']}")
             if entry.get("compressed_findings_excerpt"):
                 parts.append(f"**Key findings:**\n{entry['compressed_findings_excerpt']}")
@@ -379,7 +379,7 @@ def build_delegation_user_prompt(
     if state.directives:
         parts.append("## Previously Executed Directives (DO NOT repeat)")
         for d in state.directives[-10:]:  # Last 10 for context
-            parts.append(f"- [P{d.priority}] {d.research_topic[:120]}")
+            parts.append(f"- [P{d.priority}] {sanitize_external_content(d.research_topic[:120])}")
         parts.append("")
 
     parts.extend([
@@ -442,20 +442,20 @@ def build_first_round_think_prompt(state: DeepResearchState) -> str:
     """
     parts = [
         "# Research Decomposition Strategy\n",
-        f"**Research Query:** {state.original_query}\n",
+        f"**Research Query:** {sanitize_external_content(state.original_query)}\n",
     ]
 
     if state.research_brief and state.research_brief != state.original_query:
-        parts.append(f"**Research Brief:**\n{state.research_brief}\n")
+        parts.append(f"**Research Brief:**\n{sanitize_external_content(state.research_brief)}\n")
 
     if state.clarification_constraints:
         parts.append("**Clarification Constraints:**")
         for key, value in state.clarification_constraints.items():
-            parts.append(f"- {key}: {value}")
+            parts.append(f"- {key}: {sanitize_external_content(str(value))}")
         parts.append("")
 
     if state.system_prompt:
-        parts.append(f"**Additional Context:** {state.system_prompt}\n")
+        parts.append(f"**Additional Context:** {sanitize_external_content(state.system_prompt)}\n")
 
     parts.append(f"**Date:** {datetime.now(timezone.utc).strftime('%Y-%m-%d')}\n")
 
@@ -539,27 +539,27 @@ def build_first_round_delegation_user_prompt(
         User prompt string
     """
     parts = [
-        f"# Research Query\n{state.original_query}",
+        f"# Research Query\n{sanitize_external_content(state.original_query)}",
         "",
     ]
 
     if state.research_brief and state.research_brief != state.original_query:
         parts.extend([
             "## Research Brief",
-            state.research_brief,
+            sanitize_external_content(state.research_brief),
             "",
         ])
 
     if state.clarification_constraints:
         parts.append("## Clarification Constraints")
         for key, value in state.clarification_constraints.items():
-            parts.append(f"- {key}: {value}")
+            parts.append(f"- {key}: {sanitize_external_content(str(value))}")
         parts.append("")
 
     if state.system_prompt:
         parts.extend([
             "## Additional Context",
-            state.system_prompt,
+            sanitize_external_content(state.system_prompt),
             "",
         ])
 
@@ -634,7 +634,7 @@ def build_critique_user_prompt(
         directives_json: JSON string of the initial directives
     """
     return "\n".join([
-        f"# Original Research Query\n{state.original_query}",
+        f"# Original Research Query\n{sanitize_external_content(state.original_query)}",
         "",
         "# Directives to Critique",
         directives_json,
@@ -690,7 +690,7 @@ def build_revision_user_prompt(
         critique_text: Critique feedback from call 2
     """
     return "\n".join([
-        f"# Original Research Query\n{state.original_query}",
+        f"# Original Research Query\n{sanitize_external_content(state.original_query)}",
         "",
         "# Current Directives",
         directives_json,
@@ -740,11 +740,11 @@ def build_think_prompt(
     """
     parts = [
         f"# Research Gap Analysis\n",
-        f"**Original Query:** {state.original_query}\n",
+        f"**Original Query:** {sanitize_external_content(state.original_query)}\n",
     ]
 
     if state.research_brief:
-        brief_excerpt = state.research_brief[:500]
+        brief_excerpt = sanitize_external_content(state.research_brief[:500])
         parts.append(f"**Research Brief:** {brief_excerpt}\n")
 
     parts.append(f"**Iteration:** {state.iteration}/{state.max_iterations}")
@@ -766,7 +766,7 @@ def build_think_prompt(
     if coverage_data:
         parts.append("## Per-Sub-Query Coverage\n")
         for entry in coverage_data:
-            parts.append(f"### {entry['query']}")
+            parts.append(f"### {sanitize_external_content(entry['query'])}")
             parts.append(f"- **Status:** {entry['status']}")
             parts.append(f"- **Sources found:** {entry['source_count']}")
             qd = entry["quality_distribution"]
@@ -898,7 +898,7 @@ def build_supervision_user_prompt(
         User prompt string
     """
     prompt_parts = [
-        f"# Research Query\n{state.original_query}",
+        f"# Research Query\n{sanitize_external_content(state.original_query)}",
         "",
     ]
 
@@ -906,7 +906,7 @@ def build_supervision_user_prompt(
     if state.research_brief and state.research_brief != state.original_query:
         prompt_parts.extend([
             "## Research Brief (scope boundaries for coverage assessment)",
-            state.research_brief,
+            sanitize_external_content(state.research_brief),
             "",
         ])
 
@@ -926,7 +926,7 @@ def build_supervision_user_prompt(
         prompt_parts.append("## Per-Query Coverage")
         for entry in coverage_data:
             prompt_parts.append(f"\n### Sub-Query: {entry['sub_query_id']}")
-            prompt_parts.append(f"**Query:** {entry['query']}")
+            prompt_parts.append(f"**Query:** {sanitize_external_content(entry['query'])}")
             prompt_parts.append(f"**Status:** {entry['status']}")
             prompt_parts.append(f"**Sources:** {entry['source_count']}")
             qd = entry["quality_distribution"]

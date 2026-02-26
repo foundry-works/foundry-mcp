@@ -14,6 +14,7 @@ from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research._helpers import (
     extract_json,
+    sanitize_external_content,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
     execute_llm_call,
@@ -354,16 +355,16 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             "3. Bias toward primary and official sources (specifications, documentation, "
             "peer-reviewed work, government datasets) over aggregators or secondary commentary.",
             "4. Output ONLY the research brief paragraph, nothing else.\n",
-            f"User query:\n{state.original_query}",
+            f"User query:\n{sanitize_external_content(state.original_query)}",
         ]
 
         if state.system_prompt:
-            parts.append(f"\nAdditional context provided by the user:\n{state.system_prompt}")
+            parts.append(f"\nAdditional context provided by the user:\n{sanitize_external_content(state.system_prompt)}")
 
         if state.clarification_constraints:
             parts.append("\nClarification constraints (already confirmed with the user):")
             for key, value in state.clarification_constraints.items():
-                parts.append(f"- {key}: {value}")
+                parts.append(f"- {key}: {sanitize_external_content(str(value))}")
 
         return "\n".join(parts)
 
@@ -381,7 +382,9 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             User prompt string
         """
         # Prefer the refined brief; fall back to original query if unset.
-        query_input = state.research_brief or state.original_query
+        query_input = sanitize_external_content(
+            state.research_brief or state.original_query
+        )
 
         prompt = f"""Research Query: {query_input}
 
@@ -397,13 +400,13 @@ Generate the research plan as JSON."""
 
         # Add custom system prompt context if provided
         if state.system_prompt:
-            prompt += f"\n\nAdditional context: {state.system_prompt}"
+            prompt += f"\n\nAdditional context: {sanitize_external_content(state.system_prompt)}"
 
         # Add clarification constraints if available (from clarification phase)
         if state.clarification_constraints:
             prompt += "\n\nClarification constraints (use these to focus the research):"
             for key, value in state.clarification_constraints.items():
-                prompt += f"\n- {key}: {value}"
+                prompt += f"\n- {key}: {sanitize_external_content(str(value))}"
 
         return prompt
 
@@ -532,7 +535,7 @@ Generate the research plan as JSON."""
             Critique prompt string
         """
         parts: list[str] = [
-            f"# Research Brief\n{state.research_brief or state.original_query}\n",
+            f"# Research Brief\n{sanitize_external_content(state.research_brief or state.original_query)}\n",
             "# Generated Sub-Queries\n",
         ]
 
