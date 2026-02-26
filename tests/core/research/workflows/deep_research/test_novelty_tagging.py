@@ -332,9 +332,11 @@ def _make_state_with_existing_sources(
     existing_sources: list[ResearchSource] | None = None,
 ) -> DeepResearchState:
     """Create a state with pre-existing sources for a sub-query."""
-    state = DeepResearchState(
+    from tests.core.research.workflows.deep_research.conftest import make_test_state
+
+    state = make_test_state(
         id="deepres-test-novelty",
-        original_query="test query",
+        query="test query",
         research_brief="Test brief",
         max_sources_per_query=10,
     )

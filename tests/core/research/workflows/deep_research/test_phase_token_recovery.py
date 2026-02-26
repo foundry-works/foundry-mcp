@@ -63,36 +63,16 @@ def _make_state(
     sources_per_query: int = 3,
 ) -> DeepResearchState:
     """Create a DeepResearchState with sub-queries and sources for testing."""
-    state = DeepResearchState(
+    from tests.core.research.workflows.deep_research.conftest import make_test_state
+
+    return make_test_state(
         id="deepres-token-recovery",
-        original_query=query,
+        query=query,
         research_brief="Detailed investigation of renewable energy benefits",
         phase=phase,
-        iteration=1,
-        max_iterations=3,
-        max_sources_per_query=5,
+        num_sub_queries=num_sub_queries,
+        sources_per_query=sources_per_query,
     )
-    for i in range(num_sub_queries):
-        sq = SubQuery(
-            id=f"sq-{i}",
-            query=f"Sub-query {i}: {query}",
-            rationale=f"Rationale {i}",
-            priority=i + 1,
-            status="completed",
-        )
-        state.sub_queries.append(sq)
-        for j in range(sources_per_query):
-            src = ResearchSource(
-                id=f"src-{i}-{j}",
-                title=f"Source {j} for sq-{i}",
-                url=f"https://example{j}.com/sq-{i}/{j}",
-                content=f"Content about topic sq-{i}, finding {j}.",
-                quality=SourceQuality.HIGH if j == 0 else SourceQuality.MEDIUM,
-                source_type=SourceType.WEB,
-                sub_query_id=sq.id,
-            )
-            state.append_source(src)
-    return state
 
 
 def _make_topic_result(

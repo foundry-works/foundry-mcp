@@ -58,45 +58,19 @@ def _make_state(
     max_supervision_rounds: int = 3,
 ) -> DeepResearchState:
     """Create a DeepResearchState pre-populated for supervision tests."""
-    state = DeepResearchState(
+    from tests.core.research.workflows.deep_research.conftest import make_test_state
+
+    return make_test_state(
         id="deepres-supervision-test",
-        original_query=query,
+        query=query,
         research_brief="Investigating deep learning fundamentals",
         phase=phase,
-        iteration=1,
-        max_iterations=3,
+        num_sub_queries=num_completed,
+        num_pending_sub_queries=num_pending,
+        sources_per_query=sources_per_query,
         supervision_round=supervision_round,
         max_supervision_rounds=max_supervision_rounds,
     )
-    for i in range(num_completed):
-        sq = SubQuery(
-            id=f"sq-{i}",
-            query=f"Sub-query {i}: aspect {i} of deep learning",
-            status="completed",
-            priority=1,
-        )
-        state.sub_queries.append(sq)
-        for j in range(sources_per_query):
-            state.sources.append(
-                ResearchSource(
-                    id=f"src-{i}-{j}",
-                    url=f"https://example{j}.com/article-{i}",
-                    title=f"Source {i}-{j}",
-                    source_type=SourceType.WEB,
-                    quality=SourceQuality.HIGH if j == 0 else SourceQuality.MEDIUM,
-                    sub_query_id=sq.id,
-                )
-            )
-    for i in range(num_pending):
-        state.sub_queries.append(
-            SubQuery(
-                id=f"sq-pending-{i}",
-                query=f"Pending query {i}",
-                status="pending",
-                priority=2,
-            )
-        )
-    return state
 
 
 class StubSupervision(SupervisionPhaseMixin, LegacySupervisionMixin):
@@ -336,7 +310,7 @@ class TestSupervisionParsing:
                 "overall_coverage": "partial",
                 "per_query_assessment": [],
                 "follow_up_queries": [
-                    {"query": "SUB-QUERY 0: ASPECT 0 OF DEEP LEARNING", "rationale": "dup"},
+                    {"query": "SUB-QUERY 0: ASPECT 0 OF THE TOPIC", "rationale": "dup"},
                     {"query": "Brand new query about GANs", "rationale": "new"},
                     {"query": "Brand new query about GANs", "rationale": "within-batch dup"},
                 ],
@@ -4609,3 +4583,223 @@ class TestShouldExitHeuristicPure:
         assert should_exit is False
         assert "confidence" in data
         assert data["should_continue_gathering"] is True
+
+
+# ===========================================================================
+# 4B  Wall-clock timeout test
+# ===========================================================================
+
+
+class TestSupervisionWallClockTimeout:
+    """4B: Verify the wall-clock timeout forces early exit from the supervision loop."""
+
+    @pytest.mark.asyncio
+    async def test_wall_clock_timeout_exits_loop_early(self):
+        """With a very short wall-clock timeout, the loop exits before max rounds.
+
+        Verifies:
+        - The supervision loop exits after the timeout fires
+        - Metadata records the wall-clock exit details
+        - Audit event ``supervision_wall_clock_timeout`` is recorded
+        """
+        stub = StubSupervision()
+        # Very short wall-clock timeout (0.0 seconds) so it triggers immediately
+        stub.config.deep_research_supervision_wall_clock_timeout = 0.0
+        stub.config.deep_research_providers = ["tavily"]
+        stub.config.deep_research_topic_max_tool_calls = 5
+
+        # Give the state room to run many rounds if the timeout were absent
+        state = _make_state(
+            num_completed=2,
+            sources_per_query=1,
+            supervision_round=0,
+            max_supervision_rounds=10,
+        )
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        ):
+            result = await stub._execute_supervision_async(
+                state=state, provider_id="test-provider", timeout=30.0,
+            )
+
+        assert result.success is True
+
+        # Wall-clock exit metadata should be set
+        wall_clock_exit = state.metadata.get("supervision_wall_clock_exit")
+        assert wall_clock_exit is not None, "Expected supervision_wall_clock_exit in metadata"
+        assert "elapsed_seconds" in wall_clock_exit
+        assert "limit_seconds" in wall_clock_exit
+        assert wall_clock_exit["limit_seconds"] == 0.0
+
+        # Audit event should be recorded
+        audit_event_types = [e[0] for e in stub._audit_events]
+        assert "supervision_wall_clock_timeout" in audit_event_types
+
+        # Should NOT have run all 10 rounds
+        assert state.supervision_round < 10
+
+
+# ===========================================================================
+# 4C  All directives fail test
+# ===========================================================================
+
+
+class TestAllDirectivesFail:
+    """4C: Verify graceful degradation when every directive in a batch fails."""
+
+    @pytest.mark.asyncio
+    async def test_all_directives_fail_graceful_degradation(self):
+        """When all directive researchers raise exceptions, the loop degrades gracefully.
+
+        Verifies:
+        - The supervision loop exits without crashing
+        - State is saved
+        - The result indicates success (the supervision phase completes)
+        - History records that no new sources were found (should_continue_gathering=False)
+        """
+        stub = StubSupervision()
+        stub.config.deep_research_providers = ["tavily"]
+        stub.config.deep_research_topic_max_tool_calls = 5
+        state = _make_state(
+            num_completed=2,
+            sources_per_query=1,
+            supervision_round=0,
+            max_supervision_rounds=3,
+        )
+        state.max_sub_queries = 10
+        state.topic_research_results = []
+
+        # Delegation response with directives
+        delegation_response = json.dumps({
+            "research_complete": False,
+            "directives": [
+                {
+                    "research_topic": "Topic A",
+                    "perspective": "technical",
+                    "evidence_needed": "papers",
+                    "priority": 1,
+                },
+                {
+                    "research_topic": "Topic B",
+                    "perspective": "comparative",
+                    "evidence_needed": "benchmarks",
+                    "priority": 2,
+                },
+            ],
+            "rationale": "Need more data",
+        })
+
+        async def mock_execute_llm_call(**kwargs):
+            result = MagicMock()
+            result.result = WorkflowResult(
+                success=True,
+                content=delegation_response,
+                provider_id="test-provider",
+                model_used="test-model",
+                tokens_used=100,
+                duration_ms=500.0,
+            )
+            return result
+
+        # All topic researchers fail
+        async def mock_topic_research_always_fails(**kwargs):
+            raise RuntimeError("Simulated total failure in topic researcher")
+
+        stub._execute_topic_research_async = mock_topic_research_always_fails
+        stub._get_search_provider = MagicMock(return_value=MagicMock())
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+            side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        ):
+            result = await stub._execute_supervision_async(
+                state=state, provider_id="test-provider", timeout=30.0,
+            )
+
+        # Should complete without crashing
+        assert result.success is True
+
+        # State was saved (at least once for post-round bookkeeping)
+        assert stub.memory.save_deep_research.called
+
+        # History should record that no new sources were found
+        history = state.metadata.get("supervision_history", [])
+        assert len(history) > 0
+        # The delegation round should record 0 new sources
+        delegation_entry = next(
+            (h for h in history if h["method"] == "delegation"),
+            None,
+        )
+        assert delegation_entry is not None
+        assert delegation_entry["new_sources"] == 0
+        assert delegation_entry["should_continue_gathering"] is False
+
+    @pytest.mark.asyncio
+    async def test_all_directives_fail_loop_stops(self):
+        """When round yields 0 sources (all failures), the loop terminates."""
+        stub = StubSupervision()
+        stub.config.deep_research_providers = ["tavily"]
+        stub.config.deep_research_topic_max_tool_calls = 5
+        state = _make_state(
+            num_completed=2,
+            sources_per_query=1,
+            supervision_round=0,
+            max_supervision_rounds=5,
+        )
+        state.max_sub_queries = 10
+        state.topic_research_results = []
+
+        delegation_response = json.dumps({
+            "research_complete": False,
+            "directives": [
+                {
+                    "research_topic": "Failing topic",
+                    "perspective": "technical",
+                    "evidence_needed": "none",
+                    "priority": 1,
+                },
+            ],
+            "rationale": "Test",
+        })
+
+        async def mock_execute_llm_call(**kwargs):
+            result = MagicMock()
+            result.result = WorkflowResult(
+                success=True,
+                content=delegation_response,
+                provider_id="test-provider",
+                model_used="test-model",
+                tokens_used=50,
+                duration_ms=100.0,
+            )
+            return result
+
+        async def mock_topic_research_fails(**kwargs):
+            raise RuntimeError("All researchers fail")
+
+        stub._execute_topic_research_async = mock_topic_research_fails
+        stub._get_search_provider = MagicMock(return_value=MagicMock())
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+            side_effect=mock_execute_llm_call,
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
+        ), patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        ):
+            result = await stub._execute_supervision_async(
+                state=state, provider_id="test-provider", timeout=30.0,
+            )
+
+        assert result.success is True
+        # The loop should have stopped after the first round (0 new sources)
+        # Round 0 ran → incremented to 1 → bookkeeping returns True (stop)
+        assert state.supervision_round == 1
