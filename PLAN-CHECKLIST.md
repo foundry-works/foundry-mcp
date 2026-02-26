@@ -1,102 +1,97 @@
-# PLAN-CHECKLIST: Pre-Merge Hardening — Review Findings Remediation
+# PLAN-CHECKLIST: Pre-Merge Review Findings — Round 2
 
 **Branch:** `tyler/foundry-mcp-20260223-0747`
-**Date:** 2026-02-25
+**Date:** 2026-02-26
 
 ---
 
-## Phase 1: Runtime Crash Fixes (Critical Path)
+## Phase 1: Prompt Injection — Complete Sanitization Coverage
 
-- [ ] **1A.1** Add `deep_research_reflection_timeout: float = 60.0` to `ResearchConfig` dataclass
-- [ ] **1A.2** Add `deep_research_reflection_timeout` entry in `ResearchConfig.from_toml_dict()`
-- [ ] **1A.3** Audit `getattr` call sites — confirm all use 60.0 as fallback default
-- [ ] **1B.1** Replace broad regex pattern in `_CONTEXT_WINDOW_ERROR_PATTERNS` with tighter token+limit patterns
-- [ ] **1B.2** Remove `"InvalidArgument"` from `_CONTEXT_WINDOW_ERROR_CLASSES`
-- [ ] **1B.3** Add combined class+message check for `InvalidArgument` with token-related messages
-- [ ] **1B.4** Add false-positive regression tests (auth token, context param, length positive)
-- [ ] **1C.1** Replace `ThreadPoolExecutor` + `asyncio.run` with proper async dispatch in evaluation handler
-- [ ] **1C.2** Remove the `RuntimeError` fallback masking the fragility
-- [ ] **1C.3** Verify evaluation still works via `deep-research-evaluate` action end-to-end
-
----
-
-## Phase 2: Data Quality & Correctness
-
-- [x] **2A.1** Delete `_extract_domain` from `_helpers.py` (lines 784-803)
-- [x] **2A.2** Import `_extract_domain` from `source_quality` in `_helpers.py`
-- [x] **2A.3** Update `compute_novelty_tag` to use imported version
-- [x] **2A.4** Grep for any other references to deleted function — update if found
-- [x] **2B.1** Define `DEFAULT_MAX_SUPERVISION_ROUNDS = 6` constant in `models/deep_research.py`
-- [x] **2B.2** Update `DeepResearchState.max_supervision_rounds` Field default to use constant
-- [x] **2B.3** Update `action_handlers.py` `getattr` fallback to use constant
-- [x] **2C.1** Add `imputed: bool = False` field to `DimensionScore` dataclass
-- [x] **2C.2** Set `imputed=True` in fallback score path (`evaluator.py:199-201`)
-- [x] **2C.3** Add `imputed_count` and `warnings` to `EvaluationResult.metadata`
-- [x] **2C.4** Exclude imputed dimensions from variance calculation
-- [x] **2D.1** Compute weighted variance using effective weights and weighted mean
-- [x] **2D.2** Update variance tests to reflect weighted computation
+- [ ] **1A.1** Import `sanitize_external_content` in `topic_research.py`
+- [ ] **1A.2** Sanitize search result titles/snippets/content in `_handle_web_search_tool` before appending to `message_history`
+- [ ] **1A.3** Sanitize extracted page content in `_handle_extract_tool` before appending to `message_history`
+- [ ] **1A.4** Sanitize source fields in `_format_source_block`
+- [ ] **1B.1** Import `sanitize_external_content` in `synthesis.py`
+- [ ] **1B.2** Sanitize `tr.compressed_findings` before interpolation into synthesis prompt
+- [ ] **1B.3** Sanitize `state.raw_notes` entries before joining into prompt
+- [ ] **1B.4** Sanitize source titles/snippets in synthesis source-listing sections
+- [ ] **1C.1** Import `sanitize_external_content` in `compression.py`
+- [ ] **1C.2** Sanitize all source-derived content (`content`, `snippet`, `title`) in compression prompts
+- [ ] **1C.3** Sanitize raw notes content in compression prompts
+- [ ] **1D.1** Import `sanitize_external_content` in `brief.py`
+- [ ] **1D.2** Sanitize source content feeding into brief generation prompt
+- [ ] **1D.3** Import `sanitize_external_content` in `evaluation/evaluator.py`
+- [ ] **1D.4** Sanitize source titles, raw notes, and web-derived content in evaluation prompt
+- [ ] **1E.1** Replace `.format(content=content)` in `providers/shared.py` with safe interpolation (e.g., `string.Template.safe_substitute` or concatenation)
+- [ ] **1E.2** Apply `sanitize_external_content()` to content before prompt interpolation in `shared.py`
+- [ ] **1F.1** Add test: injection payload in search results is stripped before reaching topic researcher LLM
+- [ ] **1F.2** Add test: injection payload in source content is stripped in synthesis prompt
+- [ ] **1F.3** Add test: injection payload in source content is stripped in compression prompt
+- [ ] **1F.4** Add test: `.format()` injection in summarization content is handled safely
 
 ---
 
-## Phase 3: Concurrency & Error Handling
+## Phase 2: Config Validation & Backward Compatibility
 
-- [x] **3A.1** Change `return_exceptions=False` to `True` in directive execution gather (`supervision.py:1034`)
-- [x] **3A.2** Add post-gather `CancelledError` detection and re-raise
-- [x] **3A.3** Log other `BaseException` results as non-fatal directive failures
-- [x] **3B.1** Add `CancelledError` detection after compression gather (`compression.py:757`)
-- [x] **3B.2** Re-raise `CancelledError` to propagate cancellation upward
-- [x] **3C.1** Add cumulative content length tracking in `_build_structured_metadata_prompt`
-- [x] **3C.2** Stop adding source content at global cap (200k chars)
-- [x] **3C.3** Add truncation marker for omitted sources
-- [x] **3D.1** Track `total_remaining` during rebalance phase in `truncate_supervision_messages`
-- [x] **3D.2** Add guard to break when `total_remaining >= budget_chars`
+- [ ] **2A.1** Add `_validate_supervision_config()` method to `ResearchConfig.__post_init__`
+- [ ] **2A.2** Cap `deep_research_max_supervision_rounds` at 20 (warn + clamp)
+- [ ] **2A.3** Validate `deep_research_coverage_confidence_threshold` in [0.0, 1.0]
+- [ ] **2A.4** Validate `deep_research_max_concurrent_research_units` upper bound (e.g., 20)
+- [ ] **2B.1** Define `_DEPRECATED_FIELDS` set with all removed field names in `research.py`
+- [ ] **2B.2** Add deprecation check in `from_dict()` / `from_toml_dict()` — log `DeprecationWarning` for each match
+- [ ] **2B.3** Include migration hints in deprecation messages
+- [ ] **2C.1** Update `_COST_TIER_MODEL_DEFAULTS` to use full model names matching `model_token_limits.json`
 
 ---
 
-## Phase 4: State Model Hygiene
+## Phase 3: State Growth & Resource Guards
 
-- [x] **4A.1** Rename `ReflectionDecision` → `PhaseReflectionDecision` in `orchestration.py`
-- [x] **4A.2** Update all references in `orchestration.py` (type annotations, instantiation)
-- [x] **4A.3** Search for external imports and update
-- [x] **4B.1** Add `_SKIP_PHASES` set to `advance_phase()` containing `GATHERING`
-- [x] **4B.2** Implement skip logic: advance again if landed on a skip phase
-- [x] **4B.3** Remove direct `state.phase = DeepResearchPhase.SUPERVISION` workaround in `workflow_execution.py`
-- [x] **4B.4** Verify existing phase lifecycle tests pass with skip logic
-- [x] **4C.1** Add `_MAX_STORED_DIRECTIVES = 30` constant to `supervision.py`
-- [x] **4C.2** Cap `state.directives` after each `extend()` call
-
----
-
-## Phase 5: Prompt Injection Surface Reduction
-
-- [x] **5A.1** Add `sanitize_external_content()` function to `_helpers.py`
-  - Strip XML-like instruction tags (`<system>`, `<instructions>`, `<tool_use>`, `<human>`, `<assistant>`)
-  - Strip markdown heading injection patterns (`# SYSTEM`, `## INSTRUCTIONS`)
-- [x] **5A.2** Apply sanitizer to source titles/snippets in supervision message rendering
-- [x] **5A.3** Apply sanitizer in `_build_directive_fallback_summary` for source-derived content
-- [x] **5A.4** Add unit tests for sanitizer (confirm tags stripped, normal content preserved)
+- [ ] **3A.1** Add `_MAX_RAW_NOTES` constant to `supervision.py` (count or char budget)
+- [ ] **3A.2** Trim oldest `raw_notes` entries when cap exceeded after appending
+- [ ] **3A.3** Add audit log entry when raw notes are trimmed
+- [ ] **3B.1** Record `phase_start = time.monotonic()` at start of `execute_supervision_phase`
+- [ ] **3B.2** Add `max_phase_wall_clock` config (default 1800s)
+- [ ] **3B.3** Check elapsed time at top of each supervision round; break with warning if exceeded
+- [ ] **3B.4** Log early exit reason in state metadata
+- [ ] **3C.1** Remove outer `asyncio.wait_for` in `_compress_directive_results_inline` (or inner timeout) — use one mechanism, not both
 
 ---
 
-## Phase 6: Test Gaps & Quality
+## Phase 4: Robustness & Correctness Fixes
 
-- [x] **6A.1** Fix `test_evaluator.py:746` — capture user prompt at `execute_llm_call` layer
-- [x] **6A.2** Remove `or True` fallback from assertion
-- [x] **6A.3** Assert raw notes content appears in captured prompt
-- [x] **6B.1** Add test: cancellation during directive execution propagates upward
-- [x] **6B.2** Add test: cancellation during compression gather propagates upward
-- [x] **6B.3** Add test: partial results preserved on mid-batch cancellation
-- [x] **6C.1** Test: "invalid authentication token" NOT classified as context-window error
-- [x] **6C.2** Test: "context parameter is required" NOT classified as context-window error
-- [x] **6C.3** Test: "maximum context length exceeded" IS classified as context-window error
-- [x] **6C.4** Test: `InvalidArgument` with non-token message NOT classified as context-window error
+- [ ] **4A.1** Replace `advance_phase()` single-skip with while loop over `_SKIP_PHASES`
+- [ ] **4A.2** Add test for consecutive deprecated phases being skipped
+- [ ] **4B.1** Add `"deep-research-evaluate"` to `OBSERVER_ALLOWLIST`
+- [ ] **4B.2** Consider adding to `AUTONOMY_RUNNER_ALLOWLIST` if runners need quality gates
+- [ ] **4C.1** Replace exact `"VERDICT: NO_ISSUES"` match with regex `r"VERDICT\s*:\s*NO[_\s]?ISSUES"` in `_critique_has_issues`
+- [ ] **4C.2** Tighten `"ISSUE:"` fallback check to reduce false positives
+- [ ] **4D.1** Audit `_topic_search` — confirm `state_lock` held across check-and-add for `seen_urls`
+- [ ] **4D.2** If not atomic, move dedup check inside lock-holding section
+- [ ] **4D.3** Add test exercising concurrent researcher dedup
+- [ ] **4E.1** Add `_truncate_researcher_history` function to `topic_research.py`
+- [ ] **4E.2** Estimate token budget based on model context window
+- [ ] **4E.3** Call truncation before `_build_react_user_prompt` in the ReAct loop
+- [ ] **4F.1** Sort model token limits by key length descending after loading JSON
+
+---
+
+## Phase 5: Test Coverage for New Findings
+
+- [ ] **5A.1** Extend `test_sanitize_external_content.py` with cross-phase injection scenarios
+- [ ] **5B.1** Test: `max_supervision_rounds = 100` is clamped to 20
+- [ ] **5B.2** Test: `coverage_confidence_threshold = 1.5` raises or is clamped
+- [ ] **5B.3** Test: deprecated field in TOML input produces `DeprecationWarning`
+- [ ] **5C.1** Test: `raw_notes` list is capped after many appends
+- [ ] **5C.2** Test: supervision phase respects wall-clock timeout and exits early
+- [ ] **5D.1** Test: consecutive deprecated phases are all skipped by `advance_phase()`
+- [ ] **5E.1** Test: `deep-research-evaluate` action is allowed for observer role
 
 ---
 
 ## Final Validation
 
-- [x] Full deep research test suite passes: `python -m pytest tests/core/research/ -x -q`
-- [x] Evaluation tests pass: `python -m pytest tests/core/research/evaluation/ -x -q`
-- [x] Config smoke test: `ResearchConfig().deep_research_reflection_timeout == 60.0`
-- [x] Renamed class import: `from ...orchestration import PhaseReflectionDecision`
-- [x] No regressions in existing workflow tests
+- [ ] Full deep research test suite passes: `python -m pytest tests/core/research/ -x -q`
+- [ ] Evaluation tests pass: `python -m pytest tests/core/research/evaluation/ -x -q`
+- [ ] Integration tests pass: `python -m pytest tests/integration/ -x -q`
+- [ ] No regressions in existing workflow tests
+- [ ] Grep confirms no remaining unsanitized `source.content` or `source.title` in prompt-building code paths
