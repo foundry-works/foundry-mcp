@@ -4412,3 +4412,198 @@ class TestDirectiveExecutionCancellation:
             isinstance(r, asyncio.CancelledError) for r in gather_results
         )
         assert has_cancellation
+
+
+# ===========================================================================
+# Phase 2: State Management Bugs
+# ===========================================================================
+
+
+class TestShouldContinueGatheringAccuracy:
+    """2A: Verify supervision_history records the actual termination decision."""
+
+    @pytest.mark.asyncio
+    async def test_history_records_false_when_no_new_sources(self):
+        """should_continue_gathering is False when round_new_sources == 0."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=2, sources_per_query=3, supervision_round=0)
+
+        should_stop = await stub._post_round_bookkeeping(
+            state=state,
+            directives=[],
+            directive_results=[],
+            think_output=None,
+            round_new_sources=0,
+            inline_stats={},
+            min_sources=2,
+            timeout=60.0,
+        )
+
+        history = state.metadata.get("supervision_history", [])
+        assert len(history) == 1
+        assert history[0]["should_continue_gathering"] is False
+        assert should_stop is True
+
+    @pytest.mark.asyncio
+    async def test_history_records_true_when_new_sources_found(self):
+        """should_continue_gathering is True when round_new_sources > 0."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=2, sources_per_query=3, supervision_round=0)
+
+        should_stop = await stub._post_round_bookkeeping(
+            state=state,
+            directives=[],
+            directive_results=[],
+            think_output=None,
+            round_new_sources=5,
+            inline_stats={},
+            min_sources=2,
+            timeout=60.0,
+        )
+
+        history = state.metadata.get("supervision_history", [])
+        assert len(history) == 1
+        assert history[0]["should_continue_gathering"] is True
+        assert should_stop is False
+
+
+class TestCoverageSnapshotSuffix:
+    """2B: Verify pre/post suffixed snapshots and accurate delta computation."""
+
+    def _make_stub(self):
+        return StubSupervision(delegation_model=True)
+
+    def test_store_snapshot_with_suffix(self):
+        """Snapshots stored with suffix use '{round}_{suffix}' key."""
+        stub = self._make_stub()
+        state = _make_state(num_completed=2, sources_per_query=2, supervision_round=0)
+
+        coverage_data = stub._build_per_query_coverage(state)
+        stub._store_coverage_snapshot(state, coverage_data, suffix="pre")
+
+        snapshots = state.metadata.get("coverage_snapshots", {})
+        assert "0_pre" in snapshots, "Pre-suffixed key should exist"
+        assert "0" not in snapshots, "Bare key should not exist when suffix is given"
+
+    def test_pre_and_post_snapshots_coexist(self):
+        """Pre- and post-directive snapshots for the same round don't overwrite each other."""
+        stub = self._make_stub()
+        state = _make_state(num_completed=2, sources_per_query=2, supervision_round=0)
+
+        coverage_data = stub._build_per_query_coverage(state)
+        stub._store_coverage_snapshot(state, coverage_data, suffix="pre")
+
+        # Add extra source to simulate directive execution
+        state.sources.append(
+            ResearchSource(
+                id="src-extra",
+                url="https://newdomain.com/article",
+                title="Extra source",
+                source_type=SourceType.WEB,
+                quality=SourceQuality.HIGH,
+                sub_query_id="sq-0",
+            )
+        )
+        post_coverage = stub._build_per_query_coverage(state)
+        stub._store_coverage_snapshot(state, post_coverage, suffix="post")
+
+        snapshots = state.metadata["coverage_snapshots"]
+        assert "0_pre" in snapshots
+        assert "0_post" in snapshots
+        # Pre and post should differ in source count
+        assert snapshots["0_pre"]["sq-0"]["source_count"] == 2
+        assert snapshots["0_post"]["sq-0"]["source_count"] == 3
+
+    def test_delta_uses_prev_post_snapshot(self):
+        """compute_coverage_delta compares against previous round's post snapshot."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_coverage import (
+            compute_coverage_delta,
+            build_per_query_coverage,
+        )
+
+        state = _make_state(num_completed=2, sources_per_query=2, supervision_round=1)
+
+        # Store round 0 post snapshot (simulating what supervision loop does)
+        state.metadata["coverage_snapshots"] = {
+            "0_post": {
+                "sq-0": {"query": "Sub-query 0: aspect 0 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
+                "sq-1": {"query": "Sub-query 1: aspect 1 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
+            }
+        }
+
+        coverage_data = build_per_query_coverage(state)
+        delta = compute_coverage_delta(state, coverage_data, min_sources=2)
+
+        assert delta is not None, "Delta should be generated using 0_post snapshot"
+        assert "round 0" in delta
+
+    def test_delta_falls_back_to_bare_key(self):
+        """compute_coverage_delta falls back to bare round key for backward compatibility."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_coverage import (
+            compute_coverage_delta,
+            build_per_query_coverage,
+        )
+
+        state = _make_state(num_completed=2, sources_per_query=2, supervision_round=1)
+
+        # Store using bare key (old format)
+        state.metadata["coverage_snapshots"] = {
+            "0": {
+                "sq-0": {"query": "Sub-query 0: aspect 0 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
+                "sq-1": {"query": "Sub-query 1: aspect 1 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
+            }
+        }
+
+        coverage_data = build_per_query_coverage(state)
+        delta = compute_coverage_delta(state, coverage_data, min_sources=2)
+
+        assert delta is not None, "Delta should work with bare key (backward compat)"
+
+
+class TestShouldExitHeuristicPure:
+    """2D: _should_exit_heuristic returns data without mutating state."""
+
+    def _make_stub(self):
+        return StubSupervision(delegation_model=True)
+
+    def test_returns_false_on_round_zero(self):
+        """Round 0 always returns (False, {}) without assessing heuristic."""
+        stub = self._make_stub()
+        state = _make_state(supervision_round=0)
+
+        should_exit, data = stub._should_exit_heuristic(state, min_sources=2)
+        assert should_exit is False
+        assert data == {}
+
+    def test_returns_true_with_data_when_sufficient(self):
+        """When heuristic says sufficient, returns (True, heuristic_data) without mutating state."""
+        stub = self._make_stub()
+        state = _make_state(
+            num_completed=3, sources_per_query=5, supervision_round=1,
+        )
+
+        original_round = state.supervision_round
+        original_history = state.metadata.get("supervision_history", []).copy()
+
+        should_exit, data = stub._should_exit_heuristic(state, min_sources=2)
+
+        assert should_exit is True
+        assert "confidence" in data
+        assert data["should_continue_gathering"] is False
+        # Verify no state mutation occurred
+        assert state.supervision_round == original_round, "Round should not be incremented"
+        assert state.metadata.get("supervision_history", []) == original_history, "History should not be appended"
+        assert len(stub._audit_events) == 0, "No audit events should be written"
+
+    def test_returns_false_when_insufficient(self):
+        """When heuristic says insufficient, returns (False, heuristic_data)."""
+        stub = self._make_stub()
+        state = _make_state(
+            num_completed=2, sources_per_query=1, supervision_round=1,
+        )
+
+        should_exit, data = stub._should_exit_heuristic(state, min_sources=10)
+
+        assert should_exit is False
+        assert "confidence" in data
+        assert data["should_continue_gathering"] is True

@@ -153,11 +153,18 @@ def build_per_query_coverage(
 def store_coverage_snapshot(
     state: DeepResearchState,
     coverage_data: list[dict[str, Any]],
+    suffix: Optional[str] = None,
 ) -> None:
     """Store a coverage snapshot for the current supervision round.
 
-    Snapshots are keyed by round number in ``state.metadata["coverage_snapshots"]``
-    and used by ``compute_coverage_delta`` to produce round-over-round deltas.
+    Snapshots are keyed by ``"{round}_{suffix}"`` (when *suffix* is given) or
+    ``"{round}"`` (legacy / backward-compatible) in
+    ``state.metadata["coverage_snapshots"]`` and used by
+    ``compute_coverage_delta`` to produce round-over-round deltas.
+
+    Use ``suffix="pre"`` before directive execution and ``suffix="post"``
+    after execution so that the pre-directive snapshot is not silently
+    overwritten.
 
     Each snapshot entry stores the lightweight fields needed for delta
     comparison: source_count, unique_domains, and status.
@@ -165,6 +172,9 @@ def store_coverage_snapshot(
     Args:
         state: Current research state
         coverage_data: Per-sub-query coverage from ``build_per_query_coverage``
+        suffix: Optional label (e.g. ``"pre"``, ``"post"``) appended to the
+            round key.  When ``None``, the key is the bare round number
+            (backward-compatible).
     """
     snapshots = state.metadata.setdefault("coverage_snapshots", {})
     snapshot: dict[str, dict[str, Any]] = {}
@@ -176,7 +186,8 @@ def store_coverage_snapshot(
             "status": entry["status"],
         }
     # Store with string key (JSON-safe)
-    snapshots[str(state.supervision_round)] = snapshot
+    key = f"{state.supervision_round}_{suffix}" if suffix else str(state.supervision_round)
+    snapshots[key] = snapshot
 
 
 def compute_coverage_delta(
@@ -207,7 +218,14 @@ def compute_coverage_delta(
     """
     snapshots = state.metadata.get("coverage_snapshots", {})
     prev_round = state.supervision_round - 1
-    prev_snapshot = snapshots.get(str(prev_round))
+
+    # Prefer suffixed keys ("{round}_post" / "{round}_pre") written by the
+    # updated store_coverage_snapshot; fall back to bare round keys for
+    # backward compatibility with snapshots written before the suffix change.
+    prev_snapshot = (
+        snapshots.get(f"{prev_round}_post")
+        or snapshots.get(str(prev_round))
+    )
     if prev_snapshot is None:
         return None
 

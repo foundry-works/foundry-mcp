@@ -395,21 +395,32 @@ class WorkflowExecutionMixin:
             )
             state.metadata["cancelled"] = True
 
-            # Check if current iteration is incomplete
+            # Check if current iteration is incomplete.
+            #
+            # ROLLBACK LIMITATION: The "rollback" below only resets
+            # ``state.iteration`` and ``state.phase``.  Accumulated
+            # sources, findings, directives, and topic_research_results
+            # from the partial iteration remain in state.  Resume logic
+            # should check ``state.metadata["rollback_note"]`` to detect
+            # this condition and decide whether to re-process or skip
+            # already-collected data.
             if state.metadata.get("iteration_in_progress"):
                 # Current iteration is incomplete - discard partial results from this iteration
                 last_completed_iteration = state.metadata.get("last_completed_iteration")
                 if last_completed_iteration is not None and last_completed_iteration < state.iteration:
                     # We have a safe checkpoint from a prior completed iteration
-                    logger.info(
-                        "Discarding partial results from incomplete iteration %d (last completed: %d), research %s",
+                    logger.warning(
+                        "Cancellation rollback: resetting iteration %d → %d and "
+                        "phase → SYNTHESIS for research %s. NOTE: sources, "
+                        "findings, and directives from the partial iteration are "
+                        "retained in state — only the iteration counter and phase "
+                        "marker are rolled back.",
                         state.iteration,
                         last_completed_iteration,
                         state.id,
                     )
-                    # Rollback state to last completed iteration by restoring from checkpoint
-                    # For now, mark that we need to discard this iteration on resume
                     state.metadata["discarded_iteration"] = state.iteration
+                    state.metadata["rollback_note"] = "partial_iteration_data_retained"
                     state.iteration = last_completed_iteration
                     state.phase = DeepResearchPhase.SYNTHESIS
                 else:
@@ -419,6 +430,7 @@ class WorkflowExecutionMixin:
                         state.id,
                     )
                     state.metadata["discarded_iteration"] = state.iteration
+                    state.metadata["rollback_note"] = "partial_iteration_data_retained"
             else:
                 # Iteration was successfully completed, safe to save
                 logger.info(

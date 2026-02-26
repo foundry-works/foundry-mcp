@@ -46,22 +46,22 @@ Track completion of each fix. Mark `[x]` when implemented and verified.
 
 ## Phase 2: State Management Bugs
 
-- [ ] **2A.1** In `_post_round_bookkeeping`, set `"should_continue_gathering"` to `round_new_sources > 0`
-- [ ] **2A.2** Add test verifying history entry reflects actual termination decision
-- [ ] **2B.1** Add optional `suffix` parameter to `store_coverage_snapshot`
-- [ ] **2B.2** Store pre-directive snapshot with suffix `"pre"` (~line 249)
-- [ ] **2B.3** Store post-directive snapshot with suffix `"post"` in `_post_round_bookkeeping` (~line 620)
-- [ ] **2B.4** Update `compute_coverage_delta` to compare `"{round}_pre"` against `"{prev_round}_post"`
-- [ ] **2B.5** Add test verifying delta accurately reflects inter-round progress
-- [ ] **2C.1** Add docstring to cancellation rollback block explaining limitations
-- [ ] **2C.2** Set `state.metadata["rollback_note"] = "partial_iteration_data_retained"` on rollback
-- [ ] **2C.3** Log warning when rollback occurs
-- [ ] **2C.4** Add test verifying `rollback_note` metadata is set on cancellation
-- [ ] **2D.1** Refactor `_should_exit_heuristic` to return `(should_exit: bool, decision_data: dict)`
-- [ ] **2D.2** Move audit write, history append, and round increment to calling code (~lines 252-253)
-- [ ] **2D.3** Verify existing heuristic tests still pass
+- [x] **2A.1** In `_post_round_bookkeeping`, set `"should_continue_gathering"` to `round_new_sources > 0`
+- [x] **2A.2** Add test verifying history entry reflects actual termination decision
+- [x] **2B.1** Add optional `suffix` parameter to `store_coverage_snapshot`
+- [x] **2B.2** Store pre-directive snapshot with suffix `"pre"` (~line 249)
+- [x] **2B.3** Store post-directive snapshot with suffix `"post"` in `_post_round_bookkeeping` (~line 620)
+- [x] **2B.4** Update `compute_coverage_delta` to compare `"{round}_pre"` against `"{prev_round}_post"`
+- [x] **2B.5** Add test verifying delta accurately reflects inter-round progress
+- [x] **2C.1** Add docstring to cancellation rollback block explaining limitations
+- [x] **2C.2** Set `state.metadata["rollback_note"] = "partial_iteration_data_retained"` on rollback
+- [x] **2C.3** Log warning when rollback occurs
+- [x] **2C.4** Add test verifying `rollback_note` metadata is set on cancellation
+- [x] **2D.1** Refactor `_should_exit_heuristic` to return `(should_exit: bool, decision_data: dict)`
+- [x] **2D.2** Move audit write, history append, and round increment to calling code (~lines 252-253)
+- [x] **2D.3** Verify existing heuristic tests still pass
 
-**Verification:** `pytest tests/core/research/workflows/deep_research/test_supervision.py -x -q --tb=short`
+**Verification:** `pytest tests/core/research/workflows/deep_research/test_supervision.py -x -q --tb=short` ✅ All 179 pass
 
 ---
 
@@ -133,7 +133,7 @@ Track completion of each fix. Mark `[x]` when implemented and verified.
 | Phase | Status | Verified By |
 |-------|--------|-------------|
 | Phase 1: Sanitization | ✅ Complete | 2026-02-26 |
-| Phase 2: State Bugs | ⬜ Not started | |
+| Phase 2: State Bugs | ✅ Complete | 2026-02-26 |
 | Phase 3: Validation | ⬜ Not started | |
 | Phase 4: Tests | ⬜ Not started | |
 | Phase 5: Performance | ⬜ Not started | |

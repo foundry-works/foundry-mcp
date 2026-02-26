@@ -246,10 +246,36 @@ class SupervisionPhaseMixin:
                 coverage_delta = self._compute_coverage_delta(
                     state, coverage_data, min_sources=min_sources,
                 )
-            self._store_coverage_snapshot(state, coverage_data)
+            self._store_coverage_snapshot(state, coverage_data, suffix="pre")
 
             # Heuristic early-exit (round > 0)
-            if self._should_exit_heuristic(state, min_sources):
+            should_exit, heuristic_data = self._should_exit_heuristic(state, min_sources)
+            if should_exit:
+                logger.info(
+                    "Supervision delegation: confidence %.2f >= threshold at round %d, advancing",
+                    heuristic_data.get("confidence", 0.0),
+                    state.supervision_round,
+                )
+                self._write_audit_event(
+                    state,
+                    "supervision_result",
+                    data={
+                        "reason": "heuristic_sufficient",
+                        "model": "delegation",
+                        "supervision_round": state.supervision_round,
+                        "coverage_summary": heuristic_data,
+                    },
+                )
+                history = state.metadata.setdefault("supervision_history", [])
+                history.append({
+                    "round": state.supervision_round,
+                    "method": "delegation_heuristic",
+                    "should_continue_gathering": False,
+                    "directives_executed": 0,
+                    "overall_coverage": "sufficient",
+                })
+                _trim_supervision_history(state)
+                state.supervision_round += 1
                 break
 
             # Think + Delegate
@@ -392,39 +418,24 @@ class SupervisionPhaseMixin:
         self,
         state: DeepResearchState,
         min_sources: int,
-    ) -> bool:
-        """Check if the heuristic indicates coverage is sufficient (round > 0 only)."""
+    ) -> tuple[bool, dict[str, Any]]:
+        """Check if the heuristic indicates coverage is sufficient (round > 0 only).
+
+        Pure predicate — returns the decision and supporting data without
+        mutating *state*.  The caller is responsible for writing audit events,
+        appending to supervision history, and advancing the round counter.
+
+        Returns:
+            ``(should_exit, heuristic_data)`` where *heuristic_data* is the
+            dict produced by :func:`assess_coverage_heuristic` (empty dict
+            when round == 0).
+        """
         if state.supervision_round == 0:
-            return False
+            return False, {}
         heuristic = self._assess_coverage_heuristic(state, min_sources)
         if heuristic["should_continue_gathering"]:
-            return False
-        logger.info(
-            "Supervision delegation: confidence %.2f >= threshold at round %d, advancing",
-            heuristic.get("confidence", 0.0),
-            state.supervision_round,
-        )
-        self._write_audit_event(
-            state,
-            "supervision_result",
-            data={
-                "reason": "heuristic_sufficient",
-                "model": "delegation",
-                "supervision_round": state.supervision_round,
-                "coverage_summary": heuristic,
-            },
-        )
-        history = state.metadata.setdefault("supervision_history", [])
-        history.append({
-            "round": state.supervision_round,
-            "method": "delegation_heuristic",
-            "should_continue_gathering": False,
-            "directives_executed": 0,
-            "overall_coverage": "sufficient",
-        })
-        _trim_supervision_history(state)
-        state.supervision_round += 1
-        return True
+            return False, heuristic
+        return True, heuristic
 
     async def _run_think_delegate_step(
         self,
@@ -621,7 +632,7 @@ class SupervisionPhaseMixin:
             post_delta = self._compute_coverage_delta(
                 state, post_coverage_data, min_sources=min_sources,
             )
-            self._store_coverage_snapshot(state, post_coverage_data)
+            self._store_coverage_snapshot(state, post_coverage_data, suffix="post")
             post_think_output = await self._supervision_think_step(
                 state, post_coverage_data, timeout,
                 coverage_delta=post_delta,
@@ -639,7 +650,7 @@ class SupervisionPhaseMixin:
         history.append({
             "round": state.supervision_round,
             "method": "delegation",
-            "should_continue_gathering": True,
+            "should_continue_gathering": round_new_sources > 0,
             "directives_generated": len(directives),
             "directives_executed": len(directive_results),
             "new_sources": round_new_sources,
@@ -1888,8 +1899,9 @@ class SupervisionPhaseMixin:
         self,
         state: DeepResearchState,
         coverage_data: list[dict[str, Any]],
+        suffix: Optional[str] = None,
     ) -> None:
-        store_coverage_snapshot(state, coverage_data)
+        store_coverage_snapshot(state, coverage_data, suffix=suffix)
 
     def _compute_coverage_delta(
         self,
