@@ -81,12 +81,18 @@ def build_per_query_coverage(
     for tr in state.topic_research_results:
         topic_results_by_sq[tr.sub_query_id] = tr
 
+    # Build sub_query_id → list[source] lookup to avoid O(n×m) filtering
+    sources_by_sq: dict[str, list[Any]] = {}
+    for s in state.sources:
+        if s.sub_query_id is not None:
+            sources_by_sq.setdefault(s.sub_query_id, []).append(s)
+
     for sq in state.sub_queries:
         if sq.status == "pending":
             continue
 
-        # Count sources linked to this sub-query
-        sq_sources = [s for s in state.sources if s.sub_query_id == sq.id]
+        # Look up sources for this sub-query via pre-built index
+        sq_sources = sources_by_sq.get(sq.id, [])
         source_count = len(sq_sources)
 
         # Quality distribution
@@ -339,11 +345,17 @@ def assess_coverage_heuristic(
             "weak_factors": ["source_adequacy", "domain_diversity", "query_completion_rate"],
         }
 
+    # Build sub_query_id → list[source] lookup to avoid O(n×m) filtering
+    sources_by_sq: dict[str, list[Any]] = {}
+    for s in state.sources:
+        if s.sub_query_id is not None:
+            sources_by_sq.setdefault(s.sub_query_id, []).append(s)
+
     # --- Dimension 1: Source adequacy ---
     source_ratios: list[float] = []
     sufficient_count = 0
     for sq in completed:
-        sq_sources = [s for s in state.sources if s.sub_query_id == sq.id]
+        sq_sources = sources_by_sq.get(sq.id, [])
         count = len(sq_sources)
         ratio = min(1.0, count / min_sources) if min_sources > 0 else 1.0
         source_ratios.append(ratio)

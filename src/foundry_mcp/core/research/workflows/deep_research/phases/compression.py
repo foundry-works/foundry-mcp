@@ -375,11 +375,13 @@ def _split_supervisor_brief(content: str) -> tuple[str, str | None]:
         (compressed_findings, supervisor_summary) — supervisor_summary
         is ``None`` if the marker was not found.
     """
-    idx = content.find(_SUPERVISOR_BRIEF_MARKER)
+    idx = content.rfind(_SUPERVISOR_BRIEF_MARKER)
     if idx == -1:
         return content, None
 
     compressed = content[:idx].rstrip()
+    if not compressed:
+        return content, None
     brief = content[idx + len(_SUPERVISOR_BRIEF_MARKER):].strip()
     # Cap at 1500 chars to stay within the supervisor's context budget
     if len(brief) > 1500:

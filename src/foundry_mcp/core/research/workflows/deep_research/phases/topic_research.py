@@ -473,10 +473,15 @@ def _truncate_researcher_history(
         return message_history
 
     # Drop oldest turns until within budget, preserving the most recent ones
+    # Use index + slice instead of O(n²) pop(0) loop
     result = list(message_history)
-    while len(result) > _MIN_PRESERVE_RECENT_TURNS and total_chars > budget_chars:
-        dropped_msg = result.pop(0)
-        total_chars -= len(dropped_msg.get("content", ""))
+    max_droppable = len(result) - _MIN_PRESERVE_RECENT_TURNS
+    drop_count = 0
+    while drop_count < max_droppable and total_chars > budget_chars:
+        total_chars -= len(result[drop_count].get("content", ""))
+        drop_count += 1
+    if drop_count:
+        result = result[drop_count:]
 
     if len(result) < len(message_history):
         dropped = len(message_history) - len(result)

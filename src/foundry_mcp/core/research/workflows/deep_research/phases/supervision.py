@@ -580,14 +580,20 @@ class SupervisionPhaseMixin:
     def _trim_raw_notes(self, state: DeepResearchState) -> None:
         """Trim raw_notes if they exceed count or character caps."""
         notes_trimmed = 0
-        while len(state.raw_notes) > _MAX_RAW_NOTES:
-            state.raw_notes.pop(0)
-            notes_trimmed += 1
+        # Trim by count — drop oldest entries via slice instead of O(n²) pop(0)
+        if len(state.raw_notes) > _MAX_RAW_NOTES:
+            excess = len(state.raw_notes) - _MAX_RAW_NOTES
+            state.raw_notes = state.raw_notes[excess:]
+            notes_trimmed += excess
+        # Trim by total character count — compute drop count, then slice
         total_chars = sum(len(n) for n in state.raw_notes)
-        while state.raw_notes and total_chars > _MAX_RAW_NOTES_CHARS:
-            removed = state.raw_notes.pop(0)
-            total_chars -= len(removed)
-            notes_trimmed += 1
+        if total_chars > _MAX_RAW_NOTES_CHARS:
+            drop_count = 0
+            while drop_count < len(state.raw_notes) and total_chars > _MAX_RAW_NOTES_CHARS:
+                total_chars -= len(state.raw_notes[drop_count])
+                drop_count += 1
+            state.raw_notes = state.raw_notes[drop_count:]
+            notes_trimmed += drop_count
         if notes_trimmed > 0:
             logger.warning(
                 "Trimmed %d oldest raw_notes entries (count cap=%d, char cap=%d). "
@@ -968,8 +974,6 @@ class SupervisionPhaseMixin:
         Raises:
             ValueError: If JSON cannot be parsed
         """
-        import re
-
         # Extract gap analysis
         gap_match = re.search(
             r"<gap_analysis>\s*(.*?)\s*</gap_analysis>",
@@ -989,7 +993,6 @@ class SupervisionPhaseMixin:
     @staticmethod
     def _extract_gap_analysis_section(content: str) -> Optional[str]:
         """Extract gap analysis from <gap_analysis> tags (fallback helper)."""
-        import re
         match = re.search(
             r"<gap_analysis>\s*(.*?)\s*</gap_analysis>",
             content,

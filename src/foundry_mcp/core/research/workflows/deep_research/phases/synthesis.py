@@ -31,6 +31,7 @@ from foundry_mcp.core.research.workflows.deep_research.phases._citation_postproc
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
     MODEL_TOKEN_LIMITS,
+    _FALLBACK_CONTEXT_WINDOW,
     execute_llm_call,
     finalize_phase,
 )
@@ -118,8 +119,7 @@ _MAX_FINDINGS_TRUNCATION_RETRIES: int = 3
 # Each retry reduces the findings char budget by this factor (10% per retry).
 _FINDINGS_TRUNCATION_FACTOR: float = 0.9
 
-# Fallback context window (tokens) when the model is unknown.
-_FALLBACK_CONTEXT_WINDOW: int = 128_000
+# _FALLBACK_CONTEXT_WINDOW imported from _lifecycle.py (canonical source)
 
 # Markers that delineate the start of the findings section in the user prompt.
 _FINDINGS_START_MARKERS: list[str] = [

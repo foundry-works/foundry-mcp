@@ -113,18 +113,18 @@ Track completion of each fix. Mark `[x]` when implemented and verified.
 
 ## Phase 5: Performance & Cleanup
 
-- [ ] **5A.1** Replace `list.pop(0)` loop in `supervision.py` `_trim_raw_notes` with slice assignment
-- [ ] **5A.2** Replace `list.pop(0)` loop in `topic_research.py` `_truncate_researcher_history` with slice assignment
-- [ ] **5B.1** Build `sub_query_id → list[source]` dict in `build_per_query_coverage`
-- [ ] **5B.2** Same optimization in `assess_coverage_heuristic`
-- [ ] **5C.1** Move `_FALLBACK_CONTEXT_WINDOW` to `_lifecycle.py` as canonical source
-- [ ] **5C.2** Import it in `synthesis.py` instead of redefining
-- [ ] **5D.1** Remove inner `import re` in `_parse_combined_response`
-- [ ] **5D.2** Remove inner `import re` in `_extract_gap_analysis_section`
-- [ ] **5E.1** Replace `find("## SUPERVISOR BRIEF")` with `rfind` in `compression.py`
-- [ ] **5E.2** Add check that `compressed` is non-empty after split
+- [x] **5A.1** Replace `list.pop(0)` loop in `supervision.py` `_trim_raw_notes` with slice assignment
+- [x] **5A.2** Replace `list.pop(0)` loop in `topic_research.py` `_truncate_researcher_history` with slice assignment
+- [x] **5B.1** Build `sub_query_id → list[source]` dict in `build_per_query_coverage`
+- [x] **5B.2** Same optimization in `assess_coverage_heuristic`
+- [x] **5C.1** Move `_FALLBACK_CONTEXT_WINDOW` to `_lifecycle.py` as canonical source (already there)
+- [x] **5C.2** Import it in `synthesis.py` instead of redefining
+- [x] **5D.1** Remove inner `import re` in `_parse_combined_response`
+- [x] **5D.2** Remove inner `import re` in `_extract_gap_analysis_section`
+- [x] **5E.1** Replace `find("## SUPERVISOR BRIEF")` with `rfind` in `compression.py`
+- [x] **5E.2** Add check that `compressed` is non-empty after split
 
-**Verification:** `pytest tests/core/research/ -x -q --tb=short`
+**Verification:** `pytest tests/core/research/ -x -q --tb=short` ✅ 2571 passed, 6 skipped
 
 ---
 
@@ -136,4 +136,4 @@ Track completion of each fix. Mark `[x]` when implemented and verified.
 | Phase 2: State Bugs | ✅ Complete | 2026-02-26 |
 | Phase 3: Validation | ✅ Complete | 2026-02-26 |
 | Phase 4: Tests | ✅ Complete | 2026-02-26 |
-| Phase 5: Performance | ⬜ Not started | |
+| Phase 5: Performance | ✅ Complete | 2026-02-26 |
