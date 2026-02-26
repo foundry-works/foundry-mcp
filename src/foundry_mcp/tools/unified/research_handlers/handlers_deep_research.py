@@ -55,16 +55,16 @@ def _handle_deep_research(
     task_timeout: Optional[float] = None,
     **kwargs: Any,
 ) -> dict:
-    """Handle deep-research action with background execution.
+    """Handle deep-research action with blocking execution.
 
-    CRITICAL: This handler uses asyncio.create_task() via the workflow's
-    background mode to start research and return immediately with the
-    research_id. The workflow runs in the background and can be polled
-    via deep-research-status.
+    Runs deep research synchronously and returns the full report in a
+    single tool call.  The workflow blocks until completion (or timeout),
+    then delegates to ``_handle_deep_research_report`` to build a rich
+    response with content-fidelity metadata and allocation warnings.
 
     Supports:
-    - start: Begin new research, returns immediately with research_id
-    - continue: Resume paused research in background
+    - start: Begin new research, block until complete, return full report
+    - continue: Resume paused research, block until complete
     - resume: Alias for continue (for backward compatibility)
     """
     # Normalize 'resume' to 'continue' for workflow compatibility
@@ -97,8 +97,7 @@ def _handle_deep_research(
     if effective_timeout is None:
         effective_timeout = config.research.deep_research_timeout
 
-    # Execute with background=True for non-blocking execution
-    # This uses asyncio.create_task() internally and returns immediately
+    # Execute synchronously — blocks until the workflow completes or times out
     result = workflow.execute(
         query=query,
         research_id=research_id,
@@ -111,45 +110,31 @@ def _handle_deep_research(
         follow_links=follow_links,
         timeout_per_operation=timeout_per_operation,
         max_concurrent=max_concurrent,
-        background=True,  # CRITICAL: Run in background, return immediately
+        background=False,
         task_timeout=effective_timeout,
     )
 
     if result.success:
-        # For background execution, return started status with research_id
-        response_data = {
-            "research_id": result.metadata.get("research_id"),
-            "status": "started",
-            "effective_timeout": effective_timeout,
-            "message": (
-                "Deep research started. This typically takes 3-5 minutes. "
-                "IMPORTANT: Communicate progress to user before each status check. "
-                "Maximum 5 status checks allowed. "
-                "Do NOT use WebSearch/WebFetch while this research is running."
-            ),
-            "polling_guidance": {
-                "max_checks": 5,
-                "typical_duration_minutes": 5,
-                "require_user_communication": True,
-                "no_independent_research": True,
-            },
-        }
+        # Reuse the report handler to build a rich response with content
+        # fidelity metadata, allocation warnings, and dropped-content IDs.
+        rid = result.metadata.get("research_id")
+        if rid:
+            return _handle_deep_research_report(research_id=rid)
 
-        # Include additional metadata if available (for continue/resume)
-        if result.metadata.get("phase"):
-            response_data["phase"] = result.metadata.get("phase")
-        if result.metadata.get("iteration") is not None:
-            response_data["iteration"] = result.metadata.get("iteration")
-
-        return asdict(success_response(data=response_data))
+        # Fallback: if no research_id in metadata, return inline result
+        return asdict(success_response(data={"report": result.content, **(result.metadata or {})}))
     else:
+        details: dict[str, Any] = {"action": deep_research_action}
+        rid = (result.metadata or {}).get("research_id")
+        if rid:
+            details["research_id"] = rid
         return asdict(
             error_response(
-                result.error or "Deep research failed to start",
+                result.error or "Deep research failed",
                 error_code=ErrorCode.INTERNAL_ERROR,
                 error_type=ErrorType.INTERNAL,
                 remediation="Check query or research_id validity and provider availability",
-                details={"action": deep_research_action},
+                details=details,
             )
         )
 

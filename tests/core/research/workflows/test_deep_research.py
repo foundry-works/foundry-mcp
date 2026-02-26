@@ -1208,7 +1208,7 @@ class TestDeepResearchActionHandlers:
         _helpers._memory = old_memory
 
     def test_dispatch_to_deep_research(self, mock_tool_config, mock_tool_memory):
-        """Should dispatch 'deep-research' action to handler."""
+        """Should dispatch 'deep-research' action — blocks and returns full report."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
         with patch(
@@ -1239,8 +1239,17 @@ class TestDeepResearchActionHandlers:
                 deep_research_action="start",
             )
 
-            MockWorkflow.assert_called_once()
+            # Called twice: once for execute (blocking), once for report retrieval
+            assert MockWorkflow.call_count == 2
+            # First execute call should use background=False (blocking)
+            first_execute_call = mock_workflow.execute.call_args_list[0]
+            assert first_execute_call.kwargs["background"] is False
+            # Second execute call fetches the persisted report
+            second_execute_call = mock_workflow.execute.call_args_list[1]
+            assert second_execute_call.kwargs["action"] == "report"
+            assert second_execute_call.kwargs["research_id"] == "dr-1"
             assert result["success"] is True
+            assert result["data"]["report"] == "Research report"
             assert result["data"]["research_id"] == "dr-1"
 
     def test_dispatch_to_deep_research_status(self, mock_tool_config, mock_tool_memory):
@@ -1361,10 +1370,12 @@ class TestDeepResearchActionHandlers:
 
             assert result["success"] is True
             assert result["data"]["research_id"] == "dr-1"
-            # Verify 'resume' was normalized to 'continue' by checking the call
-            mock_workflow.execute.assert_called_once()
-            call_kwargs = mock_workflow.execute.call_args[1]
-            assert call_kwargs["action"] == "continue"
+            # First execute: blocking call with 'resume' normalized to 'continue'
+            # Second execute: report retrieval
+            assert mock_workflow.execute.call_count == 2
+            first_call_kwargs = mock_workflow.execute.call_args_list[0].kwargs
+            assert first_call_kwargs["action"] == "continue"
+            assert first_call_kwargs["background"] is False
 
     def test_deep_research_list_pagination(self, mock_tool_config, mock_tool_memory):
         """Should support cursor-based pagination for deep-research-list."""
