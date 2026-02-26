@@ -326,6 +326,83 @@ def _build_react_user_prompt(
     return "\n".join(parts)
 
 
+# ---------------------------------------------------------------------------
+# Researcher history truncation
+# ---------------------------------------------------------------------------
+
+# Reserve this fraction of the model's context window for the researcher's
+# conversation history.  The rest is needed for the system prompt, research
+# topic, and the LLM's response tokens.
+_RESEARCHER_HISTORY_BUDGET_FRACTION: float = 0.35
+
+# Characters-per-token estimate (same heuristic as _lifecycle.py)
+_CHARS_PER_TOKEN: int = 4
+
+# Minimum number of recent turns to always preserve regardless of budget.
+_MIN_PRESERVE_RECENT_TURNS: int = 4
+
+
+def _truncate_researcher_history(
+    message_history: list[dict[str, str]],
+    model: str | None,
+) -> list[dict[str, str]]:
+    """Truncate researcher conversation history to fit model context window.
+
+    Estimates the token budget from the model's context window and drops the
+    oldest turns when the history exceeds the budget, always preserving at
+    least ``_MIN_PRESERVE_RECENT_TURNS`` recent messages.
+
+    Args:
+        message_history: The researcher's message history (assistant/tool turns).
+        model: Model identifier for context-window lookup.
+
+    Returns:
+        The (possibly truncated) message list.  Returns the original list
+        unchanged if it fits within budget.
+    """
+    if len(message_history) <= _MIN_PRESERVE_RECENT_TURNS:
+        return message_history
+
+    from foundry_mcp.core.research.workflows.deep_research._helpers import (
+        estimate_token_limit_for_model,
+    )
+    from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+        MODEL_TOKEN_LIMITS,
+    )
+
+    max_tokens = estimate_token_limit_for_model(model, MODEL_TOKEN_LIMITS)
+    if max_tokens is None:
+        max_tokens = 128_000  # conservative fallback
+
+    budget_chars = int(max_tokens * _RESEARCHER_HISTORY_BUDGET_FRACTION * _CHARS_PER_TOKEN)
+
+    total_chars = sum(len(msg.get("content", "")) for msg in message_history)
+    if total_chars <= budget_chars:
+        return message_history
+
+    # Drop oldest turns until within budget, preserving the most recent ones
+    result = list(message_history)
+    while len(result) > _MIN_PRESERVE_RECENT_TURNS:
+        total_chars = sum(len(msg.get("content", "")) for msg in result)
+        if total_chars <= budget_chars:
+            break
+        result.pop(0)
+
+    if len(result) < len(message_history):
+        dropped = len(message_history) - len(result)
+        logger.info(
+            "Truncated researcher history: dropped %d oldest turns (%d -> %d), "
+            "budget=%d chars, model=%s",
+            dropped,
+            len(message_history),
+            len(result),
+            budget_chars,
+            model,
+        )
+
+    return result
+
+
 class TopicResearchMixin:
     """Per-topic ReAct research methods. Mixed into DeepResearchWorkflow.
 
@@ -467,10 +544,13 @@ class TopicResearchMixin:
                 )
                 break
 
+            # Truncate history to fit model context window before building prompt
+            truncated_history = _truncate_researcher_history(message_history, researcher_model)
+
             # Build user prompt with conversation history
             user_prompt = _build_react_user_prompt(
                 topic=sub_query.query,
-                message_history=message_history,
+                message_history=truncated_history,
                 budget_remaining=budget_remaining,
                 budget_total=max_searches,
             )
@@ -541,7 +621,7 @@ class TopicResearchMixin:
                 })
                 retry_user_prompt = _build_react_user_prompt(
                     topic=sub_query.query,
-                    message_history=message_history,
+                    message_history=_truncate_researcher_history(message_history, researcher_model),
                     budget_remaining=budget_remaining,
                     budget_total=max_searches,
                 )

@@ -67,6 +67,15 @@ _FALLBACK_MODEL_TOKEN_LIMITS: dict[str, int] = {
 }
 
 
+def _sort_limits_longest_first(limits: dict[str, int]) -> dict[str, int]:
+    """Sort token limit entries by key length descending.
+
+    Ensures the most specific (longest) substring patterns are matched first
+    by ``estimate_token_limit_for_model``, regardless of JSON key ordering.
+    """
+    return dict(sorted(limits.items(), key=lambda item: len(item[0]), reverse=True))
+
+
 def _load_model_token_limits() -> dict[str, int]:
     """Load model token limits from the external JSON config file.
 
@@ -74,9 +83,10 @@ def _load_model_token_limits() -> dict[str, int]:
     config file is missing, unreadable, or malformed.
 
     The config file is located at ``foundry_mcp/config/model_token_limits.json``.
-    **Ordering matters:** more-specific substrings must precede less-specific
-    ones (e.g. ``"gpt-4.1-mini"`` before ``"gpt-4.1"``) because
-    ``estimate_token_limit_for_model`` returns the first match.
+    Entries are sorted by key length descending so that more-specific
+    substrings (e.g. ``"gpt-4.1-mini"``) match before less-specific ones
+    (e.g. ``"gpt-4.1"``), making match order deterministic regardless of
+    JSON key ordering.
     """
     config_path = Path(_config_pkg.__file__).resolve().parent / "model_token_limits.json"
     try:
@@ -84,14 +94,14 @@ def _load_model_token_limits() -> dict[str, int]:
         limits = data.get("limits", {})
         if not isinstance(limits, dict) or not limits:
             logger.warning("model_token_limits.json has empty/invalid 'limits', using fallback")
-            return dict(_FALLBACK_MODEL_TOKEN_LIMITS)
-        return {str(k): int(v) for k, v in limits.items()}
+            return _sort_limits_longest_first(dict(_FALLBACK_MODEL_TOKEN_LIMITS))
+        return _sort_limits_longest_first({str(k): int(v) for k, v in limits.items()})
     except FileNotFoundError:
         logger.debug("model_token_limits.json not found at %s, using fallback", config_path)
-        return dict(_FALLBACK_MODEL_TOKEN_LIMITS)
+        return _sort_limits_longest_first(dict(_FALLBACK_MODEL_TOKEN_LIMITS))
     except (json.JSONDecodeError, ValueError, TypeError) as exc:
         logger.warning("Failed to load model_token_limits.json: %s, using fallback", exc)
-        return dict(_FALLBACK_MODEL_TOKEN_LIMITS)
+        return _sort_limits_longest_first(dict(_FALLBACK_MODEL_TOKEN_LIMITS))
 
 
 #: Flat mapping of model name substrings to context window sizes (in tokens).

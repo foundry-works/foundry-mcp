@@ -1171,16 +1171,21 @@ class DeepResearchState(BaseModel):
         Does nothing if already at SYNTHESIS. The phase order is derived
         from the DeepResearchPhase enum definition order.
 
+        Uses a while loop to handle consecutive deprecated phases correctly
+        (e.g. if multiple phases are ever added to ``_SKIP_PHASES``).
+
         Returns:
             The new phase after advancement
         """
         phase_order = list(DeepResearchPhase)
         current_index = phase_order.index(self.phase)
         if current_index < len(phase_order) - 1:
-            self.phase = phase_order[current_index + 1]
-            # Skip deprecated phases (e.g. GATHERING)
-            if self.phase in self._SKIP_PHASES and current_index + 1 < len(phase_order) - 1:
-                self.phase = phase_order[current_index + 2]
+            current_index += 1
+            self.phase = phase_order[current_index]
+            # Skip any consecutive deprecated phases (e.g. GATHERING)
+            while self.phase in self._SKIP_PHASES and current_index < len(phase_order) - 1:
+                current_index += 1
+                self.phase = phase_order[current_index]
         self.updated_at = datetime.now(timezone.utc)
         return self.phase
 

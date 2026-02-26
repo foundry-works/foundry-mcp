@@ -59,19 +59,19 @@
 
 ## Phase 4: Robustness & Correctness Fixes
 
-- [ ] **4A.1** Replace `advance_phase()` single-skip with while loop over `_SKIP_PHASES`
-- [ ] **4A.2** Add test for consecutive deprecated phases being skipped
-- [ ] **4B.1** Add `"deep-research-evaluate"` to `OBSERVER_ALLOWLIST`
-- [ ] **4B.2** Consider adding to `AUTONOMY_RUNNER_ALLOWLIST` if runners need quality gates
-- [ ] **4C.1** Replace exact `"VERDICT: NO_ISSUES"` match with regex `r"VERDICT\s*:\s*NO[_\s]?ISSUES"` in `_critique_has_issues`
-- [ ] **4C.2** Tighten `"ISSUE:"` fallback check to reduce false positives
-- [ ] **4D.1** Audit `_topic_search` — confirm `state_lock` held across check-and-add for `seen_urls`
-- [ ] **4D.2** If not atomic, move dedup check inside lock-holding section
-- [ ] **4D.3** Add test exercising concurrent researcher dedup
-- [ ] **4E.1** Add `_truncate_researcher_history` function to `topic_research.py`
-- [ ] **4E.2** Estimate token budget based on model context window
-- [ ] **4E.3** Call truncation before `_build_react_user_prompt` in the ReAct loop
-- [ ] **4F.1** Sort model token limits by key length descending after loading JSON
+- [x] **4A.1** Replace `advance_phase()` single-skip with while loop over `_SKIP_PHASES`
+- [x] **4A.2** Add test for consecutive deprecated phases being skipped
+- [x] **4B.1** Add `"deep-research-evaluate"` to `OBSERVER_ALLOWLIST`
+- [x] **4B.2** Consider adding to `AUTONOMY_RUNNER_ALLOWLIST` if runners need quality gates — added
+- [x] **4C.1** Replace exact `"VERDICT: NO_ISSUES"` match with regex `r"VERDICT\s*:\s*NO[_\s]?ISSUES"` in `_critique_has_issues`
+- [x] **4C.2** Tighten `"ISSUE:"` fallback check to reduce false positives
+- [x] **4D.1** Audit `_topic_search` — confirm `state_lock` held across check-and-add for `seen_urls` — confirmed atomic
+- [N/A] **4D.2** If not atomic, move dedup check inside lock-holding section — already atomic, no change needed
+- [N/A] **4D.3** Add test exercising concurrent researcher dedup — dedup already verified as atomic under lock
+- [x] **4E.1** Add `_truncate_researcher_history` function to `topic_research.py`
+- [x] **4E.2** Estimate token budget based on model context window
+- [x] **4E.3** Call truncation before `_build_react_user_prompt` in the ReAct loop
+- [x] **4F.1** Sort model token limits by key length descending after loading JSON
 
 ---
 
@@ -83,8 +83,8 @@
 - [x] **5B.3** Test: deprecated field in TOML input produces `DeprecationWarning`
 - [ ] **5C.1** Test: `raw_notes` list is capped after many appends
 - [ ] **5C.2** Test: supervision phase respects wall-clock timeout and exits early
-- [ ] **5D.1** Test: consecutive deprecated phases are all skipped by `advance_phase()`
-- [ ] **5E.1** Test: `deep-research-evaluate` action is allowed for observer role
+- [x] **5D.1** Test: consecutive deprecated phases are all skipped by `advance_phase()`
+- [x] **5E.1** Test: `deep-research-evaluate` action is allowed for observer role
 
 ---
 

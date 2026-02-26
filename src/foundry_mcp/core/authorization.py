@@ -100,6 +100,8 @@ AUTONOMY_RUNNER_ALLOWLIST: FrozenSet[str] = frozenset(
         # Read-only task context (used by step handlers for scope understanding)
         "prepare",
         "task-prepare",
+        # Research evaluation (read-only analysis for quality gates)
+        "deep-research-evaluate",
     }
 )
 
@@ -148,6 +150,8 @@ OBSERVER_ALLOWLIST: FrozenSet[str] = frozenset(
         "server-info",
         # Read-only review actions
         "review-status",
+        # Read-only research evaluation
+        "deep-research-evaluate",
     }
 )
 

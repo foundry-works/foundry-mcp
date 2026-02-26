@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from typing import TYPE_CHECKING, Any, Optional
 from urllib.parse import urlparse
@@ -2348,12 +2349,21 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             "Return the improved directive set as JSON.",
         ])
 
+    # Pre-compiled patterns for verdict/issue parsing (used by _critique_has_issues)
+    _VERDICT_NO_ISSUES_RE = re.compile(r"VERDICT\s*:\s*NO[_\s]?ISSUES", re.IGNORECASE)
+    _VERDICT_REVISION_RE = re.compile(r"VERDICT\s*:\s*REVISION[_\s]?NEEDED", re.IGNORECASE)
+    # Match "ISSUE:" as a structured marker — either at line start, after numbering,
+    # or after a label prefix (e.g. "Redundancy: ISSUE:"). Avoids false positives
+    # on conversational uses like "this is not an issue" by requiring the colon.
+    _ISSUE_MARKER_RE = re.compile(r"(?:^|\.\s+|:\s*)ISSUE\s*:", re.IGNORECASE | re.MULTILINE)
+
     @staticmethod
     def _critique_has_issues(critique_text: str) -> bool:
         """Check whether the critique indicates issues that need revision.
 
-        Looks for the ``VERDICT:`` line. Falls back to checking for ``ISSUE:``
-        markers if no verdict is found.
+        Looks for the ``VERDICT:`` line with flexible whitespace/formatting.
+        Falls back to checking for ``ISSUE:`` markers at line starts if no
+        verdict is found.
 
         Args:
             critique_text: Raw text from the critique LLM call
@@ -2361,13 +2371,13 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         Returns:
             True if revision is needed, False if all criteria passed
         """
-        text_upper = critique_text.upper()
-        if "VERDICT: NO_ISSUES" in text_upper or "VERDICT:NO_ISSUES" in text_upper:
+        cls = SupervisionPhaseMixin
+        if cls._VERDICT_NO_ISSUES_RE.search(critique_text):
             return False
-        if "VERDICT: REVISION_NEEDED" in text_upper or "VERDICT:REVISION_NEEDED" in text_upper:
+        if cls._VERDICT_REVISION_RE.search(critique_text):
             return True
-        # Fallback: if no explicit verdict, check for ISSUE markers
-        return "ISSUE:" in text_upper
+        # Fallback: check for ISSUE markers at line starts to reduce false positives
+        return bool(cls._ISSUE_MARKER_RE.search(critique_text))
 
     # ==================================================================
     # Query-generation model (legacy fallback)
