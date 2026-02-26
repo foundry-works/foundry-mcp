@@ -15,23 +15,23 @@ Track completion of each fix. Mark `[x]` when implemented and verified.
   - [x] Move `_build_revision_system_prompt` / `_build_revision_user_prompt`
   - [x] Move `_build_think_prompt`
   - [x] Update imports in `supervision.py` to call extracted functions
-  - [ ] Verify all supervision tests still pass
-- [ ] **1.2** Extract coverage assessment into `supervision_coverage.py`
-  - [ ] Create `phases/supervision_coverage.py` with module-level functions
-  - [ ] Move `_build_per_query_coverage`
-  - [ ] Move `_store_coverage_snapshot` / `_compute_coverage_delta`
-  - [ ] Move `_assess_coverage_heuristic`
-  - [ ] Move `_VERDICT_*` / `_ISSUE_MARKER_RE` patterns and `_critique_has_issues`
-  - [ ] Update imports in `supervision.py`
-  - [ ] Verify coverage heuristic tests still pass
-- [ ] **1.3** Decompose `_execute_supervision_delegation_async`
-  - [ ] Extract `_should_exit_wall_clock()` helper
-  - [ ] Extract `_should_exit_heuristic()` helper
-  - [ ] Extract `_run_think_delegate_step()` helper
-  - [ ] Extract `_execute_and_merge_directives()` helper
-  - [ ] Extract `_post_round_bookkeeping()` helper
-  - [ ] Main loop reduced to ~40 lines calling sub-methods
-  - [ ] Verify delegation integration tests still pass
+  - [x] Verify all supervision tests still pass
+- [x] **1.2** Extract coverage assessment into `supervision_coverage.py`
+  - [x] Create `phases/supervision_coverage.py` with module-level functions
+  - [x] Move `_build_per_query_coverage`
+  - [x] Move `_store_coverage_snapshot` / `_compute_coverage_delta`
+  - [x] Move `_assess_coverage_heuristic`
+  - [x] Move `_VERDICT_*` / `_ISSUE_MARKER_RE` patterns and `_critique_has_issues`
+  - [x] Update imports in `supervision.py`
+  - [x] Verify coverage heuristic tests still pass
+- [x] **1.3** Decompose `_execute_supervision_delegation_async`
+  - [x] Extract `_should_exit_wall_clock()` helper
+  - [x] Extract `_should_exit_heuristic()` helper
+  - [x] Extract `_run_think_delegate_step()` helper
+  - [x] Extract `_execute_and_merge_directives()` helper
+  - [x] Extract `_post_round_bookkeeping()` helper
+  - [x] Main loop reduced to ~90 lines calling sub-methods (includes inline early-exit blocks)
+  - [x] Verify delegation integration tests still pass
 - [x] **1.4** Extract duplicate supervision message rendering
   - [x] Create `_render_supervision_conversation_history()` in `supervision_prompts.py`
   - [x] Replace duplicate code in `_build_delegation_user_prompt` (lines 1599-1633)
