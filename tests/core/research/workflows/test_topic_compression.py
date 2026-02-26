@@ -1323,7 +1323,7 @@ class TestCompressionConfig:
         from foundry_mcp.config.research import ResearchConfig
 
         config = ResearchConfig()
-        assert config.get_compression_model() == "2.0-flash"
+        assert config.get_compression_model() == "gemini-2.5-flash"
 
     def test_explicit_compression_model(self) -> None:
         """Explicit compression model is used when set."""

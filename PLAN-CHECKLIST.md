@@ -33,14 +33,14 @@
 
 ## Phase 2: Config Validation & Backward Compatibility
 
-- [ ] **2A.1** Add `_validate_supervision_config()` method to `ResearchConfig.__post_init__`
-- [ ] **2A.2** Cap `deep_research_max_supervision_rounds` at 20 (warn + clamp)
-- [ ] **2A.3** Validate `deep_research_coverage_confidence_threshold` in [0.0, 1.0]
-- [ ] **2A.4** Validate `deep_research_max_concurrent_research_units` upper bound (e.g., 20)
-- [ ] **2B.1** Define `_DEPRECATED_FIELDS` set with all removed field names in `research.py`
-- [ ] **2B.2** Add deprecation check in `from_dict()` / `from_toml_dict()` — log `DeprecationWarning` for each match
-- [ ] **2B.3** Include migration hints in deprecation messages
-- [ ] **2C.1** Update `_COST_TIER_MODEL_DEFAULTS` to use full model names matching `model_token_limits.json`
+- [x] **2A.1** Add `_validate_supervision_config()` method to `ResearchConfig.__post_init__`
+- [x] **2A.2** Cap `deep_research_max_supervision_rounds` at 20 (warn + clamp)
+- [x] **2A.3** Validate `deep_research_coverage_confidence_threshold` in [0.0, 1.0]
+- [x] **2A.4** Validate `deep_research_max_concurrent_research_units` upper bound (e.g., 20)
+- [x] **2B.1** Define `_DEPRECATED_FIELDS` set with all removed field names in `research.py`
+- [x] **2B.2** Add deprecation check in `from_dict()` / `from_toml_dict()` — log `DeprecationWarning` for each match
+- [x] **2B.3** Include migration hints in deprecation messages
+- [x] **2C.1** Update `_COST_TIER_MODEL_DEFAULTS` to use full model names matching `model_token_limits.json`
 
 ---
 
@@ -78,9 +78,9 @@
 ## Phase 5: Test Coverage for New Findings
 
 - [ ] **5A.1** Extend `test_sanitize_external_content.py` with cross-phase injection scenarios
-- [ ] **5B.1** Test: `max_supervision_rounds = 100` is clamped to 20
-- [ ] **5B.2** Test: `coverage_confidence_threshold = 1.5` raises or is clamped
-- [ ] **5B.3** Test: deprecated field in TOML input produces `DeprecationWarning`
+- [x] **5B.1** Test: `max_supervision_rounds = 100` is clamped to 20
+- [x] **5B.2** Test: `coverage_confidence_threshold = 1.5` raises or is clamped
+- [x] **5B.3** Test: deprecated field in TOML input produces `DeprecationWarning`
 - [ ] **5C.1** Test: `raw_notes` list is capped after many appends
 - [ ] **5C.2** Test: supervision phase respects wall-clock timeout and exits early
 - [ ] **5D.1** Test: consecutive deprecated phases are all skipped by `advance_phase()`

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Tuple
@@ -25,8 +26,8 @@ class ResearchConfig:
     """Configuration for research workflows (CHAT, CONSENSUS, THINKDEEP, IDEATE, DEEP_RESEARCH).
 
     **Cost-tiered model routing:** High-volume roles (summarization, compression)
-    automatically use a cheap model (``2.0-flash``) when no explicit model is
-    configured.  See ``_COST_TIER_MODEL_DEFAULTS`` and the deep-research guide.
+    automatically use a cheap model (``gemini-2.5-flash``) when no explicit model
+    is configured.  See ``_COST_TIER_MODEL_DEFAULTS`` and the deep-research guide.
 
     Attributes:
         enabled: Master switch for research tools
@@ -272,6 +273,56 @@ class ResearchConfig:
     deep_research_digest_provider: Optional[str] = None  # Primary provider for digest
     deep_research_digest_providers: List[str] = field(default_factory=list)  # Fallback providers
 
+    #: Fields removed from ResearchConfig that should produce deprecation
+    #: warnings when encountered in user TOML configs.  Maps old field name
+    #: to a short migration hint shown in the warning message.
+    _DEPRECATED_FIELDS: ClassVar[Dict[str, str]] = {
+        "deep_research_enable_reflection": (
+            "Reflection is now always-on in the supervision loop."
+        ),
+        "deep_research_enable_contradiction_detection": (
+            "Contradiction detection has been folded into the supervision phase."
+        ),
+        "deep_research_enable_topic_agents": (
+            "Per-topic ReAct research agents are now always enabled."
+        ),
+        "deep_research_analysis_timeout": (
+            "Analysis/refinement phases have been restructured; "
+            "use deep_research_planning_timeout or deep_research_synthesis_timeout instead."
+        ),
+        "deep_research_refinement_timeout": (
+            "Analysis/refinement phases have been restructured; "
+            "use deep_research_planning_timeout or deep_research_synthesis_timeout instead."
+        ),
+        "deep_research_analysis_provider": (
+            "Analysis/refinement phases have been restructured; "
+            "use deep_research_planning_provider or deep_research_synthesis_provider instead."
+        ),
+        "deep_research_refinement_provider": (
+            "Analysis/refinement phases have been restructured; "
+            "use deep_research_planning_provider or deep_research_synthesis_provider instead."
+        ),
+        "deep_research_analysis_providers": (
+            "Analysis/refinement phases have been restructured; "
+            "use deep_research_planning_providers or deep_research_synthesis_providers instead."
+        ),
+        "deep_research_refinement_providers": (
+            "Analysis/refinement phases have been restructured; "
+            "use deep_research_planning_providers or deep_research_synthesis_providers instead."
+        ),
+        "tavily_extract_in_deep_research": (
+            "URL extraction is now per-topic; "
+            "use deep_research_enable_extract instead."
+        ),
+        "tavily_extract_max_urls": (
+            "URL extraction is now per-topic; "
+            "use deep_research_extract_max_per_iteration instead."
+        ),
+        "deep_research_digest_policy": (
+            "Digest policy has been removed; digestion is now handled automatically."
+        ),
+    }
+
     @classmethod
     def from_toml_dict(cls, data: Dict[str, Any]) -> "ResearchConfig":
         """Create config from TOML dict (typically [research] section).
@@ -282,6 +333,16 @@ class ResearchConfig:
         Returns:
             ResearchConfig instance
         """
+        # Warn about deprecated fields present in the input data
+        for field_name, hint in cls._DEPRECATED_FIELDS.items():
+            if field_name in data:
+                warnings.warn(
+                    f"Config field '{field_name}' has been removed and will be "
+                    f"ignored. {hint}",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+
         # Parse consensus_providers - handle both string and list
         consensus_providers = data.get("consensus_providers", ["gemini", "claude"])
         if isinstance(consensus_providers, str):
@@ -510,12 +571,62 @@ class ResearchConfig:
 
     def __post_init__(self) -> None:
         """Validate configuration fields after initialization."""
+        self._validate_supervision_config()
         self._validate_tavily_config()
         self._validate_perplexity_config()
         self._validate_semantic_scholar_config()
         self._validate_status_persistence_config()
         self._validate_audit_verbosity_config()
         self._validate_digest_config()
+
+    def _validate_supervision_config(self) -> None:
+        """Validate deep research supervision configuration fields.
+
+        Clamps ``deep_research_max_supervision_rounds`` and
+        ``deep_research_max_concurrent_research_units`` to sane upper bounds
+        (warns on clamp).  Raises on invalid
+        ``deep_research_coverage_confidence_threshold``.
+        """
+        # Cap max_supervision_rounds
+        if self.deep_research_max_supervision_rounds > self._MAX_SUPERVISION_ROUNDS:
+            warnings.warn(
+                f"deep_research_max_supervision_rounds={self.deep_research_max_supervision_rounds} "
+                f"exceeds maximum ({self._MAX_SUPERVISION_ROUNDS}); clamping to "
+                f"{self._MAX_SUPERVISION_ROUNDS}.",
+                stacklevel=2,
+            )
+            self.deep_research_max_supervision_rounds = self._MAX_SUPERVISION_ROUNDS
+
+        if self.deep_research_max_supervision_rounds < 1:
+            raise ValueError(
+                f"Invalid deep_research_max_supervision_rounds: "
+                f"{self.deep_research_max_supervision_rounds!r}. Must be >= 1."
+            )
+
+        # Validate coverage confidence threshold
+        if not (0.0 <= self.deep_research_coverage_confidence_threshold <= 1.0):
+            raise ValueError(
+                f"Invalid deep_research_coverage_confidence_threshold: "
+                f"{self.deep_research_coverage_confidence_threshold!r}. "
+                f"Must be in [0.0, 1.0]."
+            )
+
+        # Cap max_concurrent_research_units
+        if self.deep_research_max_concurrent_research_units > self._MAX_CONCURRENT_RESEARCH_UNITS:
+            warnings.warn(
+                f"deep_research_max_concurrent_research_units="
+                f"{self.deep_research_max_concurrent_research_units} exceeds maximum "
+                f"({self._MAX_CONCURRENT_RESEARCH_UNITS}); clamping to "
+                f"{self._MAX_CONCURRENT_RESEARCH_UNITS}.",
+                stacklevel=2,
+            )
+            self.deep_research_max_concurrent_research_units = self._MAX_CONCURRENT_RESEARCH_UNITS
+
+        if self.deep_research_max_concurrent_research_units < 1:
+            raise ValueError(
+                f"Invalid deep_research_max_concurrent_research_units: "
+                f"{self.deep_research_max_concurrent_research_units!r}. Must be >= 1."
+            )
 
     def _validate_tavily_config(self) -> None:
         """Validate all Tavily configuration fields.
@@ -958,6 +1069,10 @@ class ResearchConfig:
     # Role-based model resolution (Phase 6: Multi-Model Cost Optimization)
     # ------------------------------------------------------------------
 
+    #: Upper bounds for supervision config fields (warn + clamp).
+    _MAX_SUPERVISION_ROUNDS: ClassVar[int] = 20
+    _MAX_CONCURRENT_RESEARCH_UNITS: ClassVar[int] = 20
+
     #: Maps each model role to the config attribute suffixes to check.
     #: For each role, we try ``deep_research_{suffix}_provider`` /
     #: ``deep_research_{suffix}_model`` in order, then fall back to
@@ -982,8 +1097,8 @@ class ResearchConfig:
     #: This mirrors ODR's pattern of routing summarization to ~10x cheaper models.
     #: Users can override by setting ``deep_research_{role}_model`` explicitly.
     _COST_TIER_MODEL_DEFAULTS: ClassVar[Dict[str, str]] = {
-        "summarization": "2.0-flash",
-        "compression": "2.0-flash",
+        "summarization": "gemini-2.5-flash",
+        "compression": "gemini-2.5-flash",
     }
 
     def resolve_model_for_role(self, role: str) -> Tuple[str, Optional[str]]:

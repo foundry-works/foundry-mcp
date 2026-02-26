@@ -77,7 +77,7 @@ class ModelRoleConfig:
     models based on task role (research, report, reflection, etc.).
 
     **Cost-tier defaults:** High-volume, low-complexity roles (summarization,
-    compression) automatically use a cheap model (``2.0-flash``) when no
+    compression) automatically use a cheap model (``gemini-2.5-flash``) when no
     explicit model is configured.  This mirrors ODR's pattern of routing
     summarization to ~10x cheaper models.  See
     ``ResearchConfig._COST_TIER_MODEL_DEFAULTS`` for the mapping.

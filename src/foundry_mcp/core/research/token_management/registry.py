@@ -51,7 +51,12 @@ DEFAULT_MODEL_LIMITS: dict[str, dict[str, ModelContextLimits]] = {
             max_output_tokens=8_192,
             budgeting_mode=BudgetingMode.INPUT_ONLY,
         ),
-        # Gemini 2.0 variants
+        # Gemini 2.x variants
+        "gemini-2.5-flash": ModelContextLimits(
+            context_window=1_048_576,
+            max_output_tokens=8_192,
+            budgeting_mode=BudgetingMode.INPUT_ONLY,
+        ),
         "2.0-flash": ModelContextLimits(
             context_window=1_000_000,
             max_output_tokens=8_192,
