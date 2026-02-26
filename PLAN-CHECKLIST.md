@@ -72,26 +72,31 @@ Track completion of each fix. Mark `[x]` when implemented and verified.
 
 ## Phase 3 — Test Coverage: Restore Deleted Test Coverage
 
-- [ ] **3.1** Resolve digest integration test gap
-  - [ ] Determine if `_execute_digest_step_async` is still reachable from the new pipeline
-  - [ ] If dead code: remove `_analysis_digest.py` and related imports
-  - [ ] If live code: write replacement tests covering budget allocation, citation rendering, dedup, timeout, fidelity tracking
-- [ ] **3.2** Resolve contradiction detection test gap
-  - [ ] Determine if `_detect_contradictions()` in `analysis.py` is still called by the new pipeline
-  - [ ] If dead code: remove the method and related imports
-  - [ ] If live code: write unit tests for JSON parsing, finding ID validation, severity validation, empty description filtering, error handling
-- [ ] **3.3** Resolve orchestration reflection test gap
-  - [ ] Determine if `PhaseReflectionDecision`, `_async_think_pause`, `maybe_reflect` are still called
-  - [ ] If dead code: remove and clean up
-  - [ ] If live code: write replacement tests
-- [ ] **3.4** Add dedicated brief phase tests
-  - [ ] Create `tests/core/research/workflows/deep_research/test_brief.py`
-  - [ ] Test: LLM failure → workflow continues with original query (non-fatal)
-  - [ ] Test: malformed JSON → falls back to plain-text brief
-  - [ ] Test: `ResearchBriefOutput` parsing with missing optional fields
-  - [ ] Test: brief generation with clarification constraints included
+- [x] **3.1** Resolve digest integration test gap
+  - [x] Determine if `_execute_digest_step_async` is still reachable from the new pipeline → DEAD CODE
+  - [x] Remove `_analysis_digest.py` (deleted file)
+  - [x] Remove `DigestStepMixin` from `AnalysisPhaseMixin` inheritance and imports
+  - [x] Remove digest step call from `_execute_analysis_async`
+- [x] **3.2** Resolve contradiction detection test gap
+  - [x] Determine if `_detect_contradictions()` in `analysis.py` is still called → DEAD CODE (config flag deprecated)
+  - [x] Remove `_detect_contradictions()` method from `analysis.py`
+  - [x] Remove contradiction detection call block from `_execute_analysis_async`
+  - [x] Clean up unused imports (`Contradiction`, `asyncio`, `json`)
+- [x] **3.3** Resolve orchestration reflection test gap
+  - [x] Determine if `PhaseReflectionDecision`, `async_think_pause` are still called → DEAD CODE
+  - [x] Remove `PhaseReflectionDecision` dataclass from `orchestration.py`
+  - [x] Remove `async_think_pause()`, `_build_reflection_system_prompt()`, `_build_reflection_llm_prompt()`, `_parse_reflection_response()` from `orchestration.py`
+  - [x] Remove `dispatch_to_agent()` and `_build_agent_inputs()` (also dead)
+  - [x] Clean up unused imports (`json`, `SourceQuality`)
+- [x] **3.4** Add dedicated brief phase tests
+  - [x] Create `tests/core/research/workflows/deep_research/test_brief.py`
+  - [x] Test: LLM failure → workflow continues with original query (non-fatal)
+  - [x] Test: malformed JSON → falls back to plain-text brief
+  - [x] Test: `ResearchBriefOutput` parsing with missing optional fields
+  - [x] Test: brief generation with clarification constraints included
+  - [x] Additional: 9 parse_brief_output unit tests, 4 ResearchBriefOutput model tests, 3 prompt sanitization tests
 
-**Verification:** `pytest tests/core/research/ -x -q --tb=short`
+**Verification:** `pytest tests/core/research/ -x -q --tb=short` → 2498 passed, 6 skipped
 
 ---
 
