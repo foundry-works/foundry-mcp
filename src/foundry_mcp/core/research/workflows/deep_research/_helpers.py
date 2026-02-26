@@ -6,6 +6,7 @@ module-level functions (not via ``self``).
 
 from __future__ import annotations
 
+import html as html_module
 import json
 import logging
 import re
@@ -794,7 +795,9 @@ def compute_novelty_tag(
 _INJECTION_TAG_PATTERN: re.Pattern[str] = re.compile(
     r"<\s*/?\s*(?:system|instructions|tool_use|tool_result|human|assistant"
     r"|function_calls|(?:antml:)?invoke|prompt"
-    r"|message|messages|context|document|thinking|reflection)\b[^>]*>",
+    r"|message|messages|context|document|thinking|reflection"
+    r"|example|result|output|user|role|artifact|search_results"
+    r"|function_declaration|function_response)\b[^>]*>",
     re.IGNORECASE,
 )
 
@@ -818,6 +821,12 @@ def sanitize_external_content(text: str) -> str:
     supervision prompts.  Normal content (citations, formatting, data) is
     preserved.
 
+    Pre-processing steps handle common obfuscation techniques:
+    - Zero-width Unicode characters (U+200B, U+200C, U+200D, U+FEFF) are
+      stripped so they can't break up tag names.
+    - HTML entities (``&lt;`` → ``<``) are decoded so entity-encoded tags
+      are caught by the regex patterns.
+
     Args:
         text: Raw external content (source title, snippet, etc.)
 
@@ -826,8 +835,14 @@ def sanitize_external_content(text: str) -> str:
     """
     if not text:
         return text
+    # Strip zero-width characters that could obfuscate injection tags
+    sanitized = text.translate(
+        {0x200B: None, 0x200C: None, 0x200D: None, 0xFEFF: None}
+    )
+    # Decode HTML entities so entity-encoded tags are caught
+    sanitized = html_module.unescape(sanitized)
     # Strip XML-like instruction/override tags
-    sanitized = _INJECTION_TAG_PATTERN.sub("", text)
+    sanitized = _INJECTION_TAG_PATTERN.sub("", sanitized)
     # Strip OpenAI-family special tokens
     sanitized = _SPECIAL_TOKEN_PATTERN.sub("", sanitized)
     # Strip markdown heading injection patterns

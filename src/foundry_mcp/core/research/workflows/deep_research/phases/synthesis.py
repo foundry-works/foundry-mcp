@@ -691,9 +691,9 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         id_to_citation = state.source_id_to_citation()
 
         prompt_parts = [
-            f"# Research Query\n{state.original_query}",
+            f"# Research Query\n{sanitize_external_content(state.original_query)}",
             "",
-            f"## Research Brief\n{state.research_brief or 'Direct research on the query'}",
+            f"## Research Brief\n{sanitize_external_content(state.research_brief or 'Direct research on the query')}",
             "",
         ]
 
@@ -762,7 +762,7 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
             for tr in compressed_topics:
                 # Resolve sub-query text for section header
                 sq = state.get_sub_query(tr.sub_query_id)
-                topic_label = sq.query if sq else tr.sub_query_id
+                topic_label = sanitize_external_content(sq.query) if sq else tr.sub_query_id
                 prompt_parts.append(f"### {topic_label}")
                 prompt_parts.append("")
                 prompt_parts.append(sanitize_external_content(tr.compressed_findings or ""))
@@ -947,7 +947,7 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         prompt_parts.extend(
             [
                 "## Instructions",
-                f"Generate a comprehensive research report addressing the query: '{state.original_query}'",
+                f"Generate a comprehensive research report addressing the query: '{sanitize_external_content(state.original_query)}'",
                 "",
                 f"**Query type hint:** {type_label} — adapt the report structure accordingly.",
                 "",
@@ -1100,11 +1100,13 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         Returns:
             Minimal markdown report
         """
+        safe_query = sanitize_external_content(state.original_query)
+        safe_brief = sanitize_external_content(state.research_brief or "No research brief generated.")
         return f"""# Research Report
 
 ## Executive Summary
 
-Research was conducted on the query: "{state.original_query}"
+Research was conducted on the query: "{safe_query}"
 
 Unfortunately, the analysis phase did not yield extractable findings from the gathered sources. This may indicate:
 - The sources lacked relevant information
@@ -1113,11 +1115,11 @@ Unfortunately, the analysis phase did not yield extractable findings from the ga
 
 ## Research Query
 
-{state.original_query}
+{safe_query}
 
 ## Research Brief
 
-{state.research_brief or "No research brief generated."}
+{safe_brief}
 
 ## Sources Examined
 

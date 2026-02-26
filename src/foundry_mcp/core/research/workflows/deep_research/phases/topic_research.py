@@ -56,6 +56,11 @@ def _format_source_block(
     to reference specific sources and for the compression step to preserve
     citations — matching the ODR presentation pattern.
 
+    **Sanitization contract:** All web-derived fields (title, snippet,
+    content, URL) are passed through ``sanitize_external_content()``
+    before interpolation into the prompt.  Callers do not need to
+    pre-sanitize source objects.
+
     Args:
         idx: 1-based source index within the search batch.
         src: ResearchSource object.
@@ -385,7 +390,7 @@ def _build_react_user_prompt(
     Returns:
         Formatted user prompt string.
     """
-    parts: list[str] = [f"<research_topic>\n{topic}\n</research_topic>"]
+    parts: list[str] = [f"<research_topic>\n{sanitize_external_content(topic)}\n</research_topic>"]
 
     if message_history:
         parts.append("\n<conversation_history>")
@@ -396,7 +401,10 @@ def _build_react_user_prompt(
                 parts.append(f"\n<turn number=\"{i + 1}\" role=\"assistant\">\n{content}\n</turn>")
             elif role == "tool":
                 tool_name = msg.get("tool", "unknown")
-                parts.append(f"\n<turn number=\"{i + 1}\" role=\"tool\" tool=\"{tool_name}\">\n{content}\n</turn>")
+                # Tool results contain web-sourced content — sanitize before
+                # interpolating into the researcher prompt.
+                safe_content = sanitize_external_content(content)
+                parts.append(f"\n<turn number=\"{i + 1}\" role=\"tool\" tool=\"{tool_name}\">\n{safe_content}\n</turn>")
         parts.append("\n</conversation_history>")
 
     parts.append(

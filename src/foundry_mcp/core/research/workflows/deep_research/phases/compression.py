@@ -93,13 +93,13 @@ def _build_message_history_prompt(
     # Build source reference list so the model can map citations
     source_ref_lines: list[str] = []
     for idx, src in enumerate(topic_sources, 1):
-        url_part = f": {src.url}" if src.url else ""
+        url_part = f": {sanitize_external_content(src.url)}" if src.url else ""
         safe_title = sanitize_external_content(src.title)
         source_ref_lines.append(f"[{idx}] {safe_title}{url_part}")
     source_ref = "\n".join(source_ref_lines)
 
     return (
-        f"Research sub-query: {query_text}\n\n"
+        f"Research sub-query: {sanitize_external_content(query_text)}\n\n"
         f"Below is the full researcher conversation (tool calls and "
         f"responses) for this topic:\n\n"
         f"{history_block}\n\n"
@@ -141,12 +141,12 @@ def _build_structured_metadata_prompt(
     iteration_lines: list[str] = []
 
     iteration_lines.append(
-        f'  1. Query: "{query_text}" '
+        f'  1. Query: "{sanitize_external_content(query_text)}" '
         f"-> {topic_result.sources_found} sources found"
     )
     if topic_result.reflection_notes:
         iteration_lines.append(
-            f"     Reflection: {topic_result.reflection_notes[0]}"
+            f"     Reflection: {sanitize_external_content(topic_result.reflection_notes[0])}"
         )
 
     for i, refined_q in enumerate(topic_result.refined_queries):
@@ -156,15 +156,15 @@ def _build_structured_metadata_prompt(
             if i + 1 < len(topic_result.reflection_notes)
             else ""
         )
-        iteration_lines.append(f'  {iter_num}. Query: "{refined_q}"')
+        iteration_lines.append(f'  {iter_num}. Query: "{sanitize_external_content(refined_q)}"')
         if reflection:
             iteration_lines.append(
-                f"     Reflection: {reflection}"
+                f"     Reflection: {sanitize_external_content(reflection)}"
             )
 
     if topic_result.early_completion and topic_result.completion_rationale:
         iteration_lines.append(
-            f"  Completion: {topic_result.completion_rationale}"
+            f"  Completion: {sanitize_external_content(topic_result.completion_rationale)}"
         )
 
     iterations_block = "\n".join(iteration_lines)
@@ -200,7 +200,7 @@ def _build_structured_metadata_prompt(
     sources_block = "\n".join(source_lines)
 
     return (
-        f"Research sub-query: {query_text}\n\n"
+        f"Research sub-query: {sanitize_external_content(query_text)}\n\n"
         f"Search iterations:\n{iterations_block}\n\n"
         f"Sources ({len(topic_sources)} total):\n\n"
         f"{sources_block}\n"
@@ -902,7 +902,7 @@ class CompressionMixin:
                 # Last resort: list the source titles for this topic
                 topic_sources = [s for s in state.sources if s.id in tr.source_ids]
                 if topic_sources:
-                    source_lines = [f"  - [{s.citation_number}] {s.title}" for s in topic_sources if s.citation_number]
+                    source_lines = [f"  - [{s.citation_number}] {sanitize_external_content(s.title)}" for s in topic_sources if s.citation_number]
                     content = "Sources found:\n" + "\n".join(source_lines)
                 else:
                     continue
@@ -928,7 +928,7 @@ class CompressionMixin:
                 ]
                 refs_str = ", ".join(citation_refs) if citation_refs else "no sources"
                 category = f.category or "General"
-                finding_lines.append(f"- [{category}] {f.content} (Sources: {refs_str})")
+                finding_lines.append(f"- [{category}] {sanitize_external_content(f.content)} (Sources: {refs_str})")
             findings_section = (
                 "\n\n## Analysis Findings\n" + "\n".join(finding_lines)
             )
@@ -938,9 +938,9 @@ class CompressionMixin:
         if state.contradictions:
             contra_lines: list[str] = []
             for c in state.contradictions:
-                contra_lines.append(f"- [{c.severity.upper()}] {c.description}")
+                contra_lines.append(f"- [{sanitize_external_content(c.severity).upper()}] {sanitize_external_content(c.description)}")
                 if c.resolution:
-                    contra_lines.append(f"  Resolution: {c.resolution}")
+                    contra_lines.append(f"  Resolution: {sanitize_external_content(c.resolution)}")
             contradictions_section = (
                 "\n\n## Detected Contradictions\n" + "\n".join(contra_lines)
             )
@@ -949,7 +949,7 @@ class CompressionMixin:
         gaps_section = ""
         if state.gaps:
             gap_lines = [
-                f"- [{'resolved' if g.resolved else 'unresolved'}] {g.description}"
+                f"- [{'resolved' if g.resolved else 'unresolved'}] {sanitize_external_content(g.description)}"
                 for g in state.gaps
             ]
             gaps_section = "\n\n## Knowledge Gaps\n" + "\n".join(gap_lines)
@@ -959,7 +959,7 @@ class CompressionMixin:
         for s in state.sources:
             if s.citation_number is not None:
                 source_ref_lines.append(
-                    f"[{s.citation_number}] {s.title}"
+                    f"[{s.citation_number}] {sanitize_external_content(s.title)}"
                     + (f" - {s.url}" if s.url else "")
                 )
         source_reference = "\n\n## Source Reference\n" + "\n".join(source_ref_lines)
@@ -967,7 +967,7 @@ class CompressionMixin:
         # Assemble user prompt
         topics_block = "\n\n".join(topic_sections)
         user_prompt = (
-            f"# Research Query\n{state.original_query}\n\n"
+            f"# Research Query\n{sanitize_external_content(state.original_query)}\n\n"
             f"# Per-Topic Research Findings ({topic_count} topics)\n\n"
             f"{topics_block}"
             f"{findings_section}"

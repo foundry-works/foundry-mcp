@@ -195,9 +195,9 @@ def build_combined_think_delegate_user_prompt(
             parts.append(f"\n### {sanitize_external_content(entry['query'])}")
             parts.append(f"**Sources:** {entry['source_count']} | **Domains:** {entry['unique_domains']}")
             if entry.get("compressed_findings_excerpt"):
-                parts.append(f"**Key findings:**\n{entry['compressed_findings_excerpt']}")
+                parts.append(f"**Key findings:**\n{sanitize_external_content(entry['compressed_findings_excerpt'])}")
             elif entry.get("findings_summary"):
-                parts.append(f"**Summary:** {entry['findings_summary']}")
+                parts.append(f"**Summary:** {sanitize_external_content(entry['findings_summary'])}")
         parts.append("")
 
     # Previously executed directives
@@ -338,9 +338,9 @@ def build_delegation_user_prompt(
             parts.append(f"\n### {sanitize_external_content(entry['query'])}")
             parts.append(f"**Sources:** {entry['source_count']} | **Domains:** {entry['unique_domains']}")
             if entry.get("compressed_findings_excerpt"):
-                parts.append(f"**Key findings:**\n{entry['compressed_findings_excerpt']}")
+                parts.append(f"**Key findings:**\n{sanitize_external_content(entry['compressed_findings_excerpt'])}")
             elif entry.get("findings_summary"):
-                parts.append(f"**Summary:** {entry['findings_summary']}")
+                parts.append(f"**Summary:** {sanitize_external_content(entry['findings_summary'])}")
         parts.append("")
 
     # Gap analysis reference — the full think output is already in the
@@ -451,7 +451,7 @@ def build_first_round_think_prompt(state: DeepResearchState) -> str:
     if state.clarification_constraints:
         parts.append("**Clarification Constraints:**")
         for key, value in state.clarification_constraints.items():
-            parts.append(f"- {key}: {sanitize_external_content(str(value))}")
+            parts.append(f"- {sanitize_external_content(str(key))}: {sanitize_external_content(str(value))}")
         parts.append("")
 
     if state.system_prompt:
@@ -553,7 +553,7 @@ def build_first_round_delegation_user_prompt(
     if state.clarification_constraints:
         parts.append("## Clarification Constraints")
         for key, value in state.clarification_constraints.items():
-            parts.append(f"- {key}: {sanitize_external_content(str(value))}")
+            parts.append(f"- {sanitize_external_content(str(key))}: {sanitize_external_content(str(value))}")
         parts.append("")
 
     if state.system_prompt:
@@ -693,10 +693,10 @@ def build_revision_user_prompt(
         f"# Original Research Query\n{sanitize_external_content(state.original_query)}",
         "",
         "# Current Directives",
-        directives_json,
+        sanitize_external_content(directives_json),
         "",
         "# Critique Feedback",
-        critique_text,
+        sanitize_external_content(critique_text),
         "",
         "Revise the directives based on the critique above. "
         "Return the improved directive set as JSON.",
@@ -776,7 +776,7 @@ def build_think_prompt(
             )
             parts.append(f"- **Domains:** {', '.join(entry['domain_list']) if entry['domain_list'] else 'none'}")
             if entry.get("findings_summary"):
-                parts.append(f"- **Findings:** {entry['findings_summary']}")
+                parts.append(f"- **Findings:** {sanitize_external_content(entry['findings_summary'])}")
             parts.append("")
 
     parts.extend([
