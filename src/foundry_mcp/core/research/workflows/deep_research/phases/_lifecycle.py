@@ -332,6 +332,9 @@ def truncate_supervision_messages(
         restored = set()
         for idx in sorted(reasoning_to_remove, key=lambda i: messages[i].get("round", 0), reverse=True):
             msg_chars = len(_msg_content(messages[idx]))
+            # Guard: never let combined total exceed the global budget
+            if findings_remaining + reasoning_remaining + msg_chars > budget_chars:
+                break
             if reasoning_remaining + msg_chars <= reasoning_budget:
                 reasoning_remaining += msg_chars
                 restored.add(idx)
@@ -345,6 +348,9 @@ def truncate_supervision_messages(
         restored = set()
         for idx in sorted(findings_to_remove, key=lambda i: messages[i].get("round", 0), reverse=True):
             msg_chars = len(body_truncated.get(idx, _msg_content(messages[idx])))
+            # Guard: never let combined total exceed the global budget
+            if findings_remaining + reasoning_remaining + msg_chars > budget_chars:
+                break
             if findings_remaining + msg_chars <= findings_budget:
                 findings_remaining += msg_chars
                 restored.add(idx)

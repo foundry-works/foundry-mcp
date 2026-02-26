@@ -1031,7 +1031,24 @@ Guidelines:
                 )
 
         tasks = [run_directive_researcher(sq) for sq in directive_sub_queries]
-        results = await asyncio.gather(*tasks, return_exceptions=False)
+        gather_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Propagate cancellation if any task was cancelled
+        for r in gather_results:
+            if isinstance(r, asyncio.CancelledError):
+                raise r
+
+        # Separate successful results from unexpected exceptions
+        results: list[TopicResearchResult] = []
+        for i, r in enumerate(gather_results):
+            if isinstance(r, BaseException):
+                logger.warning(
+                    "Directive researcher unexpected exception for sub-query %s: %s. Non-fatal.",
+                    directive_sub_queries[i].id,
+                    r,
+                )
+            else:
+                results.append(r)
 
         # Merge results into state
         for result in results:
@@ -1142,6 +1159,11 @@ Guidelines:
 
         tasks = [compress_one(r) for r in results_to_compress]
         gather_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Propagate cancellation if any task was cancelled
+        for r in gather_results:
+            if isinstance(r, asyncio.CancelledError):
+                raise r
 
         for result in gather_results:
             if isinstance(result, BaseException) or not result:

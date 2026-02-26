@@ -40,16 +40,16 @@
 
 ## Phase 3: Concurrency & Error Handling
 
-- [ ] **3A.1** Change `return_exceptions=False` to `True` in directive execution gather (`supervision.py:1034`)
-- [ ] **3A.2** Add post-gather `CancelledError` detection and re-raise
-- [ ] **3A.3** Log other `BaseException` results as non-fatal directive failures
-- [ ] **3B.1** Add `CancelledError` detection after compression gather (`compression.py:757`)
-- [ ] **3B.2** Re-raise `CancelledError` to propagate cancellation upward
-- [ ] **3C.1** Add cumulative content length tracking in `_build_structured_metadata_prompt`
-- [ ] **3C.2** Stop adding source content at global cap (200k chars)
-- [ ] **3C.3** Add truncation marker for omitted sources
-- [ ] **3D.1** Track `total_remaining` during rebalance phase in `truncate_supervision_messages`
-- [ ] **3D.2** Add guard to break when `total_remaining >= budget_chars`
+- [x] **3A.1** Change `return_exceptions=False` to `True` in directive execution gather (`supervision.py:1034`)
+- [x] **3A.2** Add post-gather `CancelledError` detection and re-raise
+- [x] **3A.3** Log other `BaseException` results as non-fatal directive failures
+- [x] **3B.1** Add `CancelledError` detection after compression gather (`compression.py:757`)
+- [x] **3B.2** Re-raise `CancelledError` to propagate cancellation upward
+- [x] **3C.1** Add cumulative content length tracking in `_build_structured_metadata_prompt`
+- [x] **3C.2** Stop adding source content at global cap (200k chars)
+- [x] **3C.3** Add truncation marker for omitted sources
+- [x] **3D.1** Track `total_remaining` during rebalance phase in `truncate_supervision_messages`
+- [x] **3D.2** Add guard to break when `total_remaining >= budget_chars`
 
 ---
 

@@ -108,6 +108,9 @@ def _build_message_history_prompt(
     )
 
 
+_GLOBAL_PROMPT_BUDGET_CHARS: int = 200_000
+
+
 def _build_structured_metadata_prompt(
     *,
     query_text: str,
@@ -161,18 +164,32 @@ def _build_structured_metadata_prompt(
 
     iterations_block = "\n".join(iteration_lines)
 
-    # Source block with full content
+    # Source block with full content, subject to global budget cap
     source_lines: list[str] = []
+    cumulative_chars = 0
+    sources_included = 0
     for idx, src in enumerate(topic_sources, 1):
-        source_lines.append(f"[{idx}] Title: {src.title}")
+        entry_lines: list[str] = []
+        entry_lines.append(f"[{idx}] Title: {src.title}")
         if src.url:
-            source_lines.append(f"    URL: {src.url}")
+            entry_lines.append(f"    URL: {src.url}")
         content = src.content or src.snippet or ""
         if content:
             if len(content) > max_content_length:
                 content = content[:max_content_length] + "..."
-            source_lines.append(f"    Content: {content}")
-        source_lines.append("")
+            entry_lines.append(f"    Content: {content}")
+        entry_lines.append("")
+
+        entry_text = "\n".join(entry_lines)
+        if cumulative_chars + len(entry_text) > _GLOBAL_PROMPT_BUDGET_CHARS:
+            omitted = len(topic_sources) - sources_included
+            source_lines.append(
+                f"[... {omitted} additional source(s) omitted for context limits]"
+            )
+            break
+        cumulative_chars += len(entry_text)
+        source_lines.extend(entry_lines)
+        sources_included += 1
 
     sources_block = "\n".join(source_lines)
 
@@ -755,6 +772,11 @@ class CompressionMixin:
         # Run compression tasks in parallel
         tasks = [compress_one(tr) for tr in results_to_compress]
         gather_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Propagate cancellation if any task was cancelled
+        for r in gather_results:
+            if isinstance(r, asyncio.CancelledError):
+                raise r
 
         # Aggregate results after gather completes (no nonlocal mutation).
         # Note: per-topic PhaseMetrics and token tracking are handled by
