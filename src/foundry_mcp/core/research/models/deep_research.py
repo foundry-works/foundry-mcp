@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Literal, Optional
+from typing import Any, ClassVar, Literal, Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -1158,11 +1158,16 @@ class DeepResearchState(BaseModel):
     # Phase Management
     # =========================================================================
 
-    def advance_phase(self) -> DeepResearchPhase:
-        """Advance to the next research phase.
+    # Phases that advance_phase() skips over automatically.
+    # GATHERING is deprecated — new workflows proceed BRIEF → SUPERVISION directly.
+    # Retained in the enum only for legacy saved-state resume compatibility.
+    _SKIP_PHASES: ClassVar[set[DeepResearchPhase]] = {DeepResearchPhase.GATHERING}
 
-        Phases advance in order: CLARIFICATION -> BRIEF -> GATHERING ->
-        SUPERVISION -> SYNTHESIS.
+    def advance_phase(self) -> DeepResearchPhase:
+        """Advance to the next research phase, skipping deprecated phases.
+
+        Phases advance in order: CLARIFICATION -> BRIEF -> SUPERVISION -> SYNTHESIS.
+        GATHERING is automatically skipped (deprecated, legacy-resume-only).
         Does nothing if already at SYNTHESIS. The phase order is derived
         from the DeepResearchPhase enum definition order.
 
@@ -1173,6 +1178,9 @@ class DeepResearchState(BaseModel):
         current_index = phase_order.index(self.phase)
         if current_index < len(phase_order) - 1:
             self.phase = phase_order[current_index + 1]
+            # Skip deprecated phases (e.g. GATHERING)
+            if self.phase in self._SKIP_PHASES and current_index + 1 < len(phase_order) - 1:
+                self.phase = phase_order[current_index + 2]
         self.updated_at = datetime.now(timezone.utc)
         return self.phase
 

@@ -228,9 +228,9 @@ class WorkflowExecutionMixin:
                 )
                 if err:
                     return err
-                state.phase = DeepResearchPhase.SUPERVISION
+                state.advance_phase()  # GATHERING → SUPERVISION
             elif state.phase not in (DeepResearchPhase.SUPERVISION, DeepResearchPhase.SYNTHESIS):
-                state.phase = DeepResearchPhase.SUPERVISION
+                state.advance_phase()  # Skip to next active phase
 
             # SUPERVISION (handles decomposition + research + gap-fill internally)
             if state.phase == DeepResearchPhase.SUPERVISION:

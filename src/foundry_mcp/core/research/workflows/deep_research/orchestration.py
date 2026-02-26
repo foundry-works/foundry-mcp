@@ -94,7 +94,7 @@ class AgentDecision:
 
 
 @dataclass
-class ReflectionDecision:
+class PhaseReflectionDecision:
     """Result of an LLM-driven reflection at a phase boundary.
 
     Captures the LLM's quality assessment and proceed/adjust recommendation
@@ -464,7 +464,7 @@ class SupervisorOrchestrator:
         phase: DeepResearchPhase,
         *,
         workflow: Any = None,
-    ) -> ReflectionDecision:
+    ) -> PhaseReflectionDecision:
         """Execute LLM-driven reflection at a phase boundary.
 
         Sends the phase results and state summary to a fast model, which
@@ -476,11 +476,11 @@ class SupervisorOrchestrator:
             workflow: The DeepResearchWorkflow instance (provides config, _execute_provider_async)
 
         Returns:
-            ReflectionDecision with LLM assessment
+            PhaseReflectionDecision with LLM assessment
         """
         if workflow is None:
             logger.warning("async_think_pause called without workflow instance, returning proceed=True")
-            return ReflectionDecision(
+            return PhaseReflectionDecision(
                 quality_assessment="No workflow context available",
                 proceed=True,
                 rationale="Skipped reflection: no workflow instance provided",
@@ -517,7 +517,7 @@ class SupervisorOrchestrator:
                 phase.value,
                 exc,
             )
-            return ReflectionDecision(
+            return PhaseReflectionDecision(
                 quality_assessment="Reflection call failed",
                 proceed=True,
                 rationale=f"LLM reflection error: {exc}. Falling back to heuristic.",
@@ -533,7 +533,7 @@ class SupervisorOrchestrator:
                 phase.value,
                 result.error,
             )
-            return ReflectionDecision(
+            return PhaseReflectionDecision(
                 quality_assessment="Reflection call returned failure",
                 proceed=True,
                 rationale=f"LLM reflection failed: {result.error}. Falling back to heuristic.",
@@ -658,8 +658,8 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         model_used: Optional[str] = None,
         tokens_used: int = 0,
         duration_ms: float = 0.0,
-    ) -> ReflectionDecision:
-        """Parse LLM reflection response into a ReflectionDecision.
+    ) -> PhaseReflectionDecision:
+        """Parse LLM reflection response into a PhaseReflectionDecision.
 
         Falls back to proceed=True on parse failures.
 
@@ -672,11 +672,11 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             duration_ms: Call duration
 
         Returns:
-            ReflectionDecision
+            PhaseReflectionDecision
         """
         from foundry_mcp.core.research.workflows.deep_research._helpers import extract_json
 
-        default = ReflectionDecision(
+        default = PhaseReflectionDecision(
             quality_assessment="Unable to parse reflection response",
             proceed=True,
             rationale="Defaulting to proceed due to parse failure",
@@ -704,7 +704,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         adjustments_raw = data.get("adjustments", [])
         adjustments = [str(a) for a in adjustments_raw[:3] if a] if isinstance(adjustments_raw, list) else []
 
-        return ReflectionDecision(
+        return PhaseReflectionDecision(
             quality_assessment=str(data.get("quality_assessment", "")),
             proceed=bool(data.get("proceed", True)),
             adjustments=adjustments,

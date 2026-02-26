@@ -158,11 +158,11 @@ class TestPhaseFlowActivePhases:
         state.advance_phase()
         assert state.phase == DeepResearchPhase.SUPERVISION
 
-    def test_advance_phase_from_brief_goes_to_gathering(self) -> None:
-        """advance_phase from BRIEF goes to GATHERING."""
+    def test_advance_phase_from_brief_skips_gathering(self) -> None:
+        """advance_phase from BRIEF skips deprecated GATHERING, goes to SUPERVISION."""
         state = _make_state(phase=DeepResearchPhase.BRIEF)
         state.advance_phase()
-        assert state.phase == DeepResearchPhase.GATHERING
+        assert state.phase == DeepResearchPhase.SUPERVISION
 
     def test_advance_phase_from_clarification_goes_to_brief(self) -> None:
         """advance_phase from CLARIFICATION goes to BRIEF."""

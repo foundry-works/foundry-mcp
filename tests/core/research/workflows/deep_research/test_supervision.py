@@ -1986,18 +1986,14 @@ class TestPhaseFlowSupervisorOwnedDecomposition:
     """Tests for workflow phase flow with supervisor-owned decomposition."""
 
     def test_brief_to_supervision_transition(self):
-        """BRIEF → GATHERING → SUPERVISION transition follows the active phase order."""
+        """BRIEF → SUPERVISION transition skips deprecated GATHERING phase."""
         state = DeepResearchState(
             original_query="test query",
             phase=DeepResearchPhase.BRIEF,
             research_brief="Enriched research brief",
         )
 
-        # BRIEF → GATHERING
-        state.advance_phase()
-        assert state.phase == DeepResearchPhase.GATHERING
-
-        # GATHERING → SUPERVISION
+        # BRIEF → SUPERVISION (GATHERING is deprecated and skipped)
         state.advance_phase()
         assert state.phase == DeepResearchPhase.SUPERVISION
 

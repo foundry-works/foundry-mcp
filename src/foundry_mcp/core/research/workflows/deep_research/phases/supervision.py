@@ -48,6 +48,10 @@ _MAX_FOLLOW_UPS_PER_ROUND = 3
 # Actual cap also bounded by config.deep_research_max_concurrent_research_units
 _MAX_DIRECTIVES_PER_ROUND = 5
 
+# Cap stored directives to bound state serialization size.
+# Only the most recent directives are kept; older ones are pruned.
+_MAX_STORED_DIRECTIVES = 30
+
 
 class SupervisionPhaseMixin:
     """Supervision phase methods. Mixed into DeepResearchWorkflow.
@@ -323,8 +327,9 @@ class SupervisionPhaseMixin:
                 state.supervision_round += 1
                 break
 
-            # Store directives for audit
+            # Store directives for audit (capped to limit state serialization growth)
             state.directives.extend(directives)
+            state.directives = state.directives[-_MAX_STORED_DIRECTIVES:]
 
             # --- Step 3: Execute directives as parallel topic researchers ---
             self._check_cancellation(state)

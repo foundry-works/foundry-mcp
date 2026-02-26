@@ -55,15 +55,15 @@
 
 ## Phase 4: State Model Hygiene
 
-- [ ] **4A.1** Rename `ReflectionDecision` → `PhaseReflectionDecision` in `orchestration.py`
-- [ ] **4A.2** Update all references in `orchestration.py` (type annotations, instantiation)
-- [ ] **4A.3** Search for external imports and update
-- [ ] **4B.1** Add `_SKIP_PHASES` set to `advance_phase()` containing `GATHERING`
-- [ ] **4B.2** Implement skip logic: advance again if landed on a skip phase
-- [ ] **4B.3** Remove direct `state.phase = DeepResearchPhase.SUPERVISION` workaround in `workflow_execution.py`
-- [ ] **4B.4** Verify existing phase lifecycle tests pass with skip logic
-- [ ] **4C.1** Add `_MAX_STORED_DIRECTIVES = 30` constant to `supervision.py`
-- [ ] **4C.2** Cap `state.directives` after each `extend()` call
+- [x] **4A.1** Rename `ReflectionDecision` → `PhaseReflectionDecision` in `orchestration.py`
+- [x] **4A.2** Update all references in `orchestration.py` (type annotations, instantiation)
+- [x] **4A.3** Search for external imports and update
+- [x] **4B.1** Add `_SKIP_PHASES` set to `advance_phase()` containing `GATHERING`
+- [x] **4B.2** Implement skip logic: advance again if landed on a skip phase
+- [x] **4B.3** Remove direct `state.phase = DeepResearchPhase.SUPERVISION` workaround in `workflow_execution.py`
+- [x] **4B.4** Verify existing phase lifecycle tests pass with skip logic
+- [x] **4C.1** Add `_MAX_STORED_DIRECTIVES = 30` constant to `supervision.py`
+- [x] **4C.2** Cap `state.directives` after each `extend()` call
 
 ---
 

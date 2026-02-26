@@ -238,14 +238,12 @@ class TestDeepResearchState:
         assert state.get_gap("missing") is None
 
     def test_advance_phase(self, sample_deep_research_state):
-        """Should advance through active phases correctly."""
+        """Should advance through active phases correctly, skipping deprecated GATHERING."""
         state = sample_deep_research_state
 
         assert state.phase == DeepResearchPhase.BRIEF
 
-        state.advance_phase()
-        assert state.phase == DeepResearchPhase.GATHERING
-
+        # BRIEF → SUPERVISION (GATHERING is deprecated and skipped)
         state.advance_phase()
         assert state.phase == DeepResearchPhase.SUPERVISION
 
