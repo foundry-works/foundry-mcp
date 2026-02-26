@@ -13,6 +13,10 @@ from dataclasses import dataclass
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Optional
 
+from foundry_mcp.core.research.workflows.deep_research.source_quality import (
+    _extract_domain,
+)
+
 if TYPE_CHECKING:
     from foundry_mcp.config.research import ResearchConfig
 
@@ -779,28 +783,6 @@ def compute_novelty_tag(
         )
     else:
         return NoveltyTag(tag="[NEW]", category="new", similarity=best_sim)
-
-
-def _extract_domain(url: str) -> Optional[str]:
-    """Extract the domain from a URL for cheap overlap detection.
-
-    Args:
-        url: Full URL string.
-
-    Returns:
-        Lowercase domain (e.g. ``"example.com"``), or None on parse failure.
-    """
-    try:
-        # Strip protocol and path
-        if "://" in url:
-            url = url.split("://", 1)[1]
-        domain = url.split("/", 1)[0].split("?", 1)[0].lower()
-        # Remove www. prefix for consistency
-        if domain.startswith("www."):
-            domain = domain[4:]
-        return domain or None
-    except (IndexError, AttributeError):
-        return None
 
 
 def build_novelty_summary(

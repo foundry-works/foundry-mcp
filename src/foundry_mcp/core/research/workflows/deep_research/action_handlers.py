@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from foundry_mcp.core import task_registry
 from foundry_mcp.core.research.models.deep_research import (
+    DEFAULT_MAX_SUPERVISION_ROUNDS,
     DeepResearchPhase,
     DeepResearchState,
 )
@@ -129,7 +130,7 @@ class ActionHandlersMixin:
             planning_model=None if provider_id else planning_model,
             synthesis_model=None if provider_id else synthesis_model,
             # Supervision configuration
-            max_supervision_rounds=getattr(self.config, "deep_research_max_supervision_rounds", 3),
+            max_supervision_rounds=getattr(self.config, "deep_research_max_supervision_rounds", DEFAULT_MAX_SUPERVISION_ROUNDS),
         )
 
         # Save initial state

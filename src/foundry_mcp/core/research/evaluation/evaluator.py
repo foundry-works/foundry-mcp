@@ -197,8 +197,10 @@ def _parse_evaluation_response(
     for dim in dimensions:
         dim_data = scores_data.get(dim.name)
         if dim_data is None:
-            # Dimension missing — assign neutral score
-            dimension_scores.append(build_dimension_score(dim.name, 3, "Not evaluated"))
+            # Dimension missing — assign neutral imputed score
+            dimension_scores.append(
+                build_dimension_score(dim.name, 3, "Not evaluated", imputed=True)
+            )
             continue
 
         raw_score = dim_data.get("score", 3)
@@ -211,11 +213,22 @@ def _parse_evaluation_response(
     # Compute composite
     composite, variance, weights = compute_composite(dimension_scores)
 
+    # Track imputation in metadata
+    imputed_count = sum(1 for ds in dimension_scores if ds.imputed)
+    metadata: dict[str, object] = {}
+    if imputed_count > 0:
+        imputed_names = [ds.name for ds in dimension_scores if ds.imputed]
+        metadata["imputed_count"] = imputed_count
+        metadata["warnings"] = [
+            f"{imputed_count} dimension(s) imputed with neutral score (3/5): {', '.join(imputed_names)}"
+        ]
+
     return EvaluationResult(
         dimension_scores=dimension_scores,
         composite_score=composite,
         score_variance=variance,
         weights=weights,
+        metadata=metadata,
     )
 
 

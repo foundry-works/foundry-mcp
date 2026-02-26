@@ -24,6 +24,10 @@ from foundry_mcp.core.research.models.sources import (
 )
 
 
+# Single source of truth for the default supervision rounds cap.
+DEFAULT_MAX_SUPERVISION_ROUNDS: int = 6
+
+
 class TopicResearchResult(BaseModel):
     """Result of a per-topic ReAct research loop.
 
@@ -868,7 +872,7 @@ class DeepResearchState(BaseModel):
         description="Current supervision round within this iteration (0-based, resets each refinement iteration)",
     )
     max_supervision_rounds: int = Field(
-        default=3,
+        default=DEFAULT_MAX_SUPERVISION_ROUNDS,
         description="Maximum supervisor assess-delegate rounds per iteration",
     )
     supervision_provider: Optional[str] = Field(default=None)

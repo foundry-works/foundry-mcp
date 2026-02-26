@@ -19,12 +19,14 @@ class DimensionScore:
         raw_score: LLM-assigned score on the 1-5 rubric scale.
         normalized_score: Score mapped to 0-1 range via ``(raw - 1) / 4``.
         rationale: LLM's explanation for the assigned score.
+        imputed: Whether this score was imputed (missing from LLM response).
     """
 
     name: str
     raw_score: int
     normalized_score: float
     rationale: str = ""
+    imputed: bool = False
 
 
 @dataclass
@@ -54,6 +56,7 @@ class EvaluationResult:
                     "raw_score": ds.raw_score,
                     "normalized_score": ds.normalized_score,
                     "rationale": ds.rationale,
+                    "imputed": ds.imputed,
                 }
                 for ds in self.dimension_scores
             ],
@@ -114,13 +117,26 @@ def compute_composite(
             total = 1.0
         effective_weights = {ds.name: weights.get(ds.name, 1.0) / total for ds in dimension_scores}
 
-    # Weighted average
+    # Weighted average (includes imputed dimensions for composite)
     composite = sum(ds.normalized_score * effective_weights[ds.name] for ds in dimension_scores)
 
-    # Variance of normalized scores
-    scores = [ds.normalized_score for ds in dimension_scores]
-    mean = sum(scores) / len(scores)
-    variance = sum((s - mean) ** 2 for s in scores) / len(scores)
+    # Weighted variance using only non-imputed dimensions (imputed add noise, not signal)
+    real_scores = [ds for ds in dimension_scores if not ds.imputed]
+    if real_scores:
+        real_total_w = sum(effective_weights[ds.name] for ds in real_scores)
+        if real_total_w > 0:
+            weighted_mean = sum(
+                ds.normalized_score * effective_weights[ds.name] for ds in real_scores
+            ) / real_total_w
+            variance = sum(
+                effective_weights[ds.name] * (ds.normalized_score - weighted_mean) ** 2
+                for ds in real_scores
+            ) / real_total_w
+        else:
+            variance = 0.0
+    else:
+        # All dimensions imputed — variance is meaningless
+        variance = 0.0
 
     return composite, variance, effective_weights
 
@@ -129,6 +145,8 @@ def build_dimension_score(
     name: str,
     raw_score: int,
     rationale: str = "",
+    *,
+    imputed: bool = False,
 ) -> DimensionScore:
     """Create a DimensionScore with automatic normalization.
 
@@ -138,6 +156,7 @@ def build_dimension_score(
         name: Dimension identifier.
         raw_score: LLM-assigned score (clamped to 1-5).
         rationale: LLM's explanation.
+        imputed: Whether this score was imputed (missing from LLM response).
 
     Returns:
         DimensionScore with normalized_score computed.
@@ -148,4 +167,5 @@ def build_dimension_score(
         raw_score=clamped,
         normalized_score=normalize_score(clamped),
         rationale=rationale,
+        imputed=imputed,
     )
