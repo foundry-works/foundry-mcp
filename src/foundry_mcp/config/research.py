@@ -146,6 +146,7 @@ class ResearchConfig:
     deep_research_evaluation_provider: Optional[str] = None  # LLM provider for evaluation (uses research-tier if not set)
     deep_research_evaluation_model: Optional[str] = None  # Model override for evaluation
     deep_research_evaluation_timeout: float = 360.0  # Timeout for evaluation LLM call (seconds)
+    deep_research_reflection_timeout: float = 60.0  # Timeout per reflection call in seconds
 
     # Multi-model cost optimization — role-based model hierarchy (Phase 6)
     # "research" role: main reasoning for analysis, planning, clarification (strongest available)
@@ -389,6 +390,9 @@ class ResearchConfig:
             deep_research_evaluation_model=data.get("deep_research_evaluation_model"),
             deep_research_evaluation_timeout=float(
                 data.get("deep_research_evaluation_timeout", 360.0)
+            ),
+            deep_research_reflection_timeout=float(
+                data.get("deep_research_reflection_timeout", 60.0)
             ),
             # Multi-model cost optimization — role-based hierarchy (Phase 6)
             deep_research_research_provider=data.get("deep_research_research_provider"),
@@ -1366,6 +1370,7 @@ class ResearchConfig:
             digest_fetch_pdfs=self.deep_research_digest_fetch_pdfs,
             archive_content=self.deep_research_archive_content,
             archive_retention_days=self.deep_research_archive_retention_days,
+            reflection_timeout=self.deep_research_reflection_timeout,
             evaluation_provider=self.deep_research_evaluation_provider,
             evaluation_model=self.deep_research_evaluation_model,
             evaluation_timeout=self.deep_research_evaluation_timeout,

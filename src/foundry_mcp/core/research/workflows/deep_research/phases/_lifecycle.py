@@ -397,8 +397,12 @@ def truncate_supervision_messages(
 #: When the exception message matches any pattern, the error is re-classified
 #: as a ContextWindowError.
 _CONTEXT_WINDOW_ERROR_PATTERNS: list[str] = [
-    # OpenAI / Codex: BadRequestError with token/context/length keywords
-    r"(?i)\b(?:token|context|length|maximum.*context)\b",
+    # Token/context limit exceeded (tight patterns to avoid false positives
+    # on "invalid authentication token", "context parameter is required", etc.)
+    r"(?i)\b(?:token|context)\s*(?:limit|window|exceeded|too\s+long|overflow)\b",
+    r"(?i)\btoken\s+\w+\s+exceeded\b",
+    r"(?i)maximum\s+(?:context|token)",
+    r"(?i)(?:exceeds?|over)\s+(?:the\s+)?(?:token|context|length)\s+limit",
     # Anthropic: BadRequestError with "prompt is too long"
     r"(?i)prompt\s+is\s+too\s+long",
     # Google: ResourceExhausted / InvalidArgument with token keywords
@@ -409,9 +413,11 @@ _CONTEXT_WINDOW_ERROR_PATTERNS: list[str] = [
 
 #: Exception class names that are known context-window indicators for
 #: specific providers, regardless of message content.
+#: ``InvalidArgument`` is NOT included here — it's too generic (covers all
+#: gRPC bad-request errors).  Instead, ``InvalidArgument`` is checked with
+#: a message pattern below.
 _CONTEXT_WINDOW_ERROR_CLASSES: set[str] = {
     "ResourceExhausted",  # Google / gRPC
-    "InvalidArgument",  # Google / gRPC (token-related)
 }
 
 
@@ -428,11 +434,16 @@ def _is_context_window_error(exc: Exception) -> bool:
     """
     cls_name = type(exc).__name__
 
-    # Fast path: known class names
+    # Fast path: known class names (unconditional match)
     if cls_name in _CONTEXT_WINDOW_ERROR_CLASSES:
         return True
 
     msg = str(exc)
+
+    # InvalidArgument is a generic gRPC class — only classify as
+    # context-window error when the message also mentions tokens/context.
+    if cls_name == "InvalidArgument":
+        return bool(re.search(r"(?i)\b(?:token|context)\s*(?:limit|window|exceeded|too\s+long|overflow)\b", msg))
 
     for pattern in _CONTEXT_WINDOW_ERROR_PATTERNS:
         if re.search(pattern, msg):

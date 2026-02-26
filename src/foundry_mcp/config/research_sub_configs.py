@@ -168,6 +168,9 @@ class DeepResearchConfig:
     archive_content: bool = False
     archive_retention_days: int = 30
 
+    # Reflection timeout
+    reflection_timeout: float = 60.0
+
     # Evaluation configuration
     evaluation_provider: Optional[str] = None
     evaluation_model: Optional[str] = None

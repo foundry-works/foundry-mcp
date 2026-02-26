@@ -619,44 +619,30 @@ class ActionHandlersMixin:
 
         from foundry_mcp.core.research.evaluation.evaluator import evaluate_report
 
-        # Run evaluation (handle sync/async boundary)
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                import concurrent.futures
+        coro = evaluate_report(
+            workflow=self,
+            state=state,
+            provider_id=eval_provider,
+            model=eval_model,
+            timeout=eval_timeout,
+        )
 
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(
-                        asyncio.run,
-                        evaluate_report(
-                            workflow=self,
-                            state=state,
-                            provider_id=eval_provider,
-                            model=eval_model,
-                            timeout=eval_timeout,
-                        ),
-                    )
-                    result = future.result()
-            else:
-                result = loop.run_until_complete(
-                    evaluate_report(
-                        workflow=self,
-                        state=state,
-                        provider_id=eval_provider,
-                        model=eval_model,
-                        timeout=eval_timeout,
-                    )
-                )
+        # Run evaluation — dispatch onto the existing event loop when one is
+        # running (MCP context) instead of spawning a separate loop in a
+        # thread, which breaks cancellation and structured concurrency.
+        try:
+            loop = asyncio.get_running_loop()
         except RuntimeError:
-            result = asyncio.run(
-                evaluate_report(
-                    workflow=self,
-                    state=state,
-                    provider_id=eval_provider,
-                    model=eval_model,
-                    timeout=eval_timeout,
-                )
-            )
+            loop = None
+
+        if loop is not None:
+            # Called from within an async context — schedule onto the
+            # running loop and block until done (safe because we're in a
+            # worker thread, not the event loop thread).
+            future = asyncio.run_coroutine_threadsafe(coro, loop)
+            result = future.result(timeout=eval_timeout + 30)
+        else:
+            result = asyncio.run(coro)
 
         # If evaluate_report returned a WorkflowResult (error), pass through
         if isinstance(result, WorkflowResult):
