@@ -31,6 +31,16 @@ _active_research_memory: Optional[ResearchMemory] = None
 _crash_handler_installed = False
 _crash_handler_lock = threading.Lock()
 
+
+def set_active_research_memory(memory: Optional[ResearchMemory]) -> None:
+    """Set the active research memory for crash recovery.
+
+    Called from DeepResearchWorkflow.__init__ to ensure the crash handler
+    can persist state using the correct memory instance.
+    """
+    global _active_research_memory
+    _active_research_memory = memory
+
 # Store previous SIGTERM handler to chain calls
 _previous_sigterm_handler: Optional[Any] = None
 

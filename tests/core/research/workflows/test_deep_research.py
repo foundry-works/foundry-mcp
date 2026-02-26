@@ -2772,3 +2772,101 @@ class TestBackwardCompatDeserialization:
         assert len(restored.findings) == len(state.findings)
         assert restored.findings[0].content == "Test finding"
         assert restored.total_tokens_used == 500
+
+
+# =============================================================================
+# Phase 1 Fix Tests: Timeout & Crash Handler
+# =============================================================================
+
+
+class TestSyncTimeoutEnforcement:
+    """Tests for 1.1: asyncio.wait_for timeout on synchronous execution paths."""
+
+    def test_sync_timeout_marks_state_failed(self, mock_config, mock_memory):
+        """When task_timeout fires, state should be marked failed and saved."""
+        from foundry_mcp.core.research.workflows.deep_research.core import DeepResearchWorkflow
+
+        mock_config.resolve_phase_provider = MagicMock(return_value=(None, None))
+        mock_config.deep_research_mode = "general"
+        mock_config.deep_research_allow_clarification = False
+        mock_config.deep_research_max_supervision_rounds = 3
+        workflow = DeepResearchWorkflow(mock_config, mock_memory)
+
+        # Mock _execute_workflow_async to sleep longer than timeout
+        async def slow_workflow(**kwargs):
+            await asyncio.sleep(10)
+            return WorkflowResult(success=True, content="done")
+
+        workflow._execute_workflow_async = slow_workflow
+
+        result = workflow.execute(
+            query="test query",
+            action="start",
+            task_timeout=0.1,  # 100ms timeout
+        )
+
+        assert result.success is False
+        assert "timed out" in result.error
+        assert result.metadata.get("timeout") is True
+        # Verify state was saved with failure
+        mock_memory.save_deep_research.assert_called()
+        saved_state = mock_memory.save_deep_research.call_args[0][0]
+        assert saved_state.metadata.get("failed") is True
+        assert saved_state.metadata.get("timeout") is True
+
+    def test_sync_execution_without_timeout(self, mock_config, mock_memory):
+        """When task_timeout is None, workflow runs without timeout wrapper."""
+        from foundry_mcp.core.research.workflows.deep_research.core import DeepResearchWorkflow
+
+        mock_config.resolve_phase_provider = MagicMock(return_value=(None, None))
+        mock_config.deep_research_mode = "general"
+        mock_config.deep_research_allow_clarification = False
+        mock_config.deep_research_max_supervision_rounds = 3
+        workflow = DeepResearchWorkflow(mock_config, mock_memory)
+
+        async def fast_workflow(**kwargs):
+            return WorkflowResult(success=True, content="done", metadata={"research_id": "test-1"})
+
+        workflow._execute_workflow_async = fast_workflow
+
+        result = workflow.execute(
+            query="test query",
+            action="start",
+            task_timeout=None,
+        )
+
+        assert result.success is True
+
+
+class TestActiveResearchMemoryScoping:
+    """Tests for 1.2: _active_research_memory global variable scoping."""
+
+    def test_infrastructure_memory_set_on_workflow_init(self, mock_config, mock_memory):
+        """Verify infrastructure._active_research_memory is set after workflow init."""
+        from foundry_mcp.core.research.workflows.deep_research import infrastructure
+        from foundry_mcp.core.research.workflows.deep_research.core import DeepResearchWorkflow
+
+        mock_config.resolve_phase_provider = MagicMock(return_value=(None, None))
+        mock_config.deep_research_mode = "general"
+        mock_config.deep_research_allow_clarification = False
+        mock_config.deep_research_max_supervision_rounds = 3
+
+        # Clear it first
+        infrastructure._active_research_memory = None
+
+        DeepResearchWorkflow(mock_config, mock_memory)
+
+        # The memory should be set in infrastructure's module namespace
+        assert infrastructure._active_research_memory is not None
+        assert infrastructure._active_research_memory is mock_memory
+
+    def test_setter_function_sets_infrastructure_global(self):
+        """Verify set_active_research_memory sets the module-level global."""
+        from foundry_mcp.core.research.workflows.deep_research import infrastructure
+
+        old = infrastructure._active_research_memory
+        try:
+            infrastructure.set_active_research_memory("test-sentinel")
+            assert infrastructure._active_research_memory == "test-sentinel"
+        finally:
+            infrastructure._active_research_memory = old

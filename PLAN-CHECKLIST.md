@@ -6,21 +6,21 @@ Track completion of each fix. Mark `[x]` when implemented and verified.
 
 ## Phase 1 — Critical: Blocking Timeout & Crash Handler
 
-- [ ] **1.1** Add `asyncio.wait_for` timeout to synchronous execution paths in `action_handlers.py`
-  - [ ] Wrap coroutine in `_start_research()` with `asyncio.wait_for(coro, timeout=task_timeout)`
-  - [ ] Wrap coroutine in `_continue_research()` with `asyncio.wait_for(coro, timeout=task_timeout)`
-  - [ ] Add `asyncio.TimeoutError` handler that calls `state.mark_failed()` and saves state
-  - [ ] Simplify dead `loop.run_until_complete()` branch — replace three-way dispatch with two-way (`get_running_loop` + `asyncio.run`)
-  - [ ] Add unit test: verify timeout fires and state is marked failed
-- [ ] **1.2** Fix `_active_research_memory` global variable scoping
-  - [ ] Add `set_active_research_memory()` setter in `infrastructure.py`
-  - [ ] Call setter from `core.py` `__init__` instead of `global` statement
-  - [ ] Remove stale `global _active_research_memory` and `_active_research_memory = None` from `core.py`
-  - [ ] Add unit test: verify `infrastructure._active_research_memory` is set after workflow init
-- [ ] **1.3** Fix test regression from blocking behavior change
-  - [ ] Update `test_config_default_applies_when_param_omitted` to expect two `execute` calls (start + report)
-  - [ ] Configure `side_effect` with different results for start vs report calls
-  - [ ] Verify test passes with `pytest tests/tools/unified/test_research.py::TestDeepResearchTimeoutConfig -x`
+- [x] **1.1** Add `asyncio.wait_for` timeout to synchronous execution paths in `action_handlers.py`
+  - [x] Wrap coroutine in `_start_research()` with `asyncio.wait_for(coro, timeout=task_timeout)`
+  - [x] Wrap coroutine in `_continue_research()` with `asyncio.wait_for(coro, timeout=task_timeout)`
+  - [x] Add `asyncio.TimeoutError` handler that calls `state.mark_failed()` and saves state
+  - [x] Simplify dead `loop.run_until_complete()` branch — replace three-way dispatch with two-way (`get_running_loop` + `asyncio.run`)
+  - [x] Add unit test: verify timeout fires and state is marked failed
+- [x] **1.2** Fix `_active_research_memory` global variable scoping
+  - [x] Add `set_active_research_memory()` setter in `infrastructure.py`
+  - [x] Call setter from `core.py` `__init__` instead of `global` statement
+  - [x] Remove stale `global _active_research_memory` and `_active_research_memory = None` from `core.py`
+  - [x] Add unit test: verify `infrastructure._active_research_memory` is set after workflow init
+- [x] **1.3** Fix test regression from blocking behavior change
+  - [x] Update `test_config_default_applies_when_param_omitted` to expect two `execute` calls (start + report)
+  - [x] Configure `side_effect` with different results for start vs report calls
+  - [x] Verify test passes with `pytest tests/tools/unified/test_research.py::TestDeepResearchTimeoutConfig -x`
 
 ---
 

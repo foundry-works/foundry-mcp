@@ -47,6 +47,7 @@ from foundry_mcp.core.research.workflows.deep_research.error_handling import (
 )
 from foundry_mcp.core.research.workflows.deep_research.infrastructure import (
     install_crash_handler,
+    set_active_research_memory,
 )
 from foundry_mcp.core.research.workflows.deep_research.orchestration import (
     SupervisorHooks,
@@ -163,8 +164,7 @@ class DeepResearchWorkflow(
             hooks: Optional supervisor hooks for orchestration
         """
         super().__init__(config, memory)
-        global _active_research_memory
-        _active_research_memory = self.memory
+        set_active_research_memory(self.memory)
         self.hooks = hooks or SupervisorHooks()
         self.orchestrator = SupervisorOrchestrator()
         self._search_providers: dict[str, SearchProvider] = {}
