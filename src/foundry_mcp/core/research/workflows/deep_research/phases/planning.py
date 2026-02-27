@@ -70,6 +70,7 @@ class PlanningPhaseMixin:
 
         # Emit phase.started audit event
         phase_start_time = time.perf_counter()
+        phase_budget = timeout  # Total wall-clock budget for entire planning phase
         self._write_audit_event(
             state,
             "phase.started",
@@ -77,8 +78,13 @@ class PlanningPhaseMixin:
                 "phase_name": "planning",
                 "iteration": state.iteration,
                 "task_id": state.id,
+                "phase_budget_seconds": phase_budget,
             },
         )
+
+        def _remaining_budget() -> float:
+            """Return seconds remaining in the planning phase budget."""
+            return phase_budget - (time.perf_counter() - phase_start_time)
 
         # ---------------------------------------------------------------
         # Step 1: Refine the raw query into a structured research brief
@@ -86,47 +92,79 @@ class PlanningPhaseMixin:
         # ---------------------------------------------------------------
         if state.research_brief:
             logger.info(
-                "Research brief already set by BRIEF phase (%d chars), "
-                "skipping inline refinement",
+                "Research brief already set by BRIEF phase (%d chars), skipping inline refinement",
                 len(state.research_brief),
             )
         else:
-            brief_prompt = self._build_brief_refinement_prompt(state)
-            self._check_cancellation(state)
-
-            brief_call_result = await execute_llm_call(
-                workflow=self,
-                state=state,
-                phase_name="planning",
-                system_prompt=(
-                    "You are a research brief writer. Rewrite the user's research "
-                    "request into a single, precise research brief paragraph."
-                ),
-                user_prompt=brief_prompt,
-                provider_id=provider_id or state.planning_provider,
-                model=state.planning_model,
-                temperature=0.3,  # Low creativity — faithful rewrite
-                timeout=timeout,
-                role="summarization",  # Cheap model for lightweight rewrite
-            )
-
-            if isinstance(brief_call_result, WorkflowResult):
-                # Brief refinement failed — fall back to using the raw query
+            remaining = _remaining_budget()
+            if remaining <= 0:
                 logger.warning(
-                    "Brief refinement LLM call failed, using raw query as brief"
+                    "Planning phase budget exhausted before brief refinement "
+                    "(elapsed %.1fs > budget %.1fs), using raw query as brief",
+                    time.perf_counter() - phase_start_time,
+                    phase_budget,
                 )
                 state.research_brief = state.original_query
             else:
-                refined_brief = (brief_call_result.result.content or "").strip()
-                state.research_brief = refined_brief or state.original_query
-                logger.info(
-                    "Brief refinement complete (%d chars)",
-                    len(state.research_brief),
+                brief_prompt = self._build_brief_refinement_prompt(state)
+                self._check_cancellation(state)
+
+                brief_call_result = await execute_llm_call(
+                    workflow=self,
+                    state=state,
+                    phase_name="planning",
+                    system_prompt=(
+                        "You are a research brief writer. Rewrite the user's research "
+                        "request into a single, precise research brief paragraph."
+                    ),
+                    user_prompt=brief_prompt,
+                    provider_id=provider_id or state.planning_provider,
+                    model=state.planning_model,
+                    temperature=0.3,  # Low creativity — faithful rewrite
+                    timeout=min(timeout, remaining),
+                    role="summarization",  # Cheap model for lightweight rewrite
                 )
+
+                if isinstance(brief_call_result, WorkflowResult):
+                    # Brief refinement failed — fall back to using the raw query
+                    logger.warning("Brief refinement LLM call failed, using raw query as brief")
+                    state.research_brief = state.original_query
+                else:
+                    refined_brief = (brief_call_result.result.content or "").strip()
+                    state.research_brief = refined_brief or state.original_query
+                    logger.info(
+                        "Brief refinement complete (%d chars)",
+                        len(state.research_brief),
+                    )
 
         # ---------------------------------------------------------------
         # Step 2: Decompose the (refined) brief into sub-queries
         # ---------------------------------------------------------------
+        remaining = _remaining_budget()
+        if remaining <= 0:
+            logger.warning(
+                "Planning phase budget exhausted before decomposition "
+                "(elapsed %.1fs > budget %.1fs), using single fallback sub-query",
+                time.perf_counter() - phase_start_time,
+                phase_budget,
+            )
+            state.add_sub_query(
+                query=state.original_query,
+                rationale="Original query used directly — planning phase budget exhausted",
+                priority=1,
+            )
+            finalize_phase(self, state, "planning", phase_start_time)
+            return WorkflowResult(
+                success=True,
+                content=state.research_brief or "Planning complete (budget-limited)",
+                metadata={
+                    "research_id": state.id,
+                    "sub_query_count": len(state.sub_queries),
+                    "research_brief": state.research_brief,
+                    "budget_exhausted_before": "decomposition",
+                },
+            )
+
         system_prompt = self._build_planning_system_prompt(state)
         user_prompt = self._build_planning_user_prompt(state)
 
@@ -141,7 +179,7 @@ class PlanningPhaseMixin:
             provider_id=provider_id or state.planning_provider,
             model=state.planning_model,
             temperature=0.7,  # Some creativity for diverse sub-queries
-            timeout=timeout,
+            timeout=min(timeout, remaining),
             role="research",
         )
         if isinstance(call_result, WorkflowResult):
@@ -211,10 +249,19 @@ class PlanningPhaseMixin:
         # Step 3: Self-critique of sub-query decomposition
         # ---------------------------------------------------------------
         enable_critique = self.config.deep_research_enable_planning_critique
+        remaining = _remaining_budget()
+        if enable_critique and remaining <= 0:
+            logger.warning(
+                "Planning phase budget exhausted before critique "
+                "(elapsed %.1fs > budget %.1fs), skipping critique step",
+                time.perf_counter() - phase_start_time,
+                phase_budget,
+            )
+            enable_critique = False
+
         if enable_critique and len(state.sub_queries) > 0:
             original_queries = [
-                {"query": sq.query, "rationale": sq.rationale, "priority": sq.priority}
-                for sq in state.sub_queries
+                {"query": sq.query, "rationale": sq.rationale, "priority": sq.priority} for sq in state.sub_queries
             ]
 
             critique_prompt = self._build_decomposition_critique_prompt(state)
@@ -229,7 +276,7 @@ class PlanningPhaseMixin:
                 provider_id=None,  # Resolved by role
                 model=None,  # Resolved by role
                 temperature=0.2,  # Low temperature for analytical reasoning
-                timeout=timeout,
+                timeout=min(timeout, remaining),
                 role="reflection",  # Uses cheap model
             )
 
@@ -253,8 +300,7 @@ class PlanningPhaseMixin:
                 if critique_parsed["has_changes"]:
                     self._apply_critique_adjustments(state, critique_parsed)
                     logger.info(
-                        "Planning critique applied: %d redundancies merged, "
-                        "%d gaps added, %d adjustments",
+                        "Planning critique applied: %d redundancies merged, %d gaps added, %d adjustments",
                         len(critique_parsed.get("redundancies", [])),
                         len(critique_parsed.get("gaps", [])),
                         len(critique_parsed.get("adjustments", [])),
@@ -263,8 +309,7 @@ class PlanningPhaseMixin:
                     logger.info("Planning critique: no changes recommended")
 
                 adjusted_queries = [
-                    {"query": sq.query, "rationale": sq.rationale, "priority": sq.priority}
-                    for sq in state.sub_queries
+                    {"query": sq.query, "rationale": sq.rationale, "priority": sq.priority} for sq in state.sub_queries
                 ]
                 state.metadata["planning_critique"] = {
                     "original_sub_queries": original_queries,
@@ -346,8 +391,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             A user prompt string for the brief-refinement LLM call.
         """
         parts: list[str] = [
-            "Transform the following user research request into a single, focused "
-            "research brief paragraph.\n",
+            "Transform the following user research request into a single, focused research brief paragraph.\n",
             "Rules:",
             "1. Maximize specificity: extract every concrete detail the user provided "
             "(names, dates, versions, quantities) and foreground them.",
@@ -548,25 +592,23 @@ Generate the research plan as JSON."""
         ]
 
         for i, sq in enumerate(state.sub_queries):
-            parts.append(
-                f"{i}. **{sq.query}**\n"
-                f"   Rationale: {sq.rationale or 'N/A'}\n"
-                f"   Priority: {sq.priority}"
-            )
+            parts.append(f"{i}. **{sq.query}**\n   Rationale: {sq.rationale or 'N/A'}\n   Priority: {sq.priority}")
 
-        parts.extend([
-            "",
-            "# Instructions",
-            "Evaluate the sub-queries above for:",
-            "1. **Redundancies**: Are any sub-queries covering essentially the same ground?",
-            "2. **Missing perspectives**: Are there important angles missing? "
-            "Consider: historical context, economic factors, technical details, "
-            "stakeholder perspectives, comparative analysis, recent developments.",
-            "3. **Scope issues**: Are any sub-queries too broad (need splitting) or "
-            "too narrow (could be merged with another)?",
-            "",
-            "Return your critique as JSON.",
-        ])
+        parts.extend(
+            [
+                "",
+                "# Instructions",
+                "Evaluate the sub-queries above for:",
+                "1. **Redundancies**: Are any sub-queries covering essentially the same ground?",
+                "2. **Missing perspectives**: Are there important angles missing? "
+                "Consider: historical context, economic factors, technical details, "
+                "stakeholder perspectives, comparative analysis, recent developments.",
+                "3. **Scope issues**: Are any sub-queries too broad (need splitting) or "
+                "too narrow (could be merged with another)?",
+                "",
+                "Return your critique as JSON.",
+            ]
+        )
 
         return "\n".join(parts)
 
@@ -616,11 +658,13 @@ Generate the research plan as JSON."""
                         int_indices = [int(i) for i in indices]
                     except (ValueError, TypeError):
                         continue
-                    result["redundancies"].append({
-                        "indices": int_indices,
-                        "reason": r.get("reason", ""),
-                        "merged_query": merged,
-                    })
+                    result["redundancies"].append(
+                        {
+                            "indices": int_indices,
+                            "reason": r.get("reason", ""),
+                            "merged_query": merged,
+                        }
+                    )
 
         # Parse gaps (new queries to add)
         raw_gaps = data.get("gaps", [])
@@ -630,11 +674,17 @@ Generate the research plan as JSON."""
                     continue
                 query = g.get("query", "").strip()
                 if query:
-                    result["gaps"].append({
-                        "query": query,
-                        "rationale": g.get("rationale", ""),
-                        "priority": min(max(int(g.get("priority", 1)), 1), 10),
-                    })
+                    try:
+                        gap_priority = min(max(int(g.get("priority", 1)), 1), 10)
+                    except (ValueError, TypeError):
+                        gap_priority = 1
+                    result["gaps"].append(
+                        {
+                            "query": query,
+                            "rationale": g.get("rationale", ""),
+                            "priority": gap_priority,
+                        }
+                    )
 
         # Parse scope adjustments
         raw_adjustments = data.get("adjustments", [])
@@ -648,16 +698,16 @@ Generate the research plan as JSON."""
                         idx = int(a.get("index", -1))
                     except (ValueError, TypeError):
                         continue
-                    result["adjustments"].append({
-                        "index": idx,
-                        "revised_query": revised,
-                        "reason": a.get("reason", ""),
-                    })
+                    result["adjustments"].append(
+                        {
+                            "index": idx,
+                            "revised_query": revised,
+                            "reason": a.get("reason", ""),
+                        }
+                    )
 
         result["assessment"] = data.get("assessment", "")
-        result["has_changes"] = bool(
-            result["redundancies"] or result["gaps"] or result["adjustments"]
-        )
+        result["has_changes"] = bool(result["redundancies"] or result["gaps"] or result["adjustments"])
 
         return result
 
@@ -702,22 +752,19 @@ Generate the research plan as JSON."""
             if len(valid_indices) < 2:
                 continue
             # Keep the best (lowest number) priority from the merged set
-            min_priority = min(
-                current_queries[i].priority for i in valid_indices
-            )
+            min_priority = min(current_queries[i].priority for i in valid_indices)
             indices_to_remove.update(valid_indices)
-            merged_queries.append({
-                "query": red["merged_query"],
-                "rationale": red.get("reason", "Merged from redundant sub-queries"),
-                "priority": min_priority,
-            })
+            merged_queries.append(
+                {
+                    "query": red["merged_query"],
+                    "rationale": red.get("reason", "Merged from redundant sub-queries"),
+                    "priority": min_priority,
+                }
+            )
 
         # Remove redundant queries
         if indices_to_remove:
-            current_queries = [
-                sq for i, sq in enumerate(current_queries)
-                if i not in indices_to_remove
-            ]
+            current_queries = [sq for i, sq in enumerate(current_queries) if i not in indices_to_remove]
 
         # Replace state.sub_queries with the filtered list BEFORE adding new ones
         state.sub_queries = current_queries

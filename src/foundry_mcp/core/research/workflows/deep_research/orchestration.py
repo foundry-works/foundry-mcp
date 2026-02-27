@@ -27,6 +27,8 @@ class AgentRole(str, Enum):
     Agent Responsibilities:
     - SUPERVISOR: Orchestrates phase transitions, evaluates quality gates,
       decides on iteration vs completion.
+    - PLANNER: Decomposes the research query into focused sub-queries
+      (legacy phase — new workflows use supervisor-owned decomposition).
     - CLARIFIER: Evaluates query specificity and generates clarifying
       questions. Infers constraints from vague queries to focus research.
     - BRIEFER: Generates the enriched research brief from the raw query.
@@ -37,6 +39,7 @@ class AgentRole(str, Enum):
     """
 
     SUPERVISOR = "supervisor"
+    PLANNER = "planner"
     CLARIFIER = "clarifier"
     BRIEFER = "briefer"
     GATHERER = "gatherer"
@@ -47,6 +50,7 @@ class AgentRole(str, Enum):
 PHASE_TO_AGENT: dict[DeepResearchPhase, AgentRole] = {
     DeepResearchPhase.CLARIFICATION: AgentRole.CLARIFIER,
     DeepResearchPhase.BRIEF: AgentRole.BRIEFER,
+    DeepResearchPhase.PLANNING: AgentRole.PLANNER,
     DeepResearchPhase.GATHERING: AgentRole.GATHERER,
     DeepResearchPhase.SUPERVISION: AgentRole.SUPERVISOR,
     DeepResearchPhase.SYNTHESIS: AgentRole.SYNTHESIZER,
@@ -304,12 +308,27 @@ class SupervisorOrchestrator:
         always completes after synthesis. Supervision gap-filling handles
         iterative improvement before synthesis.
 
+        .. deprecated::
+            ``max_iterations > 1`` has no effect — multi-iteration
+            refinement is not implemented.  Supervision gap-filling
+            handles iterative improvement.  The parameter will be
+            removed in a future release.
+
         Args:
             state: Current research state
 
         Returns:
             AgentDecision with complete decision
         """
+        if state.max_iterations > 1:
+            logger.warning(
+                "max_iterations=%d is configured but multi-iteration refinement "
+                "is not implemented. Supervision gap-filling handles iterative "
+                "improvement. max_iterations > 1 has no effect and will be "
+                "removed in a future release.",
+                state.max_iterations,
+            )
+
         decision = AgentDecision(
             agent=AgentRole.SUPERVISOR,
             action="decide_iteration",

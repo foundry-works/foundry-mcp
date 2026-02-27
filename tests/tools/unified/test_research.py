@@ -828,18 +828,13 @@ class TestDeepResearchTimeoutConfig:
             "foundry_mcp.tools.unified.research_handlers.handlers_deep_research.DeepResearchWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
-            # Blocking mode calls execute twice: start then report
+            # Background mode: single execute call returns immediately
             start_result = WorkflowResult(
                 success=True,
-                content="Started",
-                metadata={"research_id": "test-123"},
+                content="Research started in background: test-123",
+                metadata={"research_id": "test-123", "background": True, "phase": "clarification"},
             )
-            report_result = WorkflowResult(
-                success=True,
-                content="Full report content",
-                metadata={"research_id": "test-123", "source_count": 5},
-            )
-            mock_workflow.execute.side_effect = [start_result, report_result]
+            mock_workflow.execute.return_value = start_result
             MockWorkflow.return_value = mock_workflow
 
             result = _handle_deep_research(
@@ -848,13 +843,13 @@ class TestDeepResearchTimeoutConfig:
                 # task_timeout NOT provided - should use config default
             )
 
-            # Verify execute called twice: start + report
-            assert mock_workflow.execute.call_count == 2
+            # Verify execute called once (background start)
+            assert mock_workflow.execute.call_count == 1
             # Verify the start call used config default timeout
             start_call_kwargs = mock_workflow.execute.call_args_list[0].kwargs
             assert start_call_kwargs["task_timeout"] == 300.0
 
-            # Verify response is successful (report response)
+            # Verify response is successful
             assert result["success"] is True
 
     def test_explicit_param_overrides_config(self, mock_config, mock_memory):
@@ -868,18 +863,13 @@ class TestDeepResearchTimeoutConfig:
             "foundry_mcp.tools.unified.research_handlers.handlers_deep_research.DeepResearchWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
-            # Blocking mode calls execute twice: start then report
+            # Background mode: single execute call returns immediately
             start_result = WorkflowResult(
                 success=True,
-                content="Started",
-                metadata={"research_id": "test-456"},
+                content="Research started in background: test-456",
+                metadata={"research_id": "test-456", "background": True, "phase": "clarification"},
             )
-            report_result = WorkflowResult(
-                success=True,
-                content="Full report",
-                metadata={"research_id": "test-456", "source_count": 3},
-            )
-            mock_workflow.execute.side_effect = [start_result, report_result]
+            mock_workflow.execute.return_value = start_result
             MockWorkflow.return_value = mock_workflow
 
             result = _handle_deep_research(
@@ -895,34 +885,29 @@ class TestDeepResearchTimeoutConfig:
             # Verify response is successful
             assert result["success"] is True
 
-    def test_hardcoded_fallback_when_config_missing(self, mock_memory):
-        """Hardcoded fallback (600s) used when config field missing."""
+    def test_config_default_fallback(self, mock_memory):
+        """Config default timeout (2400s) used when task_timeout param omitted."""
         import foundry_mcp.tools.unified.research_handlers._helpers as _helpers
         from foundry_mcp.tools.unified.research import _handle_deep_research
 
         with patch.object(_helpers, "_get_config") as mock_get_config:
             mock_cfg = MagicMock()
             mock_cfg.research.enabled = True
-            # Simulate missing deep_research_timeout by having it return default
-            mock_cfg.research.deep_research_timeout = 600.0  # Hardcoded default
+            # Use the actual default value
+            mock_cfg.research.deep_research_timeout = 2400.0
             mock_get_config.return_value = mock_cfg
 
             with patch(
                 "foundry_mcp.tools.unified.research_handlers.handlers_deep_research.DeepResearchWorkflow"
             ) as MockWorkflow:
                 mock_workflow = MagicMock()
-                # Blocking mode calls execute twice: start then report
+                # Background mode: single execute call returns immediately
                 start_result = WorkflowResult(
                     success=True,
-                    content="Started",
-                    metadata={"research_id": "test-789"},
+                    content="Research started in background: test-789",
+                    metadata={"research_id": "test-789", "background": True, "phase": "clarification"},
                 )
-                report_result = WorkflowResult(
-                    success=True,
-                    content="Report",
-                    metadata={"research_id": "test-789"},
-                )
-                mock_workflow.execute.side_effect = [start_result, report_result]
+                mock_workflow.execute.return_value = start_result
                 MockWorkflow.return_value = mock_workflow
 
                 result = _handle_deep_research(
@@ -930,9 +915,9 @@ class TestDeepResearchTimeoutConfig:
                     deep_research_action="start",
                 )
 
-                # Verify hardcoded fallback is used in the start call
+                # Verify config default is used in the start call
                 start_call_kwargs = mock_workflow.execute.call_args_list[0].kwargs
-                assert start_call_kwargs["task_timeout"] == 600.0
+                assert start_call_kwargs["task_timeout"] == 2400.0
                 assert result["success"] is True
 
 

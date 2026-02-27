@@ -107,8 +107,12 @@ class ResearchConfig:
     deep_research_max_supervision_rounds: int = 6  # Max assess-delegate rounds per iteration
     deep_research_supervision_min_sources_per_query: int = 2  # Minimum sources for "sufficient" coverage
     deep_research_coverage_confidence_threshold: float = 0.75  # Confidence score above which coverage is "sufficient"
-    deep_research_coverage_confidence_weights: Optional[dict] = None  # Dimension weights: {source_adequacy, domain_diversity, query_completion_rate}
-    deep_research_supervision_wall_clock_timeout: float = 1800.0  # Max wall-clock seconds for entire supervision phase (default 30 min)
+    deep_research_coverage_confidence_weights: Optional[dict] = (
+        None  # Dimension weights: {source_adequacy, domain_diversity, query_completion_rate}
+    )
+    deep_research_supervision_wall_clock_timeout: float = (
+        1800.0  # Max wall-clock seconds for entire supervision phase (default 30 min)
+    )
 
     # Supervision LLM provider/model (uses reflection fallback if not set)
     deep_research_supervision_provider: Optional[str] = None
@@ -116,7 +120,9 @@ class ResearchConfig:
 
     # Supervisor delegation configuration
     deep_research_max_concurrent_research_units: int = 5  # Max parallel researchers per delegation round
-    deep_research_delegation_provider: Optional[str] = None  # LLM provider for delegation prompt (uses supervision fallback)
+    deep_research_delegation_provider: Optional[str] = (
+        None  # LLM provider for delegation prompt (uses supervision fallback)
+    )
     deep_research_delegation_model_name: Optional[str] = None  # Model override for delegation prompt
 
     # Deep research planning critique (self-assessment of sub-query decomposition)
@@ -133,22 +139,36 @@ class ResearchConfig:
     deep_research_extract_max_per_iteration: int = 2  # Max URLs to extract per ReAct iteration
 
     # Fetch-time source summarization
-    deep_research_summarization_provider: Optional[str] = None  # LLM provider for fetch-time summarization (cheapest available)
+    deep_research_summarization_provider: Optional[str] = (
+        None  # LLM provider for fetch-time summarization (cheapest available)
+    )
     deep_research_summarization_model: Optional[str] = None  # Model override for fetch-time summarization
-    deep_research_max_content_length: int = 50000  # Max chars per source before L1 summarization (matches open_deep_research)
+    deep_research_max_content_length: int = (
+        50000  # Max chars per source before L1 summarization (matches open_deep_research)
+    )
     deep_research_summarization_timeout: int = 60  # Per-result summarization timeout in seconds
-    deep_research_summarization_min_content_length: int = 300  # Min chars to trigger per-result summarization (shorter content kept as-is)
+    deep_research_summarization_min_content_length: int = (
+        300  # Min chars to trigger per-result summarization (shorter content kept as-is)
+    )
 
     # Inline per-topic compression during gathering
-    deep_research_inline_compression: bool = True  # Compress each topic's findings immediately after its ReAct loop (before supervision)
+    deep_research_inline_compression: bool = (
+        True  # Compress each topic's findings immediately after its ReAct loop (before supervision)
+    )
 
     # Per-topic compression before aggregation
-    deep_research_compression_provider: Optional[str] = None  # LLM provider for per-topic compression (defaults to research/default provider)
+    deep_research_compression_provider: Optional[str] = (
+        None  # LLM provider for per-topic compression (defaults to research/default provider)
+    )
     deep_research_compression_model: Optional[str] = None  # Model override for per-topic compression
-    deep_research_compression_max_content_length: int = 50000  # Max chars per source in compression prompt (matches open_deep_research)
+    deep_research_compression_max_content_length: int = (
+        50000  # Max chars per source in compression prompt (matches open_deep_research)
+    )
 
     # Research quality evaluation (LLM-as-judge)
-    deep_research_evaluation_provider: Optional[str] = None  # LLM provider for evaluation (uses research-tier if not set)
+    deep_research_evaluation_provider: Optional[str] = (
+        None  # LLM provider for evaluation (uses research-tier if not set)
+    )
     deep_research_evaluation_model: Optional[str] = None  # Model override for evaluation
     deep_research_evaluation_timeout: float = 360.0  # Timeout for evaluation LLM call (seconds)
     deep_research_reflection_timeout: float = 60.0  # Timeout per reflection call in seconds
@@ -172,7 +192,7 @@ class ResearchConfig:
     deep_research_max_sub_queries: int = 5
     deep_research_max_sources: int = 5
     deep_research_follow_links: bool = True
-    deep_research_timeout: float = 600.0  # Wall-clock timeout for the entire deep research workflow (see deep_research_planning_timeout / deep_research_synthesis_timeout for per-phase overrides)
+    deep_research_timeout: float = 2400.0  # Wall-clock timeout for the entire deep research workflow (must exceed supervision_wall_clock_timeout + per-phase timeouts; see deep_research_planning_timeout / deep_research_synthesis_timeout for per-phase overrides)
     deep_research_max_concurrent: int = 3
     # Per-phase timeout overrides (seconds) - uses deep_research_timeout if not set
     deep_research_planning_timeout: float = 360.0
@@ -281,15 +301,11 @@ class ResearchConfig:
     #: warnings when encountered in user TOML configs.  Maps old field name
     #: to a short migration hint shown in the warning message.
     _DEPRECATED_FIELDS: ClassVar[Dict[str, str]] = {
-        "deep_research_enable_reflection": (
-            "Reflection is now always-on in the supervision loop."
-        ),
+        "deep_research_enable_reflection": ("Reflection is now always-on in the supervision loop."),
         "deep_research_enable_contradiction_detection": (
             "Contradiction detection has been folded into the supervision phase."
         ),
-        "deep_research_enable_topic_agents": (
-            "Per-topic ReAct research agents are now always enabled."
-        ),
+        "deep_research_enable_topic_agents": ("Per-topic ReAct research agents are now always enabled."),
         "deep_research_analysis_timeout": (
             "Analysis/refinement phases have been restructured; "
             "use deep_research_planning_timeout or deep_research_synthesis_timeout instead."
@@ -315,16 +331,12 @@ class ResearchConfig:
             "use deep_research_planning_providers or deep_research_synthesis_providers instead."
         ),
         "tavily_extract_in_deep_research": (
-            "URL extraction is now per-topic; "
-            "use deep_research_enable_extract instead."
+            "URL extraction is now per-topic; use deep_research_enable_extract instead."
         ),
         "tavily_extract_max_urls": (
-            "URL extraction is now per-topic; "
-            "use deep_research_extract_max_per_iteration instead."
+            "URL extraction is now per-topic; use deep_research_extract_max_per_iteration instead."
         ),
-        "deep_research_digest_policy": (
-            "Digest policy has been removed; digestion is now handled automatically."
-        ),
+        "deep_research_digest_policy": ("Digest policy has been removed; digestion is now handled automatically."),
     }
 
     @classmethod
@@ -341,8 +353,7 @@ class ResearchConfig:
         for field_name, hint in cls._DEPRECATED_FIELDS.items():
             if field_name in data:
                 warnings.warn(
-                    f"Config field '{field_name}' has been removed and will be "
-                    f"ignored. {hint}",
+                    f"Config field '{field_name}' has been removed and will be ignored. {hint}",
                     DeprecationWarning,
                     stacklevel=2,
                 )
@@ -419,13 +430,13 @@ class ResearchConfig:
             deep_research_supervision_provider=data.get("deep_research_supervision_provider"),
             deep_research_supervision_model=data.get("deep_research_supervision_model"),
             # Supervisor delegation configuration
-            deep_research_max_concurrent_research_units=int(
-                data.get("deep_research_max_concurrent_research_units", 5)
-            ),
+            deep_research_max_concurrent_research_units=int(data.get("deep_research_max_concurrent_research_units", 5)),
             deep_research_delegation_provider=data.get("deep_research_delegation_provider"),
             deep_research_delegation_model_name=data.get("deep_research_delegation_model_name"),
             # Deep research planning critique
-            deep_research_enable_planning_critique=_parse_bool(data.get("deep_research_enable_planning_critique", True)),
+            deep_research_enable_planning_critique=_parse_bool(
+                data.get("deep_research_enable_planning_critique", True)
+            ),
             # Deep research parallel topic researcher agents
             deep_research_topic_max_tool_calls=int(
                 data.get(
@@ -458,12 +469,8 @@ class ResearchConfig:
             # Research quality evaluation (LLM-as-judge)
             deep_research_evaluation_provider=data.get("deep_research_evaluation_provider"),
             deep_research_evaluation_model=data.get("deep_research_evaluation_model"),
-            deep_research_evaluation_timeout=float(
-                data.get("deep_research_evaluation_timeout", 360.0)
-            ),
-            deep_research_reflection_timeout=float(
-                data.get("deep_research_reflection_timeout", 60.0)
-            ),
+            deep_research_evaluation_timeout=float(data.get("deep_research_evaluation_timeout", 360.0)),
+            deep_research_reflection_timeout=float(data.get("deep_research_reflection_timeout", 60.0)),
             # Multi-model cost optimization — role-based hierarchy (Phase 6)
             deep_research_research_provider=data.get("deep_research_research_provider"),
             deep_research_research_model=data.get("deep_research_research_model"),
@@ -630,8 +637,7 @@ class ResearchConfig:
             self.deep_research_max_iterations = self._MAX_DEEP_RESEARCH_ITERATIONS
         if self.deep_research_max_iterations < 1:
             raise ValueError(
-                f"Invalid deep_research_max_iterations: "
-                f"{self.deep_research_max_iterations!r}. Must be >= 1."
+                f"Invalid deep_research_max_iterations: {self.deep_research_max_iterations!r}. Must be >= 1."
             )
 
         # --- deep_research_max_sub_queries ---
@@ -644,8 +650,7 @@ class ResearchConfig:
             self.deep_research_max_sub_queries = self._MAX_DEEP_RESEARCH_SUB_QUERIES
         if self.deep_research_max_sub_queries < 1:
             raise ValueError(
-                f"Invalid deep_research_max_sub_queries: "
-                f"{self.deep_research_max_sub_queries!r}. Must be >= 1."
+                f"Invalid deep_research_max_sub_queries: {self.deep_research_max_sub_queries!r}. Must be >= 1."
             )
 
         # --- deep_research_max_sources ---
@@ -657,10 +662,7 @@ class ResearchConfig:
             )
             self.deep_research_max_sources = self._MAX_DEEP_RESEARCH_SOURCES
         if self.deep_research_max_sources < 1:
-            raise ValueError(
-                f"Invalid deep_research_max_sources: "
-                f"{self.deep_research_max_sources!r}. Must be >= 1."
-            )
+            raise ValueError(f"Invalid deep_research_max_sources: {self.deep_research_max_sources!r}. Must be >= 1.")
 
         # --- deep_research_max_concurrent ---
         if self.deep_research_max_concurrent > self._MAX_DEEP_RESEARCH_CONCURRENT:
@@ -672,26 +674,22 @@ class ResearchConfig:
             self.deep_research_max_concurrent = self._MAX_DEEP_RESEARCH_CONCURRENT
         if self.deep_research_max_concurrent < 1:
             raise ValueError(
-                f"Invalid deep_research_max_concurrent: "
-                f"{self.deep_research_max_concurrent!r}. Must be >= 1."
+                f"Invalid deep_research_max_concurrent: {self.deep_research_max_concurrent!r}. Must be >= 1."
             )
 
         # --- default_timeout ---
         if self.default_timeout > self._MAX_DEFAULT_TIMEOUT:
             warnings.warn(
-                f"default_timeout={self.default_timeout} "
-                f"exceeds maximum ({self._MAX_DEFAULT_TIMEOUT}); clamping.",
+                f"default_timeout={self.default_timeout} exceeds maximum ({self._MAX_DEFAULT_TIMEOUT}); clamping.",
                 stacklevel=2,
             )
             self.default_timeout = self._MAX_DEFAULT_TIMEOUT
         if self.default_timeout < 1:
-            raise ValueError(
-                f"Invalid default_timeout: "
-                f"{self.default_timeout!r}. Must be >= 1."
-            )
+            raise ValueError(f"Invalid default_timeout: {self.default_timeout!r}. Must be >= 1.")
 
         # --- phase-specific timeouts (must be positive) ---
         timeout_fields = [
+            "deep_research_timeout",
             "deep_research_planning_timeout",
             "deep_research_synthesis_timeout",
             "deep_research_supervision_wall_clock_timeout",
@@ -713,11 +711,24 @@ class ResearchConfig:
                     default_val,
                 )
 
+        # --- timeout budget cross-validation ---
+        # The overall workflow timeout must exceed the supervision wall-clock
+        # timeout; otherwise supervision will be killed before it can finish.
+        if self.deep_research_timeout < self.deep_research_supervision_wall_clock_timeout:
+            logger.warning(
+                "deep_research_timeout=%.0f is less than "
+                "deep_research_supervision_wall_clock_timeout=%.0f — "
+                "the workflow may time out before supervision completes. "
+                "Consider raising deep_research_timeout or lowering "
+                "deep_research_supervision_wall_clock_timeout.",
+                self.deep_research_timeout,
+                self.deep_research_supervision_wall_clock_timeout,
+            )
+
         # --- content_dedup_threshold (must be in [0.0, 1.0]) ---
         if not (0.0 <= self.deep_research_content_dedup_threshold <= 1.0):
             logger.warning(
-                "deep_research_content_dedup_threshold=%s out of [0, 1] range, "
-                "reset to 0.8",
+                "deep_research_content_dedup_threshold=%s out of [0, 1] range, reset to 0.8",
                 self.deep_research_content_dedup_threshold,
             )
             self.deep_research_content_dedup_threshold = 0.8
@@ -725,18 +736,14 @@ class ResearchConfig:
         # --- compression_max_content_length (must be positive) ---
         if self.deep_research_compression_max_content_length <= 0:
             logger.warning(
-                "deep_research_compression_max_content_length=%s must be > 0, "
-                "reset to 50000",
+                "deep_research_compression_max_content_length=%s must be > 0, reset to 50000",
                 self.deep_research_compression_max_content_length,
             )
             self.deep_research_compression_max_content_length = 50000
 
         # --- token_safety_margin (fraction 0.0-1.0) ---
         if not (0.0 <= self.token_safety_margin <= 1.0):
-            raise ValueError(
-                f"Invalid token_safety_margin: "
-                f"{self.token_safety_margin!r}. Must be in [0.0, 1.0]."
-            )
+            raise ValueError(f"Invalid token_safety_margin: {self.token_safety_margin!r}. Must be in [0.0, 1.0].")
 
     def _validate_supervision_config(self) -> None:
         """Validate deep research supervision configuration fields.
@@ -1540,7 +1547,7 @@ class ResearchConfig:
     # ------------------------------------------------------------------
 
     @property
-    def tavily_config(self) -> "TavilyConfig":
+    def tavily_config(self) -> "TavilyConfig":  # noqa: F821
         """Grouped Tavily search/extract configuration."""
         from foundry_mcp.config.research_sub_configs import TavilyConfig
 
@@ -1558,7 +1565,7 @@ class ResearchConfig:
         )
 
     @property
-    def perplexity_config(self) -> "PerplexityConfig":
+    def perplexity_config(self) -> "PerplexityConfig":  # noqa: F821
         """Grouped Perplexity search configuration."""
         from foundry_mcp.config.research_sub_configs import PerplexityConfig
 
@@ -1572,7 +1579,7 @@ class ResearchConfig:
         )
 
     @property
-    def semantic_scholar_config(self) -> "SemanticScholarConfig":
+    def semantic_scholar_config(self) -> "SemanticScholarConfig":  # noqa: F821
         """Grouped Semantic Scholar configuration."""
         from foundry_mcp.config.research_sub_configs import SemanticScholarConfig
 
@@ -1585,7 +1592,7 @@ class ResearchConfig:
         )
 
     @property
-    def model_role_config(self) -> "ModelRoleConfig":
+    def model_role_config(self) -> "ModelRoleConfig":  # noqa: F821
         """Grouped role-based model routing configuration."""
         from foundry_mcp.config.research_sub_configs import ModelRoleConfig
 
@@ -1611,7 +1618,7 @@ class ResearchConfig:
         )
 
     @property
-    def deep_research_config(self) -> "DeepResearchSettings":
+    def deep_research_config(self) -> "DeepResearchSettings":  # noqa: F821
         """Grouped deep research workflow configuration."""
         from foundry_mcp.config.research_sub_configs import DeepResearchSettings
 

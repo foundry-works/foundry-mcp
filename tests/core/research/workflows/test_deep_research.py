@@ -567,13 +567,19 @@ class TestDeepResearchWorkflow:
             r.tokens_used = 30
             r.error = None
             if _llm_call_count % 2 == 1:
-                r.content = json.dumps({"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]})
+                r.content = json.dumps(
+                    {"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]}
+                )
             else:
-                r.content = json.dumps({"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]})
+                r.content = json.dumps(
+                    {"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]}
+                )
             return r
 
-        with patch.object(workflow, "_get_search_provider", side_effect=provider_lookup), \
-             patch.object(workflow, "_execute_provider_async", side_effect=_mock_llm_provider):
+        with (
+            patch.object(workflow, "_get_search_provider", side_effect=provider_lookup),
+            patch.object(workflow, "_execute_provider_async", side_effect=_mock_llm_provider),
+        ):
             result = await workflow._execute_gathering_async(
                 state=state,
                 provider_id=None,
@@ -649,13 +655,19 @@ class TestDeepResearchWorkflow:
             r.tokens_used = 30
             r.error = None
             if _llm_call_count % 2 == 1:
-                r.content = json.dumps({"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]})
+                r.content = json.dumps(
+                    {"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]}
+                )
             else:
-                r.content = json.dumps({"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]})
+                r.content = json.dumps(
+                    {"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]}
+                )
             return r
 
-        with patch.object(workflow, "_get_search_provider", side_effect=provider_lookup), \
-             patch.object(workflow, "_execute_provider_async", side_effect=_mock_llm_provider):
+        with (
+            patch.object(workflow, "_get_search_provider", side_effect=provider_lookup),
+            patch.object(workflow, "_execute_provider_async", side_effect=_mock_llm_provider),
+        ):
             result = await workflow._execute_gathering_async(
                 state=state,
                 provider_id=None,
@@ -1208,7 +1220,7 @@ class TestDeepResearchActionHandlers:
         _helpers._memory = old_memory
 
     def test_dispatch_to_deep_research(self, mock_tool_config, mock_tool_memory):
-        """Should dispatch 'deep-research' action — blocks and returns full report."""
+        """Should dispatch 'deep-research' action — starts background task and returns research_id."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
         with patch(
@@ -1217,19 +1229,12 @@ class TestDeepResearchActionHandlers:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=True,
-                content="Research report",
+                content="Research started in background: dr-1",
                 metadata={
                     "research_id": "dr-1",
-                    "phase": "synthesis",
-                    "iteration": 1,
-                    "sub_query_count": 3,
-                    "source_count": 10,
-                    "finding_count": 5,
-                    "gap_count": 0,
-                    "is_complete": True,
+                    "background": True,
+                    "phase": "clarification",
                 },
-                tokens_used=1000,
-                duration_ms=5000.0,
             )
             MockWorkflow.return_value = mock_workflow
 
@@ -1239,18 +1244,14 @@ class TestDeepResearchActionHandlers:
                 deep_research_action="start",
             )
 
-            # Called twice: once for execute (blocking), once for report retrieval
-            assert MockWorkflow.call_count == 2
-            # First execute call should use background=False (blocking)
-            first_execute_call = mock_workflow.execute.call_args_list[0]
-            assert first_execute_call.kwargs["background"] is False
-            # Second execute call fetches the persisted report
-            second_execute_call = mock_workflow.execute.call_args_list[1]
-            assert second_execute_call.kwargs["action"] == "report"
-            assert second_execute_call.kwargs["research_id"] == "dr-1"
+            # Called once: workflow created to start background task
+            assert MockWorkflow.call_count == 1
+            # Execute call should use background=True
+            execute_call = mock_workflow.execute.call_args_list[0]
+            assert execute_call.kwargs["background"] is True
             assert result["success"] is True
-            assert result["data"]["report"] == "Research report"
             assert result["data"]["research_id"] == "dr-1"
+            assert result["data"]["status"] == "started"
 
     def test_dispatch_to_deep_research_status(self, mock_tool_config, mock_tool_memory):
         """Should dispatch 'deep-research-status' action."""
@@ -1344,7 +1345,7 @@ class TestDeepResearchActionHandlers:
         assert "research_id" in result["error"].lower()
 
     def test_dispatch_to_deep_research_resume(self, mock_tool_config, mock_tool_memory):
-        """Should dispatch 'deep-research' action with resume sub-action."""
+        """Should dispatch 'deep-research' action with resume sub-action (background)."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
         with patch(
@@ -1353,11 +1354,11 @@ class TestDeepResearchActionHandlers:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=True,
-                content="Resumed research",
+                content="Research started in background: dr-1",
                 metadata={
                     "research_id": "dr-1",
+                    "background": True,
                     "phase": "gathering",
-                    "iteration": 2,
                 },
             )
             MockWorkflow.return_value = mock_workflow
@@ -1370,12 +1371,11 @@ class TestDeepResearchActionHandlers:
 
             assert result["success"] is True
             assert result["data"]["research_id"] == "dr-1"
-            # First execute: blocking call with 'resume' normalized to 'continue'
-            # Second execute: report retrieval
-            assert mock_workflow.execute.call_count == 2
+            # Single execute call: background start with 'resume' normalized to 'continue'
+            assert mock_workflow.execute.call_count == 1
             first_call_kwargs = mock_workflow.execute.call_args_list[0].kwargs
             assert first_call_kwargs["action"] == "continue"
-            assert first_call_kwargs["background"] is False
+            assert first_call_kwargs["background"] is True
 
     def test_deep_research_list_pagination(self, mock_tool_config, mock_tool_memory):
         """Should support cursor-based pagination for deep-research-list."""
@@ -1975,23 +1975,30 @@ class TestDeepResearchProviderFailover:
             r.tokens_used = 30
             r.error = None
             if _llm_call_count % 2 == 1:
-                r.content = json.dumps({"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]})
+                r.content = json.dumps(
+                    {"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]}
+                )
             else:
-                r.content = json.dumps({"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]})
+                r.content = json.dumps(
+                    {"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]}
+                )
             return r
 
-        with patch.object(
-            workflow_with_providers,
-            "_get_search_provider",
-            side_effect=lambda name: (
-                self._create_mock_provider(name, mock_google_sources)
-                if name == "google"
-                else self._create_mock_provider(name, [])
+        with (
+            patch.object(
+                workflow_with_providers,
+                "_get_search_provider",
+                side_effect=lambda name: (
+                    self._create_mock_provider(name, mock_google_sources)
+                    if name == "google"
+                    else self._create_mock_provider(name, [])
+                ),
             ),
-        ), patch.object(
-            workflow_with_providers,
-            "_execute_provider_async",
-            side_effect=_mock_llm_provider,
+            patch.object(
+                workflow_with_providers,
+                "_execute_provider_async",
+                side_effect=_mock_llm_provider,
+            ),
         ):
             result = await workflow_with_providers._execute_gathering_async(
                 state=state_with_pending_queries,
@@ -2053,19 +2060,26 @@ class TestDeepResearchProviderFailover:
             r.tokens_used = 30
             r.error = None
             if _llm_call_count % 2 == 1:
-                r.content = json.dumps({"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]})
+                r.content = json.dumps(
+                    {"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]}
+                )
             else:
-                r.content = json.dumps({"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]})
+                r.content = json.dumps(
+                    {"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]}
+                )
             return r
 
-        with patch.object(
-            workflow_with_providers,
-            "_get_search_provider",
-            side_effect=lambda name: self._create_mock_provider(name, mock_sources),
-        ), patch.object(
-            workflow_with_providers,
-            "_execute_provider_async",
-            side_effect=_mock_llm_provider,
+        with (
+            patch.object(
+                workflow_with_providers,
+                "_get_search_provider",
+                side_effect=lambda name: self._create_mock_provider(name, mock_sources),
+            ),
+            patch.object(
+                workflow_with_providers,
+                "_execute_provider_async",
+                side_effect=_mock_llm_provider,
+            ),
         ):
             result = await workflow_with_providers._execute_gathering_async(
                 state=state_with_pending_queries,
@@ -2177,19 +2191,26 @@ class TestDeepResearchProviderFailover:
             r.tokens_used = 30
             r.error = None
             if _llm_call_count % 2 == 1:
-                r.content = json.dumps({"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]})
+                r.content = json.dumps(
+                    {"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]}
+                )
             else:
-                r.content = json.dumps({"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]})
+                r.content = json.dumps(
+                    {"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]}
+                )
             return r
 
-        with patch.object(
-            workflow_with_providers,
-            "_get_search_provider",
-            side_effect=create_provider,
-        ), patch.object(
-            workflow_with_providers,
-            "_execute_provider_async",
-            side_effect=_mock_llm_provider,
+        with (
+            patch.object(
+                workflow_with_providers,
+                "_get_search_provider",
+                side_effect=create_provider,
+            ),
+            patch.object(
+                workflow_with_providers,
+                "_execute_provider_async",
+                side_effect=_mock_llm_provider,
+            ),
         ):
             result = await workflow_with_providers._execute_gathering_async(
                 state=state_with_pending_queries,
@@ -2265,19 +2286,26 @@ class TestDeepResearchProviderFailover:
             r.tokens_used = 30
             r.error = None
             if _llm_call_count % 2 == 1:
-                r.content = json.dumps({"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]})
+                r.content = json.dumps(
+                    {"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]}
+                )
             else:
-                r.content = json.dumps({"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]})
+                r.content = json.dumps(
+                    {"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]}
+                )
             return r
 
-        with patch.object(
-            workflow_with_providers,
-            "_get_search_provider",
-            side_effect=lambda name: self._create_mock_provider(name, mock_sources),
-        ), patch.object(
-            workflow_with_providers,
-            "_execute_provider_async",
-            side_effect=_mock_llm_provider,
+        with (
+            patch.object(
+                workflow_with_providers,
+                "_get_search_provider",
+                side_effect=lambda name: self._create_mock_provider(name, mock_sources),
+            ),
+            patch.object(
+                workflow_with_providers,
+                "_execute_provider_async",
+                side_effect=_mock_llm_provider,
+            ),
         ):
             result = await workflow_with_providers._execute_gathering_async(
                 state=state_with_pending_queries,
@@ -2293,8 +2321,7 @@ class TestDeepResearchProviderFailover:
         assert audit_path.exists()
         lines = audit_path.read_text(encoding="utf-8").splitlines()
         gathering_events = [
-            json.loads(line) for line in lines
-            if json.loads(line).get("event_type") == "gathering_result"
+            json.loads(line) for line in lines if json.loads(line).get("event_type") == "gathering_result"
         ]
         assert len(gathering_events) >= 1
         event_data = gathering_events[0]["data"]
@@ -2397,19 +2424,26 @@ class TestDeepResearchProviderFailoverEdgeCases:
             r.tokens_used = 30
             r.error = None
             if _llm_call_count % 2 == 1:
-                r.content = json.dumps({"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]})
+                r.content = json.dumps(
+                    {"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]}
+                )
             else:
-                r.content = json.dumps({"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]})
+                r.content = json.dumps(
+                    {"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]}
+                )
             return r
 
-        with patch.object(
-            workflow_three_providers,
-            "_get_search_provider",
-            side_effect=create_provider,
-        ), patch.object(
-            workflow_three_providers,
-            "_execute_provider_async",
-            side_effect=_mock_llm_provider,
+        with (
+            patch.object(
+                workflow_three_providers,
+                "_get_search_provider",
+                side_effect=create_provider,
+            ),
+            patch.object(
+                workflow_three_providers,
+                "_execute_provider_async",
+                side_effect=_mock_llm_provider,
+            ),
         ):
             result = await workflow_three_providers._execute_gathering_async(
                 state=state_single_query,
@@ -2889,11 +2923,7 @@ class TestSupervisionHistoryCapping:
 
         state = MagicMock()
         # Create 20 history entries (more than the cap)
-        state.metadata = {
-            "supervision_history": [
-                {"round": i, "method": "test"} for i in range(20)
-            ]
-        }
+        state.metadata = {"supervision_history": [{"round": i, "method": "test"} for i in range(20)]}
         _trim_supervision_history(state)
         history = state.metadata["supervision_history"]
         assert len(history) == _MAX_SUPERVISION_HISTORY_ENTRIES
@@ -2908,11 +2938,7 @@ class TestSupervisionHistoryCapping:
         )
 
         state = MagicMock()
-        state.metadata = {
-            "supervision_history": [
-                {"round": i, "method": "test"} for i in range(3)
-            ]
-        }
+        state.metadata = {"supervision_history": [{"round": i, "method": "test"} for i in range(3)]}
         _trim_supervision_history(state)
         assert len(state.metadata["supervision_history"]) == 3
 

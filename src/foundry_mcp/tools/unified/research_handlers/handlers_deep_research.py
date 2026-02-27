@@ -55,16 +55,16 @@ def _handle_deep_research(
     task_timeout: Optional[float] = None,
     **kwargs: Any,
 ) -> dict:
-    """Handle deep-research action with blocking execution.
+    """Handle deep-research action with background execution.
 
-    Runs deep research synchronously and returns the full report in a
-    single tool call.  The workflow blocks until completion (or timeout),
-    then delegates to ``_handle_deep_research_report`` to build a rich
-    response with content-fidelity metadata and allocation warnings.
+    Starts deep research in a background thread and returns immediately
+    with a ``research_id`` for polling via ``deep-research-status``.
+    When the workflow completes, use ``deep-research-report`` to retrieve
+    the full report with content-fidelity metadata and allocation warnings.
 
     Supports:
-    - start: Begin new research, block until complete, return full report
-    - continue: Resume paused research, block until complete
+    - start: Begin new research, return research_id immediately
+    - continue: Resume paused research, return research_id immediately
     - resume: Alias for continue (for backward compatibility)
     """
     # Normalize 'resume' to 'continue' for workflow compatibility
@@ -92,12 +92,12 @@ def _handle_deep_research(
     workflow = DeepResearchWorkflow(config.research, _get_memory())
 
     # Apply config default for task_timeout if not explicitly set
-    # Precedence: explicit param > config > hardcoded fallback (600s)
+    # Precedence: explicit param > config > hardcoded fallback
     effective_timeout = task_timeout
     if effective_timeout is None:
         effective_timeout = config.research.deep_research_timeout
 
-    # Execute synchronously — blocks until the workflow completes or times out
+    # Execute in background — returns immediately with research_id
     result = workflow.execute(
         query=query,
         research_id=research_id,
@@ -110,19 +110,23 @@ def _handle_deep_research(
         follow_links=follow_links,
         timeout_per_operation=timeout_per_operation,
         max_concurrent=max_concurrent,
-        background=False,
+        background=True,
         task_timeout=effective_timeout,
     )
 
     if result.success:
-        # Reuse the report handler to build a rich response with content
-        # fidelity metadata, allocation warnings, and dropped-content IDs.
-        rid = result.metadata.get("research_id")
-        if rid:
-            return _handle_deep_research_report(research_id=rid)
-
-        # Fallback: if no research_id in metadata, return inline result
-        return asdict(success_response(data={"report": result.content, **(result.metadata or {})}))
+        # Background mode: return research_id for status polling
+        response_data: dict[str, Any] = {
+            "status": "started",
+            "message": (
+                "Deep research started in background. "
+                "Use deep-research-status to monitor progress, "
+                "then deep-research-report to retrieve results."
+            ),
+        }
+        if result.metadata:
+            response_data.update(result.metadata)
+        return asdict(success_response(data=response_data))
     else:
         details: dict[str, Any] = {"action": deep_research_action}
         rid = (result.metadata or {}).get("research_id")
