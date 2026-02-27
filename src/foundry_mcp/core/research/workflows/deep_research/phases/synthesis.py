@@ -902,7 +902,7 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                 safe_title = sanitize_external_content(source.title)
                 prompt_parts.append(f"- **{label}**: {safe_title} [{quality}]")
                 if source.url:
-                    prompt_parts.append(f"  URL: {source.url}")
+                    prompt_parts.append(f"  URL: {sanitize_external_content(source.url)}")
 
                 # Apply token-aware content limit for snippets
                 if item.needs_summarization:
@@ -939,7 +939,7 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                 safe_title = sanitize_external_content(source.title)
                 prompt_parts.append(f"- {label}: {safe_title} [{quality}]")
                 if source.url:
-                    prompt_parts.append(f"  URL: {source.url}")
+                    prompt_parts.append(f"  URL: {sanitize_external_content(source.url)}")
 
         prompt_parts.append("")
 

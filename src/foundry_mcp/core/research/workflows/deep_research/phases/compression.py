@@ -182,7 +182,7 @@ def _build_structured_metadata_prompt(
         safe_title = sanitize_external_content(src.title)
         entry_lines.append(f"[{idx}] Title: {safe_title}")
         if src.url:
-            entry_lines.append(f"    URL: {src.url}")
+            entry_lines.append(f"    URL: {sanitize_external_content(src.url)}")
         content = sanitize_external_content(src.content or src.snippet or "")
         if content:
             if len(content) > max_content_length:

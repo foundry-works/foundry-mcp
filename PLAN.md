@@ -1,287 +1,176 @@
-# PLAN: Address Review Findings — Deep Research Workflow Refactor
+# Review Remediation Plan
 
-> **Goal**: Fix all critical, high, and medium severity issues identified during senior-engineer review of the deep research workflow refactor branch.
->
-> **Scope**: 6 phases, estimated ~500-800 LOC changes + ~200 LOC test additions
->
-> **Risk**: Low-Medium. Most changes are correctness/cleanup with no behavioral change to the happy path. Phase 1 (critical/high) requires careful async reasoning.
+Branch: `tyler/foundry-mcp-20260223-0747`
+Source: `review.txt` — senior engineer review + extended security findings
 
 ---
 
-## Phase 1: Critical & High-Priority Fixes
+## Phase 1: MUST-FIX (Critical)
 
-**Objective**: Eliminate the deadlock risk, restore cancellation semantics, fix legacy resume crash, and harden SSRF protection.
+### 1.1 Fix failing test — `_execute_analysis_async` missing
 
-### 1a. Fix `_evaluate_research` deadlock risk (CRITICAL)
+**File:** `tests/unit/test_core/research/test_deep_research_public_api.py` (lines 87-106)
 
-**File**: `src/foundry_mcp/core/research/workflows/deep_research/action_handlers.py`
-**Lines**: 573-585
+The `test_workflow_inherits_all_phase_methods` test asserts `hasattr(workflow, "_execute_analysis_async")` but this method was removed during the refactoring. The analysis phase was folded into supervision.
 
-**Problem**: `run_coroutine_threadsafe(coro, loop)` followed by `future.result()` will deadlock if called from the event loop thread. The `_run_sync` method (lines 612-675) in the same file handles this correctly using `ThreadPoolExecutor`.
+**Action:** Remove `_execute_analysis_async` from the expected method list in the test since the method no longer exists in the workflow. Verify no other tests reference this method.
 
-**Fix**: Refactor `_evaluate_research` to use the same dispatch pattern as `_run_sync`:
-1. Extract the async evaluation logic into a standalone async function.
-2. In the sync entry point, detect whether we're on the event loop thread using `loop.is_running()`.
-3. If on the event loop thread, dispatch to a `ThreadPoolExecutor` that runs `asyncio.run()` internally (same pattern as `_run_sync` lines 647-649).
-4. If no event loop, call `asyncio.run()` directly.
+### 1.2 Sanitize all 8 prompt injection gaps
 
-**Test**: Add a test that calls `_evaluate_research` from within an async context (simulating the deadlock scenario) and verifies it completes without hanging.
+Apply `sanitize_external_content()` to every trust-boundary crossing identified by the security review. The sanitization framework already exists in `_helpers.py` — these files were created before the sanitization sweep.
 
-### 1b. Restore `CancelledError` propagation (HIGH)
+| # | File | Line | Field | Fix |
+|---|------|------|-------|-----|
+| A | `_analysis_prompts.py` | 103 | `state.original_query` | Wrap with `sanitize_external_content()` |
+| B | `_analysis_prompts.py` | 106 | `state.research_brief` | Wrap with `sanitize_external_content()` |
+| C | `_analysis_prompts.py` | 141 | `source.title` | Wrap with `sanitize_external_content()` |
+| D | `_analysis_prompts.py` | 215 | `source.title` | Wrap with `sanitize_external_content()` |
+| E | `_analysis_prompts.py` | 217 | `source.url` | Wrap with `sanitize_external_content()` |
+| F | `refinement.py` | 338 | `state.original_query` | Wrap with `sanitize_external_content()` |
+| G | `synthesis.py` | 905 | `source.url` | Wrap with `sanitize_external_content()` |
+| H | `synthesis.py` | 942 | `source.url` | Wrap with `sanitize_external_content()` |
+| I | `compression.py` | 185 | `src.url` | Wrap with `sanitize_external_content()` |
 
-**File**: `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py`
-**Lines**: 379-485
+For state fields (A, B, F): prefer `build_sanitized_context(state)` where the function already provides a pre-sanitized dict, then use the sanitized values from that dict.
 
-**Problem**: `except asyncio.CancelledError` catches and returns `WorkflowResult` instead of re-raising. This breaks Python's cancellation contract — callers using `asyncio.wait_for()` or `Task.cancel()` won't see cancellation propagate.
+For source fields (C, D, E, G, H, I): wrap each interpolation with `sanitize_external_content(value)`.
 
-**Fix**:
-1. Keep the existing state cleanup / rollback logic (lines 384-469).
-2. After cleanup and state persistence, **re-raise** `CancelledError` instead of returning a `WorkflowResult`.
-3. In `background_tasks.py`, the existing guard `if state.completed_at is None` (around lines 96-116) already handles this — verify it catches the re-raised `CancelledError` and performs the same finalization.
-
-**Test**: Verify that `asyncio.Task.cancel()` on a running workflow results in `CancelledError` being raised to the caller, and that state is still properly rolled back.
-
-### 1c. Fix legacy resume crash for PLANNING phase (HIGH)
-
-**File**: `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py`
-**Lines**: ~200 (after BRIEF handling, before GATHERING)
-**File**: `src/foundry_mcp/core/research/workflows/deep_research/core.py` (lines 104-121)
-
-**Problem**: `PlanningPhaseMixin` was removed from the `DeepResearchWorkflow` MRO but `phases/__init__.py` still exports it. A saved state at `PLANNING` phase would hit the `advance_phase()` fallthrough but `self._execute_planning_async()` doesn't exist on the class — `AttributeError` at runtime.
-
-**Fix** (option b — clean removal):
-1. In `workflow_execution.py`, add explicit handling for `DeepResearchPhase.PLANNING` between the `BRIEF` and `GATHERING` blocks:
-   ```python
-   if state.phase == DeepResearchPhase.PLANNING:
-       logger.warning(
-           "PLANNING phase running from legacy saved state (research %s) "
-           "— advancing to SUPERVISION",
-           state.id,
-       )
-       self._write_audit_event(state, "legacy_phase_resume", data={
-           "phase": "planning", "deprecated_phase": True,
-       }, level="warning")
-       state.advance_phase()  # PLANNING → GATHERING → SUPERVISION
-   ```
-2. Remove `PlanningPhaseMixin` from `phases/__init__.py` `__all__` and the import (or keep the import with a comment that it's intentionally not in the MRO).
-3. Verify `DeepResearchPhase.PLANNING` still exists in the enum for deserialization of legacy states.
-
-**Test**: Create a saved state at PLANNING phase, resume it, and verify it advances to SUPERVISION without error.
-
-### 1d. Harden SSRF validation with DNS rebinding note (HIGH)
-
-**File**: `src/foundry_mcp/core/research/workflows/deep_research/_helpers.py`
-**Lines**: 809-857
-
-**Problem**: `validate_extract_url()` checks IP literals but not DNS resolution. A hostname resolving to `169.254.169.254` bypasses the check. The Tavily provider's version (in `tavily_extract.py`) supports `resolve_dns` parameter.
-
-**Fix**:
-1. Add a docstring note explicitly documenting the TOCTOU gap: "This function validates URL syntax and blocks obvious IP-literal attacks. DNS rebinding attacks (hostname resolving to private IP) are NOT blocked here — the fetch layer (Tavily API) operates in its own network context."
-2. Add an optional `resolve_dns: bool = False` parameter that, when True, performs `socket.getaddrinfo()` and checks the resolved IP against `_BLOCKED_NETWORKS`.
-3. In the `ReflectionDecision._coerce_urls` validator (deep_research.py line 232-248), call with `resolve_dns=True` since these URLs come from LLM output and are used for server-side fetch.
-
-**Test**: Add tests for DNS rebinding detection when `resolve_dns=True`.
+Ensure `sanitize_external_content` and/or `build_sanitized_context` are imported in each file.
 
 ---
 
-## Phase 2: Dead Code Cleanup
+## Phase 2: SHOULD-FIX (Important)
 
-**Objective**: Remove unreachable code that inflates the MRO and maintenance burden.
+### 2.1 Reduce method complexity (Issue #3)
 
-### 2a. Remove `AnalysisPhaseMixin` from MRO
+Extract sub-operations from the four oversized methods. Target: no method > 150 lines.
 
-**File**: `src/foundry_mcp/core/research/workflows/deep_research/core.py` (line 115)
-**File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/__init__.py`
+| File | Method | Lines | Extraction targets |
+|------|--------|-------|--------------------|
+| `supervision.py` | `_first_round_decompose_critique_revise()` | ~270 | Extract: parse/retry logic, directive validation, critique handling |
+| `supervision.py` | `_execute_supervision_delegation_async()` | ~215 | Extract: think+delegate orchestration, gap analysis construction |
+| `topic_research.py` | `_execute_topic_research_async()` | ~500+ | Extract: tool dispatch, findings truncation, result merging, retry loops |
+| `synthesis.py` | `_execute_synthesis_async()` | ~400+ | Extract: source block construction, report extraction, citation formatting |
 
-The ANALYSIS phase is no longer reachable in the active workflow. The `advance_phase()` logic skips directly from GATHERING to SUPERVISION.
+**Approach:** Create private helper methods within the same class/module. Don't create new files — keep extractions colocated. Preserve all existing behavior and error handling.
 
-1. Remove `AnalysisPhaseMixin` from `DeepResearchWorkflow` base classes in `core.py`.
-2. Mark the export in `__init__.py` as deprecated (like PlanningPhaseMixin).
-3. Verify no runtime code calls `self._execute_analysis_async()`.
+### 2.2 Split `_helpers.py` into focused modules (Issue #4)
 
-### 2b. Remove `RefinementPhaseMixin` from MRO
+Split the 987-line `_helpers.py` into domain-focused modules. The file already has clear sections:
 
-**File**: `src/foundry_mcp/core/research/workflows/deep_research/core.py` (line 117)
+| New module | Source lines (approx) | Contents |
+|-----------|----------------------|----------|
+| `_json_parsing.py` | 28-77 | `extract_json()` |
+| `_token_budget.py` | 80-371 | `fidelity_level_from_score()`, `truncate_at_boundary()`, `truncate_to_token_estimate()`, `_split_prompt_sections()`, `structured_truncate_blocks()`, `structured_drop_sources()` |
+| `_model_resolution.py` | 373-611 | `estimate_token_limit_for_model()`, `TopicReflectionDecision`, `parse_reflection_decision()`, `ClarificationDecision`, `parse_clarification_decision()`, `safe_resolve_model_for_role()`, `resolve_phase_provider()` |
+| `_content_dedup.py` | 614-786 | `_char_ngrams()`, `_normalize_content_for_dedup()`, `content_similarity()`, `NoveltyTag`, `compute_novelty_tag()` |
+| `_injection_protection.py` | 788-987 | `validate_extract_url()`, `sanitize_external_content()`, `build_sanitized_context()`, `build_novelty_summary()`, SSRF constants |
 
-Same treatment as AnalysisPhaseMixin — the REFINEMENT phase was removed from the pipeline.
+**Approach:**
+1. Create new modules under `phases/` (or a `_utils/` subpackage).
+2. Re-export everything from `_helpers.py` for backward compatibility.
+3. Update direct imports in other files to point to the new modules.
+4. Keep `_helpers.py` as a thin re-export shim initially, remove in a follow-up.
 
-1. Remove from base classes in `core.py`.
-2. Mark export as deprecated in `__init__.py`.
+### 2.3 Config bounds validation (Issue #5)
 
-### 2c. Delete `supervision_legacy.py`
+Add bounds checking in `research.py` config validation for fields that currently lack it, following the existing `max_supervision_rounds` pattern (define ClassVar constant → warn + clamp upper → raise on lower).
 
-**File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision_legacy.py` (627 lines)
+| Field | Lower bound | Upper bound | Notes |
+|-------|-------------|-------------|-------|
+| `deep_research_max_iterations` | >= 1 | <= 20 | Iteration count |
+| `deep_research_max_sub_queries` | >= 1 | <= 50 | Sub-query count |
+| `deep_research_max_sources` | >= 1 | <= 100 | Source limit per query |
+| `deep_research_max_concurrent` | >= 1 | <= 20 | Concurrency limit |
+| `default_timeout` | >= 1 | <= 3600 | Seconds |
+| `token_safety_margin` | >= 0 | <= 50000 | Token count |
 
-`LegacySupervisionMixin` is never in the class hierarchy and no config path reaches it.
+Add a new validation method `_validate_deep_research_bounds()` called from the existing validation chain.
 
-1. Delete the file entirely.
-2. Remove any imports/references.
-3. If there's concern about losing the code, note that it's preserved in git history.
+### 2.4 Coverage heuristic improvement (Issue #6)
 
-### 2d. Clean up `PlanningPhaseMixin` export
+**File:** `supervision_coverage.py` — `assess_coverage_heuristic()`
 
-**File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/__init__.py` (lines 12, 21)
+**Problem:** Source adequacy uses `mean()` averaging, so a query with 10x minimum sources compensates for one with 0 sources, allowing premature exit.
 
-After 1c adds explicit skip handling, the mixin export is only needed for external consumers that may import it directly (unlikely).
+**Fix:** Replace `mean()` with `min()` for the source adequacy dimension. This ensures coverage is only declared sufficient when *every* sub-query meets its minimum source threshold. The `min()` approach is the most conservative and prevents lopsided coverage.
 
-1. Remove from `__all__`.
-2. Keep the import line with comment: `# Retained for git history reference only; not in active MRO`
-3. Or delete outright if no external consumers exist.
+Alternative: Use a geometric mean or `median()` if `min()` proves too strict in practice (can be adjusted later).
 
----
+### 2.5 Model token limits validation (Issue #7)
 
-## Phase 3: Type Safety & Config Hardening
+**File:** `_helpers.py` (or new `_model_resolution.py`) — `estimate_token_limit_for_model()` loader
 
-**Objective**: Eliminate `getattr(self.config, ...)` anti-pattern and wire up the protocol/sub-config infrastructure that was created but not connected.
+**Problem:** Accepts any integer from JSON, including 0 or negative. A typo like `200` instead of `200000` would silently break context window management.
 
-### 3a. Wire `DeepResearchWorkflowProtocol` into phase mixins
-
-**File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/_protocols.py` (lines 33-66)
-**Files**: All phase mixin files (supervision.py, topic_research.py, synthesis.py, compression.py, brief.py, gathering.py, analysis.py, clarification.py)
-
-The protocol already defines `config`, `memory`, `_write_audit_event`, `_check_cancellation`, and `_execute_provider_async`. Currently each mixin redeclares these independently.
-
-1. In each mixin's `TYPE_CHECKING` block, import `DeepResearchWorkflowProtocol`.
-2. Add a class-level type annotation: `_self: "DeepResearchWorkflowProtocol"` or use `Self` from `typing_extensions`.
-3. Remove the duplicated `config: Any`, `memory: Any`, and per-mixin `TYPE_CHECKING` stubs.
-4. Extend the protocol with any additional methods that mixins currently stub (e.g., `_execute_topic_research_async`).
-
-### 3b. Replace `getattr(self.config, ...)` with direct attribute access
-
-**Files**: ~19 occurrences across:
-- `action_handlers.py` (lines 115, 135, 556-558)
-- `phases/supervision.py`
-- `phases/topic_research.py`
-- `phases/gathering.py`
-- `audit.py`
-- `persistence.py`
-
-For each `getattr(self.config, "deep_research_foo", default)`:
-1. Verify the attribute exists on `ResearchConfig` dataclass.
-2. Replace with `self.config.deep_research_foo`.
-3. If the attribute genuinely might not exist (backward compat), add a `hasattr` check with explicit comment explaining why.
-
-This ensures typos are caught at type-check time rather than silently returning defaults.
+**Fix:** After loading `model_token_limits.json`, validate every value is `>= 1000`. Log a warning for any entry below the threshold and skip it (don't include in lookup). This catches obvious typos without requiring exact values.
 
 ---
 
-## Phase 4: Module-Level Side Effects & Bounded Growth
+## Phase 3: NICE-TO-HAVE (Polish)
 
-**Objective**: Fix module-level I/O and ensure in-round message growth stays bounded.
+### 3.1 Reduce prompt duplication (Issue #8)
 
-### 4a. Lazy-load `MODEL_TOKEN_LIMITS`
+**File:** `supervision_prompts.py`
 
-**File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/_lifecycle.py` (lines 96-130)
+~40% of text is repeated between `build_delegation_system_prompt()` (lines 229-271) and `build_first_round_delegation_system_prompt()` (lines 493-529).
 
-Replace module-level `MODEL_TOKEN_LIMITS = _load_model_token_limits()` with lazy loading:
-```python
-@functools.lru_cache(maxsize=1)
-def get_model_token_limits() -> dict[str, int]:
-    return _load_model_token_limits()
+**Fix:** Extract shared prompt sections into a `_build_delegation_core_prompt()` helper. Have both functions call it and append their specific sections (gap-analysis guidance vs. decomposition guidance).
+
+### 3.2 Centralize supervision round increment (Issue #9)
+
+**File:** `supervision.py`
+
+`state.supervision_round += 1` appears at 4 locations (lines 286, 312, 330, 687).
+
+**Fix:** Extract to a `_advance_supervision_round(state)` method that increments the counter and emits any associated audit event. Replace all 4 call sites. This makes the round lifecycle explicit and reduces risk of missed updates.
+
+### 3.3 Consolidate `_CHARS_PER_TOKEN` constant (Issue #10)
+
+Currently defined independently in:
+- `_lifecycle.py:149`
+- `topic_research.py:435`
+- Also used inline in `_helpers.py` `truncate_to_token_estimate()`
+
+**Fix:** Define `CHARS_PER_TOKEN = 4` once in `_helpers.py` (or the new `_token_budget.py`). Import from there in all three files.
+
+### 3.4 Fix RuntimeWarning in test (Issue #11)
+
+**File:** `tests/core/research/workflows/deep_research/test_workflow_execution.py` (lines 298-320)
+
+`test_cancellation_after_brief_before_supervision` produces:
+```
+RuntimeWarning: coroutine 'StubWorkflow._execute_supervision_async' was never awaited
 ```
 
-Update all references (line 582 in same file, plus any imports) to call `get_model_token_limits()`.
-
-### 4b. Promote `_FALLBACK_CONTEXT_WINDOW` to public
-
-**File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/_lifecycle.py` (line 511)
-**File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py` (line 34)
-
-Rename `_FALLBACK_CONTEXT_WINDOW` → `FALLBACK_CONTEXT_WINDOW` (remove leading underscore).
-Update all import sites (synthesis.py, _lifecycle.py internal usages).
-
-### 4c. Post-round supervision message truncation
-
-**File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`
-**Lines**: ~468-507 (after `_execute_and_merge_directives`)
-
-Add a `truncate_supervision_messages()` call after all directive results have been appended within a round, not just at the start of the next round. This prevents temporary memory spikes from large directive result sets.
-
-Specifically, add truncation at the end of `_post_round_bookkeeping()` or at the exit of `_execute_and_merge_directives()`.
+**Fix:** Ensure the stub coroutine is properly awaited or closed in the test teardown. Likely need to either:
+- Add `asyncio.get_event_loop().run_until_complete(coro)` to consume it, or
+- Mock the method to return a regular value instead of a coroutine, or
+- Use `coro.close()` in cleanup to suppress the warning.
 
 ---
 
-## Phase 5: Test Improvements
+## Execution Order
 
-**Objective**: Address the most impactful test gaps and quality issues.
+1. **Phase 1** first — failing test and security fixes are blockers.
+2. **Phase 2.2** (split `_helpers.py`) before **2.1** (method complexity) — the split creates cleaner import targets for extracted helpers.
+3. **Phase 2.3-2.5** are independent, can be done in parallel.
+4. **Phase 3** items are independent, can be done in any order after Phase 2.
+5. **Phase 3.3** (`_CHARS_PER_TOKEN`) should happen after **2.2** (split) since the constant's home file changes.
 
-### 5a. Add topic research error path tests
+## Testing
 
-**File**: `tests/core/research/workflows/test_topic_research.py`
-
-Add tests for:
-1. Unknown tool name in researcher response (e.g., `{"tool": "invalid_tool", ...}`)
-2. Budget exhaustion mid-loop (tool calls hit max without `research_complete`)
-3. `extract_content` tool failure (provider returns error or empty content)
-
-### 5b. Add supervision to cross-phase integration test
-
-**File**: `tests/core/research/workflows/test_cross_phase_integration.py`
-
-Add `SupervisionPhaseMixin` to the `StubWorkflow` class composition. Add a test case that exercises the full path: CLARIFICATION → BRIEF → SUPERVISION → SYNTHESIS with a simplified mock.
-
-### 5c. Fix `test_supervision_skipped_when_disabled`
-
-**File**: `tests/core/research/workflows/deep_research/test_supervision.py` (line 522)
-
-The test reimplements production logic inline. Rewrite to call actual `_execute_workflow_async` with `config.deep_research_enable_supervision = False` and verify the phase transition skips SUPERVISION.
-
-### 5d. Build evaluation mock responses from `DIMENSIONS` keys
-
-**File**: `tests/core/research/evaluation/test_evaluator.py`
-
-Replace hand-written dimension names in `_make_valid_eval_response()` with dynamic construction from the `DIMENSIONS` constant to prevent drift.
-
----
-
-## Phase 6: Low-Priority Cleanup
-
-**Objective**: Address low-severity items that improve code quality but are not blocking.
-
-### 6a. Extract `build_sanitized_context(state)` helper
-
-**File**: `src/foundry_mcp/core/research/workflows/deep_research/_helpers.py`
-
-Create a helper that returns pre-sanitized versions of common state fields:
-```python
-def build_sanitized_context(state) -> dict[str, str]:
-    return {
-        "original_query": sanitize_external_content(state.original_query or ""),
-        "system_prompt": sanitize_external_content(state.system_prompt or ""),
-        "constraints": sanitize_external_content(
-            str(state.clarification_constraints) if state.clarification_constraints else ""
-        ),
-        "research_brief": sanitize_external_content(state.research_brief or ""),
-    }
+Run the full test suite after each phase:
+```bash
+python -m pytest tests/ -x -q
 ```
 
-Update prompt builders in `brief.py`, `planning.py`, `supervision_prompts.py` to use it.
-
-### 6b. Fix `extract_json()` backslash handling
-
-**File**: `src/foundry_mcp/core/research/workflows/deep_research/_helpers.py` (lines 50-77)
-
-The `escape` flag logic should only trigger inside strings:
-```python
-if char == "\\":
-    if in_string:
-        escape = True
-    continue  # ← this 'continue' is wrong; a backslash outside a string
-              # should not skip the next character
+After Phase 1.2 (sanitization), verify with:
+```bash
+python -m pytest tests/ -k "sanitiz" -v
 ```
 
-Fix: Only set `escape = True` when `in_string` is True, and remove the `continue` for the non-string case.
-
-### 6c. Add JSON/fallback token limits sync test
-
-**File**: `tests/unit/test_config_phase4.py` (new test or existing)
-
-Add a test that verifies `model_token_limits.json` and `_FALLBACK_MODEL_TOKEN_LIMITS` contain the same keys and values, preventing drift.
-
-### 6d. Consolidate `_make_state()` test helpers
-
-**Files**: 17 test files with duplicate `_make_state()` definitions
-
-Consolidate the most common patterns into `tests/core/research/workflows/deep_research/conftest.py`. Add preset factories like `make_supervision_state()`, `make_gathering_state()` that wrap `make_test_state()` with phase-specific defaults. Migrate test files to use the shared helpers.
-
-> **Note**: This is a large but low-risk refactor. Can be done incrementally per test file.
+After Phase 2.2 (split), verify all imports resolve:
+```bash
+python -c "from foundry_mcp.core.research.workflows.deep_research._helpers import *"
+```

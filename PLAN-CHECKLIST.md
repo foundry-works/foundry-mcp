@@ -1,118 +1,93 @@
-# PLAN-CHECKLIST: Review Findings Fix Plan
+# Review Remediation Checklist
 
-## Phase 1: Critical & High-Priority Fixes
-
-- [x] **1a.** Fix `_evaluate_research` deadlock risk (CRITICAL)
-  - [x] Refactor async dispatch to use `_run_sync` pattern (ThreadPoolExecutor)
-  - [x] `action_handlers.py:573-585` — replace `run_coroutine_threadsafe` + `future.result()`
-  - [x] Add test: call `_evaluate_research` from async context without deadlock
-
-- [x] **1b.** Restore `CancelledError` propagation (HIGH)
-  - [x] `workflow_execution.py:379-485` — re-raise `CancelledError` after state cleanup
-  - [x] Verify `background_tasks.py` guard handles re-raised exception
-  - [x] Add test: `Task.cancel()` propagates `CancelledError` to caller
-
-- [x] **1c.** Fix legacy resume crash for PLANNING phase (HIGH)
-  - [x] `workflow_execution.py` — add explicit PLANNING→skip-to-SUPERVISION handling
-  - [x] `phases/__init__.py` — clean up deprecated export
-  - [x] Verify `DeepResearchPhase.PLANNING` enum value still exists for deserialization
-  - [x] Add test: saved state at PLANNING phase resumes without `AttributeError`
-
-- [x] **1d.** Harden SSRF validation (HIGH)
-  - [x] `_helpers.py:809-857` — add `resolve_dns` parameter to `validate_extract_url()`
-  - [x] Document TOCTOU gap in docstring
-  - [x] `deep_research.py:232-248` — call with `resolve_dns=True` in URL coercion validator
-  - [x] Add test: DNS rebinding detection
-
-## Phase 2: Dead Code Cleanup
-
-- [x] **2a.** Remove `AnalysisPhaseMixin` from MRO
-  - [x] `core.py:115` — remove from base classes
-  - [x] `phases/__init__.py` — mark export as deprecated
-
-- [x] **2b.** Remove `RefinementPhaseMixin` from MRO
-  - [x] `core.py:117` — remove from base classes
-  - [x] `phases/__init__.py` — mark export as deprecated
-
-- [x] **2c.** Delete `supervision_legacy.py` (627 LOC)
-  - [x] Remove file
-  - [x] Remove any imports/references
-
-- [x] **2d.** Clean up `PlanningPhaseMixin` export
-  - [x] `phases/__init__.py:12,21` — remove from `__all__`
-
-## Phase 3: Type Safety & Config Hardening
-
-- [x] **3a.** Wire `DeepResearchWorkflowProtocol` into phase mixins
-  - [x] Extend `_protocols.py` protocol with missing method stubs
-  - [x] Update supervision.py mixin to use protocol
-  - [x] Update topic_research.py mixin to use protocol
-  - [x] Update synthesis.py mixin to use protocol
-  - [x] Update compression.py mixin to use protocol
-  - [x] Update brief.py mixin to use protocol
-  - [x] Update gathering.py mixin to use protocol
-  - [x] Update clarification.py mixin to use protocol
-  - [x] Remove duplicated `config: Any` / `memory: Any` stubs from each
-
-- [x] **3b.** Replace `getattr(self.config, ...)` with direct access
-  - [x] `action_handlers.py` — 4 occurrences
-  - [x] `phases/supervision.py` — 1 occurrence
-  - [x] `phases/topic_research.py` — 7 occurrences
-  - [x] `phases/gathering.py` — 4 occurrences
-  - [x] `audit.py` — 1 occurrence
-  - [x] `persistence.py` — 1 occurrence
-
-## Phase 4: Module-Level Side Effects & Bounded Growth
-
-- [x] **4a.** Lazy-load `MODEL_TOKEN_LIMITS`
-  - [x] `_lifecycle.py:96-130` — replace module-level load with `@lru_cache`
-  - [x] Update all call sites to use `get_model_token_limits()`
-
-- [x] **4b.** Promote `_FALLBACK_CONTEXT_WINDOW` to public
-  - [x] `_lifecycle.py:511` — rename to `FALLBACK_CONTEXT_WINDOW`
-  - [x] `synthesis.py:34` — update import
-  - [x] Update internal usages in `_lifecycle.py`
-
-- [x] **4c.** Post-round supervision message truncation
-  - [x] `supervision.py` — add truncation at end of `_post_round_bookkeeping()`
-
-## Phase 5: Test Improvements
-
-- [x] **5a.** Add topic research error path tests
-  - [x] Test unknown tool name dispatch
-  - [x] Test budget exhaustion forced termination
-  - [x] Test `extract_content` failure handling (RuntimeError + TimeoutError)
-
-- [x] **5b.** Add supervision to cross-phase integration test
-  - [x] Add `SupervisionPhaseMixin` to `StubWorkflow`
-  - [x] Add full-path test case: CLARIFICATION → BRIEF → SUPERVISION → SYNTHESIS
-
-- [x] **5c.** Fix `test_supervision_skipped_when_disabled`
-  - [x] Add `deep_research_enable_supervision` check in `workflow_execution.py`
-  - [x] Rewrite test to call actual `WorkflowExecutionMixin` code
-
-- [x] **5d.** Build evaluation mock responses from `DIMENSIONS` keys
-  - [x] `test_evaluator.py` — dynamically construct dimension names from `DIMENSIONS`
-
-## Phase 6: Low-Priority Cleanup
-
-- [x] **6a.** Extract `build_sanitized_context(state)` helper
-  - [x] Add to `_helpers.py`
-  - [x] Update `brief.py`, `planning.py`, `supervision_prompts.py`
-
-- [x] **6b.** Fix `extract_json()` backslash handling
-  - [x] `_helpers.py:50-77` — only skip on `\` when inside a string
-  - [x] Add test for backslash outside JSON string
-
-- [x] **6c.** Add JSON/fallback token limits sync test
-  - [x] Verify `model_token_limits.json` keys match `_FALLBACK_MODEL_TOKEN_LIMITS`
-
-- [x] **6d.** Consolidate `_make_state()` test helpers
-  - [x] Add preset factories to `conftest.py`
-  - [x] Migrate test files incrementally
+Track progress against `PLAN.md`. Mark items `[x]` when complete.
 
 ---
 
-**Total items**: 42 checklist items across 6 phases
-**Blocking items**: Phase 1 (4 items) should be completed before merge
-**Non-blocking**: Phases 2-6 can be done post-merge or in follow-up PRs
+## Phase 1: MUST-FIX
+
+- [x] **1.1** Remove `_execute_analysis_async` from expected methods in `test_workflow_inherits_all_phase_methods`
+- [x] **1.1a** Verify no other tests reference `_execute_analysis_async`
+- [x] **1.1b** Also removed `_execute_refinement_async` (also folded into supervision)
+- [x] **1.2A** Sanitize `state.original_query` in `_analysis_prompts.py:103`
+- [x] **1.2B** Sanitize `state.research_brief` in `_analysis_prompts.py:106`
+- [x] **1.2C** Sanitize `source.title` in `_analysis_prompts.py:141`
+- [x] **1.2D** Sanitize `source.title` in `_analysis_prompts.py:215`
+- [x] **1.2E** Sanitize `source.url` in `_analysis_prompts.py:217`
+- [x] **1.2F** Sanitize `state.original_query` in `refinement.py:338`
+- [x] **1.2G** Sanitize `source.url` in `synthesis.py:905`
+- [x] **1.2H** Sanitize `source.url` in `synthesis.py:942`
+- [x] **1.2I** Sanitize `src.url` in `compression.py:185`
+- [x] **1.2J** Add imports for `sanitize_external_content` / `build_sanitized_context` where missing
+- [x] **1.2K** Run sanitization tests to verify: `pytest -k "sanitiz" -v` — 141 passed
+- [x] **1.2L** Run full test suite: `pytest tests/ -x -q` — 6758 passed, 0 failed
+
+## Phase 2: SHOULD-FIX
+
+### 2.1 Method complexity reduction
+- [ ] **2.1A** Extract sub-methods from `_first_round_decompose_critique_revise()` in `supervision.py`
+- [ ] **2.1B** Extract sub-methods from `_execute_supervision_delegation_async()` in `supervision.py`
+- [ ] **2.1C** Extract sub-methods from `_execute_topic_research_async()` in `topic_research.py`
+- [ ] **2.1D** Extract sub-methods from `_execute_synthesis_async()` in `synthesis.py`
+- [ ] **2.1E** Verify no method exceeds 150 lines post-extraction
+- [ ] **2.1F** Run full test suite — all passing
+
+### 2.2 Split `_helpers.py`
+- [ ] **2.2A** Create `_json_parsing.py` with `extract_json()`
+- [ ] **2.2B** Create `_token_budget.py` with truncation/fidelity functions
+- [ ] **2.2C** Create `_model_resolution.py` with model/provider resolution + dataclasses
+- [ ] **2.2D** Create `_content_dedup.py` with similarity/novelty functions
+- [ ] **2.2E** Create `_injection_protection.py` with sanitization + SSRF validation
+- [ ] **2.2F** Update `_helpers.py` to re-export all symbols for backward compatibility
+- [ ] **2.2G** Update direct imports across codebase to use new modules
+- [ ] **2.2H** Verify import resolution: `python -c "from foundry_mcp.core.research.workflows.deep_research._helpers import *"`
+- [ ] **2.2I** Run full test suite — all passing
+
+### 2.3 Config bounds validation
+- [ ] **2.3A** Add `_MAX_*` ClassVar constants for each unbounded field
+- [ ] **2.3B** Add `_validate_deep_research_bounds()` method with warn+clamp pattern
+- [ ] **2.3C** Wire into existing validation chain
+- [ ] **2.3D** Add unit tests for bounds clamping and error on invalid values
+- [ ] **2.3E** Run full test suite — all passing
+
+### 2.4 Coverage heuristic
+- [ ] **2.4A** Replace `mean()` with `min()` in source adequacy calculation in `assess_coverage_heuristic()`
+- [ ] **2.4B** Update/add unit tests for lopsided coverage scenario
+- [ ] **2.4C** Run full test suite — all passing
+
+### 2.5 Token limits validation
+- [ ] **2.5A** Add `>= 1000` validation in token limits loader
+- [ ] **2.5B** Log warning and skip invalid entries
+- [ ] **2.5C** Add unit test for malformed token limit values
+- [ ] **2.5D** Run full test suite — all passing
+
+## Phase 3: NICE-TO-HAVE
+
+### 3.1 Prompt deduplication
+- [ ] **3.1A** Extract `_build_delegation_core_prompt()` shared helper in `supervision_prompts.py`
+- [ ] **3.1B** Refactor both `build_*_delegation_system_prompt()` to use shared helper
+- [ ] **3.1C** Run full test suite — all passing
+
+### 3.2 Centralize round increment
+- [ ] **3.2A** Create `_advance_supervision_round(state)` method in `supervision.py`
+- [ ] **3.2B** Replace all 4 `state.supervision_round += 1` sites with method call
+- [ ] **3.2C** Run full test suite — all passing
+
+### 3.3 Consolidate `_CHARS_PER_TOKEN`
+- [ ] **3.3A** Define `CHARS_PER_TOKEN = 4` in `_token_budget.py` (or `_helpers.py`)
+- [ ] **3.3B** Update imports in `_lifecycle.py` and `topic_research.py`
+- [ ] **3.3C** Remove duplicate definitions
+- [ ] **3.3D** Run full test suite — all passing
+
+### 3.4 Fix RuntimeWarning in test
+- [ ] **3.4A** Fix unawaited coroutine in `test_cancellation_after_brief_before_supervision`
+- [ ] **3.4B** Verify warning is gone: `pytest tests/.../test_workflow_execution.py -W error::RuntimeWarning -k cancellation_after_brief`
+- [ ] **3.4C** Run full test suite — all passing
+
+---
+
+## Final Validation
+
+- [ ] Full test suite green: `pytest tests/ -q`
+- [ ] No new RuntimeWarnings: `pytest tests/ -W error::RuntimeWarning -q`
+- [ ] No remaining unsanitized trust boundary crossings (grep for direct `state.original_query` / `source.title` / `source.url` interpolation in prompt strings)

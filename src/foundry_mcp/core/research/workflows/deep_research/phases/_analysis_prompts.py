@@ -12,6 +12,9 @@ from typing import Any, Optional
 from foundry_mcp.core.research.context_budget import AllocationResult
 from foundry_mcp.core.research.document_digest import deserialize_payload
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
+from foundry_mcp.core.research.workflows.deep_research._helpers import (
+    sanitize_external_content,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -100,10 +103,10 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         """
 
         prompt_parts = [
-            f"Original Research Query: {state.original_query}",
+            f"Original Research Query: {sanitize_external_content(state.original_query)}",
             "",
             "Research Brief:",
-            state.research_brief or "Direct research on the query",
+            sanitize_external_content(state.research_brief or "Direct research on the query"),
             "",
         ]
 
@@ -138,7 +141,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                         if source:
                             citation = source_id_to_citation.get(src_id, "?")
                             prompt_parts.append(
-                                f"    {src_id} [citation {citation}]: {source.title}"
+                                f"    {src_id} [citation {citation}]: {sanitize_external_content(source.title)}"
                             )
                     prompt_parts.append("")
 
@@ -212,9 +215,9 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
         for i, (source, alloc_item) in enumerate(sources_to_include, 1):
             prompt_parts.append(f"Source {i} (ID: {source.id}):")
-            prompt_parts.append(f"  Title: {source.title}")
+            prompt_parts.append(f"  Title: {sanitize_external_content(source.title)}")
             if source.url:
-                prompt_parts.append(f"  URL: {source.url}")
+                prompt_parts.append(f"  URL: {sanitize_external_content(source.url)}")
 
             # Determine content limit based on allocation
             if alloc_item and alloc_item.needs_summarization:

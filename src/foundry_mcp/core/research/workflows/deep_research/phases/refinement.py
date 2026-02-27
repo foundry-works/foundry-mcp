@@ -22,6 +22,7 @@ from foundry_mcp.core.research.workflows.deep_research._constants import (
 )
 from foundry_mcp.core.research.workflows.deep_research._helpers import (
     extract_json,
+    sanitize_external_content,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
     execute_llm_call,
@@ -335,7 +336,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             User prompt string
         """
         prompt_parts = [
-            f"# Research Query\n{state.original_query}",
+            f"# Research Query\n{sanitize_external_content(state.original_query)}",
             "",
             "## Research Status",
             f"- Iteration: {state.iteration}/{state.max_iterations}",
