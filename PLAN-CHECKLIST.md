@@ -14,14 +14,14 @@
 
 ## Phase 2: Security Hardening
 
-- [ ] **2a.** Enable DNS resolution for extract URL validation (MAJOR)
-  - [ ] `topic_research.py:1647` — pass `resolve_dns=True` to `validate_extract_url`
-  - [ ] Add test: mock `socket.getaddrinfo` → `127.0.0.1`, verify URL rejected
+- [x] **2a.** Enable DNS resolution for extract URL validation (MAJOR)
+  - [x] `topic_research.py:1647` — pass `resolve_dns=True` to `validate_extract_url`
+  - [x] Add test: mock `socket.getaddrinfo` → `127.0.0.1`, verify URL rejected (covered by existing TestValidateExtractUrlDnsRebinding)
 
-- [ ] **2b.** Sanitize `supervisor_summary` and `per_topic_summary` at construction (MAJOR)
-  - [ ] `supervision.py:1351` — wrap `per_topic_summary` with `sanitize_external_content()`
-  - [ ] `supervision.py:1467` — wrap `supervisor_summary` with `sanitize_external_content()`
-  - [ ] Add test: injection tags in `per_topic_summary` stripped by `_build_directive_fallback_summary`
+- [x] **2b.** Sanitize `supervisor_summary` and `per_topic_summary` at construction (MAJOR)
+  - [x] `supervision.py:1353` — wrap `per_topic_summary` with `sanitize_external_content()`
+  - [x] `supervision.py:1467` — wrap `supervisor_summary` with `sanitize_external_content()`
+  - [x] Add test: injection tags in `per_topic_summary` stripped by `_build_directive_fallback_summary`
 
 ## Phase 3: Token Budget & Truncation Robustness
 

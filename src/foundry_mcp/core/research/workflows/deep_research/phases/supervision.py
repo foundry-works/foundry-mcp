@@ -1350,7 +1350,7 @@ class SupervisionPhaseMixin:
         """
         # Prefer per_topic_summary if available
         if topic_result.per_topic_summary:
-            summary = topic_result.per_topic_summary
+            summary = sanitize_external_content(topic_result.per_topic_summary)
             if len(summary) > max_chars:
                 return summary[:max_chars] + "..."
             return summary
@@ -1464,7 +1464,7 @@ class SupervisionPhaseMixin:
         # Key findings from supervisor summary (structured for gap analysis)
         if topic_result.supervisor_summary:
             # Truncate to fit within remaining budget
-            brief = topic_result.supervisor_summary
+            brief = sanitize_external_content(topic_result.supervisor_summary)
             label = "Key findings: "
             max_brief = remaining - len(label) - 1
             if max_brief > 20:

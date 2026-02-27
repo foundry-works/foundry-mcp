@@ -1644,7 +1644,7 @@ class TopicResearchMixin:
                 return "Invalid URLs argument."
 
         # SSRF protection: filter out private/internal URLs
-        urls = [u for u in urls if validate_extract_url(u)]
+        urls = [u for u in urls if validate_extract_url(u, resolve_dns=True)]
 
         if not urls:
             return "No valid URLs provided for extraction."
