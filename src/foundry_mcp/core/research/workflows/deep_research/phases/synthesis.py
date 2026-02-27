@@ -1170,15 +1170,19 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         if not state.raw_notes:
             return prompt
 
-        # Determine context window size for the synthesis model
-        context_window = estimate_token_limit_for_model(
+        # Determine context window size for the synthesis model, reduced by
+        # the configured safety margin so the final prompt stays within the
+        # safe token budget (mirrors the margin applied elsewhere).
+        raw_context_window = estimate_token_limit_for_model(
             state.synthesis_model, get_model_token_limits(),
         ) or FALLBACK_CONTEXT_WINDOW
+        safety_margin = getattr(self.config, "token_safety_margin", 0.15)
+        context_window = int(raw_context_window * (1.0 - safety_margin))
 
         # Estimate current prompt size in tokens (4 chars ≈ 1 token heuristic)
         current_tokens = len(prompt) // 4
 
-        # Available headroom = context_window - current_tokens - output_reserved
+        # Available headroom = effective_context - current_tokens - output_reserved
         headroom_tokens = context_window - current_tokens - SYNTHESIS_OUTPUT_RESERVED
         headroom_fraction = headroom_tokens / context_window
 

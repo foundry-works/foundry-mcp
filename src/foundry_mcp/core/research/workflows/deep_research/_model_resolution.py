@@ -35,9 +35,12 @@ def estimate_token_limit_for_model(model: Optional[str], token_limits: dict[str,
     if not model:
         return None
     model_lower = model.lower()
-    for pattern, limit in token_limits.items():
-        if pattern.lower() in model_lower:
-            return limit
+    # Collect all matching entries, then pick the longest (most specific) key
+    # so that e.g. "gpt-4o" matches before "gpt-4" for "gpt-4o-2024-08-06".
+    matches = [(k, v) for k, v in token_limits.items() if k.lower() in model_lower]
+    if matches:
+        matches.sort(key=lambda kv: len(kv[0]), reverse=True)
+        return matches[0][1]
     return None
 
 

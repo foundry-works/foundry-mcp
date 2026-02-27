@@ -25,18 +25,18 @@
 
 ## Phase 3: Token Budget & Truncation Robustness
 
-- [ ] **3a.** Guard against zero/negative token budgets (MAJOR)
-  - [ ] `_token_budget.py:60-77` — add early return with warning when `max_tokens <= 0`
-  - [ ] Add test: `truncate_to_token_estimate("text", 0)` returns full text + logs warning
-  - [ ] Add test: `truncate_to_token_estimate("text", -5)` returns full text + logs warning
+- [x] **3a.** Guard against zero/negative token budgets (MAJOR)
+  - [x] `_token_budget.py:60-77` — add early return with warning when `max_tokens <= 0`
+  - [x] Add test: `truncate_to_token_estimate("text", 0)` returns full text + logs warning
+  - [x] Add test: `truncate_to_token_estimate("text", -5)` returns full text + logs warning
 
-- [ ] **3b.** Account for `token_safety_margin` in supplementary notes injection (MAJOR)
-  - [ ] `synthesis.py:1179-1190` — use `effective_context = context_window * (1 - safety_margin)`
-  - [ ] Add test: headroom available with raw context but not with margin → injection skipped
+- [x] **3b.** Account for `token_safety_margin` in supplementary notes injection (MAJOR)
+  - [x] `synthesis.py:1179-1190` — use `effective_context = context_window * (1 - safety_margin)`
+  - [x] Add test: headroom available with raw context but not with margin → injection skipped
 
-- [ ] **3c.** Fix model token limit substring matching order (MAJOR)
-  - [ ] `_model_resolution.py:21-41` — sort matches by descending key length (longest first)
-  - [ ] Add test: dict with `"gpt-4": 8192` and `"gpt-4o": 128000`, model `"gpt-4o-2024"` → 128000
+- [x] **3c.** Fix model token limit substring matching order (MAJOR)
+  - [x] `_model_resolution.py:21-41` — sort matches by descending key length (longest first)
+  - [x] Add test: dict with `"gpt-4": 8192` and `"gpt-4o": 128000`, model `"gpt-4o-2024"` → 128000
 
 ## Phase 4: Configuration Validation & Consistency
 

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 # Approximate characters-per-token heuristic used across budget calculations.
 # Defined here as the single source of truth; other modules import this constant.
@@ -71,6 +74,13 @@ def truncate_to_token_estimate(text: str, max_tokens: int) -> str:
     Returns:
         Truncated text if it exceeds the budget, otherwise the original text
     """
+    if max_tokens <= 0:
+        logger.warning(
+            "truncate_to_token_estimate called with max_tokens=%d; "
+            "returning full text (budget exhausted upstream)",
+            max_tokens,
+        )
+        return text
     max_chars = max_tokens * CHARS_PER_TOKEN
     if len(text) <= max_chars:
         return text
