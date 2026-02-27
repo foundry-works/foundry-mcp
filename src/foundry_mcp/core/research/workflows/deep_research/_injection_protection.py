@@ -22,17 +22,26 @@ logger = logging.getLogger(__name__)
 # SSRF protection for extract URLs
 # ---------------------------------------------------------------------------
 
-# Private/reserved IPv4 networks that must be blocked.
+# Private/reserved IPv4/IPv6 networks that must be blocked.
 _BLOCKED_NETWORKS: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = [
     ipaddress.IPv4Network("10.0.0.0/8"),
     ipaddress.IPv4Network("172.16.0.0/12"),
     ipaddress.IPv4Network("192.168.0.0/16"),
     ipaddress.IPv4Network("127.0.0.0/8"),
     ipaddress.IPv4Network("169.254.0.0/16"),  # link-local + cloud metadata
+    ipaddress.IPv4Network("0.0.0.0/8"),  # "this" network (RFC 1122)
     ipaddress.IPv6Network("::1/128"),
     ipaddress.IPv6Network("fc00::/7"),  # unique local
     ipaddress.IPv6Network("fe80::/10"),  # link-local
+    ipaddress.IPv6Network("ff00::/8"),  # multicast
 ]
+
+# Hostname suffixes that resolve to internal/local services.
+_BLOCKED_HOSTNAME_SUFFIXES: tuple[str, ...] = (
+    ".local",
+    ".internal",
+    ".localhost",
+)
 
 
 def validate_extract_url(url: str, *, resolve_dns: bool = False) -> bool:
@@ -83,6 +92,12 @@ def validate_extract_url(url: str, *, resolve_dns: bool = False) -> bool:
     if hostname in ("localhost", "localhost.localdomain"):
         return False
 
+    # Block internal hostname suffixes (.local, .internal, .localhost)
+    lower_host = hostname.lower()
+    for suffix in _BLOCKED_HOSTNAME_SUFFIXES:
+        if lower_host.endswith(suffix):
+            return False
+
     # Try to parse as IP address and check against blocked networks
     try:
         addr = ipaddress.ip_address(hostname)
@@ -96,7 +111,7 @@ def validate_extract_url(url: str, *, resolve_dns: bool = False) -> bool:
                 import socket
 
                 infos = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
-                for (*_, sockaddr) in infos:
+                for *_, sockaddr in infos:
                     resolved_ip = ipaddress.ip_address(sockaddr[0])
                     for network in _BLOCKED_NETWORKS:
                         if resolved_ip in network:
@@ -119,7 +134,7 @@ _INJECTION_TAG_PATTERN: re.Pattern[str] = re.compile(
     r"|function_calls|(?:antml:)?invoke|prompt"
     r"|message|messages|context|document|thinking|reflection"
     r"|example|result|output|user|role|artifact|search_results"
-    r"|function_declaration|function_response)\b[^>]*>",
+    r"|function_declaration|function_response)(?=[\s/>_]|$)[^>]*>",
     re.IGNORECASE,
 )
 
@@ -157,12 +172,31 @@ def sanitize_external_content(text: str) -> str:
     """
     if not text:
         return text
-    # Strip zero-width characters that could obfuscate injection tags
+    # Strip zero-width and invisible characters that could obfuscate injection tags
     sanitized = text.translate(
-        {0x200B: None, 0x200C: None, 0x200D: None, 0xFEFF: None}
+        {
+            0x00AD: None,  # Soft Hyphen
+            0x034F: None,  # Combining Grapheme Joiner
+            0x180E: None,  # Mongolian Vowel Separator
+            0x200B: None,  # Zero Width Space
+            0x200C: None,  # Zero Width Non-Joiner
+            0x200D: None,  # Zero Width Joiner
+            0x2060: None,  # Word Joiner
+            0x2061: None,  # Function Application
+            0x2062: None,  # Invisible Times
+            0x2063: None,  # Invisible Separator
+            0x2064: None,  # Invisible Plus
+            0xFEFF: None,  # Zero Width No-Break Space (BOM)
+        }
     )
-    # Decode HTML entities so entity-encoded tags are caught
-    sanitized = html_module.unescape(sanitized)
+    # Decode HTML entities so entity-encoded tags are caught.
+    # Loop until stable to defeat multi-layer encoding (e.g. &amp;lt; → &lt; → <).
+    _MAX_UNESCAPE_ROUNDS = 5
+    for _ in range(_MAX_UNESCAPE_ROUNDS):
+        unescaped = html_module.unescape(sanitized)
+        if unescaped == sanitized:
+            break
+        sanitized = unescaped
     # Strip XML-like instruction/override tags
     sanitized = _INJECTION_TAG_PATTERN.sub("", sanitized)
     # Strip OpenAI-family special tokens

@@ -15,11 +15,11 @@
 - [x] 2.6 Bound `_active_research_sessions` dict (max sessions or periodic cleanup)
 
 ## Phase 3 — Security: SSRF, Sanitization, Injection
-- [ ] 3.1 Unify SSRF validators — add `0.0.0.0/8`, `ff00::/8`, `.local`/`.internal`/`.localhost` to `_injection_protection.py`
-- [ ] 3.2 Fix double HTML entity encoding bypass (loop `html.unescape()` until stable)
-- [ ] 3.3 Sanitize `report` and `query` in evaluation prompt (`evaluator.py`)
-- [ ] 3.4 Expand zero-width character stripping (`U+00AD`, `U+034F`, `U+2060-2064`, `U+180E`)
-- [ ] 3.5 Fix `\b` word boundary to catch underscore-extended tags (`<system_prompt>` etc.)
+- [x] 3.1 Unify SSRF validators — add `0.0.0.0/8`, `ff00::/8`, `.local`/`.internal`/`.localhost` to `_injection_protection.py`
+- [x] 3.2 Fix double HTML entity encoding bypass (loop `html.unescape()` until stable)
+- [x] 3.3 Sanitize `report` and `query` in evaluation prompt (`evaluator.py`)
+- [x] 3.4 Expand zero-width character stripping (`U+00AD`, `U+034F`, `U+2060-2064`, `U+180E`)
+- [x] 3.5 Fix `\b` word boundary to catch underscore-extended tags (`<system_prompt>` etc.)
 
 ## Phase 4 — Correctness: Orchestration & Config Validation
 - [ ] 4.1 Validate `coverage_confidence_weights` schema (numeric values, known keys)

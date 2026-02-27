@@ -97,9 +97,7 @@ def _build_evaluation_prompt(
     # which uses raw researcher output as the evidence baseline.
     raw_notes_section = ""
     if raw_notes:
-        raw_notes_text = "\n---\n".join(
-            sanitize_external_content(note) for note in raw_notes
-        )
+        raw_notes_text = "\n---\n".join(sanitize_external_content(note) for note in raw_notes)
         if len(raw_notes_text) > _MAX_RAW_NOTES_CHARS:
             raw_notes_text = raw_notes_text[:_MAX_RAW_NOTES_CHARS] + "\n\n[... notes truncated ...]"
         raw_notes_section = f"""
@@ -115,11 +113,7 @@ dimension — assess whether the report's claims are supported by this evidence.
     # Format rubrics
     rubric_blocks = []
     for dim in dimensions:
-        rubric_blocks.append(
-            f"### {dim.display_name} ({dim.name})\n"
-            f"{dim.description}\n\n"
-            f"Scoring rubric:\n{dim.rubric}"
-        )
+        rubric_blocks.append(f"### {dim.display_name} ({dim.name})\n{dim.description}\n\nScoring rubric:\n{dim.rubric}")
     rubrics_text = "\n\n".join(rubric_blocks)
 
     # Build dimension names list for JSON schema
@@ -203,9 +197,7 @@ def _parse_evaluation_response(
         dim_data = scores_data.get(dim.name)
         if dim_data is None:
             # Dimension missing — assign neutral imputed score
-            dimension_scores.append(
-                build_dimension_score(dim.name, 3, "Not evaluated", imputed=True)
-            )
+            dimension_scores.append(build_dimension_score(dim.name, 3, "Not evaluated", imputed=True))
             continue
 
         raw_score = dim_data.get("score", 3)
@@ -285,8 +277,8 @@ async def evaluate_report(
     ]
 
     user_prompt = _build_evaluation_prompt(
-        query=state.original_query,
-        report=state.report,
+        query=sanitize_external_content(state.original_query or ""),
+        report=sanitize_external_content(state.report),
         sources=source_dicts,
         raw_notes=state.raw_notes if state.raw_notes else None,
     )
