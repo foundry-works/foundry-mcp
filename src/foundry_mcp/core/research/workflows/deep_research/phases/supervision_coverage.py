@@ -306,8 +306,9 @@ def assess_coverage_heuristic(
 
     Computes a confidence score from three dimensions:
 
-    - **Source adequacy**: average of ``min(1.0, sources / min_sources)``
-      across all completed sub-queries.
+    - **Source adequacy**: minimum of ``min(1.0, sources / min_sources)``
+      across all completed sub-queries — uses ``min()`` so coverage is
+      only sufficient when *every* sub-query meets its threshold.
     - **Domain diversity**: ``unique_domains / (query_count * 2)`` capped
       at 1.0 — rewards breadth of sourcing.
     - **Query completion rate**: ``completed / total`` sub-queries.
@@ -361,7 +362,7 @@ def assess_coverage_heuristic(
         source_ratios.append(ratio)
         if count >= min_sources:
             sufficient_count += 1
-    source_adequacy = sum(source_ratios) / len(source_ratios)
+    source_adequacy = min(source_ratios)
 
     # --- Dimension 2: Domain diversity ---
     all_domains: set[str] = set()

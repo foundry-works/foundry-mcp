@@ -50,7 +50,7 @@ from foundry_mcp.core.research.workflows.deep_research._constants import (
     SYNTHESIS_OUTPUT_RESERVED,
     SYNTHESIS_PHASE_BUDGET_FRACTION,
 )
-from foundry_mcp.core.research.workflows.deep_research._helpers import (
+from foundry_mcp.core.research.workflows.deep_research._token_budget import (
     truncate_at_boundary,
 )
 

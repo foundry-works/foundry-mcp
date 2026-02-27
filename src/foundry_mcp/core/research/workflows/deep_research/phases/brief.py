@@ -25,7 +25,7 @@ from foundry_mcp.core.research.models.deep_research import (
     parse_brief_output,
 )
 from foundry_mcp.core.research.workflows.base import WorkflowResult
-from foundry_mcp.core.research.workflows.deep_research._helpers import (
+from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
     build_sanitized_context,
     sanitize_external_content,
 )

@@ -20,9 +20,11 @@ from foundry_mcp.core.research.workflows.deep_research._budgeting import (
 from foundry_mcp.core.research.workflows.deep_research._constants import (
     REFINEMENT_OUTPUT_RESERVED,
 )
-from foundry_mcp.core.research.workflows.deep_research._helpers import (
-    extract_json,
+from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
     sanitize_external_content,
+)
+from foundry_mcp.core.research.workflows.deep_research._json_parsing import (
+    extract_json,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
     execute_llm_call,

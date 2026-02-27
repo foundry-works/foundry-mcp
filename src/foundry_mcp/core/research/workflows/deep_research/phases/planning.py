@@ -12,10 +12,12 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.workflows.base import WorkflowResult
-from foundry_mcp.core.research.workflows.deep_research._helpers import (
+from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
     build_sanitized_context,
-    extract_json,
     sanitize_external_content,
+)
+from foundry_mcp.core.research.workflows.deep_research._json_parsing import (
+    extract_json,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
     execute_llm_call,

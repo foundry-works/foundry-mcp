@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.models.enums import ConfidenceLevel
-from foundry_mcp.core.research.workflows.deep_research._helpers import extract_json
+from foundry_mcp.core.research.workflows.deep_research._json_parsing import extract_json
 
 logger = logging.getLogger(__name__)
 

@@ -109,6 +109,139 @@ class TestSupervisionConfigValidation:
 
 
 # ---------------------------------------------------------------------------
+# 2.3 — Deep research bounds validation
+# ---------------------------------------------------------------------------
+
+
+class TestDeepResearchBoundsValidation:
+    """Tests for _validate_deep_research_bounds() method."""
+
+    # --- deep_research_max_iterations ---
+
+    def test_max_iterations_clamped(self):
+        """max_iterations > 20 is clamped with warning."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            config = ResearchConfig(deep_research_max_iterations=100)
+
+        assert config.deep_research_max_iterations == 20
+        assert any("deep_research_max_iterations" in str(x.message) for x in w)
+
+    def test_max_iterations_at_boundary(self):
+        """max_iterations == 20 is accepted without warning."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            config = ResearchConfig(deep_research_max_iterations=20)
+
+        assert config.deep_research_max_iterations == 20
+        iteration_warnings = [
+            x for x in w if "deep_research_max_iterations" in str(x.message)
+        ]
+        assert len(iteration_warnings) == 0
+
+    def test_max_iterations_below_minimum_raises(self):
+        """max_iterations < 1 raises ValueError."""
+        with pytest.raises(ValueError, match="Must be >= 1"):
+            ResearchConfig(deep_research_max_iterations=0)
+
+    # --- deep_research_max_sub_queries ---
+
+    def test_max_sub_queries_clamped(self):
+        """max_sub_queries > 50 is clamped with warning."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            config = ResearchConfig(deep_research_max_sub_queries=200)
+
+        assert config.deep_research_max_sub_queries == 50
+        assert any("deep_research_max_sub_queries" in str(x.message) for x in w)
+
+    def test_max_sub_queries_below_minimum_raises(self):
+        """max_sub_queries < 1 raises ValueError."""
+        with pytest.raises(ValueError, match="Must be >= 1"):
+            ResearchConfig(deep_research_max_sub_queries=0)
+
+    # --- deep_research_max_sources ---
+
+    def test_max_sources_clamped(self):
+        """max_sources > 100 is clamped with warning."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            config = ResearchConfig(deep_research_max_sources=500)
+
+        assert config.deep_research_max_sources == 100
+        assert any("deep_research_max_sources" in str(x.message) for x in w)
+
+    def test_max_sources_below_minimum_raises(self):
+        """max_sources < 1 raises ValueError."""
+        with pytest.raises(ValueError, match="Must be >= 1"):
+            ResearchConfig(deep_research_max_sources=0)
+
+    # --- deep_research_max_concurrent ---
+
+    def test_max_concurrent_clamped(self):
+        """max_concurrent > 20 is clamped with warning."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            config = ResearchConfig(deep_research_max_concurrent=50)
+
+        assert config.deep_research_max_concurrent == 20
+        assert any("deep_research_max_concurrent" in str(x.message) for x in w)
+
+    def test_max_concurrent_below_minimum_raises(self):
+        """max_concurrent < 1 raises ValueError."""
+        with pytest.raises(ValueError, match="Must be >= 1"):
+            ResearchConfig(deep_research_max_concurrent=0)
+
+    # --- default_timeout ---
+
+    def test_default_timeout_clamped(self):
+        """default_timeout > 3600 is clamped with warning."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            config = ResearchConfig(default_timeout=10000)
+
+        assert config.default_timeout == 3600.0
+        assert any("default_timeout" in str(x.message) for x in w)
+
+    def test_default_timeout_below_minimum_raises(self):
+        """default_timeout < 1 raises ValueError."""
+        with pytest.raises(ValueError, match="Must be >= 1"):
+            ResearchConfig(default_timeout=0)
+
+    # --- token_safety_margin ---
+
+    def test_token_safety_margin_above_one_raises(self):
+        """token_safety_margin > 1.0 raises ValueError."""
+        with pytest.raises(ValueError, match=r"Must be in \[0\.0, 1\.0\]"):
+            ResearchConfig(token_safety_margin=1.5)
+
+    def test_token_safety_margin_negative_raises(self):
+        """token_safety_margin < 0.0 raises ValueError."""
+        with pytest.raises(ValueError, match=r"Must be in \[0\.0, 1\.0\]"):
+            ResearchConfig(token_safety_margin=-0.1)
+
+    def test_token_safety_margin_boundary_zero(self):
+        """token_safety_margin == 0.0 is accepted."""
+        config = ResearchConfig(token_safety_margin=0.0)
+        assert config.token_safety_margin == 0.0
+
+    def test_token_safety_margin_boundary_one(self):
+        """token_safety_margin == 1.0 is accepted."""
+        config = ResearchConfig(token_safety_margin=1.0)
+        assert config.token_safety_margin == 1.0
+
+    def test_defaults_pass_validation(self):
+        """Default values pass all bounds validation."""
+        config = ResearchConfig()
+        assert config.deep_research_max_iterations == 3
+        assert config.deep_research_max_sub_queries == 5
+        assert config.deep_research_max_sources == 5
+        assert config.deep_research_max_concurrent == 3
+        assert config.default_timeout == 360.0
+        assert config.token_safety_margin == 0.15
+
+
+# ---------------------------------------------------------------------------
 # 2B / 5B.3 — Deprecated field warnings
 # ---------------------------------------------------------------------------
 

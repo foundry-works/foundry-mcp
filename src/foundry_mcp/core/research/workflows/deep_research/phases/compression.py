@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from foundry_mcp.core.research.memory import ResearchMemory
 
 from foundry_mcp.core.research.models.deep_research import DeepResearchState, TopicResearchResult
-from foundry_mcp.core.research.workflows.deep_research._helpers import (
+from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
     sanitize_external_content,
 )
 
@@ -446,7 +446,7 @@ class CompressionMixin:
             On success, ``topic_result.compressed_findings`` is populated.
         """
         from foundry_mcp.core.research.workflows.base import WorkflowResult
-        from foundry_mcp.core.research.workflows.deep_research._helpers import safe_resolve_model_for_role
+        from foundry_mcp.core.research.workflows.deep_research._model_resolution import safe_resolve_model_for_role
         from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
             execute_llm_call,
         )
@@ -884,7 +884,7 @@ class CompressionMixin:
             Dict with compression statistics (success, tokens_used, etc.).
         """
         from foundry_mcp.core.research.workflows.base import WorkflowResult
-        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+        from foundry_mcp.core.research.workflows.deep_research._model_resolution import (
             safe_resolve_model_for_role,
         )
         from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (

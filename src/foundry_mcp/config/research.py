@@ -597,6 +597,7 @@ class ResearchConfig:
     def __post_init__(self) -> None:
         """Validate configuration fields after initialization."""
         self._validate_deep_research_mode()
+        self._validate_deep_research_bounds()
         self._validate_supervision_config()
         self._validate_tavily_config()
         self._validate_perplexity_config()
@@ -612,6 +613,88 @@ class ResearchConfig:
                 f"deep_research_mode must be one of "
                 f"{sorted(self._VALID_DEEP_RESEARCH_MODES)}, "
                 f"got {self.deep_research_mode!r}"
+            )
+
+    def _validate_deep_research_bounds(self) -> None:
+        """Validate deep research configuration bounds.
+
+        Clamps upper bounds with a warning; raises on invalid lower bounds.
+        """
+        # --- deep_research_max_iterations ---
+        if self.deep_research_max_iterations > self._MAX_DEEP_RESEARCH_ITERATIONS:
+            warnings.warn(
+                f"deep_research_max_iterations={self.deep_research_max_iterations} "
+                f"exceeds maximum ({self._MAX_DEEP_RESEARCH_ITERATIONS}); clamping.",
+                stacklevel=2,
+            )
+            self.deep_research_max_iterations = self._MAX_DEEP_RESEARCH_ITERATIONS
+        if self.deep_research_max_iterations < 1:
+            raise ValueError(
+                f"Invalid deep_research_max_iterations: "
+                f"{self.deep_research_max_iterations!r}. Must be >= 1."
+            )
+
+        # --- deep_research_max_sub_queries ---
+        if self.deep_research_max_sub_queries > self._MAX_DEEP_RESEARCH_SUB_QUERIES:
+            warnings.warn(
+                f"deep_research_max_sub_queries={self.deep_research_max_sub_queries} "
+                f"exceeds maximum ({self._MAX_DEEP_RESEARCH_SUB_QUERIES}); clamping.",
+                stacklevel=2,
+            )
+            self.deep_research_max_sub_queries = self._MAX_DEEP_RESEARCH_SUB_QUERIES
+        if self.deep_research_max_sub_queries < 1:
+            raise ValueError(
+                f"Invalid deep_research_max_sub_queries: "
+                f"{self.deep_research_max_sub_queries!r}. Must be >= 1."
+            )
+
+        # --- deep_research_max_sources ---
+        if self.deep_research_max_sources > self._MAX_DEEP_RESEARCH_SOURCES:
+            warnings.warn(
+                f"deep_research_max_sources={self.deep_research_max_sources} "
+                f"exceeds maximum ({self._MAX_DEEP_RESEARCH_SOURCES}); clamping.",
+                stacklevel=2,
+            )
+            self.deep_research_max_sources = self._MAX_DEEP_RESEARCH_SOURCES
+        if self.deep_research_max_sources < 1:
+            raise ValueError(
+                f"Invalid deep_research_max_sources: "
+                f"{self.deep_research_max_sources!r}. Must be >= 1."
+            )
+
+        # --- deep_research_max_concurrent ---
+        if self.deep_research_max_concurrent > self._MAX_DEEP_RESEARCH_CONCURRENT:
+            warnings.warn(
+                f"deep_research_max_concurrent={self.deep_research_max_concurrent} "
+                f"exceeds maximum ({self._MAX_DEEP_RESEARCH_CONCURRENT}); clamping.",
+                stacklevel=2,
+            )
+            self.deep_research_max_concurrent = self._MAX_DEEP_RESEARCH_CONCURRENT
+        if self.deep_research_max_concurrent < 1:
+            raise ValueError(
+                f"Invalid deep_research_max_concurrent: "
+                f"{self.deep_research_max_concurrent!r}. Must be >= 1."
+            )
+
+        # --- default_timeout ---
+        if self.default_timeout > self._MAX_DEFAULT_TIMEOUT:
+            warnings.warn(
+                f"default_timeout={self.default_timeout} "
+                f"exceeds maximum ({self._MAX_DEFAULT_TIMEOUT}); clamping.",
+                stacklevel=2,
+            )
+            self.default_timeout = self._MAX_DEFAULT_TIMEOUT
+        if self.default_timeout < 1:
+            raise ValueError(
+                f"Invalid default_timeout: "
+                f"{self.default_timeout!r}. Must be >= 1."
+            )
+
+        # --- token_safety_margin (fraction 0.0-1.0) ---
+        if not (0.0 <= self.token_safety_margin <= 1.0):
+            raise ValueError(
+                f"Invalid token_safety_margin: "
+                f"{self.token_safety_margin!r}. Must be in [0.0, 1.0]."
             )
 
     def _validate_supervision_config(self) -> None:
@@ -1107,6 +1190,13 @@ class ResearchConfig:
     #: Upper bounds for supervision config fields (warn + clamp).
     _MAX_SUPERVISION_ROUNDS: ClassVar[int] = 20
     _MAX_CONCURRENT_RESEARCH_UNITS: ClassVar[int] = 20
+
+    #: Upper bounds for deep research config fields (warn + clamp).
+    _MAX_DEEP_RESEARCH_ITERATIONS: ClassVar[int] = 20
+    _MAX_DEEP_RESEARCH_SUB_QUERIES: ClassVar[int] = 50
+    _MAX_DEEP_RESEARCH_SOURCES: ClassVar[int] = 100
+    _MAX_DEEP_RESEARCH_CONCURRENT: ClassVar[int] = 20
+    _MAX_DEFAULT_TIMEOUT: ClassVar[float] = 3600.0
 
     #: Maps each model role to the config attribute suffixes to check.
     #: For each role, we try ``deep_research_{suffix}_provider`` /

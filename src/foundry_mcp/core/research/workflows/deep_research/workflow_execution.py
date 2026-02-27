@@ -25,7 +25,7 @@ from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
 )
 from foundry_mcp.core.research.workflows.base import WorkflowResult
-from foundry_mcp.core.research.workflows.deep_research._helpers import (
+from foundry_mcp.core.research.workflows.deep_research._model_resolution import (
     resolve_phase_provider,
 )
 from foundry_mcp.core.research.workflows.deep_research.source_quality import (

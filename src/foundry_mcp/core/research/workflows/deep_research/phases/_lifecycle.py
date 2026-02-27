@@ -24,9 +24,11 @@ from foundry_mcp.core.observability import get_metrics
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.models.fidelity import PhaseMetrics
 from foundry_mcp.core.research.workflows.base import WorkflowResult
-from foundry_mcp.core.research.workflows.deep_research._helpers import (
+from foundry_mcp.core.research.workflows.deep_research._model_resolution import (
     estimate_token_limit_for_model,
     safe_resolve_model_for_role,
+)
+from foundry_mcp.core.research.workflows.deep_research._token_budget import (
     structured_drop_sources,
     structured_truncate_blocks,
     truncate_to_token_estimate,
@@ -113,7 +115,21 @@ def _load_model_token_limits() -> dict[str, int]:
         if not isinstance(limits, dict) or not limits:
             logger.warning("model_token_limits.json has empty/invalid 'limits', using fallback")
             return _sort_limits_longest_first(dict(_FALLBACK_MODEL_TOKEN_LIMITS))
-        return _sort_limits_longest_first({str(k): int(v) for k, v in limits.items()})
+        parsed = {str(k): int(v) for k, v in limits.items()}
+        validated: dict[str, int] = {}
+        for name, value in parsed.items():
+            if value < 1000:
+                logger.warning(
+                    "model_token_limits.json: skipping %r = %d (below minimum 1000)",
+                    name,
+                    value,
+                )
+                continue
+            validated[name] = value
+        if not validated:
+            logger.warning("model_token_limits.json: no valid entries after validation, using fallback")
+            return _sort_limits_longest_first(dict(_FALLBACK_MODEL_TOKEN_LIMITS))
+        return _sort_limits_longest_first(validated)
     except FileNotFoundError:
         logger.debug("model_token_limits.json not found at %s, using fallback", config_path)
         return _sort_limits_longest_first(dict(_FALLBACK_MODEL_TOKEN_LIMITS))

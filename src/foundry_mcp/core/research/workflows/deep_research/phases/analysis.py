@@ -30,7 +30,7 @@ from foundry_mcp.core.research.workflows.deep_research._budgeting import (
 from foundry_mcp.core.research.workflows.deep_research._constants import (
     ANALYSIS_OUTPUT_RESERVED,
 )
-from foundry_mcp.core.research.workflows.deep_research._helpers import (
+from foundry_mcp.core.research.workflows.deep_research._token_budget import (
     fidelity_level_from_score,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._analysis_parsing import (

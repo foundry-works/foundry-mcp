@@ -24,10 +24,14 @@ from foundry_mcp.core.research.workflows.deep_research._budgeting import (
 from foundry_mcp.core.research.workflows.deep_research._constants import (
     SYNTHESIS_OUTPUT_RESERVED,
 )
-from foundry_mcp.core.research.workflows.deep_research._helpers import (
-    estimate_token_limit_for_model,
-    fidelity_level_from_score,
+from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
     sanitize_external_content,
+)
+from foundry_mcp.core.research.workflows.deep_research._model_resolution import (
+    estimate_token_limit_for_model,
+)
+from foundry_mcp.core.research.workflows.deep_research._token_budget import (
+    fidelity_level_from_score,
     truncate_at_boundary,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._citation_postprocess import (
@@ -276,8 +280,81 @@ class SynthesisPhaseMixin:
         Returns:
             WorkflowResult with synthesis outcome
         """
-        # Check if we have material to synthesize: either analysis findings
-        # or per-topic compressed findings (Phase 3 PLAN — collapsed pipeline).
+        # Check for early termination when no findings exist.
+        early_result, degraded_mode = self._handle_empty_findings(state)
+        if early_result is not None:
+            return early_result
+
+        logger.info(
+            "Starting synthesis phase: %d findings, %d sources, %d topic results with compressed findings",
+            len(state.findings),
+            len(state.sources),
+            sum(1 for tr in state.topic_research_results if tr.compressed_findings),
+        )
+
+        # Emit phase.started audit event
+        phase_start_time = time.perf_counter()
+        self._write_audit_event(
+            state,
+            "phase.started",
+            data={
+                "phase_name": "synthesis",
+                "iteration": state.iteration,
+                "task_id": state.id,
+            },
+        )
+
+        # Allocate budget, build prompts, run final-fit validation.
+        system_prompt, user_prompt = self._prepare_synthesis_budget_and_prompts(
+            state, provider_id, degraded_mode,
+        )
+
+        # Check for cancellation before making provider call
+        self._check_cancellation(state)
+
+        # LLM call with findings-specific token-limit recovery.
+        llm_result = await self._execute_synthesis_llm_with_retry(
+            state, provider_id, system_prompt, user_prompt, timeout,
+        )
+        if isinstance(llm_result, WorkflowResult):
+            return llm_result
+
+        # Unpack successful LLM result.
+        result_content, findings_retries, total_chars_dropped, used_fallback = llm_result
+
+        # Extract report, post-process citations, audit, and finalize.
+        return self._finalize_synthesis_report(
+            state=state,
+            result=result_content,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            phase_start_time=phase_start_time,
+            findings_retries=findings_retries,
+            total_chars_dropped=total_chars_dropped,
+            used_fallback=used_fallback,
+            degraded_mode=degraded_mode,
+        )
+
+    # ------------------------------------------------------------------
+    # Extracted helpers for _execute_synthesis_async
+    # ------------------------------------------------------------------
+
+    def _handle_empty_findings(
+        self,
+        state: DeepResearchState,
+    ) -> tuple[Optional[WorkflowResult], bool]:
+        """Handle the case when no findings exist for synthesis.
+
+        Checks for raw notes, compressed findings, and analysis findings.
+        Returns a WorkflowResult for early exit when there is truly nothing
+        to synthesize, or ``(None, degraded_mode)`` to continue.
+
+        Args:
+            state: Current research state.
+
+        Returns:
+            A tuple of (early_result_or_none, degraded_mode_flag).
+        """
         has_compressed = any(
             tr.compressed_findings
             for tr in state.topic_research_results
@@ -325,27 +402,26 @@ class SynthesisPhaseMixin:
                         "finding_count": 0,
                         "empty_report": True,
                     },
-                )
+                ), degraded_mode
 
-        logger.info(
-            "Starting synthesis phase: %d findings, %d sources, %d topic results with compressed findings",
-            len(state.findings),
-            len(state.sources),
-            sum(1 for tr in state.topic_research_results if tr.compressed_findings),
-        )
+        return None, degraded_mode
 
-        # Emit phase.started audit event
-        phase_start_time = time.perf_counter()
-        self._write_audit_event(
-            state,
-            "phase.started",
-            data={
-                "phase_name": "synthesis",
-                "iteration": state.iteration,
-                "task_id": state.id,
-            },
-        )
+    def _prepare_synthesis_budget_and_prompts(
+        self,
+        state: DeepResearchState,
+        provider_id: Optional[str],
+        degraded_mode: bool,
+    ) -> tuple[str, str]:
+        """Allocate token budget, build prompts, and run final-fit validation.
 
+        Args:
+            state: Current research state.
+            provider_id: LLM provider to use.
+            degraded_mode: Whether synthesis is running from raw notes.
+
+        Returns:
+            A tuple of (system_prompt, user_prompt) ready for the LLM call.
+        """
         # Allocate token budget for findings and sources
         allocation_result = allocate_synthesis_budget(
             state=state,
@@ -385,29 +461,37 @@ class SynthesisPhaseMixin:
         if not valid:
             logger.warning("Synthesis phase final-fit validation failed, proceeding with truncated prompts")
 
-        # Check for cancellation before making provider call
-        self._check_cancellation(state)
+        return system_prompt, user_prompt
 
-        # ---------------------------------------------------------
-        # LLM call with findings-specific token-limit recovery.
-        #
-        # PLAN Phase 4: When synthesis hits a token limit, truncate
-        # the findings section specifically (preserving system prompt,
-        # source reference, and instructions) rather than applying
-        # generic prompt-level truncation.
-        #
-        # Strategy (mirrors open_deep_research):
-        #   Retry 1: truncate findings to model_token_limit * 4 chars
-        #   Retry 2: reduce findings budget by 10%
-        #   Retry 3: reduce findings budget by another 10%
-        #
-        # Falls back to lifecycle-level recovery (generic prompt
-        # truncation via truncate_prompt_for_retry) when findings-
-        # specific truncation alone is insufficient.
-        # ---------------------------------------------------------
+    async def _execute_synthesis_llm_with_retry(
+        self,
+        state: DeepResearchState,
+        provider_id: Optional[str],
+        system_prompt: str,
+        user_prompt: str,
+        timeout: float,
+    ) -> "WorkflowResult | tuple[Any, int, int, bool]":
+        """Execute the synthesis LLM call with findings-specific retry logic.
+
+        When synthesis hits a token limit, truncates the findings section
+        specifically (preserving system prompt, source reference, and
+        instructions).  Falls back to generic prompt truncation when
+        findings-specific truncation is insufficient.
+
+        Args:
+            state: Current research state.
+            provider_id: LLM provider to use.
+            system_prompt: The synthesis system prompt.
+            user_prompt: The synthesis user prompt.
+            timeout: Request timeout in seconds.
+
+        Returns:
+            On success: ``(llm_result, findings_retries,
+            total_chars_dropped, used_generic_fallback)``.
+            On failure: a ``WorkflowResult`` with the error.
+        """
         from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
             _is_context_window_exceeded,
-            truncate_prompt_for_retry,
         )
 
         current_user_prompt = user_prompt
@@ -441,74 +525,19 @@ class SynthesisPhaseMixin:
                     _is_context_window_exceeded(call_result)
                     and outer_attempt < _MAX_FINDINGS_TRUNCATION_RETRIES
                 ):
-                    findings_retries += 1
-
-                    # Determine findings char budget based on actual content
-                    if max_findings_chars is None:
-                        # First retry: 30% cut from actual findings length
-                        findings_section_len = _estimate_findings_section_length(user_prompt)
-                        max_findings_chars = int(findings_section_len * 0.7)
-                    else:
-                        # Subsequent retries: reduce by 10% from previous budget
-                        max_findings_chars = int(
-                            max_findings_chars * _FINDINGS_TRUNCATION_FACTOR,
-                        )
-
-                    # Try findings-specific truncation
-                    truncated_prompt, chars_dropped = _truncate_findings_section(
-                        user_prompt,  # Always truncate from original
+                    # Apply findings-specific truncation (or generic fallback).
+                    (
+                        current_user_prompt,
+                        findings_retries,
+                        total_findings_chars_dropped,
                         max_findings_chars,
-                    )
-                    total_findings_chars_dropped = (
-                        len(user_prompt) - len(truncated_prompt)
-                        if truncated_prompt != user_prompt
-                        else 0
-                    )
-
-                    if truncated_prompt != user_prompt:
-                        current_user_prompt = truncated_prompt
-                        logger.warning(
-                            "Synthesis findings-specific retry %d/%d: "
-                            "truncating findings to %d chars "
-                            "(dropped %d chars this pass, %d total)",
-                            findings_retries,
-                            _MAX_FINDINGS_TRUNCATION_RETRIES,
-                            max_findings_chars,
-                            chars_dropped,
-                            total_findings_chars_dropped,
-                        )
-                    else:
-                        # Findings truncation didn't help (section already
-                        # small or not found) — fall back to generic
-                        # lifecycle-level prompt truncation.
-                        used_generic_fallback = True
-                        current_user_prompt = truncate_prompt_for_retry(
-                            user_prompt,
-                            findings_retries,
-                            _MAX_FINDINGS_TRUNCATION_RETRIES,
-                        )
-                        logger.warning(
-                            "Synthesis findings-specific retry %d/%d: "
-                            "findings section already within budget, "
-                            "falling back to generic prompt truncation",
-                            findings_retries,
-                            _MAX_FINDINGS_TRUNCATION_RETRIES,
-                        )
-
-                    # Audit: truncation metrics
-                    self._write_audit_event(
-                        state,
-                        "synthesis_findings_truncation",
-                        data={
-                            "retry": findings_retries,
-                            "max_retries": _MAX_FINDINGS_TRUNCATION_RETRIES,
-                            "max_findings_chars": max_findings_chars,
-                            "chars_dropped": chars_dropped,
-                            "total_chars_dropped": total_findings_chars_dropped,
-                            "used_generic_fallback": used_generic_fallback,
-                            "original_prompt_len": len(user_prompt),
-                            "truncated_prompt_len": len(current_user_prompt),
-                        },
+                        used_generic_fallback,
+                    ) = self._apply_findings_truncation(
+                        state=state,
+                        user_prompt=user_prompt,
+                        findings_retries=findings_retries,
+                        max_findings_chars=max_findings_chars,
+                        used_generic_fallback=used_generic_fallback,
                     )
                     continue
 
@@ -555,6 +584,144 @@ class SynthesisPhaseMixin:
                 },
             )
 
+        return (result, findings_retries, total_findings_chars_dropped, used_generic_fallback)
+
+    def _apply_findings_truncation(
+        self,
+        state: DeepResearchState,
+        user_prompt: str,
+        findings_retries: int,
+        max_findings_chars: Optional[int],
+        used_generic_fallback: bool,
+    ) -> tuple[str, int, int, Optional[int], bool]:
+        """Truncate findings for a single retry attempt and emit audit event.
+
+        Determines the new findings character budget, applies findings-
+        specific truncation, and falls back to generic prompt truncation
+        when the findings section is already small enough.
+
+        Args:
+            state: Current research state (for audit events).
+            user_prompt: The *original* (un-truncated) user prompt.
+            findings_retries: Current retry counter (pre-increment).
+            max_findings_chars: Previous findings budget (None on first retry).
+            used_generic_fallback: Whether generic fallback was already used.
+
+        Returns:
+            ``(current_user_prompt, findings_retries, total_chars_dropped,
+            max_findings_chars, used_generic_fallback)`` — updated state
+            for the caller to thread back into the loop.
+        """
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            truncate_prompt_for_retry,
+        )
+
+        findings_retries += 1
+
+        # Determine findings char budget based on actual content
+        if max_findings_chars is None:
+            # First retry: 30% cut from actual findings length
+            findings_section_len = _estimate_findings_section_length(user_prompt)
+            max_findings_chars = int(findings_section_len * 0.7)
+        else:
+            # Subsequent retries: reduce by 10% from previous budget
+            max_findings_chars = int(
+                max_findings_chars * _FINDINGS_TRUNCATION_FACTOR,
+            )
+
+        # Try findings-specific truncation
+        truncated_prompt, chars_dropped = _truncate_findings_section(
+            user_prompt,  # Always truncate from original
+            max_findings_chars,
+        )
+        total_findings_chars_dropped = (
+            len(user_prompt) - len(truncated_prompt)
+            if truncated_prompt != user_prompt
+            else 0
+        )
+
+        if truncated_prompt != user_prompt:
+            current_user_prompt = truncated_prompt
+            logger.warning(
+                "Synthesis findings-specific retry %d/%d: "
+                "truncating findings to %d chars "
+                "(dropped %d chars this pass, %d total)",
+                findings_retries,
+                _MAX_FINDINGS_TRUNCATION_RETRIES,
+                max_findings_chars,
+                chars_dropped,
+                total_findings_chars_dropped,
+            )
+        else:
+            # Findings truncation didn't help (section already small or
+            # not found) — fall back to generic lifecycle-level truncation.
+            used_generic_fallback = True
+            current_user_prompt = truncate_prompt_for_retry(
+                user_prompt,
+                findings_retries,
+                _MAX_FINDINGS_TRUNCATION_RETRIES,
+            )
+            logger.warning(
+                "Synthesis findings-specific retry %d/%d: "
+                "findings section already within budget, "
+                "falling back to generic prompt truncation",
+                findings_retries,
+                _MAX_FINDINGS_TRUNCATION_RETRIES,
+            )
+
+        # Audit: truncation metrics
+        self._write_audit_event(
+            state,
+            "synthesis_findings_truncation",
+            data={
+                "retry": findings_retries,
+                "max_retries": _MAX_FINDINGS_TRUNCATION_RETRIES,
+                "max_findings_chars": max_findings_chars,
+                "chars_dropped": chars_dropped,
+                "total_chars_dropped": total_findings_chars_dropped,
+                "used_generic_fallback": used_generic_fallback,
+                "original_prompt_len": len(user_prompt),
+                "truncated_prompt_len": len(current_user_prompt),
+            },
+        )
+
+        return (
+            current_user_prompt,
+            findings_retries,
+            total_findings_chars_dropped,
+            max_findings_chars,
+            used_generic_fallback,
+        )
+
+    def _finalize_synthesis_report(
+        self,
+        state: DeepResearchState,
+        result: Any,
+        system_prompt: str,
+        user_prompt: str,
+        phase_start_time: float,
+        findings_retries: int,
+        total_chars_dropped: int,
+        used_fallback: bool,
+        degraded_mode: bool,
+    ) -> WorkflowResult:
+        """Extract the report, post-process citations, audit, and build the result.
+
+        Args:
+            state: Current research state.
+            result: The successful LLM result object (has ``.content``,
+                ``.provider_id``, etc.).
+            system_prompt: The system prompt used for synthesis.
+            user_prompt: The user prompt used for synthesis.
+            phase_start_time: ``time.perf_counter()`` value at phase start.
+            findings_retries: Number of findings-specific retries performed.
+            total_chars_dropped: Total characters dropped during retries.
+            used_fallback: Whether generic prompt truncation was used.
+            degraded_mode: Whether synthesis ran from raw notes.
+
+        Returns:
+            WorkflowResult with the final synthesis report.
+        """
         # Extract the markdown report from the response
         report = self._extract_markdown_report(result.content)
 

@@ -25,41 +25,41 @@ Track progress against `PLAN.md`. Mark items `[x]` when complete.
 ## Phase 2: SHOULD-FIX
 
 ### 2.1 Method complexity reduction
-- [ ] **2.1A** Extract sub-methods from `_first_round_decompose_critique_revise()` in `supervision.py`
-- [ ] **2.1B** Extract sub-methods from `_execute_supervision_delegation_async()` in `supervision.py`
-- [ ] **2.1C** Extract sub-methods from `_execute_topic_research_async()` in `topic_research.py`
-- [ ] **2.1D** Extract sub-methods from `_execute_synthesis_async()` in `synthesis.py`
-- [ ] **2.1E** Verify no method exceeds 150 lines post-extraction
-- [ ] **2.1F** Run full test suite — all passing
+- [x] **2.1A** Extract sub-methods from `_first_round_decompose_critique_revise()` in `supervision.py` — 84 lines (extracted `_run_first_round_generate`, `_run_first_round_critique`, `_run_first_round_revise`)
+- [x] **2.1B** Extract sub-methods from `_execute_supervision_delegation_async()` in `supervision.py` — 123 lines (extracted `_record_supervision_exit`, `_build_delegation_result`, `_prepare_round_coverage`)
+- [x] **2.1C** Extract sub-methods from `_execute_topic_research_async()` in `topic_research.py` — 140 lines (extracted `_resolve_topic_research_config`, `_execute_researcher_llm_call`, `_inject_reflection_prompt`, `_parse_with_retry_async`, `_check_reflection_needed`, `_dispatch_tool_calls`, `_build_raw_notes_from_history`, `_apply_inline_compression_async`, `_finalize_topic_result`)
+- [x] **2.1D** Extract sub-methods from `_execute_synthesis_async()` in `synthesis.py` — 81 lines (extracted `_handle_empty_findings`, `_prepare_synthesis_budget_and_prompts`, `_execute_synthesis_llm_with_retry`, `_apply_findings_truncation`, `_finalize_synthesis_report`)
+- [x] **2.1E** Verify no method exceeds 150 lines post-extraction — all 4 under 150
+- [x] **2.1F** Run full test suite — 6777 passed, 0 failed
 
 ### 2.2 Split `_helpers.py`
-- [ ] **2.2A** Create `_json_parsing.py` with `extract_json()`
-- [ ] **2.2B** Create `_token_budget.py` with truncation/fidelity functions
-- [ ] **2.2C** Create `_model_resolution.py` with model/provider resolution + dataclasses
-- [ ] **2.2D** Create `_content_dedup.py` with similarity/novelty functions
-- [ ] **2.2E** Create `_injection_protection.py` with sanitization + SSRF validation
-- [ ] **2.2F** Update `_helpers.py` to re-export all symbols for backward compatibility
-- [ ] **2.2G** Update direct imports across codebase to use new modules
-- [ ] **2.2H** Verify import resolution: `python -c "from foundry_mcp.core.research.workflows.deep_research._helpers import *"`
-- [ ] **2.2I** Run full test suite — all passing
+- [x] **2.2A** Create `_json_parsing.py` with `extract_json()`
+- [x] **2.2B** Create `_token_budget.py` with truncation/fidelity functions
+- [x] **2.2C** Create `_model_resolution.py` with model/provider resolution + dataclasses
+- [x] **2.2D** Create `_content_dedup.py` with similarity/novelty functions
+- [x] **2.2E** Create `_injection_protection.py` with sanitization + SSRF validation
+- [x] **2.2F** Update `_helpers.py` to re-export all symbols for backward compatibility (incl. `_extract_domain`, `_split_prompt_sections`)
+- [x] **2.2G** Update direct imports across 16 production files to use new modules
+- [x] **2.2H** Verify import resolution: `python -c "from foundry_mcp.core.research.workflows.deep_research._helpers import *"`
+- [x] **2.2I** Run full test suite — 6777 passed, 0 failed
 
 ### 2.3 Config bounds validation
-- [ ] **2.3A** Add `_MAX_*` ClassVar constants for each unbounded field
-- [ ] **2.3B** Add `_validate_deep_research_bounds()` method with warn+clamp pattern
-- [ ] **2.3C** Wire into existing validation chain
-- [ ] **2.3D** Add unit tests for bounds clamping and error on invalid values
-- [ ] **2.3E** Run full test suite — all passing
+- [x] **2.3A** Add `_MAX_*` ClassVar constants for each unbounded field
+- [x] **2.3B** Add `_validate_deep_research_bounds()` method with warn+clamp pattern
+- [x] **2.3C** Wire into existing validation chain (`__post_init__`)
+- [x] **2.3D** Add 16 unit tests for bounds clamping and error on invalid values
+- [x] **2.3E** Run full test suite — 6777 passed, 0 failed
 
 ### 2.4 Coverage heuristic
-- [ ] **2.4A** Replace `mean()` with `min()` in source adequacy calculation in `assess_coverage_heuristic()`
-- [ ] **2.4B** Update/add unit tests for lopsided coverage scenario
-- [ ] **2.4C** Run full test suite — all passing
+- [x] **2.4A** Replace `mean()` with `min()` in source adequacy calculation in `assess_coverage_heuristic()`
+- [x] **2.4B** Add unit test for lopsided coverage scenario (`test_lopsided_coverage_detected_by_min`)
+- [x] **2.4C** Run full test suite — 6777 passed, 0 failed
 
 ### 2.5 Token limits validation
-- [ ] **2.5A** Add `>= 1000` validation in token limits loader
-- [ ] **2.5B** Log warning and skip invalid entries
-- [ ] **2.5C** Add unit test for malformed token limit values
-- [ ] **2.5D** Run full test suite — all passing
+- [x] **2.5A** Add `>= 1000` validation in token limits loader (`_load_model_token_limits`)
+- [x] **2.5B** Log warning and skip invalid entries
+- [x] **2.5C** Add 2 unit tests for malformed token limit values
+- [x] **2.5D** Run full test suite — 6777 passed, 0 failed
 
 ## Phase 3: NICE-TO-HAVE
 

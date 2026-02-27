@@ -259,7 +259,7 @@ class GatheringPhaseMixin(CompressionMixin):
         from foundry_mcp.core.research.providers.shared import SourceSummarizer
 
         # Resolve summarization provider/model via role-based hierarchy (Phase 6).
-        from foundry_mcp.core.research.workflows.deep_research._helpers import safe_resolve_model_for_role
+        from foundry_mcp.core.research.workflows.deep_research._model_resolution import safe_resolve_model_for_role
 
         role_provider, role_model = safe_resolve_model_for_role(self.config, "summarization")
         summarization_provider: str = role_provider or self.config.default_provider

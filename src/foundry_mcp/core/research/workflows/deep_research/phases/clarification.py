@@ -22,11 +22,15 @@ if TYPE_CHECKING:
 
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.workflows.base import WorkflowResult
-from foundry_mcp.core.research.workflows.deep_research._helpers import (
-    ClarificationDecision,
-    extract_json,
-    parse_clarification_decision,
+from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
     sanitize_external_content,
+)
+from foundry_mcp.core.research.workflows.deep_research._json_parsing import (
+    extract_json,
+)
+from foundry_mcp.core.research.workflows.deep_research._model_resolution import (
+    ClarificationDecision,
+    parse_clarification_decision,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
     execute_structured_llm_call,

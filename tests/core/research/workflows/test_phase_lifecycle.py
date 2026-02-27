@@ -612,3 +612,49 @@ class TestModelTokenLimitsConfig:
             "Hardcoded _FALLBACK_MODEL_TOKEN_LIMITS has diverged from "
             "model_token_limits.json. Update both to keep them in sync."
         )
+
+    def test_low_values_skipped_with_warning(self, tmp_path):
+        """Token limit values < 1000 are skipped with a warning."""
+        import json
+
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _load_model_token_limits,
+        )
+
+        data = {
+            "limits": {
+                "good-model": 200000,
+                "typo-model": 200,
+                "zero-model": 0,
+            }
+        }
+        (tmp_path / "model_token_limits.json").write_text(json.dumps(data))
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases._lifecycle._config_pkg"
+        ) as mock_pkg:
+            mock_pkg.__file__ = str(tmp_path / "__init__.py")
+            result = _load_model_token_limits()
+
+        assert "good-model" in result
+        assert result["good-model"] == 200000
+        assert "typo-model" not in result
+        assert "zero-model" not in result
+
+    def test_all_values_invalid_falls_back(self, tmp_path):
+        """When all JSON entries are below 1000, fallback is used."""
+        import json
+
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _FALLBACK_MODEL_TOKEN_LIMITS,
+            _load_model_token_limits,
+        )
+
+        data = {"limits": {"bad-model": 500, "worse-model": 10}}
+        (tmp_path / "model_token_limits.json").write_text(json.dumps(data))
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases._lifecycle._config_pkg"
+        ) as mock_pkg:
+            mock_pkg.__file__ = str(tmp_path / "__init__.py")
+            result = _load_model_token_limits()
+
+        assert result == _FALLBACK_MODEL_TOKEN_LIMITS

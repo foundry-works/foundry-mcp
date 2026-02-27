@@ -3702,6 +3702,29 @@ class TestConfidenceScoredCoverage:
         assert "queries_sufficient" in result
         assert result["overall_coverage"] in ("sufficient", "partial", "insufficient")
 
+    # ------------------------------------------------------------------
+    # 2.4: Lopsided coverage — min() prevents premature exit
+    # ------------------------------------------------------------------
+
+    def test_lopsided_coverage_detected_by_min(self):
+        """A query with 0 sources should drag source_adequacy to 0.0.
+
+        Before the fix (using mean), a query with 10x sources could mask
+        another with 0 sources.  With min(), the worst sub-query dominates.
+        """
+        stub = self._make_stub()
+        # Two completed queries: one well-covered, one with NO sources
+        state = _make_state(num_completed=1, sources_per_query=10)
+        # Add a second completed sub-query with zero sources
+        state.sub_queries.append(
+            SubQuery(id="sq-empty", query="Empty query", status="completed"),
+        )
+        result = stub._assess_coverage_heuristic(state, min_sources=2)
+
+        # min() should yield 0.0 for source_adequacy (empty query = 0/2 = 0.0)
+        assert result["confidence_dimensions"]["source_adequacy"] == 0.0
+        assert result["overall_coverage"] == "partial"
+
 
 # ===========================================================================
 # Phase 2: Supervisor Delegation Scaling Heuristics

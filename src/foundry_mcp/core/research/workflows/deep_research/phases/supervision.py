@@ -33,9 +33,11 @@ from foundry_mcp.core.research.models.deep_research import (
 )
 from foundry_mcp.core.research.models.sources import SubQuery
 from foundry_mcp.core.research.workflows.base import WorkflowResult
-from foundry_mcp.core.research.workflows.deep_research._helpers import (
-    extract_json,
+from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
     sanitize_external_content,
+)
+from foundry_mcp.core.research.workflows.deep_research._json_parsing import (
+    extract_json,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
     StructuredLLMCallResult,
@@ -174,28 +176,7 @@ class SupervisionPhaseMixin:
         provider_id: Optional[str],
         timeout: float,
     ) -> WorkflowResult:
-        """Execute supervision via directive-based delegation.
-
-        Implements the multi-step supervision loop:
-        1. **Think**: Analyze compressed findings, identify gaps
-        2. **Delegate**: Generate ResearchDirective objects from gap analysis
-        3. **Execute**: Spawn parallel topic researchers for directives
-        4. **Compress**: Inline compression of new results (via existing infra)
-        5. **Assess**: Evaluate coverage and decide continue/complete
-
-        The loop runs within a single supervision phase call. When delegation
-        produces new research, the results are merged into state directly —
-        no re-entry into the GATHERING phase is needed.
-
-        Args:
-            state: Current research state
-            provider_id: LLM provider to use
-            timeout: Request timeout in seconds
-
-        Returns:
-            WorkflowResult with supervision round metadata (delegation
-            handles its own gathering internally)
-        """
+        """Execute supervision via think→delegate→execute→assess loop."""
         min_sources = getattr(
             self.config,
             "deep_research_supervision_min_sources_per_query",
@@ -215,12 +196,8 @@ class SupervisionPhaseMixin:
             },
         )
 
-        # --- Delegation loop ---
-        # Each iteration: think → delegate → execute → assess
-        # Bounded by max_supervision_rounds and wall-clock timeout.
         total_directives_executed = 0
         total_new_sources = 0
-
         wall_clock_start = time.monotonic()
         wall_clock_limit: float = getattr(
             self.config, "deep_research_supervision_wall_clock_timeout", 1800.0,
@@ -240,21 +217,9 @@ class SupervisionPhaseMixin:
                 len(state.sources),
             )
 
-            # Apply token-limit guard on supervision message history
-            if state.supervision_messages:
-                state.supervision_messages = truncate_supervision_messages(
-                    state.supervision_messages,
-                    model=state.supervision_model,
-                )
-
-            # Build coverage data and delta
-            coverage_data = self._build_per_query_coverage(state)
-            coverage_delta: Optional[str] = None
-            if state.supervision_round > 0:
-                coverage_delta = self._compute_coverage_delta(
-                    state, coverage_data, min_sources=min_sources,
-                )
-            self._store_coverage_snapshot(state, coverage_data, suffix="pre")
+            coverage_data, coverage_delta = self._prepare_round_coverage(
+                state, min_sources,
+            )
 
             # Heuristic early-exit (round > 0)
             should_exit, heuristic_data = self._should_exit_heuristic(state, min_sources)
@@ -264,26 +229,17 @@ class SupervisionPhaseMixin:
                     heuristic_data.get("confidence", 0.0),
                     state.supervision_round,
                 )
-                self._write_audit_event(
+                self._record_supervision_exit(
                     state,
-                    "supervision_result",
-                    data={
+                    method="delegation_heuristic",
+                    overall_coverage="sufficient",
+                    audit_data={
                         "reason": "heuristic_sufficient",
                         "model": "delegation",
                         "supervision_round": state.supervision_round,
                         "coverage_summary": heuristic_data,
                     },
                 )
-                history = state.metadata.setdefault("supervision_history", [])
-                history.append({
-                    "round": state.supervision_round,
-                    "method": "delegation_heuristic",
-                    "should_continue_gathering": False,
-                    "directives_executed": 0,
-                    "overall_coverage": "sufficient",
-                })
-                _trim_supervision_history(state)
-                state.supervision_round += 1
                 break
 
             # Think + Delegate
@@ -293,41 +249,30 @@ class SupervisionPhaseMixin:
                 )
             )
 
-            # Check for early exit signals
             if research_complete:
                 logger.info(
                     "Supervision delegation: ResearchComplete signal at round %d",
                     state.supervision_round,
                 )
-                history = state.metadata.setdefault("supervision_history", [])
-                history.append({
-                    "round": state.supervision_round,
-                    "method": "delegation_complete",
-                    "should_continue_gathering": False,
-                    "directives_generated": 0,
-                    "overall_coverage": "sufficient",
-                    "think_output": (think_output or "")[:_MAX_THINK_OUTPUT_STORED_CHARS],
-                })
-                _trim_supervision_history(state)
-                state.supervision_round += 1
+                self._record_supervision_exit(
+                    state,
+                    method="delegation_complete",
+                    overall_coverage="sufficient",
+                    think_output=think_output,
+                )
                 break
 
             if not directives:
                 logger.info(
-                    "Supervision delegation: no directives generated at round %d, advancing",
+                    "Supervision delegation: no directives at round %d, advancing",
                     state.supervision_round,
                 )
-                history = state.metadata.setdefault("supervision_history", [])
-                history.append({
-                    "round": state.supervision_round,
-                    "method": "delegation_no_directives",
-                    "should_continue_gathering": False,
-                    "directives_generated": 0,
-                    "overall_coverage": "partial",
-                    "think_output": (think_output or "")[:_MAX_THINK_OUTPUT_STORED_CHARS],
-                })
-                _trim_supervision_history(state)
-                state.supervision_round += 1
+                self._record_supervision_exit(
+                    state,
+                    method="delegation_no_directives",
+                    overall_coverage="partial",
+                    think_output=think_output,
+                )
                 break
 
             # Execute directives and merge results
@@ -345,7 +290,84 @@ class SupervisionPhaseMixin:
             if should_stop:
                 break
 
-        # Save final state
+        return self._build_delegation_result(
+            state, total_directives_executed, total_new_sources, phase_start_time,
+        )
+
+    def _prepare_round_coverage(
+        self,
+        state: DeepResearchState,
+        min_sources: int,
+    ) -> tuple[list[dict[str, Any]], Optional[str]]:
+        """Prepare per-round coverage data: truncate messages, build coverage, compute delta."""
+        if state.supervision_messages:
+            state.supervision_messages = truncate_supervision_messages(
+                state.supervision_messages,
+                model=state.supervision_model,
+            )
+
+        coverage_data = self._build_per_query_coverage(state)
+        coverage_delta: Optional[str] = None
+        if state.supervision_round > 0:
+            coverage_delta = self._compute_coverage_delta(
+                state, coverage_data, min_sources=min_sources,
+            )
+        self._store_coverage_snapshot(state, coverage_data, suffix="pre")
+        return coverage_data, coverage_delta
+
+    def _record_supervision_exit(
+        self,
+        state: DeepResearchState,
+        *,
+        method: str,
+        overall_coverage: str,
+        think_output: Optional[str] = None,
+        directives_generated: int = 0,
+        directives_executed: int = 0,
+        extra_data: Optional[dict[str, Any]] = None,
+        audit_data: Optional[dict[str, Any]] = None,
+    ) -> None:
+        """Record a supervision early-exit: append history, trim, advance round."""
+        if audit_data:
+            self._write_audit_event(state, "supervision_result", data=audit_data)
+
+        entry: dict[str, Any] = {
+            "round": state.supervision_round,
+            "method": method,
+            "should_continue_gathering": False,
+            "directives_generated": directives_generated,
+            "overall_coverage": overall_coverage,
+        }
+        if directives_executed:
+            entry["directives_executed"] = directives_executed
+        if think_output is not None:
+            entry["think_output"] = think_output[:_MAX_THINK_OUTPUT_STORED_CHARS]
+        if extra_data:
+            entry.update(extra_data)
+
+        history = state.metadata.setdefault("supervision_history", [])
+        history.append(entry)
+        _trim_supervision_history(state)
+        state.supervision_round += 1
+
+    def _build_delegation_result(
+        self,
+        state: DeepResearchState,
+        total_directives_executed: int,
+        total_new_sources: int,
+        phase_start_time: float,
+    ) -> WorkflowResult:
+        """Finalize the delegation loop: save state, audit, and return result.
+
+        Args:
+            state: Current research state.
+            total_directives_executed: Cumulative directives executed across rounds.
+            total_new_sources: Cumulative new sources across rounds.
+            phase_start_time: ``time.perf_counter()`` snapshot from phase start.
+
+        Returns:
+            WorkflowResult with supervision round metadata.
+        """
         self.memory.save_deep_research(state)
 
         self._write_audit_event(
@@ -1639,6 +1661,79 @@ class SupervisionPhaseMixin:
         effective_provider = provider_id or state.supervision_provider
 
         # --- Call 1: Generate initial directives ---
+        initial_directives, research_complete, gen_content, should_skip = (
+            await self._run_first_round_generate(
+                state, think_output, effective_provider, timeout,
+            )
+        )
+        if should_skip:
+            return initial_directives, research_complete, gen_content
+
+        # --- Call 2: Critique the initial directives ---
+        initial_count = len(initial_directives)
+        directives_json = json.dumps(
+            [
+                {
+                    "research_topic": d.research_topic,
+                    "perspective": d.perspective,
+                    "evidence_needed": d.evidence_needed,
+                    "priority": d.priority,
+                }
+                for d in initial_directives
+            ],
+            indent=2,
+        )
+
+        critique_text, needs_revision, should_return_initial = (
+            await self._run_first_round_critique(
+                state, initial_count, directives_json, effective_provider, timeout,
+            )
+        )
+        if should_return_initial:
+            return initial_directives, research_complete, gen_content
+
+        # --- Call 3: Revise (skip if critique found no issues) ---
+        if not needs_revision:
+            logger.info(
+                "First-round critique found no issues, using initial directives",
+            )
+            self._write_audit_event(
+                state,
+                "first_round_decomposition",
+                data={
+                    "initial_directive_count": initial_count,
+                    "final_directive_count": initial_count,
+                    "critique_triggered_revision": False,
+                },
+            )
+            return initial_directives, research_complete, gen_content
+
+        return await self._run_first_round_revise(
+            state, initial_directives, initial_count, directives_json,
+            critique_text, research_complete, effective_provider, timeout,
+            gen_content=gen_content,
+        )
+
+    async def _run_first_round_generate(
+        self,
+        state: DeepResearchState,
+        think_output: Optional[str],
+        effective_provider: Optional[str],
+        timeout: float,
+    ) -> tuple[list[ResearchDirective], bool, Optional[str], bool]:
+        """Run the generation LLM call for first-round decomposition.
+
+        Args:
+            state: Current research state.
+            think_output: Decomposition strategy from think step.
+            effective_provider: Resolved LLM provider ID.
+            timeout: Request timeout.
+
+        Returns:
+            Tuple of ``(initial_directives, research_complete, raw_content,
+            should_skip)`` where *should_skip* is ``True`` when the caller
+            should return early (research_complete or no directives).
+        """
         self._check_cancellation(state)
         gen_result = await execute_structured_llm_call(
             workflow=self,
@@ -1660,7 +1755,7 @@ class SupervisionPhaseMixin:
             logger.warning(
                 "First-round generate call failed: %s", gen_result.error,
             )
-            return [], False, None
+            return [], False, None, True
 
         # Extract initial directives
         if gen_result.parsed is not None:
@@ -1696,7 +1791,8 @@ class SupervisionPhaseMixin:
 
         # If generation signalled research_complete or produced no directives,
         # skip critique/revision — there's nothing to refine.
-        if research_complete or not initial_directives:
+        should_skip = research_complete or not initial_directives
+        if should_skip:
             self._write_audit_event(
                 state,
                 "first_round_decomposition",
@@ -1710,22 +1806,32 @@ class SupervisionPhaseMixin:
                     ),
                 },
             )
-            return initial_directives, research_complete, gen_result.result.content
 
-        # --- Call 2: Critique the initial directives ---
+        return initial_directives, research_complete, gen_result.result.content, should_skip
+
+    async def _run_first_round_critique(
+        self,
+        state: DeepResearchState,
+        initial_count: int,
+        directives_json: str,
+        effective_provider: Optional[str],
+        timeout: float,
+    ) -> tuple[str, bool, bool]:
+        """Run the critique LLM call for first-round decomposition.
+
+        Args:
+            state: Current research state.
+            initial_count: Number of directives from the generate step.
+            directives_json: JSON-serialized directives for the critique prompt.
+            effective_provider: Resolved LLM provider ID.
+            timeout: Request timeout.
+
+        Returns:
+            Tuple of ``(critique_text, needs_revision, should_return_initial)``
+            where *should_return_initial* is ``True`` when the critique call
+            failed and the caller should fall back to the initial directives.
+        """
         self._check_cancellation(state)
-        directives_json = json.dumps(
-            [
-                {
-                    "research_topic": d.research_topic,
-                    "perspective": d.perspective,
-                    "evidence_needed": d.evidence_needed,
-                    "priority": d.priority,
-                }
-                for d in initial_directives
-            ],
-            indent=2,
-        )
 
         critique_result = await execute_llm_call(
             workflow=self,
@@ -1759,7 +1865,7 @@ class SupervisionPhaseMixin:
                     "skip_reason": "critique_failed",
                 },
             )
-            return initial_directives, research_complete, gen_result.result.content
+            return "", False, True
 
         critique_text = critique_result.result.content or ""
 
@@ -1778,22 +1884,38 @@ class SupervisionPhaseMixin:
             },
         )
 
-        # --- Call 3: Revise (skip if critique found no issues) ---
-        if not needs_revision:
-            logger.info(
-                "First-round critique found no issues, using initial directives",
-            )
-            self._write_audit_event(
-                state,
-                "first_round_decomposition",
-                data={
-                    "initial_directive_count": initial_count,
-                    "final_directive_count": initial_count,
-                    "critique_triggered_revision": False,
-                },
-            )
-            return initial_directives, research_complete, gen_result.result.content
+        return critique_text, needs_revision, False
 
+    async def _run_first_round_revise(
+        self,
+        state: DeepResearchState,
+        initial_directives: list[ResearchDirective],
+        initial_count: int,
+        directives_json: str,
+        critique_text: str,
+        research_complete: bool,
+        effective_provider: Optional[str],
+        timeout: float,
+        *,
+        gen_content: Optional[str] = None,
+    ) -> tuple[list[ResearchDirective], bool, Optional[str]]:
+        """Run the revision LLM call for first-round decomposition.
+
+        Args:
+            state: Current research state.
+            initial_directives: Directives from the generate step (fallback).
+            initial_count: Number of initial directives.
+            directives_json: JSON-serialized initial directives.
+            critique_text: Critique output to inform revision.
+            research_complete: Research-complete flag from generate step.
+            effective_provider: Resolved LLM provider ID.
+            timeout: Request timeout.
+            gen_content: Raw content from the generate step (used as fallback
+                when the revision call fails).
+
+        Returns:
+            Tuple of ``(final_directives, research_complete, raw_content)``.
+        """
         self._check_cancellation(state)
         revise_result = await execute_structured_llm_call(
             workflow=self,
@@ -1826,7 +1948,7 @@ class SupervisionPhaseMixin:
                     "revision_failed": True,
                 },
             )
-            return initial_directives, research_complete, gen_result.result.content
+            return initial_directives, research_complete, gen_content
 
         # Extract revised directives
         if revise_result.parsed is not None:

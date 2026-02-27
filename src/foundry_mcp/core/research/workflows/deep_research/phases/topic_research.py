@@ -32,7 +32,7 @@ from foundry_mcp.core.research.models.deep_research import (
     parse_researcher_response,
 )
 from foundry_mcp.core.research.models.sources import SourceQuality, SubQuery
-from foundry_mcp.core.research.workflows.deep_research._helpers import (
+from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
     sanitize_external_content,
 )
 from foundry_mcp.core.research.workflows.deep_research.source_quality import (
@@ -273,7 +273,7 @@ async def _dedup_and_add_source(
 
     Returns True if the source was added, False if it was a duplicate.
     """
-    from foundry_mcp.core.research.workflows.deep_research._helpers import (
+    from foundry_mcp.core.research.workflows.deep_research._content_dedup import (
         content_similarity,
     )
 
@@ -459,7 +459,7 @@ def _truncate_researcher_history(
     if len(message_history) <= _MIN_PRESERVE_RECENT_TURNS:
         return message_history
 
-    from foundry_mcp.core.research.workflows.deep_research._helpers import (
+    from foundry_mcp.core.research.workflows.deep_research._model_resolution import (
         estimate_token_limit_for_model,
     )
     from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
@@ -557,40 +557,150 @@ class TopicResearchMixin:
     ) -> TopicResearchResult:
         """Execute a single-topic tool-calling ReAct research loop.
 
-        The researcher LLM decides which tools to call each turn:
-        web_search, extract_content, think, or research_complete.
-        This replaces the prior fixed search → reflect → think → refine
-        sequence, reducing LLM calls from 2 per iteration to 1 per turn.
-
-        Args:
-            sub_query: The sub-query to research.
-            state: Current research state (for config access and source storage).
-            available_providers: List of initialized search providers.
-            max_searches: Maximum tool call budget for this topic (hard cap).
-                Only web_search and extract_content count against this.
-            max_sources_per_provider: Max results to request from each provider
-                per search call. When None, falls back to state.max_sources_per_query.
-            timeout: Timeout per search operation.
-            seen_urls: Shared set of already-seen URLs (for deduplication).
-            seen_titles: Shared dict of normalized titles (for deduplication).
-            state_lock: Lock for thread-safe state mutations.
-            semaphore: Semaphore for concurrency control.
-
-        Returns:
-            TopicResearchResult with per-topic findings.
+        The researcher LLM decides which tools to call each turn
+        (web_search, extract_content, think, or research_complete).
+        Delegates to extracted helpers for LLM calls, parse retries,
+        reflection enforcement, tool dispatch, and finalization.
         """
         result = TopicResearchResult(sub_query_id=sub_query.id)
-        # Accumulate tokens locally and merge under lock after the loop
         local_tokens_used = 0
-        # Track tool calls (web_search + extract_content) toward budget
         tool_calls_used = 0
         budget_remaining = max_searches
 
         async with state_lock:
             sub_query.status = "executing"
 
-        # Resolve extract config once for the loop
+        extract_enabled, extract_max_per_iter, provider_id, researcher_model = (
+            self._resolve_topic_research_config()
+        )
+
+        message_history: list[dict[str, str]] = []
+        max_turns = max_searches * 3  # generous: 3x budget allows think steps
+
+        # Reflection enforcement tracking (Phase 2)
+        previous_turn_had_search = False
+        search_turn_count = 0
+        reflection_injections = 0
+
+        for turn in range(max_turns):
+            self._check_cancellation(state)
+
+            if budget_remaining <= 0:
+                logger.info(
+                    "Topic %r budget exhausted (%d/%d tool calls used), stopping",
+                    sub_query.id, tool_calls_used, max_searches,
+                )
+                break
+
+            # Execute one LLM call for this turn
+            llm_result = await self._execute_researcher_llm_call(
+                sub_query=sub_query,
+                message_history=message_history,
+                researcher_model=researcher_model,
+                provider_id=provider_id,
+                budget_remaining=budget_remaining,
+                max_searches=max_searches,
+                extract_enabled=extract_enabled,
+                turn=turn,
+            )
+            if llm_result is None:
+                break
+            local_tokens_used += llm_result.tokens_used or 0
+
+            # Parse tool calls, retrying on parse failure
+            raw_content = llm_result.content or ""
+            system_prompt = _build_researcher_system_prompt(
+                budget_total=max_searches,
+                budget_remaining=budget_remaining,
+                extract_enabled=extract_enabled,
+            )
+            response, tokens_delta = await self._parse_with_retry_async(
+                raw_content=raw_content,
+                message_history=message_history,
+                sub_query=sub_query, result=result, turn=turn,
+                provider_id=provider_id, researcher_model=researcher_model,
+                system_prompt=system_prompt,
+                budget_remaining=budget_remaining, max_searches=max_searches,
+            )
+            local_tokens_used += tokens_delta
+
+            if not response.tool_calls:
+                logger.info(
+                    "Topic %r researcher returned no tool calls on turn %d, stopping",
+                    sub_query.id, turn + 1,
+                )
+                break
+
+            # Reflection enforcement: inject synthetic think prompt if needed
+            needs_reflection, current_has_search = self._check_reflection_needed(
+                response=response,
+                previous_turn_had_search=previous_turn_had_search,
+                search_turn_count=search_turn_count,
+            )
+            if needs_reflection:
+                logger.warning(
+                    "Topic %r: researcher skipped reflection after search on turn %d, "
+                    "injecting synthetic think prompt",
+                    sub_query.id, turn + 1,
+                )
+                reflection_injections += 1
+                self._inject_reflection_prompt(message_history, raw_content)
+                if current_has_search:
+                    search_turn_count += 1
+                previous_turn_had_search = current_has_search
+                continue
+
+            # Record the assistant's response and dispatch tool calls
+            message_history.append({"role": "assistant", "content": raw_content})
+            loop_should_break, calls_delta, budget_delta = await self._dispatch_tool_calls(
+                response=response, sub_query=sub_query, state=state,
+                result=result, message_history=message_history,
+                available_providers=available_providers,
+                max_sources_per_provider=max_sources_per_provider,
+                timeout=timeout, seen_urls=seen_urls,
+                seen_titles=seen_titles, state_lock=state_lock,
+                semaphore=semaphore, budget_remaining=budget_remaining,
+                extract_enabled=extract_enabled,
+                extract_max_per_iter=extract_max_per_iter,
+            )
+            tool_calls_used += calls_delta
+            budget_remaining -= budget_delta
+
+            if current_has_search:
+                search_turn_count += 1
+            previous_turn_had_search = current_has_search
+
+            if loop_should_break:
+                break
+
+        return await self._finalize_topic_result(
+            result=result, sub_query=sub_query, state=state,
+            state_lock=state_lock, local_tokens_used=local_tokens_used,
+            tool_calls_used=tool_calls_used,
+            message_history=message_history,
+            reflection_injections=reflection_injections,
+            extract_enabled=extract_enabled, timeout=timeout,
+        )
+
+    # ------------------------------------------------------------------
+    # Extracted helpers for _execute_topic_research_async
+    # ------------------------------------------------------------------
+
+    def _resolve_topic_research_config(
+        self,
+    ) -> tuple[bool, int, str | None, str | None]:
+        """Resolve extract and LLM config once for the research loop.
+
+        Returns:
+            Tuple of (extract_enabled, extract_max_per_iter,
+            provider_id, researcher_model).
+        """
         import os as _os
+
+        from foundry_mcp.core.research.workflows.deep_research._model_resolution import (
+            resolve_phase_provider,
+            safe_resolve_model_for_role,
+        )
 
         extract_enabled = (
             self.config.deep_research_enable_extract
@@ -603,12 +713,6 @@ class TopicResearchMixin:
             self.config, "deep_research_extract_max_per_iteration", 2
         )
 
-        # Resolve provider and model for the researcher LLM
-        from foundry_mcp.core.research.workflows.deep_research._helpers import (
-            resolve_phase_provider,
-            safe_resolve_model_for_role,
-        )
-
         provider_id, researcher_model = safe_resolve_model_for_role(
             self.config, "topic_reflection"
         )
@@ -617,313 +721,389 @@ class TopicResearchMixin:
                 self.config, "topic_reflection", "reflection"
             )
 
-        # Message history for multi-turn conversation
-        message_history: list[dict[str, str]] = []
+        return extract_enabled, extract_max_per_iter, provider_id, researcher_model
 
-        # Maximum turns to prevent infinite loops (safety net)
-        max_turns = max_searches * 3  # generous: 3x budget allows think steps
+    async def _execute_researcher_llm_call(
+        self,
+        sub_query: SubQuery,
+        message_history: list[dict[str, str]],
+        researcher_model: str | None,
+        provider_id: str | None,
+        budget_remaining: int,
+        max_searches: int,
+        extract_enabled: bool,
+        turn: int,
+    ) -> Any | None:
+        """Execute a single researcher LLM call for one ReAct turn.
 
-        # Reflection enforcement tracking (Phase 2)
-        previous_turn_had_search = False
-        search_turn_count = 0  # for first-turn exception
-        reflection_injections = 0  # count of synthetic reflection prompts
+        Builds the system and user prompts, calls the provider, and
+        returns the LLM result. Returns ``None`` on failure or exception
+        to signal the main loop should break.
 
-        for turn in range(max_turns):
-            self._check_cancellation(state)
+        Args:
+            sub_query: The sub-query being researched.
+            message_history: Conversation history for prompt building.
+            researcher_model: Model identifier for the researcher LLM.
+            provider_id: Provider ID for the researcher LLM.
+            budget_remaining: Remaining tool call budget.
+            max_searches: Total tool call budget.
+            extract_enabled: Whether extract_content is available.
+            turn: Current turn index (for logging).
 
-            if budget_remaining <= 0:
-                logger.info(
-                    "Topic %r budget exhausted (%d/%d tool calls used), stopping",
-                    sub_query.id,
-                    tool_calls_used,
-                    max_searches,
+        Returns:
+            LLM result object on success, None on failure.
+        """
+        system_prompt = _build_researcher_system_prompt(
+            budget_total=max_searches,
+            budget_remaining=budget_remaining,
+            extract_enabled=extract_enabled,
+        )
+        truncated_history = _truncate_researcher_history(
+            message_history, researcher_model
+        )
+        user_prompt = _build_react_user_prompt(
+            topic=sub_query.query,
+            message_history=truncated_history,
+            budget_remaining=budget_remaining,
+            budget_total=max_searches,
+        )
+
+        try:
+            llm_result = await self._execute_provider_async(
+                prompt=user_prompt,
+                provider_id=provider_id,
+                model=researcher_model,
+                system_prompt=system_prompt,
+                timeout=self.config.deep_research_reflection_timeout,
+                temperature=0.3,
+                phase="topic_research",
+                fallback_providers=[],
+                max_retries=1,
+                retry_delay=2.0,
+            )
+            if not llm_result.success:
+                logger.warning(
+                    "Topic %r researcher LLM call failed on turn %d: %s",
+                    sub_query.id, turn + 1, llm_result.error,
                 )
-                break
-
-            # Rebuild system prompt each turn so the budget counter stays current
-            system_prompt = _build_researcher_system_prompt(
-                budget_total=max_searches,
-                budget_remaining=budget_remaining,
-                extract_enabled=extract_enabled,
+                return None
+            return llm_result
+        except (asyncio.TimeoutError, OSError, ValueError, RuntimeError) as exc:
+            logger.warning(
+                "Topic %r researcher LLM call exception on turn %d: %s",
+                sub_query.id, turn + 1, exc,
             )
+            return None
 
-            # Truncate history to fit model context window before building prompt
-            truncated_history = _truncate_researcher_history(message_history, researcher_model)
+    @staticmethod
+    def _inject_reflection_prompt(
+        message_history: list[dict[str, str]],
+        raw_content: str,
+    ) -> None:
+        """Inject a synthetic reflection-required prompt into history.
 
-            # Build user prompt with conversation history
-            user_prompt = _build_react_user_prompt(
+        Called when the researcher skips ``think`` between consecutive
+        search turns. Appends the assistant's response and a system
+        message requesting reflection.
+
+        Args:
+            message_history: Conversation history (mutated in-place).
+            raw_content: The assistant's raw response to record.
+        """
+        message_history.append({"role": "assistant", "content": raw_content})
+        message_history.append({
+            "role": "tool",
+            "tool": "system",
+            "content": (
+                "REFLECTION REQUIRED: You must call `think` to reflect on your "
+                "previous search results before issuing another search. Assess "
+                "what you found, identify gaps, and plan your next step. "
+                "Respond with ONLY a `think` tool call."
+            ),
+        })
+
+    async def _parse_with_retry_async(
+        self,
+        raw_content: str,
+        message_history: list[dict[str, str]],
+        sub_query: SubQuery,
+        result: TopicResearchResult,
+        turn: int,
+        provider_id: str | None,
+        researcher_model: str | None,
+        system_prompt: str,
+        budget_remaining: int,
+        max_searches: int,
+    ) -> tuple[Any, int]:
+        """Parse tool calls from LLM response, retrying on parse failure.
+
+        Re-prompts the LLM up to 2 times on unparseable JSON, matching
+        ODR's stop_after_attempt=3 total attempts. Appends clarification
+        messages to ``message_history`` on each retry (mutates in-place).
+
+        Args:
+            raw_content: Raw LLM response text to parse.
+            message_history: Conversation history (mutated on retries).
+            sub_query: The sub-query being researched (for logging).
+            result: TopicResearchResult (parse failure counter updated).
+            turn: Current turn index (for logging).
+            provider_id: LLM provider ID for retry calls.
+            researcher_model: LLM model for retry calls.
+            system_prompt: System prompt for retry calls.
+            budget_remaining: Remaining tool call budget (for prompt).
+            max_searches: Total tool call budget (for prompt).
+
+        Returns:
+            Tuple of (parsed response, tokens_used_delta). The response
+            may have empty tool_calls if all retries were exhausted.
+        """
+        response = parse_researcher_response(raw_content)
+        tokens_delta = 0
+
+        parse_retries = 0
+        while response.parse_failed and parse_retries < 2:
+            parse_retries += 1
+            result.tool_parse_failures += 1
+            logger.warning(
+                "Topic %r researcher returned unparseable JSON on turn %d "
+                "(retry %d/2), re-prompting with format clarification",
+                sub_query.id,
+                turn + 1,
+                parse_retries,
+            )
+            # Append the failed response + clarification to history
+            message_history.append({"role": "assistant", "content": raw_content})
+            message_history.append({
+                "role": "tool",
+                "tool": "system",
+                "content": (
+                    "Your previous response was not valid JSON. Please respond "
+                    "with ONLY a JSON object in the exact format:\n"
+                    '{"tool_calls": [{"tool": "tool_name", "arguments": {...}}]}\n'
+                    "Do not include any text outside the JSON object."
+                ),
+            })
+            retry_user_prompt = _build_react_user_prompt(
                 topic=sub_query.query,
-                message_history=truncated_history,
+                message_history=_truncate_researcher_history(message_history, researcher_model),
                 budget_remaining=budget_remaining,
                 budget_total=max_searches,
             )
-
-            # One LLM call per turn
             try:
-                llm_result = await self._execute_provider_async(
-                    prompt=user_prompt,
+                retry_result = await self._execute_provider_async(
+                    prompt=retry_user_prompt,
                     provider_id=provider_id,
                     model=researcher_model,
                     system_prompt=system_prompt,
                     timeout=self.config.deep_research_reflection_timeout,
-                    temperature=0.3,
+                    temperature=0.2,  # lower temp for format compliance
                     phase="topic_research",
                     fallback_providers=[],
                     max_retries=1,
                     retry_delay=2.0,
                 )
-
-                if not llm_result.success:
-                    logger.warning(
-                        "Topic %r researcher LLM call failed on turn %d: %s",
-                        sub_query.id,
-                        turn + 1,
-                        llm_result.error,
-                    )
+                if not retry_result.success:
                     break
-
-                local_tokens_used += llm_result.tokens_used or 0
-
-            except (asyncio.TimeoutError, OSError, ValueError, RuntimeError) as exc:
-                logger.warning(
-                    "Topic %r researcher LLM call exception on turn %d: %s",
-                    sub_query.id,
-                    turn + 1,
-                    exc,
-                )
+                tokens_delta += retry_result.tokens_used or 0
+                raw_content = retry_result.content or ""
+                response = parse_researcher_response(raw_content)
+            except (asyncio.TimeoutError, OSError, ValueError, RuntimeError):
                 break
 
-            # Parse tool calls from LLM response, retrying on parse failure
-            raw_content = llm_result.content or ""
-            response = parse_researcher_response(raw_content)
+        return response, tokens_delta
 
-            # Retry on parse failure: re-prompt the LLM with a clarifying suffix
-            # up to 2 times (matching ODR's stop_after_attempt=3 total attempts).
-            parse_retries = 0
-            while response.parse_failed and parse_retries < 2:
-                parse_retries += 1
-                result.tool_parse_failures += 1
-                logger.warning(
-                    "Topic %r researcher returned unparseable JSON on turn %d "
-                    "(retry %d/2), re-prompting with format clarification",
-                    sub_query.id,
-                    turn + 1,
-                    parse_retries,
+    @staticmethod
+    def _check_reflection_needed(
+        response: Any,
+        previous_turn_had_search: bool,
+        search_turn_count: int,
+    ) -> tuple[bool, bool]:
+        """Check whether a synthetic reflection prompt should be injected.
+
+        After the first search turn, the researcher must include a ``think``
+        call between consecutive search turns. If the researcher skips
+        reflection, this method signals that the turn should be retried
+        with a reflection-required prompt.
+
+        Args:
+            response: Parsed researcher response with tool_calls.
+            previous_turn_had_search: Whether the prior turn had a search.
+            search_turn_count: Number of search turns so far (first exempt).
+
+        Returns:
+            Tuple of (needs_reflection, current_has_search).
+        """
+        current_has_search = any(
+            tc.tool in ("web_search", "extract_content")
+            for tc in response.tool_calls
+        )
+        current_has_think = any(
+            tc.tool == "think" for tc in response.tool_calls
+        )
+
+        needs_reflection = (
+            previous_turn_had_search
+            and current_has_search
+            and not current_has_think
+            and search_turn_count > 0  # first search turn is exempt
+        )
+        return needs_reflection, current_has_search
+
+    async def _dispatch_tool_calls(
+        self,
+        response: Any,
+        sub_query: SubQuery,
+        state: DeepResearchState,
+        result: TopicResearchResult,
+        message_history: list[dict[str, str]],
+        available_providers: list[Any],
+        max_sources_per_provider: int | None,
+        timeout: float,
+        seen_urls: set[str],
+        seen_titles: dict[str, str],
+        state_lock: asyncio.Lock,
+        semaphore: asyncio.Semaphore,
+        budget_remaining: int,
+        extract_enabled: bool,
+        extract_max_per_iter: int,
+    ) -> tuple[bool, int, int]:
+        """Dispatch all tool calls from a single researcher turn.
+
+        Processes tool calls in order (think first, then action tools).
+        Appends tool-result messages to ``message_history`` and updates
+        ``result`` in-place.
+
+        Returns:
+            Tuple of (loop_should_break, tool_calls_delta, budget_delta).
+        """
+        # Sort tool calls: Think first (before action tools), then others
+        think_calls = [tc for tc in response.tool_calls if tc.tool == "think"]
+        action_calls = [tc for tc in response.tool_calls if tc.tool != "think"]
+        ordered_calls = think_calls + action_calls
+
+        tool_calls_delta = 0
+        budget_delta = 0
+
+        for tool_call in ordered_calls:
+            if tool_call.tool == "think":
+                tool_result_text = self._handle_think_tool(
+                    tool_call=tool_call,
+                    sub_query=sub_query,
+                    result=result,
                 )
-                # Append the failed response + clarification to history
-                message_history.append({"role": "assistant", "content": raw_content})
                 message_history.append({
                     "role": "tool",
-                    "tool": "system",
-                    "content": (
-                        "Your previous response was not valid JSON. Please respond "
-                        "with ONLY a JSON object in the exact format:\n"
-                        '{"tool_calls": [{"tool": "tool_name", "arguments": {...}}]}\n'
-                        "Do not include any text outside the JSON object."
-                    ),
+                    "tool": "think",
+                    "content": tool_result_text,
                 })
-                retry_user_prompt = _build_react_user_prompt(
-                    topic=sub_query.query,
-                    message_history=_truncate_researcher_history(message_history, researcher_model),
-                    budget_remaining=budget_remaining,
-                    budget_total=max_searches,
-                )
-                try:
-                    retry_result = await self._execute_provider_async(
-                        prompt=retry_user_prompt,
-                        provider_id=provider_id,
-                        model=researcher_model,
-                        system_prompt=system_prompt,
-                        timeout=self.config.deep_research_reflection_timeout,
-                        temperature=0.2,  # lower temp for format compliance
-                        phase="topic_research",
-                        fallback_providers=[],
-                        max_retries=1,
-                        retry_delay=2.0,
-                    )
-                    if not retry_result.success:
-                        break
-                    local_tokens_used += retry_result.tokens_used or 0
-                    raw_content = retry_result.content or ""
-                    response = parse_researcher_response(raw_content)
-                except (asyncio.TimeoutError, OSError, ValueError, RuntimeError):
-                    break
 
-            # No tool calls = model chose to stop (or all retries exhausted)
-            if not response.tool_calls:
-                logger.info(
-                    "Topic %r researcher returned no tool calls on turn %d%s, stopping",
-                    sub_query.id,
-                    turn + 1,
-                    f" (after {parse_retries} parse retries)" if parse_retries > 0 else "",
-                )
-                break
-
-            # --- Reflection enforcement (Phase 2) ---
-            # After the first search turn, require think between searches.
-            current_has_search = any(
-                tc.tool in ("web_search", "extract_content")
-                for tc in response.tool_calls
-            )
-            current_has_think = any(
-                tc.tool == "think" for tc in response.tool_calls
-            )
-
-            if (
-                previous_turn_had_search
-                and current_has_search
-                and not current_has_think
-                and search_turn_count > 0  # first search turn is exempt
-            ):
-                logger.warning(
-                    "Topic %r: researcher skipped reflection after search on turn %d, "
-                    "injecting synthetic think prompt",
-                    sub_query.id,
-                    turn + 1,
-                )
-                reflection_injections += 1
-                message_history.append({"role": "assistant", "content": raw_content})
-                message_history.append({
-                    "role": "tool",
-                    "tool": "system",
-                    "content": (
-                        "REFLECTION REQUIRED: You must call `think` to reflect on your "
-                        "previous search results before issuing another search. Assess "
-                        "what you found, identify gaps, and plan your next step. "
-                        "Respond with ONLY a `think` tool call."
-                    ),
-                })
-                continue
-
-            # Record the assistant's response in message history
-            message_history.append({"role": "assistant", "content": raw_content})
-
-            # Sort tool calls: Think first (before action tools), then others
-            think_calls = [tc for tc in response.tool_calls if tc.tool == "think"]
-            action_calls = [tc for tc in response.tool_calls if tc.tool != "think"]
-            ordered_calls = think_calls + action_calls
-
-            # Process each tool call
-            loop_should_break = False
-            for tool_call in ordered_calls:
-                if tool_call.tool == "think":
-                    tool_result_text = self._handle_think_tool(
-                        tool_call=tool_call,
-                        sub_query=sub_query,
-                        result=result,
-                    )
-                    message_history.append({
-                        "role": "tool",
-                        "tool": "think",
-                        "content": tool_result_text,
-                    })
-
-                elif tool_call.tool == "web_search":
-                    if budget_remaining <= 0:
-                        message_history.append({
-                            "role": "tool",
-                            "tool": "web_search",
-                            "content": "Budget exhausted. No more searches allowed.",
-                        })
-                        continue
-
-                    tool_result_text, queries_charged = await self._handle_web_search_tool(
-                        tool_call=tool_call,
-                        sub_query=sub_query,
-                        state=state,
-                        result=result,
-                        available_providers=available_providers,
-                        max_sources_per_provider=max_sources_per_provider,
-                        timeout=timeout,
-                        seen_urls=seen_urls,
-                        seen_titles=seen_titles,
-                        state_lock=state_lock,
-                        semaphore=semaphore,
-                        budget_remaining=budget_remaining,
-                    )
-                    tool_calls_used += queries_charged
-                    budget_remaining -= queries_charged
-                    result.searches_performed += queries_charged
+            elif tool_call.tool == "web_search":
+                if budget_remaining - budget_delta <= 0:
                     message_history.append({
                         "role": "tool",
                         "tool": "web_search",
-                        "content": tool_result_text,
+                        "content": "Budget exhausted. No more searches allowed.",
                     })
+                    continue
 
-                elif tool_call.tool == "extract_content":
-                    if not extract_enabled:
-                        message_history.append({
-                            "role": "tool",
-                            "tool": "extract_content",
-                            "content": "Content extraction is not available.",
-                        })
-                        continue
+                tool_result_text, queries_charged = await self._handle_web_search_tool(
+                    tool_call=tool_call,
+                    sub_query=sub_query,
+                    state=state,
+                    result=result,
+                    available_providers=available_providers,
+                    max_sources_per_provider=max_sources_per_provider,
+                    timeout=timeout,
+                    seen_urls=seen_urls,
+                    seen_titles=seen_titles,
+                    state_lock=state_lock,
+                    semaphore=semaphore,
+                    budget_remaining=budget_remaining - budget_delta,
+                )
+                tool_calls_delta += queries_charged
+                budget_delta += queries_charged
+                result.searches_performed += queries_charged
+                message_history.append({
+                    "role": "tool",
+                    "tool": "web_search",
+                    "content": tool_result_text,
+                })
 
-                    if budget_remaining <= 0:
-                        message_history.append({
-                            "role": "tool",
-                            "tool": "extract_content",
-                            "content": "Budget exhausted. No more extractions allowed.",
-                        })
-                        continue
-
-                    tool_result_text = await self._handle_extract_tool(
-                        tool_call=tool_call,
-                        sub_query=sub_query,
-                        state=state,
-                        result=result,
-                        seen_urls=seen_urls,
-                        seen_titles=seen_titles,
-                        state_lock=state_lock,
-                        semaphore=semaphore,
-                        timeout=timeout,
-                        extract_max=extract_max_per_iter,
-                    )
-                    tool_calls_used += 1
-                    budget_remaining -= 1
+            elif tool_call.tool == "extract_content":
+                if not extract_enabled:
                     message_history.append({
                         "role": "tool",
                         "tool": "extract_content",
-                        "content": tool_result_text,
+                        "content": "Content extraction is not available.",
                     })
+                    continue
 
-                elif tool_call.tool == "research_complete":
-                    summary = tool_call.arguments.get("summary", "")
-                    result.early_completion = True
-                    result.completion_rationale = summary
+                if budget_remaining - budget_delta <= 0:
                     message_history.append({
                         "role": "tool",
-                        "tool": "research_complete",
-                        "content": "Research complete. Findings recorded.",
+                        "tool": "extract_content",
+                        "content": "Budget exhausted. No more extractions allowed.",
                     })
-                    loop_should_break = True
-                    break
+                    continue
 
-                else:
-                    logger.warning(
-                        "Topic %r researcher called unknown tool %r, ignoring",
-                        sub_query.id,
-                        tool_call.tool,
-                    )
+                tool_result_text = await self._handle_extract_tool(
+                    tool_call=tool_call,
+                    sub_query=sub_query,
+                    state=state,
+                    result=result,
+                    seen_urls=seen_urls,
+                    seen_titles=seen_titles,
+                    state_lock=state_lock,
+                    semaphore=semaphore,
+                    timeout=timeout,
+                    extract_max=extract_max_per_iter,
+                )
+                tool_calls_delta += 1
+                budget_delta += 1
+                message_history.append({
+                    "role": "tool",
+                    "tool": "extract_content",
+                    "content": tool_result_text,
+                })
 
-            # Update reflection tracking
-            if current_has_search:
-                search_turn_count += 1
-            previous_turn_had_search = current_has_search
+            elif tool_call.tool == "research_complete":
+                summary = tool_call.arguments.get("summary", "")
+                result.early_completion = True
+                result.completion_rationale = summary
+                message_history.append({
+                    "role": "tool",
+                    "tool": "research_complete",
+                    "content": "Research complete. Findings recorded.",
+                })
+                return True, tool_calls_delta, budget_delta
 
-            if loop_should_break:
-                break
+            else:
+                logger.warning(
+                    "Topic %r researcher called unknown tool %r, ignoring",
+                    sub_query.id,
+                    tool_call.tool,
+                )
 
-        # --- Persist message history for downstream compression ---
-        # The raw conversation gives compression the researcher's full
-        # reasoning chain, failed attempts, and iterative refinements —
-        # significantly better than structured metadata alone.
-        result.message_history = list(message_history)
+        return False, tool_calls_delta, budget_delta
 
-        # --- Build raw_notes from message history (Phase 1 ODR alignment) ---
-        # Capture unprocessed concatenation of all tool-result and assistant
-        # messages before compression. This provides a fallback when compression
-        # degrades or fails, and ground-truth evidence for the evaluator.
+    def _build_raw_notes_from_history(
+        self,
+        message_history: list[dict[str, str]],
+        result: TopicResearchResult,
+    ) -> None:
+        """Build raw_notes from message history (Phase 1 ODR alignment).
+
+        Captures unprocessed concatenation of all tool-result and assistant
+        messages before compression. This provides a fallback when compression
+        degrades or fails, and ground-truth evidence for the evaluator.
+
+        Truncates to ``deep_research_max_content_length`` config value.
+        Mutates ``result.raw_notes`` in-place.
+
+        Args:
+            message_history: The researcher's conversation history.
+            result: TopicResearchResult to update with raw_notes.
+        """
         raw_notes_parts: list[str] = []
         for msg in message_history:
             if msg.get("role") in ("assistant", "tool"):
@@ -942,7 +1122,110 @@ class TopicResearchMixin:
                 raw_notes_text = raw_notes_text[:max_raw_notes_len]
             result.raw_notes = raw_notes_text
 
-        # --- Compile per-topic summary ---
+    async def _apply_inline_compression_async(
+        self,
+        result: TopicResearchResult,
+        sub_query: SubQuery,
+        state: DeepResearchState,
+        state_lock: asyncio.Lock,
+        timeout: float,
+    ) -> None:
+        """Apply inline per-topic compression if enabled and applicable.
+
+        Checks config, calls ``_compress_single_topic_async``, and accounts
+        for compression tokens under lock. Errors are non-fatal: on failure,
+        supervision falls back to metadata-only assessment.
+
+        Mutates ``result.compressed_findings`` and ``state.total_tokens_used``
+        in-place.
+
+        Args:
+            result: TopicResearchResult to compress.
+            sub_query: The sub-query (for logging).
+            state: Current research state (for token accounting).
+            state_lock: Lock for thread-safe state mutations.
+            timeout: Compression timeout.
+        """
+        inline_compression_enabled = getattr(
+            self.config, "deep_research_inline_compression", True
+        )
+        if not (
+            inline_compression_enabled
+            and result.sources_found > 0
+            and result.compressed_findings is None
+        ):
+            return
+
+        try:
+            comp_input, comp_output, comp_ok = await self._compress_single_topic_async(
+                topic_result=result,
+                state=state,
+                timeout=timeout,
+            )
+            if comp_ok:
+                logger.info(
+                    "Inline compression for topic %r: %d tokens",
+                    sub_query.id,
+                    comp_input + comp_output,
+                )
+            else:
+                logger.warning(
+                    "Inline compression failed for topic %r, supervision will use metadata-only assessment",
+                    sub_query.id,
+                )
+            async with state_lock:
+                state.total_tokens_used += comp_input + comp_output
+        except Exception as comp_exc:
+            logger.warning(
+                "Inline compression exception for topic %r: %s. Non-fatal, continuing.",
+                sub_query.id,
+                comp_exc,
+            )
+
+    async def _finalize_topic_result(
+        self,
+        result: TopicResearchResult,
+        sub_query: SubQuery,
+        state: DeepResearchState,
+        state_lock: asyncio.Lock,
+        local_tokens_used: int,
+        tool_calls_used: int,
+        message_history: list[dict[str, str]],
+        reflection_injections: int,
+        extract_enabled: bool,
+        timeout: float,
+    ) -> TopicResearchResult:
+        """Finalize topic research: persist history, compress, write audit.
+
+        Called after the ReAct loop completes. Handles:
+        1. Persisting message history on the result.
+        2. Building raw_notes from history.
+        3. Merging accumulated tokens under lock.
+        4. Marking the sub_query completed or failed.
+        5. Running inline compression (non-fatal on error).
+        6. Writing the audit event.
+
+        Args:
+            result: TopicResearchResult to finalize.
+            sub_query: The sub-query that was researched.
+            state: Current research state.
+            state_lock: Lock for thread-safe state mutations.
+            local_tokens_used: Tokens consumed by LLM calls.
+            tool_calls_used: Tool calls charged against budget.
+            message_history: The researcher's conversation history.
+            reflection_injections: Count of synthetic reflection prompts.
+            extract_enabled: Whether extract_content was available.
+            timeout: Timeout for inline compression.
+
+        Returns:
+            The finalized TopicResearchResult.
+        """
+        # Persist message history for downstream compression
+        result.message_history = list(message_history)
+
+        # Build raw_notes from message history
+        self._build_raw_notes_from_history(message_history, result)
+
         # Merge accumulated tokens under lock
         async with state_lock:
             state.total_tokens_used += local_tokens_used
@@ -956,40 +1239,14 @@ class TopicResearchMixin:
         else:
             sub_query.mark_failed("No sources found after topic research loop")
 
-        # --- Inline per-topic compression ---
-        inline_compression_enabled = getattr(
-            self.config, "deep_research_inline_compression", True
+        # Inline per-topic compression
+        await self._apply_inline_compression_async(
+            result=result,
+            sub_query=sub_query,
+            state=state,
+            state_lock=state_lock,
+            timeout=timeout,
         )
-        if (
-            inline_compression_enabled
-            and result.sources_found > 0
-            and result.compressed_findings is None
-        ):
-            try:
-                comp_input, comp_output, comp_ok = await self._compress_single_topic_async(
-                    topic_result=result,
-                    state=state,
-                    timeout=timeout,
-                )
-                if comp_ok:
-                    logger.info(
-                        "Inline compression for topic %r: %d tokens",
-                        sub_query.id,
-                        comp_input + comp_output,
-                    )
-                else:
-                    logger.warning(
-                        "Inline compression failed for topic %r, supervision will use metadata-only assessment",
-                        sub_query.id,
-                    )
-                async with state_lock:
-                    state.total_tokens_used += comp_input + comp_output
-            except Exception as comp_exc:
-                logger.warning(
-                    "Inline compression exception for topic %r: %s. Non-fatal, continuing.",
-                    sub_query.id,
-                    comp_exc,
-                )
 
         self._write_audit_event(
             state,
@@ -1078,7 +1335,7 @@ class TopicResearchMixin:
             state_lock: Lock for thread-safe state mutations.
         """
         from foundry_mcp.core.research.providers.shared import SourceSummarizer
-        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+        from foundry_mcp.core.research.workflows.deep_research._model_resolution import (
             resolve_phase_provider,
             safe_resolve_model_for_role,
         )
@@ -1294,10 +1551,12 @@ class TopicResearchMixin:
         # --- Novelty scoring (Phase 3 ODR alignment) ---
         # Compare each new source against existing sources for this sub-query
         # to give the researcher explicit signals for stop decisions.
-        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+        from foundry_mcp.core.research.workflows.deep_research._content_dedup import (
             NoveltyTag,
-            build_novelty_summary,
             compute_novelty_tag,
+        )
+        from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
+            build_novelty_summary,
         )
 
         # Build existing source tuples (content, title, url) for comparison
@@ -1368,7 +1627,7 @@ class TopicResearchMixin:
             Formatted tool result string with extracted content summaries
             and novelty annotations.
         """
-        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+        from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
             validate_extract_url,
         )
 
@@ -1433,10 +1692,12 @@ class TopicResearchMixin:
             )
 
         # 1b: Novelty scoring against pre-existing sources for this sub-query.
-        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+        from foundry_mcp.core.research.workflows.deep_research._content_dedup import (
             NoveltyTag,
-            build_novelty_summary,
             compute_novelty_tag,
+        )
+        from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
+            build_novelty_summary,
         )
 
         pre_existing_sources: list[tuple[str, str, str | None]] = [

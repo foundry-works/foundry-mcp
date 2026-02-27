@@ -12,7 +12,7 @@ from typing import Any, Optional
 from foundry_mcp.core.research.context_budget import AllocationResult
 from foundry_mcp.core.research.document_digest import deserialize_payload
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
-from foundry_mcp.core.research.workflows.deep_research._helpers import (
+from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
     sanitize_external_content,
 )
 
