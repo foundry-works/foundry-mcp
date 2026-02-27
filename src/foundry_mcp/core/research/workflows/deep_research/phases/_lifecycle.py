@@ -29,6 +29,7 @@ from foundry_mcp.core.research.workflows.deep_research._model_resolution import 
     safe_resolve_model_for_role,
 )
 from foundry_mcp.core.research.workflows.deep_research._token_budget import (
+    CHARS_PER_TOKEN,
     structured_drop_sources,
     structured_truncate_blocks,
     truncate_to_token_estimate,
@@ -160,9 +161,8 @@ def get_model_token_limits() -> dict[str, int]:
 # and the LLM's response tokens.
 _SUPERVISION_HISTORY_BUDGET_FRACTION: float = 0.4
 
-# Characters-per-token estimate used for budget calculations (same heuristic
-# as open_deep_research and truncate_to_token_estimate).
-_CHARS_PER_TOKEN: int = 4
+# Re-export under the old private name for backward compatibility with tests.
+_CHARS_PER_TOKEN: int = CHARS_PER_TOKEN
 
 # Type-aware budget allocation: reasoning messages (think + delegation) get
 # 60% of the budget; findings messages (tool_result / research_findings)

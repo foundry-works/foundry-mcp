@@ -315,6 +315,15 @@ class SupervisionPhaseMixin:
         self._store_coverage_snapshot(state, coverage_data, suffix="pre")
         return coverage_data, coverage_delta
 
+    @staticmethod
+    def _advance_supervision_round(state: DeepResearchState) -> None:
+        """Advance the supervision round counter.
+
+        Centralises the round lifecycle so every code-path that completes
+        a supervision round goes through one method.
+        """
+        state.supervision_round += 1
+
     def _record_supervision_exit(
         self,
         state: DeepResearchState,
@@ -348,7 +357,7 @@ class SupervisionPhaseMixin:
         history = state.metadata.setdefault("supervision_history", [])
         history.append(entry)
         _trim_supervision_history(state)
-        state.supervision_round += 1
+        self._advance_supervision_round(state)
 
     def _build_delegation_result(
         self,
@@ -706,7 +715,7 @@ class SupervisionPhaseMixin:
                 model=state.supervision_model,
             )
 
-        state.supervision_round += 1
+        self._advance_supervision_round(state)
         self.memory.save_deep_research(state)
 
         # If no new sources were found this round, stop delegating

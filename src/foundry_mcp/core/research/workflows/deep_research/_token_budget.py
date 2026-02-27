@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import re
 
+# Approximate characters-per-token heuristic used across budget calculations.
+# Defined here as the single source of truth; other modules import this constant.
+CHARS_PER_TOKEN: int = 4
+
 
 def fidelity_level_from_score(fidelity_score: float) -> str:
     """Convert fidelity score (0-1) to fidelity level string.
@@ -67,8 +71,7 @@ def truncate_to_token_estimate(text: str, max_tokens: int) -> str:
     Returns:
         Truncated text if it exceeds the budget, otherwise the original text
     """
-    # 4 chars per token heuristic
-    max_chars = max_tokens * 4
+    max_chars = max_tokens * CHARS_PER_TOKEN
     if len(text) <= max_chars:
         return text
     return truncate_at_boundary(text, max_chars)
@@ -142,7 +145,7 @@ def structured_truncate_blocks(prompt: str, max_tokens: int) -> str:
     Returns:
         Truncated prompt string
     """
-    max_chars = max_tokens * 4
+    max_chars = max_tokens * CHARS_PER_TOKEN
     if len(prompt) <= max_chars:
         return prompt
 
@@ -226,7 +229,7 @@ def structured_drop_sources(prompt: str, max_tokens: int) -> str:
     Returns:
         Prompt with lowest-quality sources removed
     """
-    max_chars = max_tokens * 4
+    max_chars = max_tokens * CHARS_PER_TOKEN
     if len(prompt) <= max_chars:
         return prompt
 

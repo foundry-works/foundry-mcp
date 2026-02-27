@@ -226,15 +226,14 @@ def build_combined_think_delegate_user_prompt(
 # ======================================================================
 
 
-def build_delegation_system_prompt() -> str:
-    """Build system prompt for the delegation step.
+def _build_delegation_core_prompt() -> str:
+    """Return the shared JSON schema, acronym rule, and JSON-only instruction.
 
-    Returns:
-        System prompt instructing directive generation
+    Used by both ``build_delegation_system_prompt`` and
+    ``build_first_round_delegation_system_prompt`` to eliminate ~40%
+    text duplication.
     """
-    return """You are a research lead delegating tasks to specialized researchers. Your task is to analyze research gaps and generate detailed research directives.
-
-Your response MUST be valid JSON with this exact structure:
+    return """Your response MUST be valid JSON with this exact structure:
 {
     "research_complete": false,
     "directives": [
@@ -248,7 +247,20 @@ Your response MUST be valid JSON with this exact structure:
     "rationale": "Why these directives were chosen"
 }
 
-Guidelines:
+%GUIDELINES%
+
+- Do NOT use acronyms or abbreviations in directive text — spell out all terms so researchers search for the correct concepts. Acronyms may be ambiguous (e.g., "ML" could mean machine learning or markup language) and produce irrelevant search results.
+
+IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
+
+
+def build_delegation_system_prompt() -> str:
+    """Build system prompt for the delegation step.
+
+    Returns:
+        System prompt instructing directive generation
+    """
+    guidelines = """Guidelines:
 - Set "research_complete" to true ONLY when existing coverage is sufficient across all dimensions
 - Each directive's "research_topic" MUST be a detailed paragraph (2-4 sentences) specifying:
   - The specific topic to investigate
@@ -259,16 +271,16 @@ Guidelines:
 - "priority": 1=critical gap (blocks report quality), 2=important (improves comprehensiveness), 3=nice-to-have. Priority determines execution order when budget is limited — critical gaps are addressed first because they block the report from being useful; nice-to-have gaps are only pursued if budget remains.
 - Do NOT duplicate research already covered — target SPECIFIC gaps
 - Directives should be complementary, not overlapping — each covers a different dimension
-- Do NOT use acronyms or abbreviations in directive text — spell out all terms so researchers search for the correct concepts. Acronyms may be ambiguous (e.g., "ML" could mean machine learning or markup language) and produce irrelevant search results.
 
 Directive Count Scaling:
 - Simple factual gaps (single missing fact or stat): 1-2 directives maximum
 - Comparison gaps (need data on specific compared elements): 1 directive per element needing more research
 - Complex multi-dimensional gaps (multiple interrelated areas uncovered): 3-5 directives targeting distinct dimensions
 - BIAS toward fewer, more focused directives — a single well-scoped directive beats three vague ones. Each directive spawns a full researcher agent with its own search budget; fewer, focused directives concentrate budget on the actual gaps, while many vague ones spread budget thin and produce overlapping, shallow results.
-- Maximum 5 directives per round regardless of complexity. Each directive consumes a researcher agent's full budget — more than 5 per round risks exceeding the session's total budget and hitting diminishing returns before the next supervision assessment.
+- Maximum 5 directives per round regardless of complexity. Each directive consumes a researcher agent's full budget — more than 5 per round risks exceeding the session's total budget and hitting diminishing returns before the next supervision assessment."""
 
-IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
+    preamble = "You are a research lead delegating tasks to specialized researchers. Your task is to analyze research gaps and generate detailed research directives.\n\n"
+    return preamble + _build_delegation_core_prompt().replace("%GUIDELINES%", guidelines)
 
 
 def build_delegation_user_prompt(
@@ -500,33 +512,17 @@ def build_first_round_delegation_system_prompt() -> str:
     Returns:
         System prompt instructing initial query decomposition via directives
     """
-    return """You are a research lead performing initial query decomposition. Your task is to break down a research query into focused, parallel research directives — each assigned to a specialized researcher.
-
-Your response MUST be valid JSON with this exact structure:
-{
-    "research_complete": false,
-    "directives": [
-        {
-            "research_topic": "Detailed paragraph-length description of what to investigate...",
-            "perspective": "What angle or perspective to approach from",
-            "evidence_needed": "What specific evidence, data, or sources to seek",
-            "priority": 1  // 1=critical, 2=important, 3=supplementary
-        }
-    ],
-    "rationale": "Why this decomposition strategy was chosen"
-}
-
-Decomposition Guidelines:
+    guidelines = """Decomposition Guidelines:
 - Generate 2-5 directives (aim for 3-4 typically for most queries)
 - Bias toward FEWER researchers for simple queries (1-2 directives for straightforward factual questions)
 - For COMPARISONS: create one directive per comparison element (e.g., "Product A vs Product B" → one directive for each product)
 - For LISTS/RANKINGS: single directive if straightforward; one per category if the list spans diverse domains
 - For COMPLEX multi-dimensional topics: 3-5 directives covering different facets (technical, economic, regulatory, user impact, etc.)
 - Directives should be SPECIFIC enough to yield targeted search results
-- Directives must cover DISTINCT aspects — no two should investigate substantially the same ground
-- Do NOT use acronyms or abbreviations in directive text — spell out all terms so researchers search for the correct concepts
+- Directives must cover DISTINCT aspects — no two should investigate substantially the same ground"""
 
-IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
+    preamble = "You are a research lead performing initial query decomposition. Your task is to break down a research query into focused, parallel research directives — each assigned to a specialized researcher.\n\n"
+    return preamble + _build_delegation_core_prompt().replace("%GUIDELINES%", guidelines)
 
 
 def build_first_round_delegation_user_prompt(

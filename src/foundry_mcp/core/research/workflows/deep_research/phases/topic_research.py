@@ -431,8 +431,10 @@ def _build_react_user_prompt(
 # topic, and the LLM's response tokens.
 _RESEARCHER_HISTORY_BUDGET_FRACTION: float = 0.35
 
-# Characters-per-token estimate (same heuristic as _lifecycle.py)
-_CHARS_PER_TOKEN: int = 4
+# Import canonical constant; keep the private alias for local usage.
+from foundry_mcp.core.research.workflows.deep_research._token_budget import (
+    CHARS_PER_TOKEN as _CHARS_PER_TOKEN,
+)
 
 # Minimum number of recent turns to always preserve regardless of budget.
 _MIN_PRESERVE_RECENT_TURNS: int = 4

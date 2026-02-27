@@ -64,30 +64,30 @@ Track progress against `PLAN.md`. Mark items `[x]` when complete.
 ## Phase 3: NICE-TO-HAVE
 
 ### 3.1 Prompt deduplication
-- [ ] **3.1A** Extract `_build_delegation_core_prompt()` shared helper in `supervision_prompts.py`
-- [ ] **3.1B** Refactor both `build_*_delegation_system_prompt()` to use shared helper
-- [ ] **3.1C** Run full test suite — all passing
+- [x] **3.1A** Extract `_build_delegation_core_prompt()` shared helper in `supervision_prompts.py`
+- [x] **3.1B** Refactor both `build_*_delegation_system_prompt()` to use shared helper
+- [x] **3.1C** Run full test suite — 6777 passed, 0 failed
 
 ### 3.2 Centralize round increment
-- [ ] **3.2A** Create `_advance_supervision_round(state)` method in `supervision.py`
-- [ ] **3.2B** Replace all 4 `state.supervision_round += 1` sites with method call
-- [ ] **3.2C** Run full test suite — all passing
+- [x] **3.2A** Create `_advance_supervision_round(state)` static method in `supervision.py`
+- [x] **3.2B** Replace all 2 `state.supervision_round += 1` sites with method call (`_record_supervision_exit`, `_post_round_bookkeeping`)
+- [x] **3.2C** Run full test suite — 6777 passed, 0 failed
 
 ### 3.3 Consolidate `_CHARS_PER_TOKEN`
-- [ ] **3.3A** Define `CHARS_PER_TOKEN = 4` in `_token_budget.py` (or `_helpers.py`)
-- [ ] **3.3B** Update imports in `_lifecycle.py` and `topic_research.py`
-- [ ] **3.3C** Remove duplicate definitions
-- [ ] **3.3D** Run full test suite — all passing
+- [x] **3.3A** Define `CHARS_PER_TOKEN = 4` in `_token_budget.py`
+- [x] **3.3B** Update imports in `_lifecycle.py` and `topic_research.py`
+- [x] **3.3C** Replace 3 hardcoded `* 4` in `_token_budget.py` with `* CHARS_PER_TOKEN`; kept `_CHARS_PER_TOKEN` alias in `_lifecycle.py` for test backward compat
+- [x] **3.3D** Run full test suite — 6777 passed, 0 failed
 
 ### 3.4 Fix RuntimeWarning in test
-- [ ] **3.4A** Fix unawaited coroutine in `test_cancellation_after_brief_before_supervision`
-- [ ] **3.4B** Verify warning is gone: `pytest tests/.../test_workflow_execution.py -W error::RuntimeWarning -k cancellation_after_brief`
-- [ ] **3.4C** Run full test suite — all passing
+- [x] **3.4A** Fix unawaited coroutine in `_run_phase` — close executor coroutine on cancellation before re-raising
+- [x] **3.4B** Verify warning is gone: `pytest tests/.../test_workflow_execution.py -W error::RuntimeWarning -k cancellation_after_brief` — PASSED
+- [x] **3.4C** Run full test suite — 6777 passed, 0 failed
 
 ---
 
 ## Final Validation
 
-- [ ] Full test suite green: `pytest tests/ -q`
-- [ ] No new RuntimeWarnings: `pytest tests/ -W error::RuntimeWarning -q`
-- [ ] No remaining unsanitized trust boundary crossings (grep for direct `state.original_query` / `source.title` / `source.url` interpolation in prompt strings)
+- [x] Full test suite green: `pytest tests/ -q` — 6777 passed, 48 skipped
+- [x] No new RuntimeWarnings: `pytest tests/ -W error::RuntimeWarning -q` — 6777 passed, 48 skipped, 2 warnings (PytestUnraisableExceptionWarning only)
+- [x] No remaining unsanitized trust boundary crossings (grep for direct `state.original_query` / `source.title` / `source.url` interpolation in prompt strings)

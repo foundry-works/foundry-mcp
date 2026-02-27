@@ -120,7 +120,14 @@ class WorkflowExecutionMixin:
             ``WorkflowResult`` on phase failure (caller should ``return`` it),
             ``None`` on success (caller continues to next phase).
         """
-        self._check_cancellation(state)
+        try:
+            self._check_cancellation(state)
+        except asyncio.CancelledError:
+            # Close the unawaited executor coroutine to prevent
+            # "coroutine was never awaited" RuntimeWarning.
+            if asyncio.iscoroutine(executor):
+                executor.close()
+            raise
         phase_started = time.perf_counter()
         self.hooks.emit_phase_start(state)
         self._write_audit_event(
