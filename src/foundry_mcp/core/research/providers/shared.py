@@ -26,9 +26,12 @@ Utilities are organized by cohesion:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
+import string
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import (
     TYPE_CHECKING,
@@ -41,6 +44,7 @@ from urllib.parse import urlparse
 if TYPE_CHECKING:
     import httpx
 
+    from foundry_mcp.core.research.models.sources import ResearchSource
     from foundry_mcp.core.research.providers.resilience.models import ErrorClassification
 
 logger = logging.getLogger(__name__)
@@ -658,3 +662,323 @@ def resolve_provider_settings(
             result[setting_name] = os.environ.get(env_var)
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Fetch-time source summarization (Phase 1)
+# ---------------------------------------------------------------------------
+
+_SOURCE_SUMMARIZATION_PROMPT = string.Template("""\
+You are a research assistant. Summarize the following web page content for \
+a researcher who needs to quickly assess relevance and extract key facts.
+
+Produce a JSON object with two fields:
+
+{
+  "summary": "A concise narrative summary (roughly 25-30% of original length). \
+Capture main points, key arguments, conclusions, and important context.",
+  "key_excerpts": ["up to 5 verbatim quotes from the original text that are \
+most important for citation"]
+}
+
+Content-type-specific guidance:
+- News articles: preserve who, what, when, where, why, how (5W1H)
+- Scientific/research: preserve methodology, key results, conclusions, and \
+sample sizes or confidence intervals
+- Opinion/analysis: preserve main arguments and supporting evidence
+- Product/technical: preserve key features, specifications, and unique \
+differentiators
+
+Rules:
+- Target ~25-30% of original length for the summary (unless content is \
+already concise)
+- Preserve: key facts, statistics, data points, important quotes, dates, \
+names, locations
+- Maintain chronological order for time-sensitive content
+- key_excerpts must be exact verbatim quotes from the original (max 5)
+- Return ONLY valid JSON, no additional text
+
+Content to summarize:
+$content""")
+
+_SUMMARIZATION_TIMEOUT: float = 60.0  # seconds per source
+_DEFAULT_MAX_CONTENT_LENGTH: int = 50_000  # chars; matches open_deep_research
+
+
+@dataclass
+class SourceSummarizationResult:
+    """Result of summarizing a single research source at fetch time.
+
+    Attributes:
+        executive_summary: Narrative summary of the source content.
+        key_excerpts: Up to 5 verbatim quotes from the original.
+        input_tokens: Tokens consumed by the summarization prompt.
+        output_tokens: Tokens generated in the summary response.
+    """
+
+    executive_summary: str
+    key_excerpts: list[str] = field(default_factory=list)
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
+class SourceSummarizer:
+    """Summarizes raw search result content at fetch time using a cheap LLM.
+
+    Produces an executive summary and key verbatim excerpts for each source,
+    reducing token pressure on downstream analysis phases while preserving
+    citation-quality quotes.
+
+    The summarizer uses the foundry provider system for LLM calls and supports
+    timeout-based fallback (returns original content on failure).
+
+    Args:
+        provider_id: LLM provider to use for summarization.
+        model: Optional model override.
+        timeout: Per-source summarization timeout in seconds (default: 60).
+        max_concurrent: Maximum parallel summarization calls (default: 3).
+        max_content_length: Truncate source content to this many chars before
+            summarization (default: 50,000, matching open_deep_research).
+    """
+
+    def __init__(
+        self,
+        provider_id: str,
+        model: Optional[str] = None,
+        timeout: float = _SUMMARIZATION_TIMEOUT,
+        max_concurrent: int = 3,
+        max_content_length: int = _DEFAULT_MAX_CONTENT_LENGTH,
+    ):
+        self._provider_id = provider_id
+        self._model = model
+        self._timeout = timeout
+        self._max_concurrent = max_concurrent
+        self._max_content_length = max_content_length
+
+    async def summarize_source(
+        self,
+        content: str,
+    ) -> SourceSummarizationResult:
+        """Summarize a single source's content.
+
+        Args:
+            content: Raw content string to summarize.
+
+        Returns:
+            SourceSummarizationResult with executive summary and key excerpts.
+
+        Raises:
+            Exception: Propagated from provider on failure (caller should catch).
+        """
+        from foundry_mcp.core.providers import (
+            ProviderHooks,
+            ProviderRequest,
+            ProviderStatus,
+        )
+        from foundry_mcp.core.providers.registry import resolve_provider
+
+        hooks = ProviderHooks()
+        provider = resolve_provider(self._provider_id, hooks=hooks)
+        if provider is None:
+            raise RuntimeError(f"Summarization provider not available: {self._provider_id}")
+
+        # Cap input length to avoid blowing the context window on
+        # full-page extracted content (matches open_deep_research).
+        if self._max_content_length and len(content) > self._max_content_length:
+            content = content[: self._max_content_length]
+
+        # Use safe_substitute to prevent KeyError from Python format
+        # string patterns in web content (e.g., "{system}", "{__class__}").
+        # Also sanitize web content to strip prompt-injection vectors.
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            sanitize_external_content,
+        )
+
+        content = sanitize_external_content(content)
+        prompt = _SOURCE_SUMMARIZATION_PROMPT.safe_substitute(content=content)
+
+        # Note: no timeout here — the caller (summarize_sources) wraps this
+        # in asyncio.wait_for() for cancellation.  Duplicating the timeout
+        # would cause confusing race conditions between the two layers.
+        request = ProviderRequest(
+            prompt=prompt,
+            max_tokens=2000,
+            model=self._model,
+        )
+
+        result = await asyncio.to_thread(provider.generate, request)
+        if result.status != ProviderStatus.SUCCESS:
+            error_msg = result.stderr or "Unknown error"
+            raise RuntimeError(f"Summarization failed ({self._provider_id}): {error_msg}")
+
+        # Parse the response into executive summary + excerpts
+        executive_summary, key_excerpts = self._parse_summary_response(result.content)
+
+        # Extract token counts from ProviderResult.tokens (TokenUsage)
+        input_tokens = result.tokens.input_tokens if result.tokens else 0
+        output_tokens = result.tokens.output_tokens if result.tokens else 0
+
+        return SourceSummarizationResult(
+            executive_summary=executive_summary,
+            key_excerpts=key_excerpts,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+
+    async def summarize_sources(
+        self,
+        sources: list["ResearchSource"],
+    ) -> dict[str, SourceSummarizationResult]:
+        """Summarize multiple sources in parallel with concurrency control.
+
+        For each source with non-empty content, runs summarization with a
+        timeout. On failure or timeout, the source retains its original
+        content (no summary produced).
+
+        Args:
+            sources: List of ResearchSource objects to summarize.
+
+        Returns:
+            Dict mapping source.id -> SourceSummarizationResult for sources
+            that were successfully summarized. Sources that failed or had no
+            content are omitted from the result.
+        """
+        semaphore = asyncio.Semaphore(self._max_concurrent)
+        results: dict[str, SourceSummarizationResult] = {}
+
+        async def _summarize_one(source: "ResearchSource") -> None:
+            if not source.content:
+                return
+
+            async with semaphore:
+                try:
+                    result = await asyncio.wait_for(
+                        self.summarize_source(source.content),
+                        timeout=self._timeout,
+                    )
+                    results[source.id] = result
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "Source summarization timed out after %.0fs: %s",
+                        self._timeout,
+                        source.id,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Source summarization failed for %s: %s",
+                        source.id,
+                        redact_secrets(str(e)),
+                    )
+
+        tasks = [_summarize_one(source) for source in sources]
+        await asyncio.gather(*tasks)
+
+        return results
+
+    @staticmethod
+    def _parse_summary_response(response: str) -> tuple[str, list[str]]:
+        """Parse LLM summary response into executive summary and excerpts.
+
+        Tries JSON parsing first (new format with ``summary`` +
+        ``key_excerpts`` fields).  Falls back to markdown-section parsing
+        for backward compatibility with the old ``## Executive Summary`` /
+        ``## Key Excerpts`` format.
+
+        Args:
+            response: Raw LLM response text.
+
+        Returns:
+            Tuple of (executive_summary, key_excerpts).
+        """
+        import json as _json
+
+        # --- Primary path: JSON ---
+        # Strip markdown code fences if present
+        stripped = response.strip()
+        if stripped.startswith("```"):
+            # Remove opening fence (possibly ```json)
+            first_newline = stripped.find("\n")
+            if first_newline != -1:
+                stripped = stripped[first_newline + 1 :]
+            if stripped.rstrip().endswith("```"):
+                stripped = stripped.rstrip()[:-3].rstrip()
+
+        try:
+            data = _json.loads(stripped)
+            if isinstance(data, dict):
+                summary = str(data.get("summary", "")).strip()
+                raw_excerpts = data.get("key_excerpts", [])
+                if isinstance(raw_excerpts, list):
+                    excerpts = [str(e).strip().strip('"').strip("'") for e in raw_excerpts[:5] if e]
+                else:
+                    excerpts = []
+                if summary:
+                    return summary, excerpts
+        except (_json.JSONDecodeError, TypeError, ValueError):
+            pass
+
+        # --- Fallback: markdown section parsing (backward compat) ---
+        executive_summary = response.strip()
+        key_excerpts: list[str] = []
+
+        excerpts_markers = ["## Key Excerpts", "## Key excerpts", "**Key Excerpts**"]
+        summary_markers = ["## Executive Summary", "## Executive summary", "**Executive Summary**"]
+
+        excerpts_header_start = -1
+        excerpts_start = -1
+        for marker in excerpts_markers:
+            idx = response.find(marker)
+            if idx != -1:
+                excerpts_header_start = idx
+                excerpts_start = idx + len(marker)
+                break
+
+        summary_start = -1
+        for marker in summary_markers:
+            idx = response.find(marker)
+            if idx != -1:
+                summary_start = idx + len(marker)
+                break
+
+        if summary_start != -1:
+            summary_end = excerpts_header_start if excerpts_header_start != -1 else len(response)
+            executive_summary = response[summary_start:summary_end].strip()
+        elif excerpts_header_start != -1:
+            executive_summary = response[:excerpts_header_start].strip()
+
+        if excerpts_start != -1:
+            excerpts_text = response[excerpts_start:]
+            for line in excerpts_text.strip().split("\n"):
+                line = line.strip()
+                if line.startswith(("- ", "* ", "\u2022 ")):
+                    excerpt = line.lstrip("-*\u2022 ").strip().strip('"').strip("'")
+                    if excerpt:
+                        key_excerpts.append(excerpt)
+                        if len(key_excerpts) >= 5:
+                            break
+
+        return executive_summary, key_excerpts
+
+    @staticmethod
+    def format_summarized_content(
+        executive_summary: str,
+        key_excerpts: list[str],
+    ) -> str:
+        """Format summary + excerpts into a single content string.
+
+        Produces structured ``<summary>`` and ``<key_excerpts>`` tags that
+        replace the original source content, matching the format used by
+        open_deep_research for researcher-facing source presentation.
+
+        Args:
+            executive_summary: The narrative summary.
+            key_excerpts: List of verbatim quotes.
+
+        Returns:
+            Formatted content string with XML-style tags.
+        """
+        parts = [f"<summary>{executive_summary}</summary>"]
+        if key_excerpts:
+            excerpts_text = ", ".join(f'"{e}"' for e in key_excerpts)
+            parts.append(f"<key_excerpts>{excerpts_text}</key_excerpts>")
+        return "\n\n".join(parts)

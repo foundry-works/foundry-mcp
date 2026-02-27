@@ -37,11 +37,11 @@ def sample_state():
 
 @pytest.fixture
 def sample_state_planning():
-    """Create a state in PLANNING phase."""
+    """Create a state in BRIEF phase."""
     return DeepResearchState(
         id="lifecycle-test-002",
         original_query="Explain reinforcement learning",
-        phase=DeepResearchPhase.PLANNING,
+        phase=DeepResearchPhase.BRIEF,
         iteration=1,
         max_iterations=3,
     )
@@ -181,7 +181,7 @@ class TestCancelDetectionAtPhaseBoundaries:
         state = DeepResearchState(
             id="orphan-test",
             original_query="test",
-            phase=DeepResearchPhase.PLANNING,
+            phase=DeepResearchPhase.BRIEF,
         )
 
         # No task registered — should not raise
@@ -405,7 +405,7 @@ class TestStatusDistinction:
         state = DeepResearchState(
             id="status-interrupted",
             original_query="test",
-            phase=DeepResearchPhase.ANALYSIS,
+            phase=DeepResearchPhase.SYNTHESIS,
             iteration=2,
         )
         state.mark_interrupted(reason="SIGTERM")
@@ -413,7 +413,7 @@ class TestStatusDistinction:
         assert state.metadata["interrupted"] is True
         assert state.metadata["terminal_status"] == "interrupted"
         assert state.metadata["interrupt_reason"] == "SIGTERM"
-        assert state.metadata["interrupt_phase"] == "analysis"
+        assert state.metadata["interrupt_phase"] == "synthesis"
         assert state.metadata["interrupt_iteration"] == 2
         assert state.completed_at is not None
         # Should NOT have cancelled or failed markers
@@ -466,7 +466,7 @@ class TestStatusDistinction:
         # Each should have a unique terminal_status
         assert interrupted.metadata.get("terminal_status") == "interrupted"
         assert cancelled.metadata.get("terminal_status") == "cancelled"
-        assert failed.metadata.get("terminal_status") is None  # mark_failed doesn't set terminal_status
+        assert failed.metadata.get("terminal_status") == "failed"
 
         # Each should have unique boolean flags
         assert interrupted.metadata.get("interrupted") is True

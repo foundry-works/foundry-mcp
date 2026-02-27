@@ -1,25 +1,24 @@
 """Analysis phase mixin for DeepResearchWorkflow.
 
-Extracts findings from gathered sources via LLM analysis, with a digest
-pipeline that extracts, ranks, selects, and digests source content before
-the main analysis call.
+Extracts findings from gathered sources via LLM analysis.
 
 Sub-modules:
-- ``_analysis_digest``:  DigestStepMixin  (digest pipeline)
 - ``_analysis_prompts``: AnalysisPromptsMixin (system/user prompt construction)
 - ``_analysis_parsing``: AnalysisParsingMixin (LLM response parsing)
+
+Note: The digest pipeline (DigestStepMixin) and contradiction detection
+have been removed — both are dead code since the pipeline was collapsed
+to BRIEF → SUPERVISION → SYNTHESIS.
 """
 
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
 import time
 from typing import TYPE_CHECKING, Any, Optional
 
 from foundry_mcp.core.research.document_digest import DocumentDigestor  # noqa: F401  # re-export for test patch targets
-from foundry_mcp.core.research.models.deep_research import Contradiction, DeepResearchState
+from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.models.sources import SourceQuality
 from foundry_mcp.core.research.pdf_extractor import PDFExtractor  # noqa: F401  # re-export for test patch targets
 from foundry_mcp.core.research.summarization import ContentSummarizer  # noqa: F401  # re-export for test patch targets
@@ -31,11 +30,8 @@ from foundry_mcp.core.research.workflows.deep_research._budgeting import (
 from foundry_mcp.core.research.workflows.deep_research._constants import (
     ANALYSIS_OUTPUT_RESERVED,
 )
-from foundry_mcp.core.research.workflows.deep_research._helpers import (
+from foundry_mcp.core.research.workflows.deep_research._token_budget import (
     fidelity_level_from_score,
-)
-from foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest import (
-    DigestStepMixin,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._analysis_parsing import (
     AnalysisParsingMixin,
@@ -51,11 +47,10 @@ from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import 
 logger = logging.getLogger(__name__)
 
 
-class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingMixin):
+class AnalysisPhaseMixin(AnalysisPromptsMixin, AnalysisParsingMixin):
     """Analysis phase methods. Mixed into DeepResearchWorkflow.
 
     Inherits from:
-    - DigestStepMixin: ``_execute_digest_step_async``
     - AnalysisPromptsMixin: ``_build_analysis_system_prompt``, ``_build_analysis_user_prompt``
     - AnalysisParsingMixin: ``_parse_analysis_response``
 
@@ -63,6 +58,9 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
     - config, memory, hooks, orchestrator (instance attributes)
     - _write_audit_event(), _check_cancellation() (cross-cutting methods)
     - _execute_provider_async() (inherited from ResearchWorkflowBase)
+
+    Note: This phase is retained for legacy resume compatibility.
+    New workflows use BRIEF → SUPERVISION → SYNTHESIS.
     """
 
     config: Any
@@ -122,30 +120,6 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
             },
         )
 
-        # Execute digest step: extract content, rank, select, and digest sources
-        # This step runs BEFORE budget allocation to ensure digested content is used
-        # for token counting and allocation decisions
-        digest_stats = await self._execute_digest_step_async(
-            state=state,
-            query=state.original_query,
-        )
-
-        # Record digest statistics in state metadata
-        if digest_stats["sources_digested"] > 0:
-            state.metadata = state.metadata or {}
-            state.metadata["digest_stats"] = digest_stats
-            self._write_audit_event(
-                state,
-                "digest.completed",
-                data={
-                    "sources_extracted": digest_stats["sources_extracted"],
-                    "sources_ranked": digest_stats["sources_ranked"],
-                    "sources_selected": digest_stats["sources_selected"],
-                    "sources_digested": digest_stats["sources_digested"],
-                    "errors": len(digest_stats["digest_errors"]),
-                },
-            )
-
         # Allocate token budget for sources
         allocation_result = allocate_source_budget(
             state=state,
@@ -201,6 +175,7 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
                 "source_count": len(state.sources),
                 "guidance": "Try reducing max_sources_per_query or processing sources in batches",
             },
+            role="research",
         )
         if isinstance(call_result, WorkflowResult):
             return call_result  # Error path
@@ -272,32 +247,6 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
                 except ValueError:
                     pass  # Invalid quality value, skip
 
-        # Contradiction detection: identify conflicting claims between findings
-        if len(state.findings) >= 2 and self.config.deep_research_enable_contradiction_detection:
-            contradictions = await self._detect_contradictions(
-                state=state,
-                provider_id=provider_id or state.analysis_provider,
-                timeout=timeout,
-            )
-            if contradictions:
-                state.contradictions.extend(contradictions)
-                self._write_audit_event(
-                    state,
-                    "contradictions_detected",
-                    data={
-                        "count": len(contradictions),
-                        "contradictions": [
-                            {
-                                "id": c.id,
-                                "finding_ids": c.finding_ids,
-                                "description": c.description,
-                                "severity": c.severity,
-                            }
-                            for c in contradictions
-                        ],
-                    },
-                )
-
         # Save state
         self.memory.save_deep_research(state)
         audit_data_ok: dict[str, Any] = {
@@ -348,116 +297,3 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
                 "parse_method": parsed.get("parse_method"),
             },
         )
-
-    async def _detect_contradictions(
-        self,
-        state: DeepResearchState,
-        provider_id: str | None,
-        timeout: float,
-    ) -> list[Contradiction]:
-        """Detect contradictions between research findings via LLM.
-
-        Sends all findings to a fast model to identify conflicting claims.
-        Returns a list of Contradiction objects.
-
-        Args:
-            state: Current research state with findings
-            provider_id: LLM provider to use
-            timeout: Request timeout in seconds
-
-        Returns:
-            List of detected Contradiction objects (may be empty)
-        """
-        from foundry_mcp.core.research.workflows.deep_research._helpers import extract_json
-
-        findings_text = []
-        for f in state.findings:
-            confidence_label = f.confidence.value if hasattr(f.confidence, "value") else str(f.confidence)
-            findings_text.append(
-                f"- [{f.id}] ({confidence_label}) {f.content} (sources: {', '.join(f.source_ids[:3])})"
-            )
-
-        if len(findings_text) < 2:
-            return []
-
-        system_prompt = (
-            "You are a research quality analyst. Identify any contradictions or conflicting claims "
-            "between the research findings provided.\n\n"
-            "Respond with valid JSON:\n"
-            '{"contradictions": [\n'
-            '  {"finding_ids": ["find-xxx", "find-yyy"], "description": "what conflicts", '
-            '"resolution": "suggested resolution", "preferred_source_id": "src-xxx or null", '
-            '"severity": "major or minor"}\n'
-            "]}\n\n"
-            "Rules:\n"
-            "- Only report genuine factual contradictions, not differences in emphasis or scope\n"
-            "- severity=major for direct factual conflicts, minor for nuance/interpretation differences\n"
-            "- preferred_source_id should reference the more authoritative source if determinable, otherwise null\n"
-            '- If no contradictions exist, return {"contradictions": []}\n'
-            "- Return ONLY valid JSON"
-        )
-
-        user_prompt = f"Research query: {state.original_query}\n\nFindings to check for contradictions:\n" + "\n".join(
-            findings_text
-        )
-
-        try:
-            result = await self._execute_provider_async(
-                prompt=user_prompt,
-                provider_id=provider_id or self.config.default_provider,
-                model=None,
-                system_prompt=system_prompt,
-                timeout=min(timeout, 120.0),
-                temperature=0.2,
-                phase="contradiction_detection",
-                fallback_providers=[],
-                max_retries=1,
-                retry_delay=2.0,
-            )
-
-            if not result.success:
-                logger.warning("Contradiction detection LLM call failed: %s", result.error)
-                return []
-
-            if result.tokens_used:
-                state.total_tokens_used += result.tokens_used
-
-            json_str = extract_json(result.content)
-            if not json_str:
-                logger.warning("No JSON found in contradiction detection response")
-                return []
-
-            data = json.loads(json_str)
-            raw_contradictions = data.get("contradictions", [])
-            if not isinstance(raw_contradictions, list):
-                return []
-
-            contradictions = []
-            for c in raw_contradictions:
-                if not isinstance(c, dict):
-                    continue
-                finding_ids = c.get("finding_ids", [])
-                description = c.get("description", "").strip()
-                if not finding_ids or not description:
-                    continue
-                # Validate finding IDs exist in state
-                valid_ids = [fid for fid in finding_ids if any(f.id == fid for f in state.findings)]
-                if len(valid_ids) < 2:
-                    continue
-
-                contradictions.append(
-                    Contradiction(
-                        finding_ids=valid_ids,
-                        description=description,
-                        resolution=c.get("resolution"),
-                        preferred_source_id=c.get("preferred_source_id"),
-                        severity=c.get("severity", "minor") if c.get("severity") in ("major", "minor") else "minor",
-                    )
-                )
-
-            logger.info("Contradiction detection found %d contradiction(s)", len(contradictions))
-            return contradictions
-
-        except (json.JSONDecodeError, asyncio.TimeoutError, OSError, ValueError, KeyError, RuntimeError) as exc:
-            logger.warning("Contradiction detection failed: %s. Continuing without.", exc)
-            return []

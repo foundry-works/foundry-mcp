@@ -91,11 +91,8 @@ def test_workflow_inherits_all_phase_methods():
     )
 
     expected_methods = [
-        "_execute_planning_async",
         "_execute_gathering_async",
-        "_execute_analysis_async",
         "_execute_synthesis_async",
-        "_execute_refinement_async",
         "list_sessions",
         "delete_session",
         "resume_research",

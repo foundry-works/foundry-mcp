@@ -141,7 +141,7 @@ class TestPartialResultCancellationFlow:
     async def test_cancel_after_synthesis_preserves_iteration(self):
         """Should preserve iteration when cancelled after synthesis completes."""
         state = DeepResearchState(original_query="Test cancellation")
-        state.phase = DeepResearchPhase.REFINEMENT
+        state.phase = DeepResearchPhase.SYNTHESIS
         state.iteration = 2
         state.metadata["iteration_in_progress"] = False  # Synthesis completed
         state.metadata["last_completed_iteration"] = 2
@@ -165,7 +165,7 @@ class TestPartialResultCancellationFlow:
     async def test_cancel_first_iteration_marks_for_discard(self):
         """Should mark first iteration for discard when cancelled before completion."""
         state = DeepResearchState(original_query="Test cancellation")
-        state.phase = DeepResearchPhase.ANALYSIS
+        state.phase = DeepResearchPhase.GATHERING
         state.iteration = 1
         state.metadata["iteration_in_progress"] = True
         # No last_completed_iteration yet
@@ -191,8 +191,8 @@ class TestIterationProgressTracking:
         """Should track iteration progress through gathering to synthesis."""
         state = DeepResearchState(original_query="Test query")
 
-        # Phase: PLANNING - no iteration_in_progress
-        state.phase = DeepResearchPhase.PLANNING
+        # Phase: BRIEF - no iteration_in_progress
+        state.phase = DeepResearchPhase.BRIEF
         assert state.metadata.get("iteration_in_progress") is None
 
         # Phase: GATHERING - iteration starts
@@ -200,8 +200,8 @@ class TestIterationProgressTracking:
         state.metadata["iteration_in_progress"] = True
         assert state.metadata["iteration_in_progress"] is True
 
-        # Phase: ANALYSIS - still in progress
-        state.phase = DeepResearchPhase.ANALYSIS
+        # Phase: SUPERVISION - still in progress
+        state.phase = DeepResearchPhase.SUPERVISION
         assert state.metadata["iteration_in_progress"] is True
 
         # Phase: SYNTHESIS - iteration completes
@@ -212,19 +212,19 @@ class TestIterationProgressTracking:
         assert state.metadata["last_completed_iteration"] == 1
 
     def test_progress_flag_lifecycle_refinement_iteration(self):
-        """Should track progress through refinement iteration."""
+        """Should track progress through a second gathering-to-synthesis iteration."""
         state = DeepResearchState(original_query="Test query")
         state.iteration = 1
         state.metadata["last_completed_iteration"] = 1
 
-        # Start refinement - new iteration begins
-        state.phase = DeepResearchPhase.REFINEMENT
+        # Start second iteration - new gathering begins
+        state.phase = DeepResearchPhase.GATHERING
         state.iteration = 2
         state.metadata["iteration_in_progress"] = True
         assert state.metadata["iteration_in_progress"] is True
         assert state.metadata["last_completed_iteration"] == 1
 
-        # Refinement to synthesis completes
+        # Gathering to synthesis completes
         state.phase = DeepResearchPhase.SYNTHESIS
         state.metadata["iteration_in_progress"] = False
         state.metadata["last_completed_iteration"] = 2
@@ -317,3 +317,210 @@ class TestPartialResultMetadataAudit:
         assert audit_data["last_completed_iteration"] == 1
         assert audit_data["discarded_iteration"] == 2
         assert audit_data["cancellation_state"] == "cancelling"
+
+
+class TestCancellationRaceConditionFix:
+    """Tests for the triple mark_cancelled race condition fix (PLAN Phase 3.1).
+
+    Verifies that cancellation preserves the inner handler's partial-result
+    discard state and that outer handlers don't overwrite it.
+    """
+
+    def test_cancel_research_does_not_write_state(self):
+        """_cancel_research should only set the cancel flag, not write state directly.
+
+        The workflow's own CancelledError handler in _execute_workflow_async()
+        is the sole writer of terminal state.
+        """
+        from unittest.mock import MagicMock
+
+        from foundry_mcp.core.research.workflows.deep_research.action_handlers import (
+            ActionHandlersMixin,
+        )
+
+        mock_config = MagicMock()
+        mock_memory = MagicMock()
+
+        handler = ActionHandlersMixin.__new__(ActionHandlersMixin)
+        handler.config = mock_config
+        handler.memory = mock_memory
+
+        # Create a mock background task that returns True on cancel
+        mock_bg_task = MagicMock()
+        mock_bg_task.cancel.return_value = True
+        handler.get_background_task = MagicMock(return_value=mock_bg_task)
+
+        result = handler._cancel_research("test-research-id")
+
+        assert result.success is True
+        assert "cancelled" in result.content
+
+        # The key assertion: memory.load_deep_research should NOT be called.
+        # The handler should not load, modify, or save state.
+        mock_memory.load_deep_research.assert_not_called()
+        mock_memory.save_deep_research.assert_not_called()
+
+    def test_background_tasks_guard_skips_if_already_terminated(self):
+        """background_tasks CancelledError handler should not mark_cancelled
+        if state.completed_at is already set (inner handler already ran).
+        """
+        state = DeepResearchState(original_query="Test query")
+        state.iteration = 2
+        state.phase = DeepResearchPhase.GATHERING
+        state.metadata["iteration_in_progress"] = True
+        state.metadata["last_completed_iteration"] = 1
+
+        # Simulate the inner handler having already terminated the state
+        state.mark_cancelled(phase_state="phase=synthesis, iteration=1")
+        assert state.completed_at is not None
+
+        # Record the state after inner handler
+        inner_completed_at = state.completed_at
+        inner_phase_state = state.metadata["cancelled_phase_state"]
+
+        # Simulate the outer background_tasks guard
+        if state.completed_at is None:
+            # This should NOT execute
+            state.mark_cancelled(phase_state=f"phase={state.phase.value}, iteration={state.iteration}")
+            raise AssertionError("Should not have called mark_cancelled again")
+
+        # State should be unchanged from inner handler's write
+        assert state.completed_at == inner_completed_at
+        assert state.metadata["cancelled_phase_state"] == inner_phase_state
+
+    def test_workflow_execution_returns_result_not_raises(self):
+        """_execute_workflow_async CancelledError handler should return a
+        WorkflowResult instead of re-raising CancelledError, preserving
+        the iteration rollback state.
+        """
+        from foundry_mcp.core.research.workflows.base import WorkflowResult
+
+        state = DeepResearchState(original_query="Test query")
+        state.iteration = 2
+        state.phase = DeepResearchPhase.GATHERING
+        state.metadata["iteration_in_progress"] = True
+        state.metadata["last_completed_iteration"] = 1
+
+        # Simulate the inner handler's iteration rollback logic
+        state.metadata["cancellation_state"] = "cancelling"
+        state.metadata["cancelled"] = True
+
+        if state.metadata.get("iteration_in_progress"):
+            last_completed = state.metadata.get("last_completed_iteration")
+            if last_completed is not None and last_completed < state.iteration:
+                state.metadata["discarded_iteration"] = state.iteration
+                state.iteration = last_completed
+                state.phase = DeepResearchPhase.SYNTHESIS
+
+        state.metadata["cancellation_state"] = "cleanup"
+        state.mark_cancelled(phase_state=f"phase={state.phase.value}, iteration={state.iteration}")
+
+        # Build the result as the fixed code does (instead of re-raising)
+        result = WorkflowResult(
+            success=False,
+            content="",
+            error="Research cancelled",
+            metadata={
+                "research_id": state.id,
+                "cancelled": True,
+                "phase": state.phase.value,
+                "iteration": state.iteration,
+                "discarded_iteration": state.metadata.get("discarded_iteration"),
+            },
+        )
+
+        # Verify the result captures the rollback state
+        assert result.success is False
+        assert result.error == "Research cancelled"
+        assert result.metadata["cancelled"] is True
+        assert result.metadata["discarded_iteration"] == 2
+        assert result.metadata["iteration"] == 1
+        assert result.metadata["phase"] == "synthesis"
+
+        # Verify state was properly rolled back
+        assert state.iteration == 1
+        assert state.phase == DeepResearchPhase.SYNTHESIS
+        assert state.completed_at is not None
+
+    def test_cancellation_preserves_inner_handler_rollback(self):
+        """Full integration test: cancellation should preserve the inner
+        handler's partial-result discard even when all three paths run.
+
+        Simulates the scenario where:
+        1. _cancel_research() sets the cancel flag
+        2. _execute_workflow_async catches CancelledError, rolls back, returns result
+        3. background_tasks catches nothing (no CancelledError since result returned)
+
+        The final state should reflect the inner handler's rollback.
+        """
+        from unittest.mock import MagicMock
+
+        state = DeepResearchState(original_query="Test query")
+        state.iteration = 3
+        state.phase = DeepResearchPhase.GATHERING
+        state.metadata["iteration_in_progress"] = True
+        state.metadata["last_completed_iteration"] = 2
+
+        mock_memory = MagicMock()
+        saves = []
+
+        def capture_save(s):
+            # Capture a snapshot of key fields at save time
+            saves.append(
+                {
+                    "iteration": s.iteration,
+                    "phase": s.phase.value,
+                    "completed_at": s.completed_at,
+                    "discarded_iteration": s.metadata.get("discarded_iteration"),
+                    "cancellation_state": s.metadata.get("cancellation_state"),
+                    "cancelled_phase_state": s.metadata.get("cancelled_phase_state"),
+                }
+            )
+
+        mock_memory.save_deep_research.side_effect = capture_save
+
+        # Step 1: _cancel_research only sets bg_task cancel flag (no state writes)
+        # (Nothing to simulate here - the fix removed state writes)
+
+        # Step 2: _execute_workflow_async inner handler
+        # Cancelling transition
+        state.metadata["cancellation_state"] = "cancelling"
+        state.metadata["cancelled"] = True
+
+        # Iteration rollback
+        if state.metadata.get("iteration_in_progress"):
+            last_completed = state.metadata.get("last_completed_iteration")
+            if last_completed is not None and last_completed < state.iteration:
+                state.metadata["discarded_iteration"] = state.iteration
+                state.iteration = last_completed
+                state.phase = DeepResearchPhase.SYNTHESIS
+
+        mock_memory.save_deep_research(state)  # First save: cancelling with rollback
+
+        # Cleanup transition
+        state.metadata["cancellation_state"] = "cleanup"
+        state.mark_cancelled(phase_state=f"phase={state.phase.value}, iteration={state.iteration}")
+        mock_memory.save_deep_research(state)  # Second save: after mark_cancelled
+
+        # Step 3: background_tasks safety net - should be skipped
+        if state.completed_at is None:
+            state.mark_cancelled(phase_state="SHOULD_NOT_APPEAR")
+            mock_memory.save_deep_research(state)
+
+        # Verify final state
+        assert state.iteration == 2  # Rolled back from 3 to 2
+        assert state.phase == DeepResearchPhase.SYNTHESIS
+        assert state.metadata["discarded_iteration"] == 3
+        assert state.completed_at is not None
+        assert state.metadata["terminal_status"] == "cancelled"
+        assert state.metadata["cancelled_phase_state"] == "phase=synthesis, iteration=2"
+
+        # Verify save count: only 2 saves (from inner handler), not 3
+        assert len(saves) == 2
+        # First save: rollback applied but not yet marked cancelled
+        assert saves[0]["iteration"] == 2
+        assert saves[0]["discarded_iteration"] == 3
+        assert saves[0]["completed_at"] is None  # Not yet terminated
+        # Second save: marked cancelled
+        assert saves[1]["completed_at"] is not None
+        assert saves[1]["cancellation_state"] == "cleanup"

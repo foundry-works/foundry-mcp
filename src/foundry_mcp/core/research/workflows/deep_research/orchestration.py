@@ -2,12 +2,10 @@
 
 Contains agent roles, decision tracking, supervisor hooks for workflow
 event injection, and the orchestrator that coordinates phase transitions.
-Includes optional LLM-driven reflection at phase boundaries.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
@@ -19,8 +17,6 @@ from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
     DeepResearchState,
 )
-from foundry_mcp.core.research.models.enums import ConfidenceLevel
-from foundry_mcp.core.research.models.sources import SourceQuality
 
 logger = logging.getLogger(__name__)
 
@@ -30,39 +26,34 @@ class AgentRole(str, Enum):
 
     Agent Responsibilities:
     - SUPERVISOR: Orchestrates phase transitions, evaluates quality gates,
-      decides on iteration vs completion. The supervisor runs think-tool
-      pauses between phases to evaluate progress and adjust strategy.
+      decides on iteration vs completion.
+    - PLANNER: Decomposes the research query into focused sub-queries
+      (legacy phase — new workflows use supervisor-owned decomposition).
     - CLARIFIER: Evaluates query specificity and generates clarifying
       questions. Infers constraints from vague queries to focus research.
-    - PLANNER: Decomposes the original query into focused sub-queries,
-      generates the research brief, and identifies key themes to explore.
+    - BRIEFER: Generates the enriched research brief from the raw query.
     - GATHERER: Executes parallel search across providers, handles rate
       limiting, deduplicates sources, and validates source quality.
-    - ANALYZER: Extracts findings from sources, assesses evidence quality,
-      identifies contradictions, and rates source reliability.
     - SYNTHESIZER: Generates coherent report sections, ensures logical
       flow, integrates findings, and produces the final synthesis.
-    - REFINER: Identifies knowledge gaps, generates follow-up queries,
-      determines if additional iteration is needed, and prioritizes gaps.
     """
 
     SUPERVISOR = "supervisor"
-    CLARIFIER = "clarifier"
     PLANNER = "planner"
+    CLARIFIER = "clarifier"
+    BRIEFER = "briefer"
     GATHERER = "gatherer"
-    ANALYZER = "analyzer"
     SYNTHESIZER = "synthesizer"
-    REFINER = "refiner"
 
 
 # Mapping from workflow phases to specialist agents
 PHASE_TO_AGENT: dict[DeepResearchPhase, AgentRole] = {
     DeepResearchPhase.CLARIFICATION: AgentRole.CLARIFIER,
+    DeepResearchPhase.BRIEF: AgentRole.BRIEFER,
     DeepResearchPhase.PLANNING: AgentRole.PLANNER,
     DeepResearchPhase.GATHERING: AgentRole.GATHERER,
-    DeepResearchPhase.ANALYSIS: AgentRole.ANALYZER,
+    DeepResearchPhase.SUPERVISION: AgentRole.SUPERVISOR,
     DeepResearchPhase.SYNTHESIS: AgentRole.SYNTHESIZER,
-    DeepResearchPhase.REFINEMENT: AgentRole.REFINER,
 }
 
 
@@ -100,39 +91,6 @@ class AgentDecision:
             "inputs": self.inputs,
             "outputs": self.outputs,
             "timestamp": self.timestamp.isoformat(),
-        }
-
-
-@dataclass
-class ReflectionDecision:
-    """Result of an LLM-driven reflection at a phase boundary.
-
-    Captures the LLM's quality assessment and proceed/adjust recommendation
-    so the supervisor can make informed decisions about workflow continuation.
-    """
-
-    quality_assessment: str  # LLM's assessment of phase output quality
-    proceed: bool  # Whether to proceed to the next phase
-    adjustments: list[str] = dataclass_field(default_factory=list)  # Suggested adjustments
-    rationale: str = ""  # Why the LLM made this recommendation
-    phase: str = ""  # Phase that was evaluated
-    provider_id: Optional[str] = None  # Provider used for reflection
-    model_used: Optional[str] = None  # Model used for reflection
-    tokens_used: int = 0  # Tokens consumed by reflection call
-    duration_ms: float = 0.0  # Duration of reflection call
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for JSON serialization."""
-        return {
-            "quality_assessment": self.quality_assessment,
-            "proceed": self.proceed,
-            "adjustments": self.adjustments,
-            "rationale": self.rationale,
-            "phase": self.phase,
-            "provider_id": self.provider_id,
-            "model_used": self.model_used,
-            "tokens_used": self.tokens_used,
-            "duration_ms": self.duration_ms,
         }
 
 
@@ -241,95 +199,6 @@ class SupervisorOrchestrator:
         """Initialize the supervisor orchestrator."""
         self._decisions: list[AgentDecision] = []
 
-    def dispatch_to_agent(
-        self,
-        state: DeepResearchState,
-        phase: DeepResearchPhase,
-    ) -> AgentDecision:
-        """Dispatch work to the appropriate specialist agent for a phase.
-
-        Args:
-            state: Current research state
-            phase: The phase to execute
-
-        Returns:
-            AgentDecision recording the dispatch
-        """
-        agent = PHASE_TO_AGENT.get(phase, AgentRole.SUPERVISOR)
-        inputs = self._build_agent_inputs(state, phase)
-
-        decision = AgentDecision(
-            agent=agent,
-            action=f"execute_{phase.value}",
-            rationale=f"Phase {phase.value} requires {agent.value} specialist",
-            inputs=inputs,
-        )
-
-        self._decisions.append(decision)
-        return decision
-
-    def _build_agent_inputs(
-        self,
-        state: DeepResearchState,
-        phase: DeepResearchPhase,
-    ) -> dict[str, Any]:
-        """Build the input context for a specialist agent.
-
-        Handoff inputs vary by phase:
-        - PLANNING: original query, system prompt
-        - GATHERING: sub-queries, source types, rate limits
-        - ANALYSIS: sources, findings so far
-        - SYNTHESIS: findings, gaps, iteration count
-        - REFINEMENT: gaps, remaining iterations, report draft
-        """
-        base_inputs = {
-            "research_id": state.id,
-            "original_query": state.original_query,
-            "current_phase": phase.value,
-            "iteration": state.iteration,
-        }
-
-        if phase == DeepResearchPhase.CLARIFICATION:
-            return {
-                **base_inputs,
-                "system_prompt": state.system_prompt,
-            }
-        elif phase == DeepResearchPhase.PLANNING:
-            return {
-                **base_inputs,
-                "system_prompt": state.system_prompt,
-                "max_sub_queries": state.max_sub_queries,
-                "clarification_constraints": state.clarification_constraints,
-            }
-        elif phase == DeepResearchPhase.GATHERING:
-            return {
-                **base_inputs,
-                "sub_queries": [q.query for q in state.pending_sub_queries()],
-                "source_types": [st.value for st in state.source_types],
-                "max_sources_per_query": state.max_sources_per_query,
-            }
-        elif phase == DeepResearchPhase.ANALYSIS:
-            return {
-                **base_inputs,
-                "source_count": len(state.sources),
-                "high_quality_sources": len([s for s in state.sources if s.quality == SourceQuality.HIGH]),
-            }
-        elif phase == DeepResearchPhase.SYNTHESIS:
-            return {
-                **base_inputs,
-                "finding_count": len(state.findings),
-                "gap_count": len(state.gaps),
-                "has_research_brief": state.research_brief is not None,
-            }
-        elif phase == DeepResearchPhase.REFINEMENT:
-            return {
-                **base_inputs,
-                "gaps": [g.description for g in state.gaps if not g.resolved],
-                "remaining_iterations": state.max_iterations - state.iteration,
-                "has_report_draft": state.report is not None,
-            }
-        return base_inputs
-
     def evaluate_phase_completion(
         self,
         state: DeepResearchState,
@@ -376,29 +245,27 @@ class SupervisorOrchestrator:
             has_constraints = bool(state.clarification_constraints)
             return {
                 "has_constraints": has_constraints,
-                "quality_ok": True,  # Clarification always proceeds
+                "quality_ok": True,
                 "rationale": (
                     f"Clarification {'provided constraints' if has_constraints else 'skipped/no constraints needed'}. "
-                    "Proceeding to planning."
+                    "Proceeding to brief."
                 ),
             }
 
-        elif phase == DeepResearchPhase.PLANNING:
-            sub_query_count = len(state.sub_queries)
-            quality_ok = sub_query_count >= 2  # At least 2 sub-queries
+        elif phase == DeepResearchPhase.BRIEF:
+            has_brief = state.research_brief is not None
             return {
-                "sub_query_count": sub_query_count,
-                "has_research_brief": state.research_brief is not None,
-                "quality_ok": quality_ok,
+                "has_research_brief": has_brief,
+                "quality_ok": has_brief,
                 "rationale": (
-                    f"Planning produced {sub_query_count} sub-queries. "
-                    f"{'Sufficient' if quality_ok else 'Insufficient'} for gathering."
+                    f"Brief {'generated' if has_brief else 'missing'}. "
+                    f"{'Proceeding to supervision' if has_brief else 'May need retry'}."
                 ),
             }
 
         elif phase == DeepResearchPhase.GATHERING:
             source_count = len(state.sources)
-            quality_ok = source_count >= 3  # At least 3 sources
+            quality_ok = source_count >= 3
             return {
                 "source_count": source_count,
                 "quality_ok": quality_ok,
@@ -408,19 +275,23 @@ class SupervisorOrchestrator:
                 ),
             }
 
-        elif phase == DeepResearchPhase.ANALYSIS:
-            finding_count = len(state.findings)
-            high_confidence = len([f for f in state.findings if f.confidence == ConfidenceLevel.HIGH])
-            quality_ok = finding_count >= 2
+        elif phase == DeepResearchPhase.SUPERVISION:
+            pending = len(state.pending_sub_queries())
+            source_count = len(state.sources)
+            has_sources = source_count > 0
+            has_completed_round = state.supervision_round >= 1
+            quality_ok = has_sources and has_completed_round
+            rationale_parts = [f"Supervision round {state.supervision_round}: {pending} follow-up queries queued."]
+            if not has_sources:
+                rationale_parts.append("No sources collected — quality gate failed.")
+            if not has_completed_round:
+                rationale_parts.append("No supervision round completed — quality gate failed.")
             return {
-                "finding_count": finding_count,
-                "high_confidence_count": high_confidence,
+                "supervision_round": state.supervision_round,
+                "pending_follow_ups": pending,
+                "source_count": source_count,
                 "quality_ok": quality_ok,
-                "rationale": (
-                    f"Analysis extracted {finding_count} findings "
-                    f"({high_confidence} high confidence). "
-                    f"{'Ready for synthesis' if quality_ok else 'May need more analysis'}."
-                ),
+                "rationale": " ".join(rationale_parts),
             }
 
         elif phase == DeepResearchPhase.SYNTHESIS:
@@ -434,23 +305,7 @@ class SupervisorOrchestrator:
                 "rationale": (
                     f"Synthesis {'produced' if has_report else 'failed to produce'} report "
                     f"({report_length} chars). "
-                    f"{'Complete' if quality_ok else 'May need refinement'}."
-                ),
-            }
-
-        elif phase == DeepResearchPhase.REFINEMENT:
-            unaddressed_gaps = len([g for g in state.gaps if not g.resolved])
-            can_iterate = state.iteration < state.max_iterations
-            should_iterate = unaddressed_gaps > 0 and can_iterate
-            return {
-                "unaddressed_gaps": unaddressed_gaps,
-                "iteration": state.iteration,
-                "max_iterations": state.max_iterations,
-                "should_iterate": should_iterate,
-                "rationale": (
-                    f"Refinement found {unaddressed_gaps} gaps. "
-                    f"{'Will iterate' if should_iterate else 'Completing'} "
-                    f"(iteration {state.iteration}/{state.max_iterations})."
+                    f"{'Complete' if quality_ok else 'May need improvement'}."
                 ),
             }
 
@@ -459,34 +314,42 @@ class SupervisorOrchestrator:
     def decide_iteration(self, state: DeepResearchState) -> AgentDecision:
         """Supervisor decides whether to iterate or complete.
 
-        Called after synthesis to determine if refinement is needed.
+        With the collapsed pipeline (no refinement phase), the supervisor
+        always completes after synthesis. Supervision gap-filling handles
+        iterative improvement before synthesis.
+
+        .. deprecated::
+            ``max_iterations > 1`` has no effect — multi-iteration
+            refinement is not implemented.  Supervision gap-filling
+            handles iterative improvement.  The parameter will be
+            removed in a future release.
 
         Args:
             state: Current research state
 
         Returns:
-            AgentDecision with iterate vs complete decision
+            AgentDecision with complete decision
         """
-        unaddressed_gaps = [g for g in state.gaps if not g.resolved]
-        can_iterate = state.iteration < state.max_iterations
-        should_iterate = len(unaddressed_gaps) > 0 and can_iterate
+        if state.max_iterations > 1:
+            logger.warning(
+                "max_iterations=%d is configured but multi-iteration refinement "
+                "is not implemented. Supervision gap-filling handles iterative "
+                "improvement. max_iterations > 1 has no effect and will be "
+                "removed in a future release.",
+                state.max_iterations,
+            )
 
         decision = AgentDecision(
             agent=AgentRole.SUPERVISOR,
             action="decide_iteration",
-            rationale=(
-                f"{'Iterating' if should_iterate else 'Completing'}: "
-                f"{len(unaddressed_gaps)} gaps, "
-                f"iteration {state.iteration}/{state.max_iterations}"
-            ),
+            rationale=f"Completing: iteration {state.iteration}/{state.max_iterations}",
             inputs={
-                "gap_count": len(unaddressed_gaps),
                 "iteration": state.iteration,
                 "max_iterations": state.max_iterations,
             },
             outputs={
-                "should_iterate": should_iterate,
-                "next_phase": (DeepResearchPhase.REFINEMENT.value if should_iterate else "COMPLETED"),
+                "should_iterate": False,
+                "next_phase": "COMPLETED",
             },
         )
 
@@ -505,270 +368,6 @@ class SupervisorOrchestrator:
         state.metadata["agent_decisions"].extend([d.to_dict() for d in self._decisions])
         self._decisions.clear()
 
-    async def async_think_pause(
-        self,
-        state: DeepResearchState,
-        phase: DeepResearchPhase,
-        *,
-        workflow: Any = None,
-    ) -> ReflectionDecision:
-        """Execute LLM-driven reflection at a phase boundary.
-
-        Sends the phase results and state summary to a fast model, which
-        assesses quality and recommends whether to proceed or adjust.
-
-        Args:
-            state: Current research state (after phase execution)
-            phase: The phase that just completed
-            workflow: The DeepResearchWorkflow instance (provides config, _execute_provider_async)
-
-        Returns:
-            ReflectionDecision with LLM assessment
-        """
-        if workflow is None:
-            logger.warning("async_think_pause called without workflow instance, returning proceed=True")
-            return ReflectionDecision(
-                quality_assessment="No workflow context available",
-                proceed=True,
-                rationale="Skipped reflection: no workflow instance provided",
-                phase=phase.value,
-            )
-
-        import time
-
-        reflection_prompt = self._build_reflection_llm_prompt(state, phase)
-        system_prompt = self._build_reflection_system_prompt()
-
-        provider_id = workflow.config.get_reflection_provider()
-        timeout = workflow.config.deep_research_reflection_timeout
-
-        start_time = time.perf_counter()
-
-        try:
-            result = await workflow._execute_provider_async(
-                prompt=reflection_prompt,
-                provider_id=provider_id,
-                model=None,
-                system_prompt=system_prompt,
-                timeout=timeout,
-                temperature=0.2,  # Low temperature for analytical assessment
-                phase="reflection",
-                fallback_providers=[],
-                max_retries=1,
-                retry_delay=2.0,
-            )
-        except Exception as exc:
-            duration_ms = (time.perf_counter() - start_time) * 1000
-            logger.warning(
-                "Reflection LLM call failed for phase %s: %s. Proceeding with heuristic fallback.",
-                phase.value,
-                exc,
-            )
-            return ReflectionDecision(
-                quality_assessment="Reflection call failed",
-                proceed=True,
-                rationale=f"LLM reflection error: {exc}. Falling back to heuristic.",
-                phase=phase.value,
-                duration_ms=duration_ms,
-            )
-
-        duration_ms = (time.perf_counter() - start_time) * 1000
-
-        if not result.success:
-            logger.warning(
-                "Reflection LLM returned failure for phase %s: %s. Using heuristic fallback.",
-                phase.value,
-                result.error,
-            )
-            return ReflectionDecision(
-                quality_assessment="Reflection call returned failure",
-                proceed=True,
-                rationale=f"LLM reflection failed: {result.error}. Falling back to heuristic.",
-                phase=phase.value,
-                provider_id=result.provider_id,
-                model_used=result.model_used,
-                duration_ms=duration_ms,
-            )
-
-        decision = self._parse_reflection_response(
-            result.content,
-            phase=phase,
-            provider_id=result.provider_id,
-            model_used=result.model_used,
-            tokens_used=result.tokens_used or 0,
-            duration_ms=duration_ms,
-        )
-
-        # Record the reflection as an agent decision for traceability
-        self._decisions.append(
-            AgentDecision(
-                agent=AgentRole.SUPERVISOR,
-                action=f"reflect_{phase.value}",
-                rationale=decision.rationale,
-                inputs={"phase": phase.value, "reflection_prompt_length": len(reflection_prompt)},
-                outputs=decision.to_dict(),
-            )
-        )
-
-        return decision
-
-    def _build_reflection_system_prompt(self) -> str:
-        """Build system prompt for LLM reflection calls."""
-        return """You are a research quality supervisor. Your task is to evaluate the quality of a completed research phase and recommend whether to proceed.
-
-Respond with valid JSON in this exact structure:
-{
-    "quality_assessment": "Brief assessment of the phase output quality",
-    "proceed": true/false,
-    "adjustments": ["Optional suggestion 1", "Optional suggestion 2"],
-    "rationale": "Why you recommend proceeding or not"
-}
-
-Rules:
-- Set "proceed" to true if the phase produced usable output, even if imperfect
-- Set "proceed" to false only if the output is fundamentally insufficient
-- Keep adjustments practical and actionable (max 3)
-- Be pragmatic: minor quality issues should not block progress
-- Consider the research phase context when evaluating quality
-
-IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
-
-    def _build_reflection_llm_prompt(
-        self,
-        state: DeepResearchState,
-        phase: DeepResearchPhase,
-    ) -> str:
-        """Build the user prompt for LLM reflection, summarizing phase output.
-
-        Args:
-            state: Current research state
-            phase: Phase that just completed
-
-        Returns:
-            Reflection prompt string with phase-specific context
-        """
-        base = (
-            f"Research query: {state.original_query}\n"
-            f"Phase just completed: {phase.value}\n"
-            f"Iteration: {state.iteration}/{state.max_iterations}\n"
-        )
-
-        if phase == DeepResearchPhase.CLARIFICATION:
-            has_constraints = bool(state.clarification_constraints)
-            base += (
-                f"\nConstraints inferred: {has_constraints}\n"
-                f"Constraint keys: {list(state.clarification_constraints.keys()) if has_constraints else '(none)'}\n"
-            )
-
-        elif phase == DeepResearchPhase.PLANNING:
-            base += (
-                f"\nSub-queries generated: {len(state.sub_queries)}\n"
-                f"Sub-queries: {[q.query for q in state.sub_queries[:5]]}\n"
-                f"Research brief available: {state.research_brief is not None}\n"
-            )
-
-        elif phase == DeepResearchPhase.GATHERING:
-            base += (
-                f"\nSources collected: {len(state.sources)}\n"
-                f"Source quality distribution: "
-                f"HIGH={len([s for s in state.sources if s.quality == SourceQuality.HIGH])}, "
-                f"MEDIUM={len([s for s in state.sources if s.quality == SourceQuality.MEDIUM])}, "
-                f"LOW={len([s for s in state.sources if s.quality == SourceQuality.LOW])}\n"
-            )
-
-        elif phase == DeepResearchPhase.ANALYSIS:
-            high_conf = len([f for f in state.findings if f.confidence == ConfidenceLevel.HIGH])
-            base += (
-                f"\nFindings extracted: {len(state.findings)}\n"
-                f"High confidence findings: {high_conf}\n"
-                f"Gaps identified: {len(state.gaps)}\n"
-            )
-
-        elif phase == DeepResearchPhase.SYNTHESIS:
-            report_length = len(state.report) if state.report else 0
-            base += (
-                f"\nReport generated: {state.report is not None}\n"
-                f"Report length: {report_length} chars\n"
-                f"Unresolved gaps: {len(state.unresolved_gaps())}\n"
-            )
-
-        elif phase == DeepResearchPhase.REFINEMENT:
-            resolved = len([g for g in state.gaps if g.resolved])
-            base += (
-                f"\nGaps resolved: {resolved}/{len(state.gaps)}\n"
-                f"Can iterate more: {state.iteration < state.max_iterations}\n"
-            )
-
-        base += "\nEvaluate: Is the output quality sufficient to proceed to the next phase?"
-        return base
-
-    def _parse_reflection_response(
-        self,
-        content: str,
-        *,
-        phase: DeepResearchPhase,
-        provider_id: Optional[str] = None,
-        model_used: Optional[str] = None,
-        tokens_used: int = 0,
-        duration_ms: float = 0.0,
-    ) -> ReflectionDecision:
-        """Parse LLM reflection response into a ReflectionDecision.
-
-        Falls back to proceed=True on parse failures.
-
-        Args:
-            content: Raw LLM response
-            phase: Phase that was evaluated
-            provider_id: Provider used
-            model_used: Model used
-            tokens_used: Tokens consumed
-            duration_ms: Call duration
-
-        Returns:
-            ReflectionDecision
-        """
-        from foundry_mcp.core.research.workflows.deep_research._helpers import extract_json
-
-        default = ReflectionDecision(
-            quality_assessment="Unable to parse reflection response",
-            proceed=True,
-            rationale="Defaulting to proceed due to parse failure",
-            phase=phase.value,
-            provider_id=provider_id,
-            model_used=model_used,
-            tokens_used=tokens_used,
-            duration_ms=duration_ms,
-        )
-
-        if not content:
-            return default
-
-        json_str = extract_json(content)
-        if not json_str:
-            logger.warning("No JSON found in reflection response for phase %s", phase.value)
-            return default
-
-        try:
-            data = json.loads(json_str)
-        except json.JSONDecodeError as e:
-            logger.error("Failed to parse reflection JSON for phase %s: %s", phase.value, e)
-            return default
-
-        adjustments_raw = data.get("adjustments", [])
-        adjustments = [str(a) for a in adjustments_raw[:3] if a] if isinstance(adjustments_raw, list) else []
-
-        return ReflectionDecision(
-            quality_assessment=str(data.get("quality_assessment", "")),
-            proceed=bool(data.get("proceed", True)),
-            adjustments=adjustments,
-            rationale=str(data.get("rationale", "")),
-            phase=phase.value,
-            provider_id=provider_id,
-            model_used=model_used,
-            tokens_used=tokens_used,
-            duration_ms=duration_ms,
-        )
-
     def get_reflection_prompt(self, state: DeepResearchState, phase: DeepResearchPhase) -> str:
         """Generate a reflection prompt for the supervisor think pause.
 
@@ -784,29 +383,23 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                 f"Clarification complete. Constraints: {bool(state.clarification_constraints)}. "
                 "Evaluate: Is the query now specific enough for focused research?"
             ),
-            DeepResearchPhase.PLANNING: (
-                f"Planning complete. Generated {len(state.sub_queries)} sub-queries. "
-                f"Research brief: {bool(state.research_brief)}. "
-                "Evaluate: Are sub-queries comprehensive? Any gaps in coverage?"
+            DeepResearchPhase.BRIEF: (
+                f"Brief generation complete. Research brief: {bool(state.research_brief)}. "
+                "Evaluate: Is the brief comprehensive enough for supervision?"
             ),
             DeepResearchPhase.GATHERING: (
                 f"Gathering complete. Collected {len(state.sources)} sources. "
                 f"Evaluate: Is source diversity sufficient? Quality distribution?"
             ),
-            DeepResearchPhase.ANALYSIS: (
-                f"Analysis complete. Extracted {len(state.findings)} findings, "
-                f"identified {len(state.gaps)} gaps. "
-                "Evaluate: Are findings well-supported? Critical gaps?"
+            DeepResearchPhase.SUPERVISION: (
+                f"Supervision round {state.supervision_round} complete. "
+                f"{len(state.pending_sub_queries())} follow-up queries pending. "
+                "Evaluate: Is coverage sufficient or should gathering continue?"
             ),
             DeepResearchPhase.SYNTHESIS: (
                 f"Synthesis complete. Report: {len(state.report or '')} chars. "
                 f"Iteration {state.iteration}/{state.max_iterations}. "
-                "Evaluate: Report quality? Need refinement?"
-            ),
-            DeepResearchPhase.REFINEMENT: (
-                f"Refinement complete. Gaps addressed: "
-                f"{len([g for g in state.gaps if g.resolved])}/{len(state.gaps)}. "
-                "Evaluate: Continue iterating or finalize?"
+                "Evaluate: Report quality?"
             ),
         }
         return prompts.get(phase, f"Phase {phase.value} complete. Evaluate progress.")

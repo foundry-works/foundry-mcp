@@ -28,8 +28,58 @@ _active_research_sessions: dict[str, DeepResearchState] = {}
 _active_sessions_lock = threading.Lock()
 _active_research_memory: Optional[ResearchMemory] = None
 
+# Maximum concurrent research sessions tracked for crash recovery.
+# Prevents unbounded dict growth if sessions aren't cleaned up properly.
+_MAX_ACTIVE_SESSIONS: int = 20
+
 _crash_handler_installed = False
 _crash_handler_lock = threading.Lock()
+
+
+def register_active_session(research_id: str, state: "DeepResearchState") -> None:
+    """Register an active research session with bounded capacity.
+
+    Evicts the oldest completed (or arbitrary oldest) session when the cap
+    is exceeded to prevent unbounded dict growth from leaked sessions.
+    """
+    with _active_sessions_lock:
+        _active_research_sessions[research_id] = state
+        if len(_active_research_sessions) > _MAX_ACTIVE_SESSIONS:
+            # Evict sessions that are already completed first
+            to_evict: list[str] = []
+            for sid, sstate in _active_research_sessions.items():
+                if sid == research_id:
+                    continue
+                if sstate.completed_at is not None:
+                    to_evict.append(sid)
+                if len(_active_research_sessions) - len(to_evict) <= _MAX_ACTIVE_SESSIONS:
+                    break
+            # If still over cap, evict oldest by insertion order
+            if len(_active_research_sessions) - len(to_evict) > _MAX_ACTIVE_SESSIONS:
+                for sid in list(_active_research_sessions):
+                    if sid != research_id and sid not in to_evict:
+                        to_evict.append(sid)
+                    if len(_active_research_sessions) - len(to_evict) <= _MAX_ACTIVE_SESSIONS:
+                        break
+            for sid in to_evict:
+                _active_research_sessions.pop(sid, None)
+            if to_evict:
+                logger.warning(
+                    "Evicted %d stale session(s) from _active_research_sessions (cap=%d)",
+                    len(to_evict),
+                    _MAX_ACTIVE_SESSIONS,
+                )
+
+
+def set_active_research_memory(memory: Optional[ResearchMemory]) -> None:
+    """Set the active research memory for crash recovery.
+
+    Called from DeepResearchWorkflow.__init__ to ensure the crash handler
+    can persist state using the correct memory instance.
+    """
+    global _active_research_memory
+    _active_research_memory = memory
+
 
 # Store previous SIGTERM handler to chain calls
 _previous_sigterm_handler: Optional[Any] = None
@@ -185,6 +235,9 @@ def _cleanup_on_exit() -> None:
         if state.completed_at is None:
             state.mark_interrupted(reason="process_exit")
     _persist_active_sessions()
+    # Clear the dict to release references even if the finally block didn't run
+    with _active_sessions_lock:
+        _active_research_sessions.clear()
 
 
 def install_crash_handler() -> None:

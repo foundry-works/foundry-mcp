@@ -9,6 +9,9 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Optional
 
+if TYPE_CHECKING:
+    from foundry_mcp.core.research.memory import ResearchMemory
+
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 
@@ -23,8 +26,9 @@ class SessionManagementMixin:
     - _execute_workflow_async() (orchestration loop on core)
     """
 
-    memory: Any
+    memory: ResearchMemory
 
+    # Stubs for Pyright — canonical signatures live in phases/_protocols.py
     if TYPE_CHECKING:
 
         async def _execute_workflow_async(self, *args: Any, **kwargs: Any) -> Any: ...
@@ -247,6 +251,22 @@ class SessionManagementMixin:
             # Synthesis requires findings from analysis
             if not state.findings:
                 issues.append("No findings found for synthesis phase")
+
+        # Check for rollback_note from cancellation — partial iteration data may
+        # be retained in state (sources, findings, directives) from an incomplete
+        # iteration.  This is a warning (not a resume blocker) since the data is
+        # usable, just potentially incomplete or duplicated.
+        rollback_note = state.metadata.get("rollback_note")
+        if rollback_note:
+            discarded_iter = state.metadata.get("discarded_iteration", "?")
+            logger.warning(
+                "Resuming research %s with rollback_note=%r (discarded_iteration=%s). "
+                "Partial data from the cancelled iteration is retained in state — "
+                "results may contain duplicates or incomplete data.",
+                state.id,
+                rollback_note,
+                discarded_iter,
+            )
 
         # Note: Pydantic's default_factory=list guarantees collections are never None,
         # so explicit None checks are unnecessary. Corrupted data would fail Pydantic

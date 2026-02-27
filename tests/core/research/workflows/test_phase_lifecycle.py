@@ -47,7 +47,7 @@ def sample_state():
     return DeepResearchState(
         id="deepres-lifecycle-test",
         original_query="lifecycle test query",
-        phase=DeepResearchPhase.PLANNING,
+        phase=DeepResearchPhase.BRIEF,
         iteration=1,
         max_iterations=3,
     )
@@ -529,3 +529,124 @@ class TestEdgeCases:
         # Should have base metadata but no extra keys
         assert "finding_count" not in ret.metadata
         assert "research_id" in ret.metadata
+
+
+# ---------------------------------------------------------------------------
+# MODEL_TOKEN_LIMITS external config loading
+# ---------------------------------------------------------------------------
+
+
+class TestModelTokenLimitsConfig:
+    """Tests for externalized MODEL_TOKEN_LIMITS config loading."""
+
+    def test_loaded_from_json_config(self):
+        """get_model_token_limits() should load from the external JSON config file."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            get_model_token_limits,
+        )
+
+        limits = get_model_token_limits()
+        assert isinstance(limits, dict)
+        assert len(limits) > 0
+        # Spot-check known entries
+        assert limits["claude-opus-4-6"] == 200_000
+        assert limits["gemini-3"] == 1_000_000
+
+    def test_fallback_on_missing_file(self, tmp_path):
+        """Should fall back to hardcoded limits when JSON file is missing."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _FALLBACK_MODEL_TOKEN_LIMITS,
+            _load_model_token_limits,
+        )
+
+        with patch("foundry_mcp.core.research.workflows.deep_research.phases._lifecycle._config_pkg") as mock_pkg:
+            mock_pkg.__file__ = str(tmp_path / "__init__.py")
+            result = _load_model_token_limits()
+
+        assert result == _FALLBACK_MODEL_TOKEN_LIMITS
+
+    def test_fallback_on_malformed_json(self, tmp_path):
+        """Should fall back to hardcoded limits when JSON is malformed."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _FALLBACK_MODEL_TOKEN_LIMITS,
+            _load_model_token_limits,
+        )
+
+        (tmp_path / "model_token_limits.json").write_text("not valid json")
+        with patch("foundry_mcp.core.research.workflows.deep_research.phases._lifecycle._config_pkg") as mock_pkg:
+            mock_pkg.__file__ = str(tmp_path / "__init__.py")
+            result = _load_model_token_limits()
+
+        assert result == _FALLBACK_MODEL_TOKEN_LIMITS
+
+    def test_ordering_preserved(self):
+        """More-specific substrings should precede less-specific ones."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            get_model_token_limits,
+        )
+
+        keys = list(get_model_token_limits().keys())
+        # gpt-4.1-mini must come before gpt-4.1
+        if "gpt-4.1-mini" in keys and "gpt-4.1" in keys:
+            assert keys.index("gpt-4.1-mini") < keys.index("gpt-4.1")
+
+    def test_fallback_matches_json(self):
+        """_FALLBACK_MODEL_TOKEN_LIMITS must match model_token_limits.json to prevent divergence."""
+        import json
+        from pathlib import Path
+
+        import foundry_mcp.config as config_pkg
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _FALLBACK_MODEL_TOKEN_LIMITS,
+        )
+
+        json_path = Path(config_pkg.__file__).resolve().parent / "model_token_limits.json"
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+        json_limits = {str(k): int(v) for k, v in data["limits"].items()}
+
+        assert _FALLBACK_MODEL_TOKEN_LIMITS == json_limits, (
+            "Hardcoded _FALLBACK_MODEL_TOKEN_LIMITS has diverged from "
+            "model_token_limits.json. Update both to keep them in sync."
+        )
+
+    def test_low_values_skipped_with_warning(self, tmp_path):
+        """Token limit values < 1000 are skipped with a warning."""
+        import json
+
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _load_model_token_limits,
+        )
+
+        data = {
+            "limits": {
+                "good-model": 200000,
+                "typo-model": 200,
+                "zero-model": 0,
+            }
+        }
+        (tmp_path / "model_token_limits.json").write_text(json.dumps(data))
+        with patch("foundry_mcp.core.research.workflows.deep_research.phases._lifecycle._config_pkg") as mock_pkg:
+            mock_pkg.__file__ = str(tmp_path / "__init__.py")
+            result = _load_model_token_limits()
+
+        assert "good-model" in result
+        assert result["good-model"] == 200000
+        assert "typo-model" not in result
+        assert "zero-model" not in result
+
+    def test_all_values_invalid_falls_back(self, tmp_path):
+        """When all JSON entries are below 1000, fallback is used."""
+        import json
+
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _FALLBACK_MODEL_TOKEN_LIMITS,
+            _load_model_token_limits,
+        )
+
+        data = {"limits": {"bad-model": 500, "worse-model": 10}}
+        (tmp_path / "model_token_limits.json").write_text(json.dumps(data))
+        with patch("foundry_mcp.core.research.workflows.deep_research.phases._lifecycle._config_pkg") as mock_pkg:
+            mock_pkg.__file__ = str(tmp_path / "__init__.py")
+            result = _load_model_token_limits()
+
+        assert result == _FALLBACK_MODEL_TOKEN_LIMITS

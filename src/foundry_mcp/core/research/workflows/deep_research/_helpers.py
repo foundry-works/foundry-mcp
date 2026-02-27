@@ -2,121 +2,53 @@
 
 These are stateless functions with no instance access. Called as
 module-level functions (not via ``self``).
+
+This module is a backward-compatibility re-export shim. The actual
+implementations have been split into focused modules:
+
+- ``_json_parsing`` — JSON extraction from LLM responses
+- ``_token_budget`` — fidelity scoring, truncation, structured source dropping
+- ``_model_resolution`` — model/provider lookup, reflection/clarification parsing
+- ``_content_dedup`` — content similarity, novelty tagging
+- ``_injection_protection`` — SSRF validation, prompt injection sanitization
 """
 
-from __future__ import annotations
+# Re-export everything so existing ``from ._helpers import X`` continues to work.
 
-import re
-from typing import TYPE_CHECKING, Optional
+from foundry_mcp.core.research.workflows.deep_research._content_dedup import (  # noqa: F401
+    NoveltyTag,
+    compute_novelty_tag,
+    content_similarity,
+)
+from foundry_mcp.core.research.workflows.deep_research._injection_protection import (  # noqa: F401
+    build_novelty_summary,
+    build_sanitized_context,
+    sanitize_external_content,
+    validate_extract_url,
+)
+from foundry_mcp.core.research.workflows.deep_research._json_parsing import (  # noqa: F401
+    extract_json,
+)
+from foundry_mcp.core.research.workflows.deep_research._model_resolution import (  # noqa: F401
+    ClarificationDecision,
+    TopicReflectionDecision,
+    estimate_token_limit_for_model,
+    parse_clarification_decision,
+    parse_reflection_decision,
+    resolve_phase_provider,
+    safe_resolve_model_for_role,
+)
+from foundry_mcp.core.research.workflows.deep_research._token_budget import (  # noqa: F401
+    _split_prompt_sections,
+    fidelity_level_from_score,
+    structured_drop_sources,
+    structured_truncate_blocks,
+    truncate_at_boundary,
+    truncate_to_token_estimate,
+)
 
-if TYPE_CHECKING:
-    from foundry_mcp.config.research import ResearchConfig
-
-
-def extract_json(content: str) -> Optional[str]:
-    """Extract JSON object from content that may contain other text.
-
-    Handles cases where JSON is wrapped in markdown code blocks
-    or mixed with explanatory text.
-
-    Args:
-        content: Raw content that may contain JSON
-
-    Returns:
-        Extracted JSON string or None if not found
-    """
-    # First, try to find JSON in code blocks
-    code_block_pattern = r"```(?:json)?\s*([\s\S]*?)```"
-    matches = re.findall(code_block_pattern, content)
-    for match in matches:
-        match = match.strip()
-        if match.startswith("{"):
-            return match
-
-    # Try to find raw JSON object
-    # Look for the outermost { ... } pair
-    brace_start = content.find("{")
-    if brace_start == -1:
-        return None
-
-    # Find matching closing brace
-    depth = 0
-    for i, char in enumerate(content[brace_start:], brace_start):
-        if char == "{":
-            depth += 1
-        elif char == "}":
-            depth -= 1
-            if depth == 0:
-                return content[brace_start : i + 1]
-
-    return None
-
-
-def fidelity_level_from_score(fidelity_score: float) -> str:
-    """Convert fidelity score (0-1) to fidelity level string.
-
-    Args:
-        fidelity_score: Numeric fidelity from 0.0 to 1.0
-
-    Returns:
-        Fidelity level: 'full', 'condensed', 'compressed', or 'minimal'
-    """
-    if fidelity_score >= 0.9:
-        return "full"
-    elif fidelity_score >= 0.6:
-        return "condensed"
-    elif fidelity_score >= 0.3:
-        return "compressed"
-    else:
-        return "minimal"
-
-
-def truncate_at_boundary(content: str, target_length: int) -> str:
-    """Truncate content at a natural boundary (paragraph, sentence).
-
-    Args:
-        content: Content to truncate
-        target_length: Target length in characters
-
-    Returns:
-        Truncated content with ellipsis marker
-    """
-    if len(content) <= target_length:
-        return content
-
-    truncated = content[:target_length]
-
-    # Try to find paragraph boundary in last 20%
-    search_start = int(target_length * 0.8)
-    para_break = truncated.rfind("\n\n", search_start)
-    if para_break > search_start // 2:
-        truncated = truncated[:para_break]
-    else:
-        # Try sentence boundary
-        sentence_break = truncated.rfind(". ", search_start)
-        if sentence_break > search_start // 2:
-            truncated = truncated[: sentence_break + 1]
-
-    return truncated.strip() + "\n\n[... content truncated for context limits]"
-
-
-def resolve_phase_provider(config: "ResearchConfig", *phase_names: str) -> str:
-    """Resolve LLM provider ID by trying phase-specific config attrs in order.
-
-    Walks *phase_names* and checks
-    ``config.deep_research_{name}_provider`` for each.  Returns the
-    first non-None value found, falling back to ``config.default_provider``.
-
-    Args:
-        config: ResearchConfig instance
-        *phase_names: Config attribute suffixes to check in order
-            (e.g. ``"topic_reflection"``, ``"reflection"``).
-
-    Returns:
-        Provider ID string (never None).
-    """
-    for name in phase_names:
-        value = getattr(config, f"deep_research_{name}_provider", None)
-        if value is not None:
-            return value
-    return config.default_provider
+# _extract_domain was imported from source_quality in the original module
+# and is used by some tests via _helpers. Re-export for backward compat.
+from foundry_mcp.core.research.workflows.deep_research.source_quality import (  # noqa: F401
+    _extract_domain,
+)

@@ -20,7 +20,10 @@ from foundry_mcp.core.research.workflows.deep_research._budgeting import (
 from foundry_mcp.core.research.workflows.deep_research._constants import (
     REFINEMENT_OUTPUT_RESERVED,
 )
-from foundry_mcp.core.research.workflows.deep_research._helpers import (
+from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
+    sanitize_external_content,
+)
+from foundry_mcp.core.research.workflows.deep_research._json_parsing import (
     extract_json,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
@@ -309,8 +312,8 @@ Your response MUST be valid JSON with this exact structure:
 }
 
 Guidelines:
-- Assess each gap's severity: "critical" (blocks conclusions), "moderate" (affects confidence), "minor" (nice to have)
-- Only mark gaps as addressable if follow-up research can realistically fill them
+- Assess each gap's severity: "critical" (blocks conclusions), "moderate" (affects confidence), "minor" (nice to have). Severity determines whether a follow-up iteration is worth the budget — only critical and moderate gaps justify the cost of another research cycle.
+- Only mark gaps as addressable if follow-up research can realistically fill them. Some gaps exist because the information genuinely doesn't exist online (proprietary data, future events, classified information) — marking these as addressable wastes iteration budget on impossible searches.
 - Generate 1-3 highly focused follow-up queries per addressable gap
 - Priority 1 is highest priority
 - Mark gaps as addressed if the current report already covers them adequately
@@ -335,7 +338,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             User prompt string
         """
         prompt_parts = [
-            f"# Research Query\n{state.original_query}",
+            f"# Research Query\n{sanitize_external_content(state.original_query)}",
             "",
             "## Research Status",
             f"- Iteration: {state.iteration}/{state.max_iterations}",

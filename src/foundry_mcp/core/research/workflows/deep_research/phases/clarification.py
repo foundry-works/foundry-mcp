@@ -1,8 +1,12 @@
 """Clarification phase mixin for DeepResearchWorkflow.
 
-Analyzes query specificity and optionally generates clarifying questions
-before the planning phase begins. When enabled, this reduces wasted search
-credits on vague or ambiguous queries by inferring constraints upfront.
+Analyzes query specificity and generates a structured binary decision:
+either a clarifying question (need_clarification=True) or a verification
+statement confirming the LLM's understanding (need_clarification=False).
+
+When clarification is not needed, the verification text is stored in
+state.clarification_constraints for traceability and fed into the
+planning phase.
 """
 
 from __future__ import annotations
@@ -12,17 +16,98 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, Optional
 
+if TYPE_CHECKING:
+    from foundry_mcp.config.research import ResearchConfig
+    from foundry_mcp.core.research.memory import ResearchMemory
+
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.workflows.base import WorkflowResult
-from foundry_mcp.core.research.workflows.deep_research._helpers import (
+from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
+    sanitize_external_content,
+)
+from foundry_mcp.core.research.workflows.deep_research._json_parsing import (
     extract_json,
 )
+from foundry_mcp.core.research.workflows.deep_research._model_resolution import (
+    ClarificationDecision,
+    parse_clarification_decision,
+)
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
-    execute_llm_call,
+    execute_structured_llm_call,
     finalize_phase,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_inferred_constraints(content: str) -> dict[str, str]:
+    """Extract inferred_constraints from a clarification response.
+
+    Looks for an ``inferred_constraints`` dict in the JSON response and
+    normalises all values to strings (booleans become ``"true"``/``"false"``).
+    Returns an empty dict when the field is absent, the JSON is unparsable,
+    or the value is not a dict.
+
+    This replaces the legacy ``_parse_clarification_response()`` method,
+    keeping only the constraint-extraction logic that the planning phase
+    still consumes.
+
+    Args:
+        content: Raw LLM response content
+
+    Returns:
+        Dict of string key-value constraints (may be empty)
+    """
+    if not content:
+        return {}
+
+    json_str = extract_json(content)
+    if not json_str:
+        return {}
+
+    try:
+        data = json.loads(json_str)
+    except json.JSONDecodeError:
+        return {}
+
+    constraints = data.get("inferred_constraints", {})
+    if not isinstance(constraints, dict):
+        return {}
+
+    # Only keep string-valued constraints, filter empty values
+    return {
+        k: (str(v).lower() if isinstance(v, bool) else str(v))
+        for k, v in constraints.items()
+        if v is not None and v != "" and isinstance(v, (str, int, float, bool))
+    }
+
+
+def _strict_parse_clarification(content: str) -> ClarificationDecision:
+    """Parse clarification response with strict validation.
+
+    Raises on failure so that ``execute_structured_llm_call`` can retry.
+
+    Args:
+        content: Raw LLM response content
+
+    Returns:
+        ClarificationDecision with extracted fields
+
+    Raises:
+        ValueError: If no valid JSON found or required field missing
+        json.JSONDecodeError: If JSON is malformed
+    """
+    json_str = extract_json(content)
+    if not json_str:
+        raise ValueError("No JSON object found in clarification response")
+    data = json.loads(json_str)
+    if "need_clarification" not in data:
+        raise ValueError("Missing required 'need_clarification' field in response")
+    return ClarificationDecision(
+        need_clarification=bool(data["need_clarification"]),
+        question=str(data.get("question", "")),
+        verification=str(data.get("verification", "")),
+    )
 
 
 class ClarificationPhaseMixin:
@@ -32,15 +117,26 @@ class ClarificationPhaseMixin:
     - config, memory, hooks, orchestrator (instance attributes)
     - _write_audit_event(), _check_cancellation() (cross-cutting methods)
     - _execute_provider_async() (inherited from ResearchWorkflowBase)
+
+    See ``DeepResearchWorkflowProtocol`` in ``_protocols.py`` for the
+    full structural contract.
     """
 
-    config: Any
-    memory: Any
+    config: ResearchConfig
+    memory: ResearchMemory
 
+    # Stubs for Pyright — canonical signatures live in _protocols.py
     if TYPE_CHECKING:
 
-        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
-        def _check_cancellation(self, *args: Any, **kwargs: Any) -> None: ...
+        def _write_audit_event(
+            self,
+            state: DeepResearchState | None,
+            event_name: str,
+            *,
+            data: dict[str, Any] | None = ...,
+            level: str = ...,
+        ) -> None: ...
+        def _check_cancellation(self, state: DeepResearchState) -> None: ...
 
     async def _execute_clarification_async(
         self,
@@ -48,19 +144,19 @@ class ClarificationPhaseMixin:
         provider_id: Optional[str],
         timeout: float,
     ) -> WorkflowResult:
-        """Execute clarification phase: assess query specificity and infer constraints.
+        """Execute clarification phase with structured binary decision.
 
-        This phase:
-        1. Sends the original query to a fast model for specificity assessment
-        2. If the query is specific enough, proceeds immediately (no-op)
-        3. If vague, infers reasonable constraints (scope, timeframe, domain)
-           and stores them in state.clarification_constraints
-        4. The inferred constraints are fed into the planning phase
+        Uses ``execute_structured_llm_call`` to obtain a JSON response
+        with the schema ``{need_clarification, question, verification}``.
 
-        Since this runs non-interactively (MCP tool response is returned after
-        the full workflow), we infer constraints rather than asking the user
-        and blocking. The clarification questions are recorded in state metadata
-        for transparency.
+        Behavior:
+        - ``need_clarification=True``: stores the question in state metadata
+          and infers constraints (existing flow).
+        - ``need_clarification=False``: stores the verification text in
+          ``state.clarification_constraints`` for traceability and logs an
+          audit event, then proceeds to planning.
+        - Parse failure (after 3 retries): treats as "no clarification
+          needed" — safe default matching existing behavior.
 
         Args:
             state: Current research state
@@ -88,7 +184,7 @@ class ClarificationPhaseMixin:
 
         self._check_cancellation(state)
 
-        call_result = await execute_llm_call(
+        call_result = await execute_structured_llm_call(
             workflow=self,
             state=state,
             phase_name="clarification",
@@ -98,22 +194,51 @@ class ClarificationPhaseMixin:
             model=None,
             temperature=0.3,  # Low temperature for analytical assessment
             timeout=timeout,
+            parse_fn=_strict_parse_clarification,
+            role="clarification",
         )
+
+        # LLM-level error — propagate immediately
         if isinstance(call_result, WorkflowResult):
-            return call_result  # Error path
+            return call_result
+
         result = call_result.result
 
-        parsed = self._parse_clarification_response(result.content)
+        # Determine the clarification decision
+        if call_result.parsed is not None:
+            decision: ClarificationDecision = call_result.parsed
+        else:
+            # Parse exhausted — use lenient fallback on the last response
+            decision = parse_clarification_decision(result.content or "")
 
-        if parsed["needs_clarification"]:
-            state.clarification_constraints = parsed.get("inferred_constraints", {})
-            state.metadata["clarification_questions"] = parsed.get("questions", [])
+        if decision.need_clarification:
+            # Store question for transparency; infer constraints from existing
+            # parsing for backward compatibility
+            state.metadata["clarification_questions"] = [decision.question] if decision.question else []
+            # Extract inferred_constraints (if present) for the planning phase
+            state.clarification_constraints = _extract_inferred_constraints(result.content)
             logger.info(
-                "Clarification phase: query needs refinement, inferred %d constraints",
-                len(state.clarification_constraints),
+                "Clarification phase: query needs refinement, question=%s",
+                decision.question[:100] if decision.question else "(none)",
             )
         else:
-            logger.info("Clarification phase: query is specific enough, no constraints needed")
+            # Store verification as a constraint for traceability
+            if decision.verification:
+                state.clarification_constraints = {
+                    "verification": decision.verification,
+                }
+            logger.info(
+                "Clarification phase: query understood, verification=%s",
+                decision.verification[:100] if decision.verification else "(none)",
+            )
+            self._write_audit_event(
+                state,
+                "clarification_verification",
+                data={
+                    "verification": decision.verification,
+                    "task_id": state.id,
+                },
+            )
 
         self.memory.save_deep_research(state)
         self._write_audit_event(
@@ -124,9 +249,10 @@ class ClarificationPhaseMixin:
                 "model_used": result.model_used,
                 "tokens_used": result.tokens_used,
                 "duration_ms": result.duration_ms,
-                "needs_clarification": parsed["needs_clarification"],
-                "questions": parsed.get("questions", []),
-                "inferred_constraints": parsed.get("inferred_constraints", {}),
+                "need_clarification": decision.need_clarification,
+                "question": decision.question,
+                "verification": decision.verification,
+                "parse_retries": call_result.parse_retries,
             },
         )
 
@@ -141,53 +267,37 @@ class ClarificationPhaseMixin:
             duration_ms=result.duration_ms,
             metadata={
                 "research_id": state.id,
-                "needs_clarification": parsed["needs_clarification"],
+                "need_clarification": decision.need_clarification,
                 "constraints_count": len(state.clarification_constraints),
+                "parse_retries": call_result.parse_retries,
             },
         )
 
     def _build_clarification_system_prompt(self) -> str:
-        """Build system prompt for query clarification assessment.
+        """Build system prompt for structured clarification decision.
 
         Returns:
-            System prompt string
+            System prompt string requesting JSON with the
+            ``{need_clarification, question, verification}`` schema.
         """
         return """You are a research query analyst. Your task is to evaluate whether a research query is specific enough for focused, high-quality research.
 
-Analyze the query and respond with valid JSON in this exact structure:
+Make a binary decision and respond with valid JSON in this exact structure:
 {
-    "needs_clarification": true/false,
-    "questions": [
-        "Clarifying question 1?",
-        "Clarifying question 2?"
-    ],
-    "inferred_constraints": {
-        "scope": "description of inferred scope",
-        "timeframe": "description of inferred timeframe (if relevant)",
-        "domain": "specific domain or field to focus on",
-        "depth": "overview | detailed | comprehensive",
-        "geographic_focus": "region or 'global' (if relevant)"
-    }
+    "need_clarification": true/false,
+    "question": "A single clarifying question if clarification is needed, otherwise empty string",
+    "verification": "Your restatement of how you understand the query and what you will research"
 }
 
 Rules:
-- Set "needs_clarification" to true if the query is vague, overly broad, or ambiguous
-- Set "needs_clarification" to false if the query is already specific and actionable
-- Generate 1-3 clarifying questions that would most improve research focus
-- ALWAYS provide "inferred_constraints" with your best inference of what the user likely wants
-- Only include constraint keys that are relevant (omit irrelevant ones)
-- The constraints should narrow the research to produce focused, useful results
-- Be practical: infer the most likely intent rather than asking about edge cases
+- Set "need_clarification" to true ONLY if the query is genuinely vague, overly broad, or ambiguous. Unnecessary clarification adds latency and user friction — the user has to respond before research begins. Err toward proceeding when a reasonable interpretation exists.
+- Set "need_clarification" to false if the query is specific enough for focused research
+- When "need_clarification" is true: provide the single most important clarifying question in "question"
+- When "need_clarification" is false: provide your understanding of the query in "verification" — restate what you believe the user wants researched, including scope, domain, and focus
+- ALWAYS provide "verification" regardless of the decision. Verification serves as an audit trail and catches misunderstandings early — if your interpretation diverges from the user's intent, this makes it visible before a full research cycle is wasted.
 
-Examples of vague queries needing clarification:
-- "How does AI work?" → Too broad, needs scope (ML? generative AI? robotics?)
-- "What's the best database?" → Missing context (use case, scale, budget)
-- "Tell me about climate change" → Needs focus (causes? solutions? policy? economics?)
-
-Examples of specific queries NOT needing clarification:
-- "Compare PostgreSQL vs MySQL for high-write OLTP workloads in 2024"
-- "What are the current FDA regulations for AI-based medical devices?"
-- "How does the Rust borrow checker prevent data races?"
+Example — needs clarification: "What's the best database?" → Missing context (use case, scale, budget)
+Example — does NOT need clarification: "Compare PostgreSQL vs MySQL for high-write OLTP workloads in 2024"
 
 IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
@@ -200,55 +310,9 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         Returns:
             User prompt string
         """
-        prompt = f"Research Query: {state.original_query}"
+        prompt = f"Research Query: {sanitize_external_content(state.original_query)}"
 
         if state.system_prompt:
-            prompt += f"\n\nAdditional context provided by user: {state.system_prompt}"
+            prompt += f"\n\nAdditional context provided by user: {sanitize_external_content(state.system_prompt)}"
 
         return prompt
-
-    def _parse_clarification_response(self, content: str) -> dict[str, Any]:
-        """Parse LLM response into structured clarification data.
-
-        Args:
-            content: Raw LLM response content
-
-        Returns:
-            Dict with 'needs_clarification', 'questions', and 'inferred_constraints'
-        """
-        result: dict[str, Any] = {
-            "needs_clarification": False,
-            "questions": [],
-            "inferred_constraints": {},
-        }
-
-        if not content:
-            return result
-
-        json_str = extract_json(content)
-        if not json_str:
-            logger.warning("No JSON found in clarification response")
-            return result
-
-        try:
-            data = json.loads(json_str)
-        except json.JSONDecodeError as e:
-            logger.error("Failed to parse JSON from clarification response: %s", e)
-            return result
-
-        result["needs_clarification"] = bool(data.get("needs_clarification", False))
-
-        questions = data.get("questions", [])
-        if isinstance(questions, list):
-            result["questions"] = [str(q) for q in questions[:3] if q]
-
-        constraints = data.get("inferred_constraints", {})
-        if isinstance(constraints, dict):
-            # Only keep string-valued constraints, filter empty values
-            result["inferred_constraints"] = {
-                k: (str(v).lower() if isinstance(v, bool) else str(v))
-                for k, v in constraints.items()
-                if v is not None and v != "" and isinstance(v, (str, int, float, bool))
-            }
-
-        return result

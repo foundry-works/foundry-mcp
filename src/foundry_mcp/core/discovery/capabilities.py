@@ -109,6 +109,35 @@ def get_capabilities() -> Dict[str, Any]:
                     "responses and capability payloads report currently enabled state."
                 ),
             },
+            "deep_research": {
+                "model_roles": {
+                    "research": {
+                        "description": "Main reasoning for analysis, planning, clarification (strongest model)",
+                        "phases": ["analysis", "planning", "clarification"],
+                    },
+                    "report": {
+                        "description": "Final synthesis and report generation",
+                        "phases": ["synthesis"],
+                    },
+                    "reflection": {
+                        "description": "Supervisor-level reflection after gathering",
+                        "phases": ["reflection"],
+                    },
+                    "topic_reflection": {
+                        "description": "Per-topic ReAct reflection (falls back to reflection role)",
+                        "phases": ["topic_reflection"],
+                    },
+                    "summarization": {
+                        "description": "Fetch-time source summarization (cheapest model)",
+                        "phases": ["summarization"],
+                    },
+                    "compression": {
+                        "description": "Per-topic finding compression before aggregation",
+                        "phases": ["compression"],
+                    },
+                },
+                "model_role_config_prefix": "deep_research_{role}_provider / deep_research_{role}_model",
+            },
         },
         "server_version": "1.0.0",
         "api_version": "2024-11-01",

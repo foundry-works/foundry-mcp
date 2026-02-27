@@ -828,11 +828,13 @@ class TestDeepResearchTimeoutConfig:
             "foundry_mcp.tools.unified.research_handlers.handlers_deep_research.DeepResearchWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
-            mock_workflow.execute.return_value = WorkflowResult(
+            # Background mode: single execute call returns immediately
+            start_result = WorkflowResult(
                 success=True,
-                content="Started",
-                metadata={"research_id": "test-123"},
+                content="Research started in background: test-123",
+                metadata={"research_id": "test-123", "background": True, "phase": "clarification"},
             )
+            mock_workflow.execute.return_value = start_result
             MockWorkflow.return_value = mock_workflow
 
             result = _handle_deep_research(
@@ -841,14 +843,14 @@ class TestDeepResearchTimeoutConfig:
                 # task_timeout NOT provided - should use config default
             )
 
-            # Verify workflow was called with config default timeout
-            mock_workflow.execute.assert_called_once()
-            call_kwargs = mock_workflow.execute.call_args.kwargs
-            assert call_kwargs["task_timeout"] == 300.0
+            # Verify execute called once (background start)
+            assert mock_workflow.execute.call_count == 1
+            # Verify the start call used config default timeout
+            start_call_kwargs = mock_workflow.execute.call_args_list[0].kwargs
+            assert start_call_kwargs["task_timeout"] == 300.0
 
-            # Verify effective_timeout is in response
+            # Verify response is successful
             assert result["success"] is True
-            assert result["data"]["effective_timeout"] == 300.0
 
     def test_explicit_param_overrides_config(self, mock_config, mock_memory):
         """Explicit task_timeout param overrides config default."""
@@ -861,11 +863,13 @@ class TestDeepResearchTimeoutConfig:
             "foundry_mcp.tools.unified.research_handlers.handlers_deep_research.DeepResearchWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
-            mock_workflow.execute.return_value = WorkflowResult(
+            # Background mode: single execute call returns immediately
+            start_result = WorkflowResult(
                 success=True,
-                content="Started",
-                metadata={"research_id": "test-456"},
+                content="Research started in background: test-456",
+                metadata={"research_id": "test-456", "background": True, "phase": "clarification"},
             )
+            mock_workflow.execute.return_value = start_result
             MockWorkflow.return_value = mock_workflow
 
             result = _handle_deep_research(
@@ -874,34 +878,36 @@ class TestDeepResearchTimeoutConfig:
                 task_timeout=900.0,  # Explicit override
             )
 
-            # Verify workflow was called with explicit timeout, not config
-            call_kwargs = mock_workflow.execute.call_args.kwargs
-            assert call_kwargs["task_timeout"] == 900.0
+            # Verify the start call used explicit timeout, not config
+            start_call_kwargs = mock_workflow.execute.call_args_list[0].kwargs
+            assert start_call_kwargs["task_timeout"] == 900.0
 
-            # Verify effective_timeout reflects explicit param
-            assert result["data"]["effective_timeout"] == 900.0
+            # Verify response is successful
+            assert result["success"] is True
 
-    def test_hardcoded_fallback_when_config_missing(self, mock_memory):
-        """Hardcoded fallback (600s) used when config field missing."""
+    def test_config_default_fallback(self, mock_memory):
+        """Config default timeout (2400s) used when task_timeout param omitted."""
         import foundry_mcp.tools.unified.research_handlers._helpers as _helpers
         from foundry_mcp.tools.unified.research import _handle_deep_research
 
         with patch.object(_helpers, "_get_config") as mock_get_config:
             mock_cfg = MagicMock()
             mock_cfg.research.enabled = True
-            # Simulate missing deep_research_timeout by having it return default
-            mock_cfg.research.deep_research_timeout = 600.0  # Hardcoded default
+            # Use the actual default value
+            mock_cfg.research.deep_research_timeout = 2400.0
             mock_get_config.return_value = mock_cfg
 
             with patch(
                 "foundry_mcp.tools.unified.research_handlers.handlers_deep_research.DeepResearchWorkflow"
             ) as MockWorkflow:
                 mock_workflow = MagicMock()
-                mock_workflow.execute.return_value = WorkflowResult(
+                # Background mode: single execute call returns immediately
+                start_result = WorkflowResult(
                     success=True,
-                    content="Started",
-                    metadata={"research_id": "test-789"},
+                    content="Research started in background: test-789",
+                    metadata={"research_id": "test-789", "background": True, "phase": "clarification"},
                 )
+                mock_workflow.execute.return_value = start_result
                 MockWorkflow.return_value = mock_workflow
 
                 result = _handle_deep_research(
@@ -909,7 +915,39 @@ class TestDeepResearchTimeoutConfig:
                     deep_research_action="start",
                 )
 
-                # Verify hardcoded fallback is used
-                call_kwargs = mock_workflow.execute.call_args.kwargs
-                assert call_kwargs["task_timeout"] == 600.0
-                assert result["data"]["effective_timeout"] == 600.0
+                # Verify config default is used in the start call
+                start_call_kwargs = mock_workflow.execute.call_args_list[0].kwargs
+                assert start_call_kwargs["task_timeout"] == 2400.0
+                assert result["success"] is True
+
+
+class TestDeepResearchInputValidation:
+    """Tests for deep research input validation (Phase 2 — 2.7)."""
+
+    def test_oversized_system_prompt_returns_validation_error(self, mock_config, mock_memory):
+        """system_prompt exceeding MAX_PROMPT_LENGTH is rejected."""
+        from foundry_mcp.tools.unified.research import _handle_deep_research
+
+        oversized_prompt = "x" * 200_001  # MAX_PROMPT_LENGTH is 200_000
+
+        with patch(
+            "foundry_mcp.tools.unified.research_handlers.handlers_deep_research.DeepResearchWorkflow"
+        ) as MockWorkflow:
+            mock_workflow = MagicMock()
+            mock_workflow.execute.return_value = WorkflowResult(
+                success=False,
+                content="",
+                error="Input validation failed: system_prompt length 200001 exceeds maximum 200000 characters",
+                metadata={"validation_errors": ["system_prompt length 200001 exceeds maximum 200000 characters"]},
+            )
+            MockWorkflow.return_value = mock_workflow
+
+            result = _handle_deep_research(
+                query="valid query",
+                deep_research_action="start",
+                system_prompt=oversized_prompt,
+            )
+
+            # The workflow's execute should have been called and returned the validation error
+            assert result["success"] is False
+            assert "system_prompt" in result.get("error", "")

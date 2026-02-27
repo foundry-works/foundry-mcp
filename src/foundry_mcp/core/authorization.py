@@ -70,18 +70,29 @@ AUTONOMY_RUNNER_ALLOWLIST: FrozenSet[str] = frozenset(
         "spec-find",
         # Runtime capability preflight
         "server-capabilities",
-        # Session lifecycle
+        # Session lifecycle (both bare and task-prefixed forms, since session
+        # actions dispatched via the task tool normalize to "task-session-*")
         "session-start",
         "session-resume",
         "session-heartbeat",
         "session-rebase",
         "session-list",
         "session-status",
-        # Session-step actions
+        "task-session-start",
+        "task-session-resume",
+        "task-session-heartbeat",
+        "task-session-rebase",
+        "task-session-list",
+        "task-session-status",
+        # Session-step actions (bare and task-prefixed)
         "session-step-next",
         "session-step-report",
         "session-step-replay",
         "session-step-heartbeat",
+        "task-session-step-next",
+        "task-session-step-report",
+        "task-session-step-replay",
+        "task-session-step-heartbeat",
         # Fidelity gate
         "review-fidelity-gate",
         # Verification execution (required for proof-carrying receipts)
@@ -89,6 +100,8 @@ AUTONOMY_RUNNER_ALLOWLIST: FrozenSet[str] = frozenset(
         # Read-only task context (used by step handlers for scope understanding)
         "prepare",
         "task-prepare",
+        # Research evaluation (read-only analysis for quality gates)
+        "deep-research-evaluate",
     }
 )
 
@@ -117,10 +130,13 @@ OBSERVER_ALLOWLIST: FrozenSet[str] = frozenset(
         "task-info",
         "task-query",
         "task-prepare",
-        # Read-only session actions
+        # Read-only session actions (bare and task-prefixed forms)
         "session-status",
         "session-events",
         "session-list",
+        "task-session-status",
+        "task-session-events",
+        "task-session-list",
         # Read-only spec actions
         "spec-list",
         "spec-info",
@@ -134,6 +150,8 @@ OBSERVER_ALLOWLIST: FrozenSet[str] = frozenset(
         "server-info",
         # Read-only review actions
         "review-status",
+        # Read-only research evaluation
+        "deep-research-evaluate",
     }
 )
 
@@ -312,11 +330,13 @@ def check_action_allowed(
             configured_role=role,
         )
 
+    # raw_action is always needed for denial logging below, define before branch.
+    raw_action = (action or "").lower()
+
     # Check raw action name as fallback, but ONLY when no tool_name is provided.
     # When tool_name is present, only the normalized "tool-action" form is checked
     # to prevent generic action names like "list" or "get" from matching any tool.
     if not tool_name:
-        raw_action = (action or "").lower()
         if raw_action in allowlist:
             return AuthzResult(
                 allowed=True,

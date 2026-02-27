@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import logging
 import os
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Tuple
 
 from foundry_mcp.config.parsing import _parse_bool, _parse_provider_spec
 
@@ -23,6 +24,10 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ResearchConfig:
     """Configuration for research workflows (CHAT, CONSENSUS, THINKDEEP, IDEATE, DEEP_RESEARCH).
+
+    **Cost-tiered model routing:** High-volume roles (summarization, compression)
+    automatically use a cheap model (``gemini-2.5-flash``) when no explicit model
+    is configured.  See ``_COST_TIER_MODEL_DEFAULTS`` and the deep-research guide.
 
     Attributes:
         enabled: Master switch for research tools
@@ -37,7 +42,7 @@ class ResearchConfig:
         deep_research_max_sub_queries: Maximum sub-queries for query decomposition
         deep_research_max_sources: Maximum sources per sub-query
         deep_research_follow_links: Whether to follow and extract content from links
-        deep_research_timeout: Default timeout per operation in seconds
+        deep_research_timeout: Default wall-clock timeout for the entire deep research workflow in seconds (see also deep_research_planning_timeout, deep_research_synthesis_timeout for per-phase overrides)
         deep_research_max_concurrent: Maximum concurrent operations
         deep_research_providers: Ordered list of search providers for deep research
         deep_research_audit_artifacts: Whether to write per-run audit artifacts
@@ -90,42 +95,115 @@ class ResearchConfig:
     deep_research_allow_clarification: bool = True
     deep_research_clarification_provider: Optional[str] = None  # Uses default_provider if not set
 
-    # Deep research LLM-driven supervisor reflection
-    deep_research_enable_reflection: bool = True  # Master switch for LLM reflection at phase boundaries
-    deep_research_reflection_provider: Optional[str] = None  # Uses default_provider if not set
-    deep_research_reflection_timeout: float = 60.0  # Timeout per reflection call (seconds)
+    # Deep research brief phase (query enrichment before planning)
+    deep_research_brief_provider: Optional[str] = None  # Uses research-tier if not set
+    deep_research_brief_model: Optional[str] = None  # Uses research-tier model if not set
 
-    # Deep research contradiction detection in analysis phase
-    deep_research_enable_contradiction_detection: bool = True  # LLM-based contradiction detection between findings
+    # Deep research LLM-driven supervisor reflection
+    deep_research_reflection_provider: Optional[str] = None  # Uses default_provider if not set
+
+    # Deep research iterative supervision (coverage gap assessment between gathering rounds)
+    deep_research_enable_supervision: bool = True  # Master switch for iterative supervision loop
+    deep_research_max_supervision_rounds: int = 6  # Max assess-delegate rounds per iteration
+    deep_research_supervision_min_sources_per_query: int = 2  # Minimum sources for "sufficient" coverage
+    deep_research_coverage_confidence_threshold: float = 0.75  # Confidence score above which coverage is "sufficient"
+    deep_research_coverage_confidence_weights: Optional[dict] = (
+        None  # Dimension weights: {source_adequacy, domain_diversity, query_completion_rate}
+    )
+    deep_research_supervision_wall_clock_timeout: float = (
+        1800.0  # Max wall-clock seconds for entire supervision phase (default 30 min)
+    )
+
+    # Supervision LLM provider/model (uses reflection fallback if not set)
+    deep_research_supervision_provider: Optional[str] = None
+    deep_research_supervision_model: Optional[str] = None
+
+    # Supervisor delegation configuration
+    deep_research_max_concurrent_research_units: int = 5  # Max parallel researchers per delegation round
+    deep_research_delegation_provider: Optional[str] = (
+        None  # LLM provider for delegation prompt (uses supervision fallback)
+    )
+    deep_research_delegation_model_name: Optional[str] = None  # Model override for delegation prompt
+
+    # Deep research planning critique (self-assessment of sub-query decomposition)
+    deep_research_enable_planning_critique: bool = True  # Enable LLM self-critique of planning decomposition
 
     # Deep research parallel topic researcher agents
-    deep_research_enable_topic_agents: bool = True  # Master switch for per-topic ReAct loops in gathering
-    deep_research_topic_max_searches: int = 3  # Max search iterations per topic (ReAct loop limit)
+    deep_research_topic_max_tool_calls: int = 10  # Max tool calls (search + extract) per topic (ReAct loop limit)
     deep_research_topic_reflection_provider: Optional[str] = None  # Uses default_provider if not set
+    deep_research_enable_content_dedup: bool = True  # Cross-researcher content-similarity deduplication
+    deep_research_content_dedup_threshold: float = 0.8  # Jaccard similarity threshold for content dedup
+
+    # Per-topic URL extraction during gathering (Phase 3 PLAN)
+    deep_research_enable_extract: bool = True  # Allow researchers to extract full content from promising URLs
+    deep_research_extract_max_per_iteration: int = 2  # Max URLs to extract per ReAct iteration
+
+    # Fetch-time source summarization
+    deep_research_summarization_provider: Optional[str] = (
+        None  # LLM provider for fetch-time summarization (cheapest available)
+    )
+    deep_research_summarization_model: Optional[str] = None  # Model override for fetch-time summarization
+    deep_research_max_content_length: int = (
+        50000  # Max chars per source before L1 summarization (matches open_deep_research)
+    )
+    deep_research_summarization_timeout: int = 60  # Per-result summarization timeout in seconds
+    deep_research_summarization_min_content_length: int = (
+        300  # Min chars to trigger per-result summarization (shorter content kept as-is)
+    )
+
+    # Inline per-topic compression during gathering
+    deep_research_inline_compression: bool = (
+        True  # Compress each topic's findings immediately after its ReAct loop (before supervision)
+    )
+
+    # Per-topic compression before aggregation
+    deep_research_compression_provider: Optional[str] = (
+        None  # LLM provider for per-topic compression (defaults to research/default provider)
+    )
+    deep_research_compression_model: Optional[str] = None  # Model override for per-topic compression
+    deep_research_compression_max_content_length: int = (
+        50000  # Max chars per source in compression prompt (matches open_deep_research)
+    )
+
+    # Research quality evaluation (LLM-as-judge)
+    deep_research_evaluation_provider: Optional[str] = (
+        None  # LLM provider for evaluation (uses research-tier if not set)
+    )
+    deep_research_evaluation_model: Optional[str] = None  # Model override for evaluation
+    deep_research_evaluation_timeout: float = 360.0  # Timeout for evaluation LLM call (seconds)
+    deep_research_reflection_timeout: float = 60.0  # Timeout per reflection call in seconds
+
+    # Multi-model cost optimization — role-based model hierarchy (Phase 6)
+    # "research" role: main reasoning for analysis, planning, clarification (strongest available)
+    deep_research_research_provider: Optional[str] = None
+    deep_research_research_model: Optional[str] = None
+    # "reflection" role: think-tool pauses (model override — provider already exists above)
+    deep_research_reflection_model: Optional[str] = None
+    # "topic_reflection" role: per-topic ReAct reflection (model override — provider already exists above)
+    deep_research_topic_reflection_model: Optional[str] = None
+    # "report" role: final synthesis / report generation
+    deep_research_report_provider: Optional[str] = None
+    deep_research_report_model: Optional[str] = None
+    # "clarification" role: structured clarification gate (model override — provider already exists above)
+    deep_research_clarification_model: Optional[str] = None
 
     # Deep research configuration
     deep_research_max_iterations: int = 3
     deep_research_max_sub_queries: int = 5
     deep_research_max_sources: int = 5
     deep_research_follow_links: bool = True
-    deep_research_timeout: float = 600.0  # Whole workflow timeout
+    deep_research_timeout: float = 2400.0  # Wall-clock timeout for the entire deep research workflow (must exceed supervision_wall_clock_timeout + per-phase timeouts; see deep_research_planning_timeout / deep_research_synthesis_timeout for per-phase overrides)
     deep_research_max_concurrent: int = 3
     # Per-phase timeout overrides (seconds) - uses deep_research_timeout if not set
     deep_research_planning_timeout: float = 360.0
-    deep_research_analysis_timeout: float = 360.0
     deep_research_synthesis_timeout: float = 600.0  # Synthesis may take longer
-    deep_research_refinement_timeout: float = 360.0
     # Per-phase provider overrides - uses default_provider if not set
     deep_research_planning_provider: Optional[str] = None
-    deep_research_analysis_provider: Optional[str] = None
     deep_research_synthesis_provider: Optional[str] = None
-    deep_research_refinement_provider: Optional[str] = None
     # Per-phase fallback provider lists (for retry/fallback on failure)
     # On failure, tries next provider in the list until success or exhaustion
     deep_research_planning_providers: List[str] = field(default_factory=list)
-    deep_research_analysis_providers: List[str] = field(default_factory=list)
     deep_research_synthesis_providers: List[str] = field(default_factory=list)
-    deep_research_refinement_providers: List[str] = field(default_factory=list)
     # Retry settings for deep research phases
     deep_research_max_retries: int = 2  # Retry attempts per provider
     deep_research_retry_delay: float = 5.0  # Seconds between retries
@@ -141,7 +219,7 @@ class ResearchConfig:
             "tavily": 60,  # Tavily free tier: ~1 req/sec
             "perplexity": 60,  # Perplexity: ~1 req/sec (pricing: $5/1k requests)
             "google": 100,  # Google CSE: 100 queries/day free, ~100/min paid
-            "semantic_scholar": 100,  # Semantic Scholar: 100 req/5min unauthenticated
+            "semantic_scholar": 20,  # Semantic Scholar: ~20 req/min (100 req/5min unauthenticated)
         }
     )
     # Search provider API keys (all optional, read from env vars if not set)
@@ -181,9 +259,6 @@ class ResearchConfig:
     # Tavily extract configuration
     tavily_extract_depth: str = "basic"  # "basic", "advanced"
     tavily_extract_include_images: bool = False
-    # Tavily extract integration with deep research
-    tavily_extract_in_deep_research: bool = False  # Enable extract as follow-up step
-    tavily_extract_max_urls: int = 5  # Max URLs to extract per deep research run
 
     # Perplexity search configuration
     perplexity_search_context_size: str = "medium"  # "low", "medium", "high"
@@ -208,7 +283,6 @@ class ResearchConfig:
     audit_verbosity: str = "full"  # "full" or "minimal" - controls JSONL audit payload size
 
     # Document digest configuration (for large content compression in deep research)
-    deep_research_digest_policy: str = "auto"  # "off", "auto", "always", "proactive"
     deep_research_digest_min_chars: int = 10000  # Minimum chars before digest is applied
     deep_research_digest_max_sources: int = 8  # Max sources to digest per batch
     deep_research_digest_timeout: float = 120.0  # Timeout per digest operation (seconds)
@@ -219,9 +293,51 @@ class ResearchConfig:
     deep_research_digest_fetch_pdfs: bool = False  # Whether to fetch and extract PDF content
     deep_research_archive_content: bool = False  # Archive canonical text for digested sources
     deep_research_archive_retention_days: int = 30  # Days to retain archived digest content (0 = keep indefinitely)
-    # Digest LLM provider configuration (uses analysis provider if not set)
+    # Digest LLM provider configuration (uses default provider if not set)
     deep_research_digest_provider: Optional[str] = None  # Primary provider for digest
     deep_research_digest_providers: List[str] = field(default_factory=list)  # Fallback providers
+
+    #: Fields removed from ResearchConfig that should produce deprecation
+    #: warnings when encountered in user TOML configs.  Maps old field name
+    #: to a short migration hint shown in the warning message.
+    _DEPRECATED_FIELDS: ClassVar[Dict[str, str]] = {
+        "deep_research_enable_reflection": ("Reflection is now always-on in the supervision loop."),
+        "deep_research_enable_contradiction_detection": (
+            "Contradiction detection has been folded into the supervision phase."
+        ),
+        "deep_research_enable_topic_agents": ("Per-topic ReAct research agents are now always enabled."),
+        "deep_research_analysis_timeout": (
+            "Analysis/refinement phases have been restructured; "
+            "use deep_research_planning_timeout or deep_research_synthesis_timeout instead."
+        ),
+        "deep_research_refinement_timeout": (
+            "Analysis/refinement phases have been restructured; "
+            "use deep_research_planning_timeout or deep_research_synthesis_timeout instead."
+        ),
+        "deep_research_analysis_provider": (
+            "Analysis/refinement phases have been restructured; "
+            "use deep_research_planning_provider or deep_research_synthesis_provider instead."
+        ),
+        "deep_research_refinement_provider": (
+            "Analysis/refinement phases have been restructured; "
+            "use deep_research_planning_provider or deep_research_synthesis_provider instead."
+        ),
+        "deep_research_analysis_providers": (
+            "Analysis/refinement phases have been restructured; "
+            "use deep_research_planning_providers or deep_research_synthesis_providers instead."
+        ),
+        "deep_research_refinement_providers": (
+            "Analysis/refinement phases have been restructured; "
+            "use deep_research_planning_providers or deep_research_synthesis_providers instead."
+        ),
+        "tavily_extract_in_deep_research": (
+            "URL extraction is now per-topic; use deep_research_enable_extract instead."
+        ),
+        "tavily_extract_max_urls": (
+            "URL extraction is now per-topic; use deep_research_extract_max_per_iteration instead."
+        ),
+        "deep_research_digest_policy": ("Digest policy has been removed; digestion is now handled automatically."),
+    }
 
     @classmethod
     def from_toml_dict(cls, data: Dict[str, Any]) -> "ResearchConfig":
@@ -233,6 +349,15 @@ class ResearchConfig:
         Returns:
             ResearchConfig instance
         """
+        # Warn about deprecated fields present in the input data
+        for field_name, hint in cls._DEPRECATED_FIELDS.items():
+            if field_name in data:
+                warnings.warn(
+                    f"Config field '{field_name}' has been removed and will be ignored. {hint}",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+
         # Parse consensus_providers - handle both string and list
         consensus_providers = data.get("consensus_providers", ["gemini", "claude"])
         if isinstance(consensus_providers, str):
@@ -256,9 +381,7 @@ class ResearchConfig:
             return list(val) if val else []
 
         deep_research_planning_providers = _parse_provider_list("deep_research_planning_providers")
-        deep_research_analysis_providers = _parse_provider_list("deep_research_analysis_providers")
         deep_research_synthesis_providers = _parse_provider_list("deep_research_synthesis_providers")
-        deep_research_refinement_providers = _parse_provider_list("deep_research_refinement_providers")
 
         # Parse per_provider_rate_limits - handle dict from TOML
         per_provider_rate_limits = data.get(
@@ -267,7 +390,7 @@ class ResearchConfig:
                 "tavily": 60,
                 "perplexity": 60,
                 "google": 100,
-                "semantic_scholar": 100,
+                "semantic_scholar": 20,  # ~20 req/min unauthenticated
             },
         )
         if isinstance(per_provider_rate_limits, dict):
@@ -286,40 +409,92 @@ class ResearchConfig:
             # Deep research clarification phase
             deep_research_allow_clarification=_parse_bool(data.get("deep_research_allow_clarification", True)),
             deep_research_clarification_provider=data.get("deep_research_clarification_provider"),
+            # Deep research brief phase (query enrichment)
+            deep_research_brief_provider=data.get("deep_research_brief_provider"),
+            deep_research_brief_model=data.get("deep_research_brief_model"),
             # Deep research LLM-driven reflection
-            deep_research_enable_reflection=_parse_bool(data.get("deep_research_enable_reflection", True)),
             deep_research_reflection_provider=data.get("deep_research_reflection_provider"),
-            deep_research_reflection_timeout=float(data.get("deep_research_reflection_timeout", 60.0)),
-            # Deep research contradiction detection
-            deep_research_enable_contradiction_detection=_parse_bool(
-                data.get("deep_research_enable_contradiction_detection", True)
+            # Deep research iterative supervision
+            deep_research_enable_supervision=_parse_bool(data.get("deep_research_enable_supervision", True)),
+            deep_research_max_supervision_rounds=int(data.get("deep_research_max_supervision_rounds", 6)),
+            deep_research_supervision_min_sources_per_query=int(
+                data.get("deep_research_supervision_min_sources_per_query", 2)
+            ),
+            deep_research_coverage_confidence_threshold=float(
+                data.get("deep_research_coverage_confidence_threshold", 0.75)
+            ),
+            deep_research_coverage_confidence_weights=data.get("deep_research_coverage_confidence_weights"),
+            deep_research_supervision_wall_clock_timeout=float(
+                data.get("deep_research_supervision_wall_clock_timeout", 1800.0)
+            ),
+            deep_research_supervision_provider=data.get("deep_research_supervision_provider"),
+            deep_research_supervision_model=data.get("deep_research_supervision_model"),
+            # Supervisor delegation configuration
+            deep_research_max_concurrent_research_units=int(data.get("deep_research_max_concurrent_research_units", 5)),
+            deep_research_delegation_provider=data.get("deep_research_delegation_provider"),
+            deep_research_delegation_model_name=data.get("deep_research_delegation_model_name"),
+            # Deep research planning critique
+            deep_research_enable_planning_critique=_parse_bool(
+                data.get("deep_research_enable_planning_critique", True)
             ),
             # Deep research parallel topic researcher agents
-            deep_research_enable_topic_agents=_parse_bool(data.get("deep_research_enable_topic_agents", True)),
-            deep_research_topic_max_searches=int(data.get("deep_research_topic_max_searches", 3)),
+            deep_research_topic_max_tool_calls=int(
+                data.get(
+                    "deep_research_topic_max_tool_calls",
+                    data.get("deep_research_topic_max_searches", 10),  # backward compat: accept old key
+                )
+            ),
             deep_research_topic_reflection_provider=data.get("deep_research_topic_reflection_provider"),
+            deep_research_enable_content_dedup=_parse_bool(data.get("deep_research_enable_content_dedup", True)),
+            deep_research_content_dedup_threshold=float(data.get("deep_research_content_dedup_threshold", 0.8)),
+            # Per-topic URL extraction during gathering
+            deep_research_enable_extract=_parse_bool(data.get("deep_research_enable_extract", True)),
+            deep_research_extract_max_per_iteration=int(data.get("deep_research_extract_max_per_iteration", 2)),
+            # Fetch-time source summarization
+            deep_research_summarization_provider=data.get("deep_research_summarization_provider"),
+            deep_research_summarization_model=data.get("deep_research_summarization_model"),
+            deep_research_max_content_length=int(data.get("deep_research_max_content_length", 50000)),
+            deep_research_summarization_timeout=int(data.get("deep_research_summarization_timeout", 60)),
+            deep_research_summarization_min_content_length=int(
+                data.get("deep_research_summarization_min_content_length", 300)
+            ),
+            # Inline per-topic compression during gathering
+            deep_research_inline_compression=_parse_bool(data.get("deep_research_inline_compression", True)),
+            # Per-topic compression
+            deep_research_compression_provider=data.get("deep_research_compression_provider"),
+            deep_research_compression_model=data.get("deep_research_compression_model"),
+            deep_research_compression_max_content_length=int(
+                data.get("deep_research_compression_max_content_length", 50000)
+            ),
+            # Research quality evaluation (LLM-as-judge)
+            deep_research_evaluation_provider=data.get("deep_research_evaluation_provider"),
+            deep_research_evaluation_model=data.get("deep_research_evaluation_model"),
+            deep_research_evaluation_timeout=float(data.get("deep_research_evaluation_timeout", 360.0)),
+            deep_research_reflection_timeout=float(data.get("deep_research_reflection_timeout", 60.0)),
+            # Multi-model cost optimization — role-based hierarchy (Phase 6)
+            deep_research_research_provider=data.get("deep_research_research_provider"),
+            deep_research_research_model=data.get("deep_research_research_model"),
+            deep_research_reflection_model=data.get("deep_research_reflection_model"),
+            deep_research_topic_reflection_model=data.get("deep_research_topic_reflection_model"),
+            deep_research_report_provider=data.get("deep_research_report_provider"),
+            deep_research_report_model=data.get("deep_research_report_model"),
+            deep_research_clarification_model=data.get("deep_research_clarification_model"),
             # Deep research configuration
             deep_research_max_iterations=int(data.get("deep_research_max_iterations", 3)),
             deep_research_max_sub_queries=int(data.get("deep_research_max_sub_queries", 5)),
             deep_research_max_sources=int(data.get("deep_research_max_sources", 5)),
             deep_research_follow_links=_parse_bool(data.get("deep_research_follow_links", True)),
-            deep_research_timeout=float(data.get("deep_research_timeout", 600.0)),
+            deep_research_timeout=float(data.get("deep_research_timeout", 2400.0)),
             deep_research_max_concurrent=int(data.get("deep_research_max_concurrent", 3)),
             # Per-phase timeout overrides (match class defaults)
             deep_research_planning_timeout=float(data.get("deep_research_planning_timeout", 360.0)),
-            deep_research_analysis_timeout=float(data.get("deep_research_analysis_timeout", 360.0)),
             deep_research_synthesis_timeout=float(data.get("deep_research_synthesis_timeout", 600.0)),
-            deep_research_refinement_timeout=float(data.get("deep_research_refinement_timeout", 360.0)),
             # Per-phase provider overrides
             deep_research_planning_provider=data.get("deep_research_planning_provider"),
-            deep_research_analysis_provider=data.get("deep_research_analysis_provider"),
             deep_research_synthesis_provider=data.get("deep_research_synthesis_provider"),
-            deep_research_refinement_provider=data.get("deep_research_refinement_provider"),
             # Per-phase fallback provider lists
             deep_research_planning_providers=deep_research_planning_providers,
-            deep_research_analysis_providers=deep_research_analysis_providers,
             deep_research_synthesis_providers=deep_research_synthesis_providers,
-            deep_research_refinement_providers=deep_research_refinement_providers,
             # Retry settings
             deep_research_max_retries=int(data.get("deep_research_max_retries", 2)),
             deep_research_retry_delay=float(data.get("deep_research_retry_delay", 5.0)),
@@ -348,9 +523,6 @@ class ResearchConfig:
             # Tavily extract configuration
             tavily_extract_depth=str(data.get("tavily_extract_depth", "basic")),
             tavily_extract_include_images=_parse_bool(data.get("tavily_extract_include_images", False)),
-            # Tavily extract in deep research
-            tavily_extract_in_deep_research=_parse_bool(data.get("tavily_extract_in_deep_research", False)),
-            tavily_extract_max_urls=int(data.get("tavily_extract_max_urls", 5)),
             # Perplexity search configuration
             perplexity_search_context_size=str(data.get("perplexity_search_context_size", "medium")),
             perplexity_max_tokens=int(data.get("perplexity_max_tokens", 50000)),
@@ -384,7 +556,6 @@ class ResearchConfig:
             # Audit verbosity
             audit_verbosity=str(data.get("audit_verbosity", "full")),
             # Document digest configuration
-            deep_research_digest_policy=str(data.get("deep_research_digest_policy", "auto")),
             deep_research_digest_min_chars=int(data.get("deep_research_digest_min_chars", 10000)),
             deep_research_digest_max_sources=int(data.get("deep_research_digest_max_sources", 8)),
             deep_research_digest_timeout=float(data.get("deep_research_digest_timeout", 120.0)),
@@ -400,16 +571,258 @@ class ResearchConfig:
         )
         config.tavily_search_depth_configured = "tavily_search_depth" in data
         config.tavily_chunks_per_source_configured = "tavily_chunks_per_source" in data
+
+        # Warn on unknown TOML keys (likely typos)
+        import dataclasses as _dc
+
+        known_keys = {f.name for f in _dc.fields(cls)} | set(cls._DEPRECATED_FIELDS)
+        # Backward-compat aliases that are also accepted
+        known_keys.add("deep_research_topic_max_searches")
+        unknown_keys = set(data.keys()) - known_keys
+        for key in sorted(unknown_keys):
+            logger.warning(
+                "Unknown config key '%s' in [research] section — check for typos",
+                key,
+            )
+
         return config
+
+    @property
+    def deep_research_topic_max_searches(self) -> int:
+        """Backward-compat alias for deep_research_topic_max_tool_calls.
+
+        .. deprecated:: Use ``deep_research_topic_max_tool_calls`` instead.
+        """
+        return self.deep_research_topic_max_tool_calls
+
+    @deep_research_topic_max_searches.setter
+    def deep_research_topic_max_searches(self, value: int) -> None:
+        self.deep_research_topic_max_tool_calls = value
+
+    _VALID_DEEP_RESEARCH_MODES: ClassVar[frozenset] = frozenset({"general", "academic", "technical"})
 
     def __post_init__(self) -> None:
         """Validate configuration fields after initialization."""
+        self._validate_deep_research_mode()
+        self._validate_deep_research_bounds()
+        self._validate_supervision_config()
         self._validate_tavily_config()
         self._validate_perplexity_config()
         self._validate_semantic_scholar_config()
         self._validate_status_persistence_config()
         self._validate_audit_verbosity_config()
         self._validate_digest_config()
+
+    def _validate_deep_research_mode(self) -> None:
+        """Validate deep_research_mode is one of the allowed values."""
+        if self.deep_research_mode not in self._VALID_DEEP_RESEARCH_MODES:
+            raise ValueError(
+                f"deep_research_mode must be one of "
+                f"{sorted(self._VALID_DEEP_RESEARCH_MODES)}, "
+                f"got {self.deep_research_mode!r}"
+            )
+
+    def _validate_deep_research_bounds(self) -> None:
+        """Validate deep research configuration bounds.
+
+        Clamps upper bounds with a warning; raises on invalid lower bounds.
+        """
+        # --- deep_research_max_iterations ---
+        if self.deep_research_max_iterations > self._MAX_DEEP_RESEARCH_ITERATIONS:
+            warnings.warn(
+                f"deep_research_max_iterations={self.deep_research_max_iterations} "
+                f"exceeds maximum ({self._MAX_DEEP_RESEARCH_ITERATIONS}); clamping.",
+                stacklevel=2,
+            )
+            self.deep_research_max_iterations = self._MAX_DEEP_RESEARCH_ITERATIONS
+        if self.deep_research_max_iterations < 1:
+            raise ValueError(
+                f"Invalid deep_research_max_iterations: {self.deep_research_max_iterations!r}. Must be >= 1."
+            )
+
+        # --- deep_research_max_sub_queries ---
+        if self.deep_research_max_sub_queries > self._MAX_DEEP_RESEARCH_SUB_QUERIES:
+            warnings.warn(
+                f"deep_research_max_sub_queries={self.deep_research_max_sub_queries} "
+                f"exceeds maximum ({self._MAX_DEEP_RESEARCH_SUB_QUERIES}); clamping.",
+                stacklevel=2,
+            )
+            self.deep_research_max_sub_queries = self._MAX_DEEP_RESEARCH_SUB_QUERIES
+        if self.deep_research_max_sub_queries < 1:
+            raise ValueError(
+                f"Invalid deep_research_max_sub_queries: {self.deep_research_max_sub_queries!r}. Must be >= 1."
+            )
+
+        # --- deep_research_max_sources ---
+        if self.deep_research_max_sources > self._MAX_DEEP_RESEARCH_SOURCES:
+            warnings.warn(
+                f"deep_research_max_sources={self.deep_research_max_sources} "
+                f"exceeds maximum ({self._MAX_DEEP_RESEARCH_SOURCES}); clamping.",
+                stacklevel=2,
+            )
+            self.deep_research_max_sources = self._MAX_DEEP_RESEARCH_SOURCES
+        if self.deep_research_max_sources < 1:
+            raise ValueError(f"Invalid deep_research_max_sources: {self.deep_research_max_sources!r}. Must be >= 1.")
+
+        # --- deep_research_max_concurrent ---
+        if self.deep_research_max_concurrent > self._MAX_DEEP_RESEARCH_CONCURRENT:
+            warnings.warn(
+                f"deep_research_max_concurrent={self.deep_research_max_concurrent} "
+                f"exceeds maximum ({self._MAX_DEEP_RESEARCH_CONCURRENT}); clamping.",
+                stacklevel=2,
+            )
+            self.deep_research_max_concurrent = self._MAX_DEEP_RESEARCH_CONCURRENT
+        if self.deep_research_max_concurrent < 1:
+            raise ValueError(
+                f"Invalid deep_research_max_concurrent: {self.deep_research_max_concurrent!r}. Must be >= 1."
+            )
+
+        # --- default_timeout ---
+        if self.default_timeout > self._MAX_DEFAULT_TIMEOUT:
+            warnings.warn(
+                f"default_timeout={self.default_timeout} exceeds maximum ({self._MAX_DEFAULT_TIMEOUT}); clamping.",
+                stacklevel=2,
+            )
+            self.default_timeout = self._MAX_DEFAULT_TIMEOUT
+        if self.default_timeout < 1:
+            raise ValueError(f"Invalid default_timeout: {self.default_timeout!r}. Must be >= 1.")
+
+        # --- phase-specific timeouts (must be positive) ---
+        timeout_fields = [
+            "deep_research_timeout",
+            "deep_research_planning_timeout",
+            "deep_research_synthesis_timeout",
+            "deep_research_supervision_wall_clock_timeout",
+            "deep_research_reflection_timeout",
+            "deep_research_evaluation_timeout",
+            "deep_research_digest_timeout",
+            "deep_research_summarization_timeout",
+            "deep_research_retry_delay",
+        ]
+        for field_name in timeout_fields:
+            val = getattr(self, field_name)
+            if val is not None and val <= 0:
+                default_val = ResearchConfig.__dataclass_fields__[field_name].default
+                setattr(self, field_name, default_val)
+                logger.warning(
+                    "%s=%s invalid (must be > 0), reset to default %s",
+                    field_name,
+                    val,
+                    default_val,
+                )
+
+        # --- timeout budget cross-validation ---
+        # The overall workflow timeout must exceed the supervision wall-clock
+        # timeout; otherwise supervision will be killed before it can finish.
+        if self.deep_research_timeout < self.deep_research_supervision_wall_clock_timeout:
+            logger.warning(
+                "deep_research_timeout=%.0f is less than "
+                "deep_research_supervision_wall_clock_timeout=%.0f — "
+                "the workflow may time out before supervision completes. "
+                "Consider raising deep_research_timeout or lowering "
+                "deep_research_supervision_wall_clock_timeout.",
+                self.deep_research_timeout,
+                self.deep_research_supervision_wall_clock_timeout,
+            )
+
+        # --- content_dedup_threshold (must be in [0.0, 1.0]) ---
+        if not (0.0 <= self.deep_research_content_dedup_threshold <= 1.0):
+            logger.warning(
+                "deep_research_content_dedup_threshold=%s out of [0, 1] range, reset to 0.8",
+                self.deep_research_content_dedup_threshold,
+            )
+            self.deep_research_content_dedup_threshold = 0.8
+
+        # --- compression_max_content_length (must be positive) ---
+        if self.deep_research_compression_max_content_length <= 0:
+            logger.warning(
+                "deep_research_compression_max_content_length=%s must be > 0, reset to 50000",
+                self.deep_research_compression_max_content_length,
+            )
+            self.deep_research_compression_max_content_length = 50000
+
+        # --- token_safety_margin (fraction 0.0-1.0) ---
+        if not (0.0 <= self.token_safety_margin <= 1.0):
+            raise ValueError(f"Invalid token_safety_margin: {self.token_safety_margin!r}. Must be in [0.0, 1.0].")
+
+    def _validate_supervision_config(self) -> None:
+        """Validate deep research supervision configuration fields.
+
+        Clamps ``deep_research_max_supervision_rounds`` and
+        ``deep_research_max_concurrent_research_units`` to sane upper bounds
+        (warns on clamp).  Raises on invalid
+        ``deep_research_coverage_confidence_threshold``.
+        """
+        # Cap max_supervision_rounds
+        if self.deep_research_max_supervision_rounds > self._MAX_SUPERVISION_ROUNDS:
+            warnings.warn(
+                f"deep_research_max_supervision_rounds={self.deep_research_max_supervision_rounds} "
+                f"exceeds maximum ({self._MAX_SUPERVISION_ROUNDS}); clamping to "
+                f"{self._MAX_SUPERVISION_ROUNDS}.",
+                stacklevel=2,
+            )
+            self.deep_research_max_supervision_rounds = self._MAX_SUPERVISION_ROUNDS
+
+        if self.deep_research_max_supervision_rounds < 1:
+            raise ValueError(
+                f"Invalid deep_research_max_supervision_rounds: "
+                f"{self.deep_research_max_supervision_rounds!r}. Must be >= 1."
+            )
+
+        # Validate coverage confidence threshold
+        if not (0.0 <= self.deep_research_coverage_confidence_threshold <= 1.0):
+            raise ValueError(
+                f"Invalid deep_research_coverage_confidence_threshold: "
+                f"{self.deep_research_coverage_confidence_threshold!r}. "
+                f"Must be in [0.0, 1.0]."
+            )
+
+        # Cap max_concurrent_research_units
+        if self.deep_research_max_concurrent_research_units > self._MAX_CONCURRENT_RESEARCH_UNITS:
+            warnings.warn(
+                f"deep_research_max_concurrent_research_units="
+                f"{self.deep_research_max_concurrent_research_units} exceeds maximum "
+                f"({self._MAX_CONCURRENT_RESEARCH_UNITS}); clamping to "
+                f"{self._MAX_CONCURRENT_RESEARCH_UNITS}.",
+                stacklevel=2,
+            )
+            self.deep_research_max_concurrent_research_units = self._MAX_CONCURRENT_RESEARCH_UNITS
+
+        if self.deep_research_max_concurrent_research_units < 1:
+            raise ValueError(
+                f"Invalid deep_research_max_concurrent_research_units: "
+                f"{self.deep_research_max_concurrent_research_units!r}. Must be >= 1."
+            )
+
+        # Validate coverage_confidence_weights schema
+        _VALID_WEIGHT_KEYS = {"source_adequacy", "domain_diversity", "query_completion_rate"}
+        if self.deep_research_coverage_confidence_weights is not None:
+            weights = self.deep_research_coverage_confidence_weights
+            if not isinstance(weights, dict):
+                logger.warning(
+                    "deep_research_coverage_confidence_weights must be a dict, got %s; resetting to None",
+                    type(weights).__name__,
+                )
+                self.deep_research_coverage_confidence_weights = None
+            else:
+                unknown_keys = set(weights.keys()) - _VALID_WEIGHT_KEYS
+                if unknown_keys:
+                    logger.warning(
+                        "deep_research_coverage_confidence_weights contains unknown keys: %s "
+                        "(valid keys: %s); removing them",
+                        unknown_keys,
+                        _VALID_WEIGHT_KEYS,
+                    )
+                    for k in unknown_keys:
+                        del weights[k]
+                for k, v in list(weights.items()):
+                    if not isinstance(v, (int, float)):
+                        logger.warning(
+                            "deep_research_coverage_confidence_weights[%r]=%r is not numeric; removing",
+                            k,
+                            v,
+                        )
+                        del weights[k]
 
     def _validate_tavily_config(self) -> None:
         """Validate all Tavily configuration fields.
@@ -600,14 +1013,6 @@ class ResearchConfig:
         Raises:
             ValueError: If any digest config field has an invalid value.
         """
-        # Validate digest_policy
-        valid_policies = {"off", "auto", "always", "proactive"}
-        if self.deep_research_digest_policy not in valid_policies:
-            raise ValueError(
-                f"Invalid deep_research_digest_policy: {self.deep_research_digest_policy!r}. "
-                f"Must be one of: {sorted(valid_policies)}"
-            )
-
         # Validate min_chars (must be positive)
         if self.deep_research_digest_min_chars < 0:
             raise ValueError(
@@ -675,18 +1080,19 @@ class ResearchConfig:
         falls back to deep_research_timeout.
 
         Args:
-            phase: Phase name ("planning", "analysis", "synthesis", "refinement", "gathering")
+            phase: Phase name ("planning", "gathering", "supervision", "synthesis",
+                   "clarification", "brief")
 
         Returns:
             Timeout in seconds for the phase
         """
         phase_timeouts = {
             "clarification": self.deep_research_planning_timeout,  # Reuse planning timeout
+            "brief": self.deep_research_planning_timeout,  # Brief uses planning-tier timeout
             "planning": self.deep_research_planning_timeout,
-            "analysis": self.deep_research_analysis_timeout,
-            "synthesis": self.deep_research_synthesis_timeout,
-            "refinement": self.deep_research_refinement_timeout,
             "gathering": self.deep_research_timeout,  # Gathering uses default
+            "supervision": self.deep_research_planning_timeout,  # Lightweight LLM call, reuse planning timeout
+            "synthesis": self.deep_research_synthesis_timeout,
         }
         return phase_timeouts.get(phase.lower(), self.deep_research_timeout)
 
@@ -698,7 +1104,7 @@ class ResearchConfig:
         and ProviderSpec format ("[cli]gemini:pro").
 
         Args:
-            phase: Phase name ("planning", "analysis", "synthesis", "refinement")
+            phase: Phase name ("planning", "synthesis")
 
         Returns:
             Provider ID for the phase (e.g., "gemini", "opencode")
@@ -713,16 +1119,14 @@ class ResearchConfig:
         Returns (provider_id, model) tuple for use with the provider registry.
 
         Args:
-            phase: Phase name ("planning", "analysis", "synthesis", "refinement")
+            phase: Phase name ("planning", "synthesis")
 
         Returns:
             Tuple of (provider_id, model) where model may be None
         """
         phase_providers = {
             "planning": self.deep_research_planning_provider,
-            "analysis": self.deep_research_analysis_provider,
             "synthesis": self.deep_research_synthesis_provider,
-            "refinement": self.deep_research_refinement_provider,
         }
         configured = phase_providers.get(phase.lower())
         spec_str = configured or self.default_provider
@@ -735,16 +1139,14 @@ class ResearchConfig:
         otherwise returns an empty list (no fallback).
 
         Args:
-            phase: Phase name ("planning", "analysis", "synthesis", "refinement")
+            phase: Phase name ("planning", "synthesis")
 
         Returns:
             List of fallback provider IDs to try on failure
         """
         phase_fallbacks = {
             "planning": self.deep_research_planning_providers,
-            "analysis": self.deep_research_analysis_providers,
             "synthesis": self.deep_research_synthesis_providers,
-            "refinement": self.deep_research_refinement_providers,
         }
         return phase_fallbacks.get(phase.lower(), [])
 
@@ -793,6 +1195,172 @@ class ResearchConfig:
             List of fallback provider IDs to try on failure
         """
         return self.deep_research_digest_providers
+
+    def get_summarization_provider(self) -> str:
+        """Get LLM provider ID for fetch-time source summarization.
+
+        Returns the summarization-specific provider if configured, otherwise
+        falls back to summarization_provider (existing), then default_provider.
+
+        Returns:
+            Provider ID for fetch-time summarization
+        """
+        if self.deep_research_summarization_provider:
+            provider_id, _ = _parse_provider_spec(self.deep_research_summarization_provider)
+            return provider_id
+        if self.summarization_provider:
+            provider_id, _ = _parse_provider_spec(self.summarization_provider)
+            return provider_id
+        provider_id, _ = _parse_provider_spec(self.default_provider)
+        return provider_id
+
+    def get_summarization_model(self) -> Optional[str]:
+        """Get model override for fetch-time source summarization.
+
+        Returns the summarization-specific model if configured, otherwise
+        the cost-tier default for the summarization role.
+
+        Returns:
+            Model name (cost-tier default if no explicit config)
+        """
+        if self.deep_research_summarization_model:
+            return self.deep_research_summarization_model
+        if self.deep_research_summarization_provider:
+            _, model = _parse_provider_spec(self.deep_research_summarization_provider)
+            return model
+        return self._COST_TIER_MODEL_DEFAULTS.get("summarization")
+
+    def get_compression_provider(self) -> str:
+        """Get LLM provider ID for per-topic compression.
+
+        Returns the compression-specific provider if configured, otherwise
+        falls back to default_provider.
+
+        Returns:
+            Provider ID for per-topic compression
+        """
+        if self.deep_research_compression_provider:
+            provider_id, _ = _parse_provider_spec(self.deep_research_compression_provider)
+            return provider_id
+        provider_id, _ = _parse_provider_spec(self.default_provider)
+        return provider_id
+
+    def get_compression_model(self) -> Optional[str]:
+        """Get model override for per-topic compression.
+
+        Returns the compression-specific model if configured, otherwise
+        the cost-tier default for the compression role.
+
+        Returns:
+            Model name (cost-tier default if no explicit config)
+        """
+        if self.deep_research_compression_model:
+            return self.deep_research_compression_model
+        if self.deep_research_compression_provider:
+            _, model = _parse_provider_spec(self.deep_research_compression_provider)
+            return model
+        return self._COST_TIER_MODEL_DEFAULTS.get("compression")
+
+    # ------------------------------------------------------------------
+    # Role-based model resolution (Phase 6: Multi-Model Cost Optimization)
+    # ------------------------------------------------------------------
+
+    #: Upper bounds for supervision config fields (warn + clamp).
+    _MAX_SUPERVISION_ROUNDS: ClassVar[int] = 20
+    _MAX_CONCURRENT_RESEARCH_UNITS: ClassVar[int] = 20
+
+    #: Upper bounds for deep research config fields (warn + clamp).
+    _MAX_DEEP_RESEARCH_ITERATIONS: ClassVar[int] = 20
+    _MAX_DEEP_RESEARCH_SUB_QUERIES: ClassVar[int] = 50
+    _MAX_DEEP_RESEARCH_SOURCES: ClassVar[int] = 100
+    _MAX_DEEP_RESEARCH_CONCURRENT: ClassVar[int] = 20
+    _MAX_DEFAULT_TIMEOUT: ClassVar[float] = 3600.0
+
+    #: Maps each model role to the config attribute suffixes to check.
+    #: For each role, we try ``deep_research_{suffix}_provider`` /
+    #: ``deep_research_{suffix}_model`` in order, then fall back to
+    #: ``default_provider``.
+    _ROLE_RESOLUTION_CHAIN: ClassVar[Dict[str, List[str]]] = {
+        "research": ["research"],
+        "report": ["report", "synthesis"],
+        "reflection": ["reflection"],
+        "supervision": ["supervision", "reflection"],
+        "topic_reflection": ["topic_reflection", "reflection"],
+        "summarization": ["summarization"],
+        "compression": ["compression"],
+        "clarification": ["clarification", "research"],
+        "evaluation": ["evaluation", "research"],
+        "brief": ["brief", "research"],
+        "delegation": ["delegation", "supervision", "reflection"],
+    }
+
+    #: Cost-tier model defaults for high-volume, low-complexity roles.
+    #: When no explicit model is configured for these roles, the cheap-tier
+    #: model is used instead of the provider's default (which may be expensive).
+    #: This mirrors ODR's pattern of routing summarization to ~10x cheaper models.
+    #: Users can override by setting ``deep_research_{role}_model`` explicitly.
+    _COST_TIER_MODEL_DEFAULTS: ClassVar[Dict[str, str]] = {
+        "summarization": "gemini-2.5-flash",
+        "compression": "gemini-2.5-flash",
+    }
+
+    def resolve_model_for_role(self, role: str) -> Tuple[str, Optional[str]]:
+        """Resolve ``(provider_id, model)`` for a model role.
+
+        Resolution chain (first non-None wins):
+
+        1. **Role-specific config** — ``deep_research_{role}_provider`` /
+           ``deep_research_{role}_model``.
+        2. **Phase-level fallback** — the role maps to one or more phase
+           suffixes (see ``_ROLE_RESOLUTION_CHAIN``), each checked in order.
+        3. **Cost-tier default** — for high-volume roles (summarization,
+           compression), a cheap model is used instead of the provider's
+           default (see ``_COST_TIER_MODEL_DEFAULTS``).
+        4. **Global default** — ``default_provider``.
+
+        The returned ``model`` may be ``None`` when only the provider is
+        configured and no cost-tier default applies.
+
+        Args:
+            role: Model role name (``"research"``, ``"report"``,
+                ``"reflection"``, ``"topic_reflection"``,
+                ``"summarization"``, ``"compression"``,
+                ``"clarification"``).
+
+        Returns:
+            ``(provider_id, model)`` tuple.
+        """
+        suffixes = self._ROLE_RESOLUTION_CHAIN.get(role, [role])
+
+        resolved_provider: Optional[str] = None
+        resolved_model: Optional[str] = None
+
+        for suffix in suffixes:
+            provider_attr = f"deep_research_{suffix}_provider"
+            model_attr = f"deep_research_{suffix}_model"
+
+            if resolved_provider is None:
+                provider_val = getattr(self, provider_attr, None)
+                if provider_val is not None:
+                    resolved_provider = provider_val
+
+            if resolved_model is None:
+                model_val = getattr(self, model_attr, None)
+                if model_val is not None:
+                    resolved_model = model_val
+
+            # If both found, stop early
+            if resolved_provider is not None and resolved_model is not None:
+                break
+
+        # Parse the resolved provider (or fall back to default_provider)
+        spec_str = resolved_provider or self.default_provider
+        provider_id, spec_model = _parse_provider_spec(spec_str)
+
+        # Model priority: explicit model field > model embedded in provider spec > cost-tier default
+        final_model = resolved_model or spec_model or self._COST_TIER_MODEL_DEFAULTS.get(role)
+
+        return provider_id, final_model
 
     def get_search_provider_api_key(
         self,
@@ -999,3 +1567,129 @@ class ResearchConfig:
         # Fall back to default: research_dir/.archive
         base_research = research_dir or Path("specs/.research")
         return base_research / ".archive"
+
+    # ------------------------------------------------------------------
+    # Nested sub-config accessors (Phase 3 PA.1)
+    #
+    # These provide typed, grouped views over the flat fields above.
+    # The flat fields remain the source of truth and are fully backward
+    # compatible.  New code may prefer these for clarity.
+    # ------------------------------------------------------------------
+
+    @property
+    def tavily_config(self) -> "TavilyConfig":  # noqa: F821
+        """Grouped Tavily search/extract configuration."""
+        from foundry_mcp.config.research_sub_configs import TavilyConfig
+
+        return TavilyConfig(
+            api_key=self.tavily_api_key,
+            search_depth=self.tavily_search_depth,
+            topic=self.tavily_topic,
+            news_days=self.tavily_news_days,
+            include_images=self.tavily_include_images,
+            country=self.tavily_country,
+            chunks_per_source=self.tavily_chunks_per_source,
+            auto_parameters=self.tavily_auto_parameters,
+            extract_depth=self.tavily_extract_depth,
+            extract_include_images=self.tavily_extract_include_images,
+        )
+
+    @property
+    def perplexity_config(self) -> "PerplexityConfig":  # noqa: F821
+        """Grouped Perplexity search configuration."""
+        from foundry_mcp.config.research_sub_configs import PerplexityConfig
+
+        return PerplexityConfig(
+            api_key=self.perplexity_api_key,
+            search_context_size=self.perplexity_search_context_size,
+            max_tokens=self.perplexity_max_tokens,
+            max_tokens_per_page=self.perplexity_max_tokens_per_page,
+            recency_filter=self.perplexity_recency_filter,
+            country=self.perplexity_country,
+        )
+
+    @property
+    def semantic_scholar_config(self) -> "SemanticScholarConfig":  # noqa: F821
+        """Grouped Semantic Scholar configuration."""
+        from foundry_mcp.config.research_sub_configs import SemanticScholarConfig
+
+        return SemanticScholarConfig(
+            api_key=self.semantic_scholar_api_key,
+            publication_types=self.semantic_scholar_publication_types,
+            sort_by=self.semantic_scholar_sort_by,
+            sort_order=self.semantic_scholar_sort_order,
+            use_extended_fields=self.semantic_scholar_use_extended_fields,
+        )
+
+    @property
+    def model_role_config(self) -> "ModelRoleConfig":  # noqa: F821
+        """Grouped role-based model routing configuration."""
+        from foundry_mcp.config.research_sub_configs import ModelRoleConfig
+
+        return ModelRoleConfig(
+            research_provider=self.deep_research_research_provider,
+            research_model=self.deep_research_research_model,
+            report_provider=self.deep_research_report_provider,
+            report_model=self.deep_research_report_model,
+            reflection_provider=self.deep_research_reflection_provider,
+            reflection_model=self.deep_research_reflection_model,
+            supervision_provider=self.deep_research_supervision_provider,
+            supervision_model=self.deep_research_supervision_model,
+            topic_reflection_provider=self.deep_research_topic_reflection_provider,
+            topic_reflection_model=self.deep_research_topic_reflection_model,
+            clarification_provider=self.deep_research_clarification_provider,
+            clarification_model=self.deep_research_clarification_model,
+            compression_provider=self.deep_research_compression_provider,
+            compression_model=self.deep_research_compression_model,
+            summarization_provider=self.deep_research_summarization_provider,
+            summarization_model=self.deep_research_summarization_model,
+            digest_provider=self.deep_research_digest_provider,
+            digest_providers=list(self.deep_research_digest_providers),
+        )
+
+    @property
+    def deep_research_config(self) -> "DeepResearchSettings":  # noqa: F821
+        """Grouped deep research workflow configuration."""
+        from foundry_mcp.config.research_sub_configs import DeepResearchSettings
+
+        return DeepResearchSettings(
+            allow_clarification=self.deep_research_allow_clarification,
+            enable_supervision=self.deep_research_enable_supervision,
+            max_supervision_rounds=self.deep_research_max_supervision_rounds,
+            supervision_min_sources_per_query=self.deep_research_supervision_min_sources_per_query,
+            max_iterations=self.deep_research_max_iterations,
+            max_sub_queries=self.deep_research_max_sub_queries,
+            max_sources=self.deep_research_max_sources,
+            follow_links=self.deep_research_follow_links,
+            timeout=self.deep_research_timeout,
+            max_concurrent=self.deep_research_max_concurrent,
+            mode=self.deep_research_mode,
+            audit_artifacts=self.deep_research_audit_artifacts,
+            topic_max_searches=self.deep_research_topic_max_tool_calls,
+            enable_content_dedup=self.deep_research_enable_content_dedup,
+            content_dedup_threshold=self.deep_research_content_dedup_threshold,
+            planning_timeout=self.deep_research_planning_timeout,
+            synthesis_timeout=self.deep_research_synthesis_timeout,
+            planning_provider=self.deep_research_planning_provider,
+            synthesis_provider=self.deep_research_synthesis_provider,
+            planning_providers=list(self.deep_research_planning_providers),
+            synthesis_providers=list(self.deep_research_synthesis_providers),
+            max_retries=self.deep_research_max_retries,
+            retry_delay=self.deep_research_retry_delay,
+            providers=list(self.deep_research_providers),
+            stale_task_seconds=self.deep_research_stale_task_seconds,
+            digest_min_chars=self.deep_research_digest_min_chars,
+            digest_max_sources=self.deep_research_digest_max_sources,
+            digest_timeout=self.deep_research_digest_timeout,
+            digest_max_concurrent=self.deep_research_digest_max_concurrent,
+            digest_include_evidence=self.deep_research_digest_include_evidence,
+            digest_evidence_max_chars=self.deep_research_digest_evidence_max_chars,
+            digest_max_evidence_snippets=self.deep_research_digest_max_evidence_snippets,
+            digest_fetch_pdfs=self.deep_research_digest_fetch_pdfs,
+            archive_content=self.deep_research_archive_content,
+            archive_retention_days=self.deep_research_archive_retention_days,
+            reflection_timeout=self.deep_research_reflection_timeout,
+            evaluation_provider=self.deep_research_evaluation_provider,
+            evaluation_model=self.deep_research_evaluation_model,
+            evaluation_timeout=self.deep_research_evaluation_timeout,
+        )

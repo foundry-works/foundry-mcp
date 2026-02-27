@@ -11,6 +11,10 @@ import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Optional
 
+if TYPE_CHECKING:
+    from foundry_mcp.config.research import ResearchConfig
+    from foundry_mcp.core.research.memory import ResearchMemory
+
 from foundry_mcp.core import task_registry
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
@@ -45,20 +49,33 @@ class ActionHandlersMixin:
     - self._start_background_task(): from BackgroundTaskMixin
     - self._cleanup_completed_task(): from BackgroundTaskMixin
     - self._execute_workflow_async(): from WorkflowExecutionMixin
+
+    See ``DeepResearchWorkflowProtocol`` in ``phases/_protocols.py`` for
+    the full structural contract.
     """
 
-    config: Any
-    memory: Any
+    config: ResearchConfig
+    memory: ResearchMemory
 
+    # Stubs for Pyright — canonical signatures live in phases/_protocols.py
     if TYPE_CHECKING:
 
-        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
-        def _persist_state_if_needed(self, *args: Any, **kwargs: Any) -> None: ...
-        def _flush_state(self, *args: Any, **kwargs: Any) -> None: ...
-        def get_background_task(self, *args: Any, **kwargs: Any) -> Any: ...
-        def _start_background_task(self, *args: Any, **kwargs: Any) -> Any: ...
-        def _cleanup_completed_task(self, *args: Any, **kwargs: Any) -> None: ...
-        async def _execute_workflow_async(self, *args: Any, **kwargs: Any) -> Any: ...
+        def _write_audit_event(
+            self,
+            state: DeepResearchState | None,
+            event_name: str,
+            *,
+            data: dict[str, Any] | None = ...,
+            level: str = ...,
+        ) -> None: ...
+        def _persist_state_if_needed(self, state: DeepResearchState) -> bool: ...
+        def _flush_state(self, state: DeepResearchState) -> None: ...
+        def get_background_task(self, research_id: str) -> Any: ...
+        def _start_background_task(self, **kwargs: Any) -> Any: ...
+        def _cleanup_completed_task(self, research_id: str) -> None: ...
+        async def _execute_workflow_async(
+            self, state: DeepResearchState, provider_id: str | None, timeout_per_operation: float, max_concurrent: int
+        ) -> Any: ...
 
     def _start_research(
         self,
@@ -86,6 +103,10 @@ class ActionHandlersMixin:
         violations: list[str] = []
         if len(query) > MAX_PROMPT_LENGTH:
             violations.append(f"query length {len(query)} exceeds maximum {MAX_PROMPT_LENGTH} characters")
+        if system_prompt and len(system_prompt) > MAX_PROMPT_LENGTH:
+            violations.append(
+                f"system_prompt length {len(system_prompt)} exceeds maximum {MAX_PROMPT_LENGTH} characters"
+            )
         if max_iterations > MAX_ITERATIONS:
             violations.append(f"max_iterations {max_iterations} exceeds maximum {MAX_ITERATIONS}")
         if max_sub_queries > MAX_SUB_QUERIES:
@@ -105,13 +126,11 @@ class ActionHandlersMixin:
         # Resolve per-phase providers and models from config
         # Supports ProviderSpec format: "[cli]gemini:pro" -> (provider_id, model)
         planning_pid, planning_model = self.config.resolve_phase_provider("planning")
-        analysis_pid, analysis_model = self.config.resolve_phase_provider("analysis")
         synthesis_pid, synthesis_model = self.config.resolve_phase_provider("synthesis")
-        refinement_pid, refinement_model = self.config.resolve_phase_provider("refinement")
 
-        # Determine initial phase: CLARIFICATION if enabled, else PLANNING
-        initial_phase = DeepResearchPhase.PLANNING
-        if getattr(self.config, "deep_research_allow_clarification", False):
+        # Determine initial phase: CLARIFICATION if enabled, else SUPERVISION
+        initial_phase = DeepResearchPhase.SUPERVISION
+        if self.config.deep_research_allow_clarification:
             initial_phase = DeepResearchPhase.CLARIFICATION
 
         # Create initial state with per-phase provider configuration
@@ -126,14 +145,12 @@ class ActionHandlersMixin:
             system_prompt=system_prompt,
             # Per-phase providers: explicit provider_id overrides config
             planning_provider=provider_id or planning_pid,
-            analysis_provider=provider_id or analysis_pid,
             synthesis_provider=provider_id or synthesis_pid,
-            refinement_provider=provider_id or refinement_pid,
             # Per-phase models from ProviderSpec (only used if provider_id not overridden)
             planning_model=None if provider_id else planning_model,
-            analysis_model=None if provider_id else analysis_model,
             synthesis_model=None if provider_id else synthesis_model,
-            refinement_model=None if provider_id else refinement_model,
+            # Supervision configuration
+            max_supervision_rounds=self.config.deep_research_max_supervision_rounds,
         )
 
         # Save initial state
@@ -166,42 +183,14 @@ class ActionHandlersMixin:
                 task_timeout=task_timeout,
             )
 
-        # Synchronous execution
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Already in async context, run directly
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(
-                        asyncio.run,
-                        self._execute_workflow_async(
-                            state=state,
-                            provider_id=provider_id,
-                            timeout_per_operation=timeout_per_operation,
-                            max_concurrent=max_concurrent,
-                        ),
-                    )
-                    return future.result()
-            else:
-                return loop.run_until_complete(
-                    self._execute_workflow_async(
-                        state=state,
-                        provider_id=provider_id,
-                        timeout_per_operation=timeout_per_operation,
-                        max_concurrent=max_concurrent,
-                    )
-                )
-        except RuntimeError:
-            return asyncio.run(
-                self._execute_workflow_async(
-                    state=state,
-                    provider_id=provider_id,
-                    timeout_per_operation=timeout_per_operation,
-                    max_concurrent=max_concurrent,
-                )
-            )
+        # Synchronous execution with optional timeout enforcement
+        return self._run_sync(
+            state=state,
+            provider_id=provider_id,
+            timeout_per_operation=timeout_per_operation,
+            max_concurrent=max_concurrent,
+            task_timeout=task_timeout,
+        )
 
     def _continue_research(
         self,
@@ -262,42 +251,14 @@ class ActionHandlersMixin:
                 task_timeout=task_timeout,
             )
 
-        # Continue from current phase synchronously
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Already in async context, run in thread pool
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(
-                        asyncio.run,
-                        self._execute_workflow_async(
-                            state=state,
-                            provider_id=provider_id,
-                            timeout_per_operation=timeout_per_operation,
-                            max_concurrent=max_concurrent,
-                        ),
-                    )
-                    return future.result()
-            else:
-                return loop.run_until_complete(
-                    self._execute_workflow_async(
-                        state=state,
-                        provider_id=provider_id,
-                        timeout_per_operation=timeout_per_operation,
-                        max_concurrent=max_concurrent,
-                    )
-                )
-        except RuntimeError:
-            return asyncio.run(
-                self._execute_workflow_async(
-                    state=state,
-                    provider_id=provider_id,
-                    timeout_per_operation=timeout_per_operation,
-                    max_concurrent=max_concurrent,
-                )
-            )
+        # Continue from current phase synchronously with optional timeout
+        return self._run_sync(
+            state=state,
+            provider_id=provider_id,
+            timeout_per_operation=timeout_per_operation,
+            max_concurrent=max_concurrent,
+            task_timeout=task_timeout,
+        )
 
     def _get_status(self, research_id: Optional[str]) -> WorkflowResult:
         """Get the current status of a research session."""
@@ -557,19 +518,12 @@ class ActionHandlersMixin:
             )
 
         if bg_task.cancel():
-            state = self.memory.load_deep_research(research_id)
-            if state:
-                state.mark_cancelled(phase_state=f"phase={state.phase.value}, iteration={state.iteration}")
-                self.memory.save_deep_research(state)
-                self._write_audit_event(
-                    state,
-                    "workflow_cancelled",
-                    data={
-                        "cancelled": True,
-                        "terminal_status": "cancelled",
-                    },
-                    level="warning",
-                )
+            # Only set the cancel flag on the BackgroundTask.
+            # The workflow's own CancelledError handler in _execute_workflow_async()
+            # is the sole writer of terminal state — it performs iteration rollback
+            # and partial-result discard before marking cancelled and saving.
+            # Writing state here would race with that handler and could overwrite
+            # the careful rollback logic with a simpler snapshot.
             return WorkflowResult(
                 success=True,
                 content=f"Research '{research_id}' cancelled",
@@ -580,4 +534,161 @@ class ActionHandlersMixin:
                 success=False,
                 content="",
                 error=f"Task '{research_id}' already completed",
+            )
+
+    def _evaluate_research(self, research_id: Optional[str]) -> WorkflowResult:
+        """Evaluate a completed research report using LLM-as-judge.
+
+        Loads the research session, validates the report exists, runs
+        evaluation across 6 quality dimensions, and returns scores.
+
+        Args:
+            research_id: ID of the research session to evaluate
+
+        Returns:
+            WorkflowResult with evaluation scores or error
+        """
+        if not research_id:
+            return WorkflowResult(
+                success=False,
+                content="",
+                error="research_id is required for evaluation",
+            )
+
+        state = self.memory.load_deep_research(research_id)
+        if state is None:
+            return WorkflowResult(
+                success=False,
+                content="",
+                error=f"Research session '{research_id}' not found",
+            )
+
+        if not state.report:
+            return WorkflowResult(
+                success=False,
+                content="",
+                error="Research report not yet generated. Complete research first.",
+            )
+
+        # Resolve evaluation provider/model/timeout from config
+        eval_provider = self.config.deep_research_evaluation_provider
+        eval_model = self.config.deep_research_evaluation_model
+        eval_timeout = self.config.deep_research_evaluation_timeout
+
+        from foundry_mcp.core.research.evaluation.evaluator import evaluate_report
+
+        coro = evaluate_report(
+            workflow=self,
+            state=state,
+            provider_id=eval_provider,
+            model=eval_model,
+            timeout=eval_timeout,
+        )
+
+        # Run evaluation synchronously.  Uses the same two-way dispatch as
+        # _run_sync: if an event loop is already running (e.g. MCP async
+        # context), offload to a ThreadPoolExecutor that calls asyncio.run()
+        # in a fresh thread.  This avoids the deadlock that
+        # run_coroutine_threadsafe + future.result() causes when the caller
+        # is on the event loop thread.
+        try:
+            asyncio.get_running_loop()
+            # Already in async context — run in a thread with a new loop
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, coro)
+                result = future.result(timeout=eval_timeout + 30)
+        except RuntimeError:
+            # No running loop — safe to call asyncio.run() directly
+            result = asyncio.run(coro)
+
+        # If evaluate_report returned a WorkflowResult (error), pass through
+        if isinstance(result, WorkflowResult):
+            return result
+
+        # Build response from EvaluationResult
+        score_summary = "\n".join(
+            f"  {ds.name}: {ds.raw_score}/5 ({ds.normalized_score:.2f}) — {ds.rationale}"
+            for ds in result.dimension_scores
+        )
+        content = (
+            f"Evaluation of research '{research_id}':\n"
+            f"Composite Score: {result.composite_score:.3f} (0-1 scale)\n\n"
+            f"Dimension Scores:\n{score_summary}"
+        )
+
+        return WorkflowResult(
+            success=True,
+            content=content,
+            metadata={
+                "research_id": research_id,
+                "evaluation": result.to_dict(),
+                "composite_score": result.composite_score,
+            },
+        )
+
+    def _run_sync(
+        self,
+        state: DeepResearchState,
+        provider_id: Optional[str],
+        timeout_per_operation: float,
+        max_concurrent: int,
+        task_timeout: Optional[float],
+    ) -> WorkflowResult:
+        """Run workflow synchronously with optional timeout enforcement.
+
+        Uses a two-way dispatch: if an event loop is already running
+        (e.g. MCP async context), offloads to a ThreadPoolExecutor;
+        otherwise calls asyncio.run() directly.
+
+        When task_timeout is set, wraps the coroutine in
+        asyncio.wait_for() so the workflow is cancelled on timeout.
+        """
+
+        async def _run_with_timeout() -> WorkflowResult:
+            coro = self._execute_workflow_async(
+                state=state,
+                provider_id=provider_id,
+                timeout_per_operation=timeout_per_operation,
+                max_concurrent=max_concurrent,
+            )
+            if task_timeout:
+                return await asyncio.wait_for(coro, timeout=task_timeout)
+            return await coro
+
+        try:
+            try:
+                asyncio.get_running_loop()
+                # Already in async context — run in a thread with a new loop
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_with_timeout())
+                    return future.result()
+            except RuntimeError:
+                # No running loop — safe to call asyncio.run()
+                return asyncio.run(_run_with_timeout())
+        except asyncio.TimeoutError:
+            timeout_message = f"Research timed out after {task_timeout}s"
+            state.metadata["timeout"] = True
+            state.metadata["abort_phase"] = state.phase.value
+            state.metadata["abort_iteration"] = state.iteration
+            state.mark_failed(timeout_message)
+            self.memory.save_deep_research(state)
+            self._write_audit_event(
+                state,
+                "workflow_timeout",
+                data={
+                    "timeout_seconds": task_timeout,
+                    "abort_phase": state.phase.value,
+                    "abort_iteration": state.iteration,
+                },
+                level="warning",
+            )
+            return WorkflowResult(
+                success=False,
+                content="",
+                error=timeout_message,
+                metadata={"research_id": state.id, "timeout": True},
             )

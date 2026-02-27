@@ -187,6 +187,19 @@ class TestCheckActionAllowed:
         result = check_action_allowed("unknown", "task", "complete")
         assert result.allowed is False
 
+    def test_denial_with_tool_name_and_no_normalized_action_does_not_crash(self):
+        """Regression: raw_action must be defined before denial logging.
+
+        When tool_name is truthy but the combined "tool-action" is not in the
+        allowlist, the denial path must not raise UnboundLocalError.
+        """
+        # "observer" cannot do "task-nonexistent", and the denial path
+        # references raw_action which was previously only set inside
+        # the `if not tool_name:` branch.
+        result = check_action_allowed("observer", "task", "nonexistent")
+        assert result.allowed is False
+        assert result.denied_action == "task-nonexistent"
+
 
 class TestInitializeRoleFromConfig:
     """Test initialize_role_from_config function."""

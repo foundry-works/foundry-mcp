@@ -47,6 +47,7 @@ from foundry_mcp.core.research.workflows.deep_research.error_handling import (
 )
 from foundry_mcp.core.research.workflows.deep_research.infrastructure import (
     install_crash_handler,
+    set_active_research_memory,
 )
 from foundry_mcp.core.research.workflows.deep_research.orchestration import (
     SupervisorHooks,
@@ -57,8 +58,8 @@ from foundry_mcp.core.research.workflows.deep_research.orchestration import (
 from foundry_mcp.core.research.workflows.deep_research.persistence import (
     PersistenceMixin,
 )
-from foundry_mcp.core.research.workflows.deep_research.phases.analysis import (
-    AnalysisPhaseMixin,
+from foundry_mcp.core.research.workflows.deep_research.phases.brief import (
+    BriefPhaseMixin,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases.clarification import (
     ClarificationPhaseMixin,
@@ -66,13 +67,8 @@ from foundry_mcp.core.research.workflows.deep_research.phases.clarification impo
 from foundry_mcp.core.research.workflows.deep_research.phases.gathering import (
     GatheringPhaseMixin,
 )
-
-# Phase mixins
-from foundry_mcp.core.research.workflows.deep_research.phases.planning import (
-    PlanningPhaseMixin,
-)
-from foundry_mcp.core.research.workflows.deep_research.phases.refinement import (
-    RefinementPhaseMixin,
+from foundry_mcp.core.research.workflows.deep_research.phases.supervision import (
+    SupervisionPhaseMixin,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
     SynthesisPhaseMixin,
@@ -105,12 +101,11 @@ class DeepResearchWorkflow(
     ActionHandlersMixin,
     WorkflowExecutionMixin,
     ClarificationPhaseMixin,
-    PlanningPhaseMixin,
-    GatheringPhaseMixin,
+    BriefPhaseMixin,
+    GatheringPhaseMixin,  # DEPRECATED: legacy resume compat only
     TopicResearchMixin,
-    AnalysisPhaseMixin,
+    SupervisionPhaseMixin,
     SynthesisPhaseMixin,
-    RefinementPhaseMixin,
     BackgroundTaskMixin,
     SessionManagementMixin,
     ResearchWorkflowBase,
@@ -124,12 +119,17 @@ class DeepResearchWorkflow(
     - Multi-agent supervisor hooks
     - Session persistence for resume capability
 
-    Workflow Phases:
-    1. PLANNING - Decompose query into sub-queries
-    2. GATHERING - Execute sub-queries in parallel
-    3. ANALYSIS - Extract findings and assess quality
-    4. SYNTHESIS - Generate comprehensive report
-    5. REFINEMENT - Identify gaps and iterate if needed
+    Active Workflow Phases:
+    0. CLARIFICATION - (Optional) Analyze query and ask clarifying questions
+    1. BRIEF - Enrich raw query into a structured research brief
+    2. SUPERVISION - Supervisor-owned decomposition (round 0) and gap-fill (rounds 1+)
+    3. SYNTHESIS - Combine findings into a comprehensive report
+
+    Legacy phases (PLANNING, GATHERING) are retained in the class hierarchy
+    for saved-state resume compatibility only.  Legacy phases (ANALYSIS,
+    REFINEMENT) have been removed from the MRO — their mixin modules are
+    preserved for reference but are no longer in the active class hierarchy.
+    New workflows proceed directly from BRIEF → SUPERVISION → SYNTHESIS.
     """
 
     # Class-level task registry for background task tracking
@@ -152,8 +152,7 @@ class DeepResearchWorkflow(
             hooks: Optional supervisor hooks for orchestration
         """
         super().__init__(config, memory)
-        global _active_research_memory
-        _active_research_memory = self.memory
+        set_active_research_memory(self.memory)
         self.hooks = hooks or SupervisorHooks()
         self.orchestrator = SupervisorOrchestrator()
         self._search_providers: dict[str, SearchProvider] = {}
@@ -192,11 +191,12 @@ class DeepResearchWorkflow(
         - status: Get current status
         - report: Get final report
         - cancel: Cancel running task
+        - evaluate: Evaluate completed report quality (LLM-as-judge)
 
         Args:
             query: Research query (required for 'start')
-            research_id: Session ID (required for continue/status/report/cancel)
-            action: One of 'start', 'continue', 'status', 'report', 'cancel'
+            research_id: Session ID (required for continue/status/report/cancel/evaluate)
+            action: One of 'start', 'continue', 'status', 'report', 'cancel', 'evaluate'
             provider_id: Provider for LLM operations
             system_prompt: Optional custom system prompt
             max_iterations: Maximum refinement iterations (default: 3)
@@ -241,11 +241,13 @@ class DeepResearchWorkflow(
                 return self._get_report(research_id=research_id)
             elif action == "cancel":
                 return self._cancel_research(research_id=research_id)
+            elif action == "evaluate":
+                return self._evaluate_research(research_id=research_id)
             else:
                 return WorkflowResult(
                     success=False,
                     content="",
-                    error=f"Unknown action '{action}'. Use: start, continue, status, report, cancel",
+                    error=f"Unknown action '{action}'. Use: start, continue, status, report, cancel, evaluate",
                 )
         except Exception as exc:
             # Catch all exceptions to ensure graceful failure

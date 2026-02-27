@@ -1,6 +1,6 @@
 """Fidelity tracking models for token budget management."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 
@@ -71,7 +71,7 @@ class PhaseContentFidelityRecord(BaseModel):
         description="Any warnings generated during processing",
     )
     timestamp: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="When this fidelity was applied",
     )
     original_tokens: Optional[int] = Field(
@@ -120,11 +120,11 @@ class ContentFidelityRecord(BaseModel):
         description="Most recent fidelity level (convenience field)",
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="When tracking began for this item",
     )
     updated_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="Last time any phase record was updated",
     )
 
@@ -155,7 +155,7 @@ class ContentFidelityRecord(BaseModel):
             final_tokens=final_tokens,
         )
         self.current_level = level
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     def get_phase(self, phase: str) -> Optional[PhaseContentFidelityRecord]:
         """Get fidelity record for a specific phase.
@@ -203,7 +203,7 @@ class ContentFidelityRecord(BaseModel):
             )
             self.current_level = latest_phase.level
 
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     def get_phases_for_item(self) -> list[str]:
         """Get all phase names recorded for this item.
@@ -258,3 +258,7 @@ class PhaseMetrics(BaseModel):
     cached_tokens: int = Field(default=0, description="Tokens served from cache")
     provider_id: Optional[str] = Field(default=None, description="Provider used for this phase")
     model_used: Optional[str] = Field(default=None, description="Model used for this phase")
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extensible metadata (e.g. token_limit_retries, model_roles)",
+    )

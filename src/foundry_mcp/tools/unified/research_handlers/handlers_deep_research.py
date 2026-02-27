@@ -34,6 +34,10 @@ _DR_DELETE_SCHEMA = {
     "research_id": Str(required=True),
 }
 
+_DR_EVALUATE_SCHEMA = {
+    "research_id": Str(required=True),
+}
+
 
 def _handle_deep_research(
     *,
@@ -53,14 +57,14 @@ def _handle_deep_research(
 ) -> dict:
     """Handle deep-research action with background execution.
 
-    CRITICAL: This handler uses asyncio.create_task() via the workflow's
-    background mode to start research and return immediately with the
-    research_id. The workflow runs in the background and can be polled
-    via deep-research-status.
+    Starts deep research in a background thread and returns immediately
+    with a ``research_id`` for polling via ``deep-research-status``.
+    When the workflow completes, use ``deep-research-report`` to retrieve
+    the full report with content-fidelity metadata and allocation warnings.
 
     Supports:
-    - start: Begin new research, returns immediately with research_id
-    - continue: Resume paused research in background
+    - start: Begin new research, return research_id immediately
+    - continue: Resume paused research, return research_id immediately
     - resume: Alias for continue (for backward compatibility)
     """
     # Normalize 'resume' to 'continue' for workflow compatibility
@@ -88,13 +92,12 @@ def _handle_deep_research(
     workflow = DeepResearchWorkflow(config.research, _get_memory())
 
     # Apply config default for task_timeout if not explicitly set
-    # Precedence: explicit param > config > hardcoded fallback (600s)
+    # Precedence: explicit param > config > hardcoded fallback
     effective_timeout = task_timeout
     if effective_timeout is None:
         effective_timeout = config.research.deep_research_timeout
 
-    # Execute with background=True for non-blocking execution
-    # This uses asyncio.create_task() internally and returns immediately
+    # Execute in background — returns immediately with research_id
     result = workflow.execute(
         query=query,
         research_id=research_id,
@@ -107,45 +110,35 @@ def _handle_deep_research(
         follow_links=follow_links,
         timeout_per_operation=timeout_per_operation,
         max_concurrent=max_concurrent,
-        background=True,  # CRITICAL: Run in background, return immediately
+        background=True,
         task_timeout=effective_timeout,
     )
 
     if result.success:
-        # For background execution, return started status with research_id
-        response_data = {
-            "research_id": result.metadata.get("research_id"),
+        # Background mode: return research_id for status polling
+        response_data: dict[str, Any] = {
             "status": "started",
-            "effective_timeout": effective_timeout,
             "message": (
-                "Deep research started. This typically takes 3-5 minutes. "
-                "IMPORTANT: Communicate progress to user before each status check. "
-                "Maximum 5 status checks allowed. "
-                "Do NOT use WebSearch/WebFetch while this research is running."
+                "Deep research started in background. "
+                "Use deep-research-status to monitor progress, "
+                "then deep-research-report to retrieve results."
             ),
-            "polling_guidance": {
-                "max_checks": 5,
-                "typical_duration_minutes": 5,
-                "require_user_communication": True,
-                "no_independent_research": True,
-            },
         }
-
-        # Include additional metadata if available (for continue/resume)
-        if result.metadata.get("phase"):
-            response_data["phase"] = result.metadata.get("phase")
-        if result.metadata.get("iteration") is not None:
-            response_data["iteration"] = result.metadata.get("iteration")
-
+        if result.metadata:
+            response_data.update(result.metadata)
         return asdict(success_response(data=response_data))
     else:
+        details: dict[str, Any] = {"action": deep_research_action}
+        rid = (result.metadata or {}).get("research_id")
+        if rid:
+            details["research_id"] = rid
         return asdict(
             error_response(
-                result.error or "Deep research failed to start",
+                result.error or "Deep research failed",
                 error_code=ErrorCode.INTERNAL_ERROR,
                 error_type=ErrorType.INTERNAL,
                 remediation="Check query or research_id validity and provider availability",
-                details={"action": deep_research_action},
+                details=details,
             )
         )
 
@@ -170,17 +163,17 @@ def _handle_deep_research_status(
     )
 
     if result.success:
-        # Add next_action guidance based on check count
+        # Add next_action guidance — research runs in the background,
+        # so the caller should relay progress to the user and poll again.
         status_data = dict(result.metadata) if result.metadata else {}
-        check_count = status_data.get("status_check_count", 1)
-        checks_remaining = max(0, 5 - check_count)
+        research_status = status_data.get("status", "unknown")
 
-        if checks_remaining > 0:
-            status_data["next_action"] = (
-                f"BEFORE next check: Tell user about progress. {checks_remaining} checks remaining."
-            )
+        if research_status in ("completed", "failed", "cancelled"):
+            status_data["next_action"] = "Research finished. Use deep-research-report to retrieve results."
         else:
-            status_data["next_action"] = "Max checks reached. Offer user options: wait, background, or cancel."
+            status_data["next_action"] = (
+                "Research is running in the background. Tell the user about current progress, then check again shortly."
+            )
 
         return asdict(success_response(data=status_data))
     else:
@@ -237,6 +230,38 @@ def _handle_deep_research_report(
                 error_code=ErrorCode.NOT_FOUND,
                 error_type=ErrorType.NOT_FOUND,
                 remediation="Ensure research is complete or use deep-research-status to check",
+            )
+        )
+
+
+def _handle_deep_research_evaluate(
+    *,
+    research_id: Optional[str] = None,
+    **kwargs: Any,
+) -> dict:
+    """Handle deep-research-evaluate action (LLM-as-judge quality scoring)."""
+    payload = {"research_id": research_id}
+    err = validate_payload(payload, _DR_EVALUATE_SCHEMA, tool_name="research", action="deep-research-evaluate")
+    if err:
+        return err
+
+    config = _get_config()
+    workflow = DeepResearchWorkflow(config.research, _get_memory())
+
+    result = workflow.execute(
+        research_id=research_id,
+        action="evaluate",
+    )
+
+    if result.success:
+        return asdict(success_response(data=dict(result.metadata) if result.metadata else {}))
+    else:
+        return asdict(
+            error_response(
+                result.error or "Evaluation failed",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+                remediation="Ensure research is complete with a generated report",
             )
         )
 

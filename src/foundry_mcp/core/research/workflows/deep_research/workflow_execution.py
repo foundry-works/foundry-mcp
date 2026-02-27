@@ -1,8 +1,10 @@
 """Async workflow execution engine for deep research.
 
-Orchestrates the multi-phase workflow (planning, gathering, analysis,
-synthesis, refinement) with cancellation support, error handling,
-and resource cleanup.
+Orchestrates the multi-phase workflow (clarification, brief, supervision,
+synthesis) with cancellation support, error handling, and resource cleanup.
+
+GATHERING is a legacy-resume-only phase — new workflows jump directly
+from BRIEF to SUPERVISION (supervisor-owned decomposition).
 """
 
 from __future__ import annotations
@@ -14,12 +16,16 @@ import time
 import traceback
 from typing import TYPE_CHECKING, Any, Optional
 
+if TYPE_CHECKING:
+    from foundry_mcp.config.research import ResearchConfig
+    from foundry_mcp.core.research.memory import ResearchMemory
+
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
     DeepResearchState,
 )
 from foundry_mcp.core.research.workflows.base import WorkflowResult
-from foundry_mcp.core.research.workflows.deep_research._helpers import (
+from foundry_mcp.core.research.workflows.deep_research._model_resolution import (
     resolve_phase_provider,
 )
 from foundry_mcp.core.research.workflows.deep_research.source_quality import (
@@ -45,102 +51,36 @@ class WorkflowExecutionMixin:
     - self._record_workflow_error(): from ErrorHandlingMixin
     - self._safe_orchestrator_transition(): from ErrorHandlingMixin
     - self._check_cancellation(): defined here
-    - Phase execution methods from phase mixins
+    - Phase execution methods: clarification, brief, gathering, supervision, synthesis
     """
 
-    config: Any
-    memory: Any
+    config: ResearchConfig
+    memory: ResearchMemory
     hooks: Any
     orchestrator: Any
     _tasks: dict[str, Any]
     _tasks_lock: threading.Lock
     _search_providers: dict[str, Any]
 
+    # Stubs for Pyright — canonical signatures live in phases/_protocols.py
     if TYPE_CHECKING:
 
-        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
-        def _flush_state(self, *args: Any, **kwargs: Any) -> None: ...
+        def _write_audit_event(
+            self,
+            state: DeepResearchState | None,
+            event_name: str,
+            *,
+            data: dict[str, Any] | None = ...,
+            level: str = ...,
+        ) -> None: ...
+        def _flush_state(self, state: DeepResearchState) -> None: ...
         def _record_workflow_error(self, *args: Any, **kwargs: Any) -> None: ...
         def _safe_orchestrator_transition(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_clarification_async(self, *args: Any, **kwargs: Any) -> Any: ...
-        async def _execute_planning_async(self, *args: Any, **kwargs: Any) -> Any: ...
+        async def _execute_brief_async(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_gathering_async(self, *args: Any, **kwargs: Any) -> Any: ...
-        async def _execute_analysis_async(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_synthesis_async(self, *args: Any, **kwargs: Any) -> Any: ...
-        async def _execute_refinement_async(self, *args: Any, **kwargs: Any) -> Any: ...
-        async def _execute_extract_followup_async(self, *args: Any, **kwargs: Any) -> Any: ...
-        async def _execute_digest_step_async(self, *args: Any, **kwargs: Any) -> Any: ...
-
-    async def _maybe_reflect(
-        self,
-        state: DeepResearchState,
-        phase: DeepResearchPhase,
-    ) -> None:
-        """Run LLM-driven reflection if enabled in config.
-
-        Called after a phase completes successfully. Logs the reflection
-        decision and records it in state audit trail. Does not block
-        workflow progression in v1 (proceed is always respected, but
-        adjustments are logged for observability).
-
-        Args:
-            state: Current research state
-            phase: Phase that just completed
-        """
-        if not getattr(self.config, "deep_research_enable_reflection", False):
-            return
-
-        try:
-            decision = await self.orchestrator.async_think_pause(
-                state=state,
-                phase=phase,
-                workflow=self,
-            )
-
-            self._write_audit_event(
-                state,
-                "reflection_complete",
-                data={
-                    "phase": phase.value,
-                    "proceed": decision.proceed,
-                    "quality_assessment": decision.quality_assessment,
-                    "adjustments": decision.adjustments,
-                    "rationale": decision.rationale,
-                    "provider_id": decision.provider_id,
-                    "model_used": decision.model_used,
-                    "tokens_used": decision.tokens_used,
-                    "duration_ms": decision.duration_ms,
-                },
-            )
-
-            if decision.tokens_used:
-                state.total_tokens_used += decision.tokens_used
-
-            if not decision.proceed:
-                logger.warning(
-                    "Reflection recommends NOT proceeding after phase %s (research %s): %s. "
-                    "Logging adjustments but continuing in v1.",
-                    phase.value,
-                    state.id,
-                    decision.rationale,
-                )
-                for adj in decision.adjustments:
-                    logger.info("  Suggested adjustment: %s", adj)
-            else:
-                logger.info(
-                    "Reflection: phase %s quality OK (research %s): %s",
-                    phase.value,
-                    state.id,
-                    decision.quality_assessment[:100],
-                )
-
-        except Exception as exc:
-            logger.warning(
-                "Reflection failed for phase %s (research %s): %s. Continuing without reflection.",
-                phase.value,
-                state.id,
-                exc,
-            )
+        async def _execute_supervision_async(self, *args: Any, **kwargs: Any) -> Any: ...
 
     def _check_cancellation(self, state: DeepResearchState) -> None:
         """Check if cancellation has been requested for this research session.
@@ -172,23 +112,29 @@ class WorkflowExecutionMixin:
     ) -> WorkflowResult | None:
         """Execute common phase lifecycle: cancel -> timer -> hooks -> audit -> execute -> error -> hooks -> audit -> transition.
 
-        Encapsulates the boilerplate shared across all 5 phase dispatch blocks
+        Encapsulates the boilerplate shared across phase dispatch blocks
         in ``_execute_workflow_async``.
 
         Args:
             state: Current research state.
             phase: The phase being executed (used for audit events and orchestrator transition).
             executor: An *unawaited* coroutine returned by ``_execute_<phase>_async(...)``.
-            skip_error_check: If True, do not check ``result.success`` for failure
-                (used by REFINEMENT which always succeeds).
+            skip_error_check: If True, do not check ``result.success`` for failure.
             skip_transition: If True, skip the standard orchestrator transition
-                (used by SYNTHESIS/REFINEMENT which have custom post-processing).
+                (used by SUPERVISION/SYNTHESIS which have custom post-processing).
 
         Returns:
             ``WorkflowResult`` on phase failure (caller should ``return`` it),
             ``None`` on success (caller continues to next phase).
         """
-        self._check_cancellation(state)
+        try:
+            self._check_cancellation(state)
+        except asyncio.CancelledError:
+            # Close the unawaited executor coroutine to prevent
+            # "coroutine was never awaited" RuntimeWarning.
+            if asyncio.iscoroutine(executor):
+                executor.close()
+            raise
         phase_started = time.perf_counter()
         self.hooks.emit_phase_start(state)
         self._write_audit_event(
@@ -239,7 +185,19 @@ class WorkflowExecutionMixin:
         start_time = time.perf_counter()
 
         try:
-            # Phase execution based on current state
+            # Phase transition table (new workflows):
+            #   CLARIFICATION → BRIEF → SUPERVISION → SYNTHESIS
+            #
+            # PLANNING and GATHERING are legacy-resume-only phases — new
+            # workflows never enter them.  The supervisor handles both
+            # decomposition (round 0) and gap-driven follow-up (rounds 1+).
+            #
+            # Legacy saved states may resume at GATHERING; this is handled
+            # below by running GATHERING once and then advancing to
+            # SUPERVISION.  The ``elif … not in (SUPERVISION, SYNTHESIS)``
+            # guard after the GATHERING block skips any other intermediate
+            # phases that may exist in the enum but are no longer active.
+
             if state.phase == DeepResearchPhase.CLARIFICATION:
                 err = await self._run_phase(
                     state,
@@ -247,189 +205,161 @@ class WorkflowExecutionMixin:
                     self._execute_clarification_async(
                         state=state,
                         provider_id=resolve_phase_provider(self.config, "clarification"),
-                        timeout=self.config.get_phase_timeout("planning"),  # Reuse planning timeout
+                        timeout=self.config.get_phase_timeout("clarification"),
                     ),
                 )
                 if err:
                     return err
-                await self._maybe_reflect(state, DeepResearchPhase.CLARIFICATION)
 
-            if state.phase == DeepResearchPhase.PLANNING:
+            if state.phase == DeepResearchPhase.BRIEF:
                 err = await self._run_phase(
                     state,
-                    DeepResearchPhase.PLANNING,
-                    self._execute_planning_async(
+                    DeepResearchPhase.BRIEF,
+                    self._execute_brief_async(
                         state=state,
-                        provider_id=state.planning_provider,
-                        timeout=self.config.get_phase_timeout("planning"),
+                        provider_id=resolve_phase_provider(self.config, "brief"),
+                        timeout=self.config.get_phase_timeout("brief"),
                     ),
                 )
                 if err:
                     return err
-                await self._maybe_reflect(state, DeepResearchPhase.PLANNING)
 
-            # Iterative loop for GATHERING → ANALYSIS → SYNTHESIS → REFINEMENT.
-            # Replaces the previous recursive call to _execute_workflow_async so
-            # that the try/except/finally cleanup runs exactly once.
-            while True:
-                if state.phase == DeepResearchPhase.GATHERING:
-                    # Mark the current iteration as in progress (for cancellation handling)
+            # After BRIEF, jump directly to SUPERVISION (supervisor-owned decomposition).
+            # PLANNING and GATHERING are legacy-resume-only phases — new workflows
+            # never enter them.  The supervisor handles both decomposition (round 0)
+            # and gap-driven follow-up (rounds 1+).
+            if state.phase == DeepResearchPhase.PLANNING:
+                # Legacy saved states may resume at PLANNING; skip to SUPERVISION.
+                logger.warning(
+                    "PLANNING phase running from legacy saved state (research %s) — advancing to SUPERVISION",
+                    state.id,
+                )
+                self._write_audit_event(
+                    state,
+                    "legacy_phase_resume",
+                    data={
+                        "phase": "planning",
+                        "deprecated_phase": True,
+                    },
+                    level="warning",
+                )
+                state.advance_phase()  # PLANNING → skips GATHERING → SUPERVISION
+
+            if state.phase == DeepResearchPhase.GATHERING:
+                # Legacy saved states may resume at GATHERING; run it once
+                # then advance to SUPERVISION.
+                logger.warning(
+                    "GATHERING phase running from legacy saved state (research %s) "
+                    "— new workflows use supervisor-owned decomposition via SUPERVISION phase",
+                    state.id,
+                )
+                self._write_audit_event(
+                    state,
+                    "legacy_phase_resume",
+                    data={
+                        "phase": "gathering",
+                        "message": "Legacy saved state resumed at GATHERING phase",
+                        "deprecated_phase": True,
+                    },
+                    level="warning",
+                )
+                state.metadata["iteration_in_progress"] = True
+                err = await self._run_phase(
+                    state,
+                    DeepResearchPhase.GATHERING,
+                    self._execute_gathering_async(
+                        state=state,
+                        provider_id=provider_id,
+                        timeout=timeout_per_operation,
+                        max_concurrent=max_concurrent,
+                    ),
+                )
+                if err:
+                    return err
+                state.advance_phase()  # GATHERING → SUPERVISION
+            elif state.phase not in (DeepResearchPhase.SUPERVISION, DeepResearchPhase.SYNTHESIS):
+                logger.warning(
+                    "Unexpected phase %s at iteration entry for research %s, advancing to next active phase",
+                    state.phase,
+                    state.id,
+                )
+                state.advance_phase()  # Skip to next active phase
+
+            # SUPERVISION (handles decomposition + research + gap-fill internally)
+            if state.phase == DeepResearchPhase.SUPERVISION:
+                if not self.config.deep_research_enable_supervision:
+                    logger.info(
+                        "Supervision disabled via config for research %s, skipping to SYNTHESIS",
+                        state.id,
+                    )
+                    self._write_audit_event(
+                        state,
+                        "supervision_skipped",
+                        data={"reason": "disabled_via_config"},
+                    )
+                    state.phase = DeepResearchPhase.SYNTHESIS
+                else:
                     state.metadata["iteration_in_progress"] = True
+
                     err = await self._run_phase(
                         state,
-                        DeepResearchPhase.GATHERING,
-                        self._execute_gathering_async(
+                        DeepResearchPhase.SUPERVISION,
+                        self._execute_supervision_async(
                             state=state,
-                            provider_id=provider_id,
-                            timeout=timeout_per_operation,
-                            max_concurrent=max_concurrent,
-                        ),
-                    )
-                    if err:
-                        return err
-
-                    await self._maybe_reflect(state, DeepResearchPhase.GATHERING)
-
-                    # Optional: Execute extract follow-up to expand URL content
-                    if self.config.tavily_extract_in_deep_research:
-                        extract_result = await self._execute_extract_followup_async(
-                            state=state,
-                            max_urls=self.config.tavily_extract_max_urls,
-                        )
-                        if extract_result:
-                            self._write_audit_event(
-                                state,
-                                "extract_followup_complete",
-                                data={
-                                    "urls_extracted": extract_result.get("urls_extracted", 0),
-                                    "urls_failed": extract_result.get("urls_failed", 0),
-                                },
-                            )
-
-                    # Proactive digest: digest sources immediately after gathering
-                    # when policy is "proactive", ensuring uniform pre-processed
-                    # content before the analysis phase.
-                    if self.config.deep_research_digest_policy == "proactive":
-                        self._check_cancellation(state)
-                        logger.info(
-                            "Running proactive digest on %d sources for research %s",
-                            len(state.sources),
-                            state.id,
-                        )
-                        digest_stats = await self._execute_digest_step_async(
-                            state=state,
-                            query=state.original_query,
-                        )
-                        self._write_audit_event(
-                            state,
-                            "proactive_digest_complete",
-                            data={
-                                "sources_digested": digest_stats.get("sources_digested", 0),
-                                "sources_selected": digest_stats.get("sources_selected", 0),
-                                "sources_ranked": digest_stats.get("sources_ranked", 0),
-                                "errors": len(digest_stats.get("digest_errors", [])),
-                            },
-                        )
-                        # Persist state with digested content
-                        self.memory.save_deep_research(state)
-
-                if state.phase == DeepResearchPhase.ANALYSIS:
-                    err = await self._run_phase(
-                        state,
-                        DeepResearchPhase.ANALYSIS,
-                        self._execute_analysis_async(
-                            state=state,
-                            provider_id=state.analysis_provider,
-                            timeout=self.config.get_phase_timeout("analysis"),
-                        ),
-                    )
-                    if err:
-                        return err
-                    await self._maybe_reflect(state, DeepResearchPhase.ANALYSIS)
-
-                if state.phase == DeepResearchPhase.SYNTHESIS:
-                    err = await self._run_phase(
-                        state,
-                        DeepResearchPhase.SYNTHESIS,
-                        self._execute_synthesis_async(
-                            state=state,
-                            provider_id=state.synthesis_provider,
-                            timeout=self.config.get_phase_timeout("synthesis"),
+                            provider_id=resolve_phase_provider(self.config, "supervision", "reflection"),
+                            timeout=self.config.get_phase_timeout("supervision"),
                         ),
                         skip_transition=True,
                     )
                     if err:
                         return err
+                    state.phase = DeepResearchPhase.SYNTHESIS
 
-                    # Phase-specific: custom orchestrator + iteration decision
-                    try:
-                        self.orchestrator.evaluate_phase_completion(state, DeepResearchPhase.SYNTHESIS)
-                        self.orchestrator.decide_iteration(state)
-                        prompt = self.orchestrator.get_reflection_prompt(state, DeepResearchPhase.SYNTHESIS)
-                        self.hooks.think_pause(state, prompt)
-                        await self._maybe_reflect(state, DeepResearchPhase.SYNTHESIS)
-                        self.orchestrator.record_to_state(state)
-                    except Exception as exc:
-                        logger.exception(
-                            "Orchestrator transition failed for synthesis, research %s: %s",
-                            state.id,
-                            exc,
-                        )
-                        self._write_audit_event(
-                            state,
-                            "orchestrator_error",
-                            data={
-                                "phase": "synthesis",
-                                "error": str(exc),
-                                "traceback": traceback.format_exc(),
-                            },
-                            level="error",
-                        )
-                        self._record_workflow_error(exc, state, "orchestrator_synthesis")
-                        raise
+            # SYNTHESIS
+            if state.phase == DeepResearchPhase.SYNTHESIS:
+                err = await self._run_phase(
+                    state,
+                    DeepResearchPhase.SYNTHESIS,
+                    self._execute_synthesis_async(
+                        state=state,
+                        provider_id=state.synthesis_provider,
+                        timeout=self.config.get_phase_timeout("synthesis"),
+                    ),
+                    skip_transition=True,
+                )
+                if err:
+                    return err
 
-                    # Check if refinement needed
-                    if state.should_continue_refinement():
-                        state.phase = DeepResearchPhase.REFINEMENT
-                    else:
-                        # Mark iteration as successfully completed (no more refinement)
-                        state.metadata["iteration_in_progress"] = False
-                        state.metadata["last_completed_iteration"] = state.iteration
-                        state.mark_completed(report=state.report)
-                        break  # Exit iteration loop — workflow complete
-
-                # Handle refinement phase
-                if state.phase == DeepResearchPhase.REFINEMENT:
-                    # Mark the current iteration as in progress (for cancellation handling)
-                    state.metadata["iteration_in_progress"] = True
-                    await self._run_phase(
-                        state,
-                        DeepResearchPhase.REFINEMENT,
-                        self._execute_refinement_async(
-                            state=state,
-                            provider_id=state.refinement_provider,
-                            timeout=self.config.get_phase_timeout("refinement"),
-                        ),
-                        skip_error_check=True,
-                        skip_transition=True,
+                # Phase-specific: custom orchestrator + iteration decision
+                try:
+                    self.orchestrator.evaluate_phase_completion(state, DeepResearchPhase.SYNTHESIS)
+                    self.orchestrator.decide_iteration(state)
+                    prompt = self.orchestrator.get_reflection_prompt(state, DeepResearchPhase.SYNTHESIS)
+                    self.hooks.think_pause(state, prompt)
+                    self.orchestrator.record_to_state(state)
+                except Exception as exc:
+                    logger.exception(
+                        "Orchestrator transition failed for synthesis, research %s: %s",
+                        state.id,
+                        exc,
                     )
+                    self._write_audit_event(
+                        state,
+                        "orchestrator_error",
+                        data={
+                            "phase": "synthesis",
+                            "error": str(exc),
+                            "traceback": traceback.format_exc(),
+                        },
+                        level="error",
+                    )
+                    self._record_workflow_error(exc, state, "orchestrator_synthesis")
+                    raise
 
-                    # Mark iteration as successfully completed
-                    state.metadata["iteration_in_progress"] = False
-                    state.metadata["last_completed_iteration"] = state.iteration
-
-                    if state.should_continue_refinement():
-                        # Check for cancellation before starting new iteration
-                        self._check_cancellation(state)
-                        state.start_new_iteration()
-                        # Continue the while loop — re-enter GATHERING phase
-                        continue
-                    else:
-                        state.mark_completed(report=state.report)
-                        break  # Exit iteration loop — workflow complete
-
-                # If we reach here without hitting REFINEMENT, we're done
-                break
+                # No refinement — workflow complete
+                state.metadata["iteration_in_progress"] = False
+                state.metadata["last_completed_iteration"] = state.iteration
+                state.mark_completed(report=state.report)
 
             # Calculate duration
             duration_ms = (time.perf_counter() - start_time) * 1000
@@ -518,21 +448,32 @@ class WorkflowExecutionMixin:
             )
             state.metadata["cancelled"] = True
 
-            # Check if current iteration is incomplete
+            # Check if current iteration is incomplete.
+            #
+            # ROLLBACK LIMITATION: The "rollback" below only resets
+            # ``state.iteration`` and ``state.phase``.  Accumulated
+            # sources, findings, directives, and topic_research_results
+            # from the partial iteration remain in state.  Resume logic
+            # should check ``state.metadata["rollback_note"]`` to detect
+            # this condition and decide whether to re-process or skip
+            # already-collected data.
             if state.metadata.get("iteration_in_progress"):
                 # Current iteration is incomplete - discard partial results from this iteration
                 last_completed_iteration = state.metadata.get("last_completed_iteration")
                 if last_completed_iteration is not None and last_completed_iteration < state.iteration:
                     # We have a safe checkpoint from a prior completed iteration
-                    logger.info(
-                        "Discarding partial results from incomplete iteration %d (last completed: %d), research %s",
+                    logger.warning(
+                        "Cancellation rollback: resetting iteration %d → %d and "
+                        "phase → SYNTHESIS for research %s. NOTE: sources, "
+                        "findings, and directives from the partial iteration are "
+                        "retained in state — only the iteration counter and phase "
+                        "marker are rolled back.",
                         state.iteration,
                         last_completed_iteration,
                         state.id,
                     )
-                    # Rollback state to last completed iteration by restoring from checkpoint
-                    # For now, mark that we need to discard this iteration on resume
                     state.metadata["discarded_iteration"] = state.iteration
+                    state.metadata["rollback_note"] = "partial_iteration_data_retained"
                     state.iteration = last_completed_iteration
                     state.phase = DeepResearchPhase.SYNTHESIS
                 else:
@@ -542,6 +483,7 @@ class WorkflowExecutionMixin:
                         state.id,
                     )
                     state.metadata["discarded_iteration"] = state.iteration
+                    state.metadata["rollback_note"] = "partial_iteration_data_retained"
             else:
                 # Iteration was successfully completed, safe to save
                 logger.info(
@@ -578,7 +520,13 @@ class WorkflowExecutionMixin:
                 },
                 level="warning",
             )
-            # Re-raise to propagate cancellation to caller
+            # Re-raise CancelledError to honour Python's cancellation
+            # contract.  Callers using asyncio.wait_for() or Task.cancel()
+            # need to see the exception propagate.  The outer handler in
+            # background_tasks.py already guards on ``state.completed_at is
+            # None`` so it won't overwrite the careful iteration rollback
+            # and partial-result discard performed above (mark_cancelled
+            # sets completed_at).
             raise
         except Exception as exc:
             tb_str = traceback.format_exc()

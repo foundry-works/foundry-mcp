@@ -376,17 +376,26 @@ researchers run in parallel, bounded by `deep_research_max_concurrent`.
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `deep_research_enable_topic_agents` | bool | `true` | Enable per-topic ReAct loops in the gathering phase |
-| `deep_research_topic_max_searches` | int | `3` | Maximum search iterations per topic |
+| `deep_research_topic_max_tool_calls` | int | `10` | Maximum tool calls (search + extract) per topic |
 | `deep_research_topic_reflection_provider` | string | `null` | LLM provider for per-topic reflection (uses `default_provider` if not set) |
+| `deep_research_enable_extract` | bool | `true` | Allow researchers to extract full content from promising URLs |
+| `deep_research_extract_max_per_iteration` | int | `2` | Maximum URLs to extract per ReAct iteration |
+
+> **Note:** `deep_research_topic_max_searches` is accepted as a backward-compatible alias for `deep_research_topic_max_tool_calls`.
 
 Per-topic summaries are compiled and fed into the analysis phase, providing
 more coherent per-topic coverage than flat parallel search. Sources are
-deduplicated across topic researchers.
+deduplicated across topic researchers. When extraction is enabled, the
+reflection step can recommend URLs for full content extraction, which is
+particularly valuable for technical documentation, academic papers, and
+comparison tables.
 
 ```toml
 [research]
 deep_research_enable_topic_agents = true
-deep_research_topic_max_searches = 3
+deep_research_topic_max_tool_calls = 10
+deep_research_enable_extract = true
+deep_research_extract_max_per_iteration = 2
 deep_research_topic_reflection_provider = "[cli]gemini:flash"
 ```
 

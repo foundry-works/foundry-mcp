@@ -18,9 +18,7 @@ class TestConfigFallbackProviders:
         """Test that fallback providers are empty by default."""
         config = ResearchConfig()
         assert config.get_phase_fallback_providers("planning") == []
-        assert config.get_phase_fallback_providers("analysis") == []
         assert config.get_phase_fallback_providers("synthesis") == []
-        assert config.get_phase_fallback_providers("refinement") == []
 
     def test_get_phase_fallback_providers_configured(self) -> None:
         """Test that configured fallback providers are returned."""
@@ -30,9 +28,6 @@ class TestConfigFallbackProviders:
         )
         assert config.get_phase_fallback_providers("planning") == ["gemini", "claude"]
         assert config.get_phase_fallback_providers("synthesis") == ["claude:opus", "gemini:pro"]
-        # Unconfigured phases return empty
-        assert config.get_phase_fallback_providers("analysis") == []
-        assert config.get_phase_fallback_providers("refinement") == []
 
     def test_get_phase_fallback_providers_unknown_phase(self) -> None:
         """Test that unknown phases return empty list."""
@@ -64,15 +59,13 @@ class TestConfigFromTomlDict:
         """Test that phase fallback providers are parsed from TOML dict."""
         data = {
             "deep_research_planning_providers": ["gemini:pro", "claude:sonnet"],
-            "deep_research_analysis_providers": ["gemini:pro"],
+            "deep_research_synthesis_providers": ["gemini:pro"],
             "deep_research_max_retries": 3,
             "deep_research_retry_delay": 8.5,
         }
         config = ResearchConfig.from_toml_dict(data)
         assert config.deep_research_planning_providers == ["gemini:pro", "claude:sonnet"]
-        assert config.deep_research_analysis_providers == ["gemini:pro"]
-        assert config.deep_research_synthesis_providers == []
-        assert config.deep_research_refinement_providers == []
+        assert config.deep_research_synthesis_providers == ["gemini:pro"]
         assert config.deep_research_max_retries == 3
         assert config.deep_research_retry_delay == 8.5
 

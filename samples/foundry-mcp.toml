@@ -473,8 +473,13 @@ deep_research_reflection_timeout = 60.0
 # Master switch for per-topic ReAct loops in gathering
 deep_research_enable_topic_agents = true
 
-# Max search iterations per topic (ReAct loop limit)
-deep_research_topic_max_searches = 3
+# Max tool calls (search + extract) per topic (ReAct loop limit)
+# Note: "deep_research_topic_max_searches" is accepted as a backward-compat alias
+deep_research_topic_max_tool_calls = 10
+
+# Per-topic URL extraction during gathering
+deep_research_enable_extract = true       # Allow researchers to extract full content from promising URLs
+deep_research_extract_max_per_iteration = 2  # Max URLs to extract per ReAct iteration
 
 # LLM provider for per-topic reflection (uses default_provider if not set)
 # deep_research_topic_reflection_provider = "[cli]gemini:flash"
@@ -642,7 +647,7 @@ content_archive_ttl_hours = 168
 [research.per_provider_rate_limits]
 tavily = 60
 perplexity = 60
-semantic_scholar = 100
+semantic_scholar = 20
 
 # -----------------------------------------------------------------------------
 # Tavily Search Provider Configuration

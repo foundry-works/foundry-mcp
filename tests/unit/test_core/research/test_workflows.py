@@ -1007,7 +1007,7 @@ class TestDeepResearchRobustness:
         from foundry_mcp.core.research.workflows.deep_research import AgentDecision, AgentRole
 
         decision = AgentDecision(
-            agent=AgentRole.PLANNER,
+            agent=AgentRole.BRIEFER,
             action="test",
             rationale="test rationale",
             inputs={},
@@ -1340,8 +1340,12 @@ class TestDeepResearchTimeoutRecovery:
             DeepResearchWorkflow._tasks["new-task"] = new_task
             DeepResearchWorkflow._tasks["running-task"] = running_task
 
-        # Cleanup with 1 hour threshold
-        removed = DeepResearchWorkflow.cleanup_stale_tasks(max_age_seconds=3600)
+        # Cleanup with 1 hour threshold (instance method — any instance works
+        # since _tasks/_tasks_lock are class-level attributes)
+        from unittest.mock import MagicMock
+
+        workflow_instance = object.__new__(DeepResearchWorkflow)
+        removed = workflow_instance.cleanup_stale_tasks(max_age_seconds=3600)
 
         assert removed == 1  # Only old task should be removed
 

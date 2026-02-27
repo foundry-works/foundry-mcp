@@ -4,20 +4,23 @@ Each mixin contributes a disjoint set of methods implementing one workflow phase
 They are combined via multiple inheritance in the main DeepResearchWorkflow class.
 """
 
-from .analysis import AnalysisPhaseMixin
+from .analysis import AnalysisPhaseMixin  # noqa: F401 — DEPRECATED: not in active MRO
+from .brief import BriefPhaseMixin
 from .clarification import ClarificationPhaseMixin
-from .gathering import GatheringPhaseMixin
-from .planning import PlanningPhaseMixin
-from .refinement import RefinementPhaseMixin
+from .compression import CompressionMixin
+from .gathering import GatheringPhaseMixin  # DEPRECATED: legacy resume compat only
+from .planning import PlanningPhaseMixin  # noqa: F401 — DEPRECATED: not in active MRO
+from .refinement import RefinementPhaseMixin  # noqa: F401 — DEPRECATED: not in active MRO
+from .supervision import SupervisionPhaseMixin
 from .synthesis import SynthesisPhaseMixin
 from .topic_research import TopicResearchMixin
 
 __all__ = [
+    "BriefPhaseMixin",
     "ClarificationPhaseMixin",
-    "PlanningPhaseMixin",
+    "CompressionMixin",
     "GatheringPhaseMixin",
     "TopicResearchMixin",
-    "AnalysisPhaseMixin",
+    "SupervisionPhaseMixin",
     "SynthesisPhaseMixin",
-    "RefinementPhaseMixin",
 ]

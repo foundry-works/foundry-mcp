@@ -12,6 +12,9 @@ import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Optional
 
+if TYPE_CHECKING:
+    pass
+
 from foundry_mcp.core.observability import audit_log, get_metrics
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.models.sources import SourceQuality
@@ -19,38 +22,40 @@ from foundry_mcp.core.research.providers import (
     GoogleSearchProvider,
     PerplexitySearchProvider,
     SearchProvider,
-    SearchProviderError,
     SemanticScholarProvider,
     TavilyExtractProvider,
     TavilySearchProvider,
 )
 from foundry_mcp.core.research.providers.resilience import get_resilience_manager
 from foundry_mcp.core.research.workflows.base import WorkflowResult
+from foundry_mcp.core.research.workflows.deep_research.phases.compression import CompressionMixin
 from foundry_mcp.core.research.workflows.deep_research.source_quality import (
     _normalize_title,
-    get_domain_quality,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class GatheringPhaseMixin:
+class GatheringPhaseMixin(CompressionMixin):
     """Gathering phase methods. Mixed into DeepResearchWorkflow.
+
+    Inherits from :class:`CompressionMixin` which provides
+    ``_compress_topic_findings_async`` for per-topic compression.
 
     At runtime, ``self`` is a DeepResearchWorkflow instance providing:
     - config, memory, hooks, orchestrator (instance attributes)
     - _search_providers (cache dict on instance)
     - _write_audit_event(), _check_cancellation() (cross-cutting methods)
+
+    See ``DeepResearchWorkflowProtocol`` in ``_protocols.py`` for the
+    full structural contract.
     """
 
-    config: Any
-    memory: Any
     _search_providers: dict[str, Any]
 
+    # Stubs for Pyright — canonical signatures live in _protocols.py
     if TYPE_CHECKING:
 
-        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
-        def _check_cancellation(self, *args: Any, **kwargs: Any) -> None: ...
         async def _execute_topic_research_async(self, *args: Any, **kwargs: Any) -> Any: ...
 
     # ------------------------------------------------------------------
@@ -214,6 +219,8 @@ class GatheringPhaseMixin:
         try:
             if provider_name == "tavily":
                 provider = TavilySearchProvider()
+                # Wire fetch-time summarization for search results
+                self._attach_source_summarizer(provider)
                 self._search_providers[provider_name] = provider
                 return provider
             if provider_name == "perplexity":
@@ -238,6 +245,35 @@ class GatheringPhaseMixin:
         except Exception as e:
             logger.error("Error initializing %s provider: %s", provider_name, e)
             return None
+
+    def _attach_source_summarizer(self, provider: SearchProvider) -> None:
+        """Attach a SourceSummarizer to a search provider for fetch-time summarization.
+
+        Reads summarization provider/model config and creates a SourceSummarizer
+        instance, then sets it on the provider's ``_source_summarizer`` attribute.
+
+        Args:
+            provider: SearchProvider instance to configure.
+        """
+        from foundry_mcp.core.research.providers.shared import SourceSummarizer
+
+        # Resolve summarization provider/model via role-based hierarchy (Phase 6).
+        from foundry_mcp.core.research.workflows.deep_research._model_resolution import safe_resolve_model_for_role
+
+        role_provider, role_model = safe_resolve_model_for_role(self.config, "summarization")
+        summarization_provider: str = role_provider or self.config.default_provider
+        summarization_model: str | None = role_model
+        max_concurrent = self.config.deep_research_max_concurrent
+        max_content_length = self.config.deep_research_max_content_length
+
+        summarization_timeout = float(self.config.deep_research_summarization_timeout)
+        provider._source_summarizer = SourceSummarizer(
+            provider_id=summarization_provider,
+            model=summarization_model,
+            timeout=summarization_timeout,
+            max_concurrent=max_concurrent,
+            max_content_length=max_content_length,
+        )
 
     # ------------------------------------------------------------------
     # Main gathering phase
@@ -393,348 +429,95 @@ class GatheringPhaseMixin:
         failed_queries = 0
 
         # --- Topic agent delegation path ---
-        # When topic agents are enabled, each sub-query runs its own ReAct
-        # loop (search → reflect → refine → search) instead of flat parallel search.
-        if getattr(self.config, "deep_research_enable_topic_agents", False):
-            topic_max_searches = getattr(self.config, "deep_research_topic_max_searches", 3)
+        # Each sub-query runs its own ReAct loop (search -> reflect -> refine -> search)
+        # instead of flat parallel search.
+        topic_max_searches = self.config.deep_research_topic_max_tool_calls
 
-            # Budget splitting: divide max_sources_per_query across topic agents
-            # so the aggregate source count stays within a reasonable bound.
-            # Each topic gets at least 2 results per provider call.
-            num_topics = max(1, len(pending_queries))
-            per_topic_max_sources = max(2, state.max_sources_per_query // num_topics)
+        # Budget splitting: divide max_sources_per_query across topic agents
+        # so the aggregate source count stays within a reasonable bound.
+        # Each topic gets at least 2 results per provider call.
+        num_topics = max(1, len(pending_queries))
+        per_topic_max_sources = max(2, state.max_sources_per_query // num_topics)
 
-            logger.info(
-                "Topic agent budget: %d topics, %d sources/provider/topic (total budget %d)",
-                num_topics,
-                per_topic_max_sources,
-                state.max_sources_per_query,
+        logger.info(
+            "Topic agent budget: %d topics, %d sources/provider/topic (total budget %d)",
+            num_topics,
+            per_topic_max_sources,
+            state.max_sources_per_query,
+        )
+
+        self._check_cancellation(state)
+
+        async def run_topic_agent(sq):
+            return await self._execute_topic_research_async(
+                sub_query=sq,
+                state=state,
+                available_providers=available_providers,
+                max_searches=topic_max_searches,
+                max_sources_per_provider=per_topic_max_sources,
+                timeout=timeout,
+                seen_urls=seen_urls,
+                seen_titles=seen_titles,
+                state_lock=state_lock,
+                semaphore=semaphore,
             )
 
-            self._check_cancellation(state)
-
-            async def run_topic_agent(sq):
-                return await self._execute_topic_research_async(
-                    sub_query=sq,
-                    state=state,
-                    available_providers=available_providers,
-                    max_searches=topic_max_searches,
-                    max_sources_per_provider=per_topic_max_sources,
-                    timeout=timeout,
-                    seen_urls=seen_urls,
-                    seen_titles=seen_titles,
-                    state_lock=state_lock,
-                    semaphore=semaphore,
-                )
-
-            try:
-                tasks = [run_topic_agent(sq) for sq in pending_queries]
-                topic_results = await asyncio.gather(*tasks, return_exceptions=True)
-
-                for i, result in enumerate(topic_results):
-                    if isinstance(result, BaseException):
-                        failed_queries += 1
-                        logger.error("Topic agent exception for sub-query %s: %s", pending_queries[i].id, result)
-                    else:
-                        total_sources_added += result.sources_found
-                        state.topic_research_results.append(result)
-                        if result.sources_found == 0:
-                            failed_queries += 1
-
-            except asyncio.CancelledError:
-                logger.warning("Gathering phase (topic agents) cancelled for research %s", state.id)
-                try:
-                    state.updated_at = datetime.now(timezone.utc)
-                    self.memory.save_deep_research(state)
-                except Exception as save_exc:
-                    logger.error("Error saving state during topic agent cancellation: %s", save_exc)
-                raise
-            finally:
-                state.updated_at = datetime.now(timezone.utc)
-
-            # Save state and emit audit events (same as flat path)
-            circuit_breaker_states_end = {
-                name: resilience_manager.get_breaker_state(name).value for name in configured_provider_names
-            }
-            self.memory.save_deep_research(state)
-            self._write_audit_event(
-                state,
-                "gathering_result",
-                data={
-                    "source_count": total_sources_added,
-                    "queries_executed": len(pending_queries),
-                    "queries_failed": failed_queries,
-                    "unique_urls": len(seen_urls),
-                    "providers_used": [p.get_provider_name() for p in available_providers],
-                    "providers_unavailable": unavailable_providers,
-                    "circuit_breaker_states_start": circuit_breaker_states_start,
-                    "circuit_breaker_states_end": circuit_breaker_states_end,
-                    "topic_agents_enabled": True,
-                    "topic_max_searches": topic_max_searches,
-                    "per_topic_max_sources": per_topic_max_sources,
-                },
-            )
-
-            success = total_sources_added > 0 or failed_queries < len(pending_queries)
-            error_msg = None
-            if not success and failed_queries == len(pending_queries):
-                error_msg = (
-                    f"All {failed_queries} topic researchers failed to find sources. "
-                    f"Providers used: {[p.get_provider_name() for p in available_providers]}"
-                )
-
-            logger.info(
-                "Gathering phase (topic agents) complete: %d sources from %d queries (%d failed)",
-                total_sources_added,
-                len(pending_queries),
-                failed_queries,
-            )
-
-            phase_duration_ms = (time.perf_counter() - phase_start_time) * 1000
-            self._write_audit_event(
-                state,
-                "phase.completed",
-                data={
-                    "phase_name": "gathering",
-                    "iteration": state.iteration,
-                    "task_id": state.id,
-                    "duration_ms": phase_duration_ms,
-                    "topic_agents_enabled": True,
-                },
-            )
-            get_metrics().histogram(
-                "foundry_mcp_research_phase_duration_seconds",
-                phase_duration_ms / 1000.0,
-                labels={"phase_name": "gathering", "status": "success" if success else "error"},
-            )
-
-            return WorkflowResult(
-                success=success,
-                content=f"Gathered {total_sources_added} sources from {len(pending_queries)} topic researchers",
-                error=error_msg,
-                metadata={
-                    "research_id": state.id,
-                    "source_count": total_sources_added,
-                    "queries_executed": len(pending_queries),
-                    "queries_failed": failed_queries,
-                    "unique_urls": len(seen_urls),
-                    "providers_used": [p.get_provider_name() for p in available_providers],
-                    "topic_agents_enabled": True,
-                },
-            )
-
-        # --- Flat parallel search path (original behavior) ---
         try:
+            tasks = [run_topic_agent(sq) for sq in pending_queries]
+            topic_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            async def execute_sub_query(sub_query) -> tuple[int, Optional[str]]:
-                """Execute a single sub-query and return (sources_added, error)."""
-                async with semaphore:
-                    # Check for cancellation before executing sub-query
-                    self._check_cancellation(state)
-
-                    sub_query.status = "executing"
-
-                    provider_errors: list[str] = []
-                    added = 0
-
-                    for provider in available_providers:
-                        provider_name = provider.get_provider_name()
-
-                        # Check if circuit breaker opened mid-gathering (graceful degradation)
-                        if not resilience_manager.is_provider_available(provider_name):
-                            logger.warning(
-                                "Provider %s circuit breaker opened mid-gathering, skipping for remaining sub-queries",
-                                provider_name,
-                            )
-                            provider_errors.append(f"{provider_name}: circuit breaker open")
-                            continue
-
-                        try:
-                            # Check for cancellation before making search provider call
-                            self._check_cancellation(state)
-
-                            # Build provider-specific kwargs
-                            search_kwargs: dict[str, Any] = {
-                                "query": sub_query.query,
-                                "max_results": state.max_sources_per_query,
-                                "sub_query_id": sub_query.id,
-                            }
-
-                            # Add provider-specific kwargs
-                            if provider_name == "tavily":
-                                tavily_kwargs = self._get_tavily_search_kwargs(state)
-                                search_kwargs.update(tavily_kwargs)
-                            elif provider_name == "perplexity":
-                                perplexity_kwargs = self._get_perplexity_search_kwargs(state)
-                                search_kwargs.update(perplexity_kwargs)
-                                # Perplexity also needs include_raw_content for link following
-                                search_kwargs["include_raw_content"] = state.follow_links
-                            elif provider_name == "semantic_scholar":
-                                semantic_scholar_kwargs = self._get_semantic_scholar_search_kwargs(state)
-                                search_kwargs.update(semantic_scholar_kwargs)
-                                # Semantic Scholar also gets include_raw_content for consistency
-                                search_kwargs["include_raw_content"] = state.follow_links
-                            else:
-                                # Other providers just get include_raw_content
-                                search_kwargs["include_raw_content"] = state.follow_links
-
-                            sources = await asyncio.wait_for(
-                                provider.search(**search_kwargs),
-                                timeout=timeout,
-                            )
-
-                            # Add sources with deduplication
-                            for source in sources:
-                                async with state_lock:
-                                    # URL-based deduplication
-                                    if source.url and source.url in seen_urls:
-                                        continue  # Skip duplicate URL
-
-                                    # Title-based deduplication (same paper from different domains)
-                                    normalized_title = _normalize_title(source.title)
-                                    if normalized_title and len(normalized_title) > 20:
-                                        if normalized_title in seen_titles:
-                                            logger.debug(
-                                                "Skipping duplicate by title: %s (already have %s)",
-                                                source.url,
-                                                seen_titles[normalized_title],
-                                            )
-                                            continue  # Skip duplicate title
-                                        seen_titles[normalized_title] = source.url or ""
-
-                                    if source.url:
-                                        seen_urls.add(source.url)
-                                        # Apply domain-based quality scoring
-                                        if source.quality == SourceQuality.UNKNOWN:
-                                            source.quality = get_domain_quality(source.url, state.research_mode)
-
-                                    # Add source to state (centralised citation assignment)
-                                    state.append_source(source)
-                                    sub_query.source_ids.append(source.id)
-                                    added += 1
-
-                            self._write_audit_event(
-                                state,
-                                "gathering_provider_result",
-                                data={
-                                    "provider": provider_name,
-                                    "sub_query_id": sub_query.id,
-                                    "sub_query": sub_query.query,
-                                    "sources_added": len(sources),
-                                },
-                            )
-                            # Track search provider query count
-                            async with state_lock:
-                                state.search_provider_stats[provider_name] = (
-                                    state.search_provider_stats.get(provider_name, 0) + 1
-                                )
-                        except SearchProviderError as e:
-                            provider_errors.append(f"{provider_name}: {e}")
-                            self._write_audit_event(
-                                state,
-                                "gathering_provider_result",
-                                data={
-                                    "provider": provider_name,
-                                    "sub_query_id": sub_query.id,
-                                    "sub_query": sub_query.query,
-                                    "sources_added": 0,
-                                    "error": str(e),
-                                },
-                                level="warning",
-                            )
-                        except asyncio.TimeoutError:
-                            provider_errors.append(f"{provider_name}: timeout after {timeout}s")
-                            self._write_audit_event(
-                                state,
-                                "gathering_provider_result",
-                                data={
-                                    "provider": provider_name,
-                                    "sub_query_id": sub_query.id,
-                                    "sub_query": sub_query.query,
-                                    "sources_added": 0,
-                                    "error": f"timeout after {timeout}s",
-                                },
-                                level="warning",
-                            )
-                        except Exception as e:
-                            provider_errors.append(f"{provider_name}: {e}")
-                            self._write_audit_event(
-                                state,
-                                "gathering_provider_result",
-                                data={
-                                    "provider": provider_name,
-                                    "sub_query_id": sub_query.id,
-                                    "sub_query": sub_query.query,
-                                    "sources_added": 0,
-                                    "error": str(e),
-                                },
-                                level="warning",
-                            )
-
-                    if added > 0:
-                        sub_query.mark_completed(findings=f"Found {added} sources")
-                        logger.debug(
-                            "Sub-query '%s' completed: %d sources",
-                            sub_query.query[:50],
-                            added,
-                        )
-                        return added, None
-
-                    error_summary = "; ".join(provider_errors) or "No sources found"
-                    sub_query.mark_failed(error_summary)
-                    logger.warning(
-                        "Sub-query '%s' failed: %s",
-                        sub_query.query[:50],
-                        error_summary,
-                    )
-                    return 0, error_summary
-
-            # Check for cancellation before executing sub-query batch
-            self._check_cancellation(state)
-
-            # Execute all sub-queries concurrently
-            tasks = [execute_sub_query(sq) for sq in pending_queries]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            # Aggregate results
-            for result in results:
-                # Check for BaseException (includes Exception, CancelledError, KeyboardInterrupt, etc.)
-                # asyncio.gather with return_exceptions=True can return any BaseException
+            for i, result in enumerate(topic_results):
                 if isinstance(result, BaseException):
                     failed_queries += 1
-                    logger.error("Task exception: %s", result)
+                    logger.error("Topic agent exception for sub-query %s: %s", pending_queries[i].id, result)
                 else:
-                    added, error = result
-                    total_sources_added += added
-                    if error:
+                    total_sources_added += result.sources_found
+                    state.add_topic_research_result(result)
+                    # Aggregate raw notes for session-level access (Phase 1 ODR alignment)
+                    if result.raw_notes:
+                        state.raw_notes.append(result.raw_notes)
+                    if result.sources_found == 0:
                         failed_queries += 1
 
         except asyncio.CancelledError:
-            # Handle cancellation: save interim state before re-raising
-            logger.warning(
-                "Gathering phase cancelled during sub-query execution for research %s",
-                state.id,
-            )
+            logger.warning("Gathering phase (topic agents) cancelled for research %s", state.id)
             try:
                 state.updated_at = datetime.now(timezone.utc)
                 self.memory.save_deep_research(state)
             except Exception as save_exc:
-                logger.error(
-                    "Error saving state during gathering cancellation for research %s: %s",
-                    state.id,
-                    save_exc,
-                )
+                logger.error("Error saving state during topic agent cancellation: %s", save_exc)
             raise
         finally:
-            # Ensure state timestamp is updated on any exit
             state.updated_at = datetime.now(timezone.utc)
 
-        # Capture circuit breaker states at end of gathering
+        # --- Per-topic compression step ---
+        # When inline compression is enabled, each topic researcher already
+        # compressed its own findings during the ReAct loop. The batch path
+        # here only runs for topics that still lack compressed_findings
+        # (inline compression disabled, or inline compression failed).
+        compression_stats: dict[str, Any] = {}
+        if total_sources_added > 0 and state.topic_research_results:
+            # Check if any topics still need compression
+            needs_compression = any(
+                tr.source_ids and tr.compressed_findings is None for tr in state.topic_research_results
+            )
+            if needs_compression:
+                self._check_cancellation(state)
+                compression_stats = await self._compress_topic_findings_async(
+                    state=state,
+                    max_concurrent=max_concurrent,
+                    timeout=timeout,
+                )
+            else:
+                logger.info(
+                    "Skipping batch compression: all %d topics already compressed inline",
+                    len(state.topic_research_results),
+                )
+
+        # Save state and emit audit events
         circuit_breaker_states_end = {
             name: resilience_manager.get_breaker_state(name).value for name in configured_provider_names
         }
-
-        # Save state (normal execution path after finally block)
         self.memory.save_deep_research(state)
         self._write_audit_event(
             state,
@@ -748,22 +531,19 @@ class GatheringPhaseMixin:
                 "providers_unavailable": unavailable_providers,
                 "circuit_breaker_states_start": circuit_breaker_states_start,
                 "circuit_breaker_states_end": circuit_breaker_states_end,
+                "topic_max_searches": topic_max_searches,
+                "per_topic_max_sources": per_topic_max_sources,
+                "compression": compression_stats,
             },
         )
 
-        # Determine success
         success = total_sources_added > 0 or failed_queries < len(pending_queries)
-
-        # Build error message if all queries failed
         error_msg = None
-        if not success:
-            providers_used = [p.get_provider_name() for p in available_providers]
-            if failed_queries == len(pending_queries):
-                error_msg = (
-                    f"All {failed_queries} sub-queries failed to find sources. "
-                    f"Providers used: {providers_used}. "
-                    f"Unavailable providers: {unavailable_providers}"
-                )
+        if not success and failed_queries == len(pending_queries):
+            error_msg = (
+                f"All {failed_queries} topic researchers failed to find sources. "
+                f"Providers used: {[p.get_provider_name() for p in available_providers]}"
+            )
 
         logger.info(
             "Gathering phase complete: %d sources from %d queries (%d failed)",
@@ -772,7 +552,6 @@ class GatheringPhaseMixin:
             failed_queries,
         )
 
-        # Emit phase.completed audit event
         phase_duration_ms = (time.perf_counter() - phase_start_time) * 1000
         self._write_audit_event(
             state,
@@ -782,11 +561,8 @@ class GatheringPhaseMixin:
                 "iteration": state.iteration,
                 "task_id": state.id,
                 "duration_ms": phase_duration_ms,
-                "circuit_breaker_states": circuit_breaker_states_end,
             },
         )
-
-        # Emit phase duration metric
         get_metrics().histogram(
             "foundry_mcp_research_phase_duration_seconds",
             phase_duration_ms / 1000.0,
@@ -795,7 +571,7 @@ class GatheringPhaseMixin:
 
         return WorkflowResult(
             success=success,
-            content=f"Gathered {total_sources_added} sources from {len(pending_queries)} sub-queries",
+            content=f"Gathered {total_sources_added} sources from {len(pending_queries)} topic researchers",
             error=error_msg,
             metadata={
                 "research_id": state.id,
@@ -804,11 +580,7 @@ class GatheringPhaseMixin:
                 "queries_failed": failed_queries,
                 "unique_urls": len(seen_urls),
                 "providers_used": [p.get_provider_name() for p in available_providers],
-                "providers_unavailable": unavailable_providers,
-                "circuit_breaker_states": {
-                    "start": circuit_breaker_states_start,
-                    "end": circuit_breaker_states_end,
-                },
+                "compression": compression_stats,
             },
         )
 
@@ -824,16 +596,14 @@ class GatheringPhaseMixin:
         """Execute Tavily Extract as optional follow-up after gathering phase.
 
         This step expands URL content for top-ranked sources discovered during search.
-        It runs between GATHERING and ANALYSIS phases when enabled via config flag
-        ``tavily_extract_in_deep_research``.
+        It runs between GATHERING and SYNTHESIS phases when configured.
 
-        Per acceptance criteria:
+        Behaviour:
         - Extract can expand URLs discovered during search
-        - Optional step controlled by config flag: tavily_extract_in_deep_research
         - Max 5 URLs extracted per deep research run (configurable)
         - URL prioritization: top-N by relevance score (quality)
         - Results integrated into source collection with extract_source=true metadata
-        - Extraction occurs after search phase, before analysis phase
+        - Extraction occurs after search phase, before synthesis phase
 
         Args:
             state: Current research state with sources from gathering

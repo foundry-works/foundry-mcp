@@ -11,7 +11,11 @@ import logging
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    from foundry_mcp.config.research import ResearchConfig
+    from foundry_mcp.core.research.memory import ResearchMemory
 from uuid import uuid4
 
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
@@ -25,14 +29,17 @@ class AuditMixin:
     Requires the composing class to provide:
     - self.config: ResearchConfig (with audit_verbosity, deep_research_audit_artifacts)
     - self.memory: ResearchMemory (with base_path)
+
+    See ``DeepResearchWorkflowProtocol`` in ``phases/_protocols.py`` for
+    the full structural contract.
     """
 
-    config: Any
-    memory: Any
+    config: ResearchConfig
+    memory: ResearchMemory
 
     def _audit_enabled(self) -> bool:
         """Return True if audit artifacts are enabled."""
-        return bool(getattr(self.config, "deep_research_audit_artifacts", True))
+        return bool(self.config.deep_research_audit_artifacts)
 
     def _audit_path(self, research_id: str) -> Path:
         """Resolve audit artifact path for a research session."""

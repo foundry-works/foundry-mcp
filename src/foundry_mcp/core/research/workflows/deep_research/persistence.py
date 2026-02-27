@@ -10,13 +10,14 @@ import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
+if TYPE_CHECKING:
+    from foundry_mcp.config.research import ResearchConfig
+    from foundry_mcp.core.research.memory import ResearchMemory
+
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
     DeepResearchState,
 )
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +31,13 @@ class PersistenceMixin:
     - self._last_persisted_at: datetime | None
     - self._last_persisted_phase: DeepResearchPhase | None
     - self._last_persisted_iteration: int | None
+
+    See ``DeepResearchWorkflowProtocol`` in ``phases/_protocols.py`` for
+    the full structural contract.
     """
 
-    config: Any
-    memory: Any
+    config: ResearchConfig
+    memory: ResearchMemory
     _last_persisted_at: Any
     _last_persisted_phase: DeepResearchPhase | None
     _last_persisted_iteration: int | None
@@ -127,7 +131,7 @@ class PersistenceMixin:
             return True
 
         # Priority 3: Check throttle interval
-        throttle_seconds = getattr(self.config, "status_persistence_throttle_seconds", 5)
+        throttle_seconds = self.config.status_persistence_throttle_seconds
 
         # 0 means always persist (backwards compatibility)
         if throttle_seconds == 0:

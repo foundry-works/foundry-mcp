@@ -13,6 +13,9 @@ import time
 import traceback
 from typing import TYPE_CHECKING, Any, Optional
 
+if TYPE_CHECKING:
+    from foundry_mcp.core.research.memory import ResearchMemory
+
 from foundry_mcp.core import task_registry
 from foundry_mcp.core.background_task import BackgroundTask, TaskStatus
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
@@ -20,6 +23,7 @@ from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research.infrastructure import (
     _active_research_sessions,
     _active_sessions_lock,
+    register_active_session,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,15 +39,23 @@ class BackgroundTaskMixin:
     - memory (inherited from ResearchWorkflowBase)
     """
 
-    memory: Any
+    memory: ResearchMemory
     _tasks: dict[str, BackgroundTask]
     _tasks_lock: threading.Lock
 
+    # Stubs for Pyright — canonical signatures live in phases/_protocols.py
     if TYPE_CHECKING:
 
-        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
+        def _write_audit_event(
+            self,
+            state: DeepResearchState | None,
+            event_name: str,
+            *,
+            data: dict[str, Any] | None = ...,
+            level: str = ...,
+        ) -> None: ...
         def _record_workflow_error(self, *args: Any, **kwargs: Any) -> None: ...
-        def _flush_state(self, *args: Any, **kwargs: Any) -> None: ...
+        def _flush_state(self, state: DeepResearchState) -> None: ...
         async def _execute_workflow_async(self, *args: Any, **kwargs: Any) -> Any: ...
 
     def _start_background_task(
@@ -62,6 +74,9 @@ class BackgroundTaskMixin:
         This approach works correctly from sync MCP tool handlers where
         there is no running event loop.
         """
+        # Prevent accumulation of BackgroundTask objects from crashed threads
+        self.cleanup_stale_tasks()
+
         # Create BackgroundTask tracking structure first
         bg_task = BackgroundTask(
             research_id=state.id,
@@ -72,9 +87,8 @@ class BackgroundTaskMixin:
         # Also register with global task registry for watchdog monitoring
         task_registry.register(bg_task)
 
-        # Register session for crash handler visibility (under lock)
-        with _active_sessions_lock:
-            _active_research_sessions[state.id] = state
+        # Register session for crash handler visibility (with bounded capacity)
+        register_active_session(state.id, state)
 
         # Reference to self for use in thread
         workflow = self
@@ -96,17 +110,23 @@ class BackgroundTaskMixin:
                             return await asyncio.wait_for(coro, timeout=task_timeout)
                         return await coro
                     except asyncio.CancelledError:
-                        state.mark_cancelled(phase_state=f"phase={state.phase.value}, iteration={state.iteration}")
-                        workflow.memory.save_deep_research(state)
-                        workflow._write_audit_event(
-                            state,
-                            "workflow_cancelled",
-                            data={
-                                "cancelled": True,
-                                "terminal_status": "cancelled",
-                            },
-                            level="warning",
-                        )
+                        # Safety net: only mark cancelled if the inner handler
+                        # in _execute_workflow_async() hasn't already terminated
+                        # the state (which sets completed_at). This avoids
+                        # overwriting the inner handler's careful iteration
+                        # rollback and partial-result discard.
+                        if state.completed_at is None:
+                            state.mark_cancelled(phase_state=f"phase={state.phase.value}, iteration={state.iteration}")
+                            workflow.memory.save_deep_research(state)
+                            workflow._write_audit_event(
+                                state,
+                                "workflow_cancelled",
+                                data={
+                                    "cancelled": True,
+                                    "terminal_status": "cancelled",
+                                },
+                                level="warning",
+                            )
                         return WorkflowResult(
                             success=False,
                             content="",
@@ -246,8 +266,7 @@ class BackgroundTaskMixin:
         with self._tasks_lock:
             self._tasks.pop(research_id, None)
 
-    @classmethod
-    def cleanup_stale_tasks(cls, max_age_seconds: float = 3600) -> int:
+    def cleanup_stale_tasks(self, max_age_seconds: float = 3600) -> int:
         """Remove old completed tasks from the registry.
 
         This can be called periodically to clean up memory from completed tasks
@@ -263,13 +282,13 @@ class BackgroundTaskMixin:
 
         now = time.time()
         removed = 0
-        with cls._tasks_lock:
+        with self._tasks_lock:
             stale_ids = [
                 task_id
-                for task_id, task in cls._tasks.items()
+                for task_id, task in self._tasks.items()
                 if task.is_done and task.completed_at and (now - task.completed_at) > max_age_seconds
             ]
             for task_id in stale_ids:
-                del cls._tasks[task_id]
+                del self._tasks[task_id]
                 removed += 1
         return removed

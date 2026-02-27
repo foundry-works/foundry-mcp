@@ -89,16 +89,6 @@ class TestTavilyExtractConfigParsing:
         config = ResearchConfig.from_toml_dict({"tavily_extract_include_images": True})
         assert config.tavily_extract_include_images is True
 
-    def test_parse_tavily_extract_in_deep_research(self):
-        """Test tavily_extract_in_deep_research is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({"tavily_extract_in_deep_research": True})
-        assert config.tavily_extract_in_deep_research is True
-
-    def test_parse_tavily_extract_max_urls(self):
-        """Test tavily_extract_max_urls is parsed correctly."""
-        config = ResearchConfig.from_toml_dict({"tavily_extract_max_urls": 10})
-        assert config.tavily_extract_max_urls == 10
-
 
 class TestTavilyConfigDefaults:
     """Tests for Tavily configuration default values."""
@@ -147,16 +137,6 @@ class TestTavilyConfigDefaults:
         """Test default tavily_extract_include_images is False."""
         config = ResearchConfig()
         assert config.tavily_extract_include_images is False
-
-    def test_default_tavily_extract_in_deep_research_is_false(self):
-        """Test default tavily_extract_in_deep_research is False."""
-        config = ResearchConfig()
-        assert config.tavily_extract_in_deep_research is False
-
-    def test_default_tavily_extract_max_urls(self):
-        """Test default tavily_extract_max_urls is 5."""
-        config = ResearchConfig()
-        assert config.tavily_extract_max_urls == 5
 
 
 class TestTavilyConfigValidation:
@@ -241,8 +221,6 @@ class TestTavilyConfigPrecedence:
 
         assert config.tavily_extract_depth == "advanced"  # overridden
         assert config.tavily_extract_include_images is False  # default preserved
-        assert config.tavily_extract_in_deep_research is False  # default preserved
-        assert config.tavily_extract_max_urls == 5  # default preserved
 
     def test_all_tavily_fields_combined(self):
         """Test all Tavily fields can be set together."""
@@ -259,8 +237,6 @@ class TestTavilyConfigPrecedence:
                 # Extract fields
                 "tavily_extract_depth": "advanced",
                 "tavily_extract_include_images": True,
-                "tavily_extract_in_deep_research": True,
-                "tavily_extract_max_urls": 10,
             }
         )
 
@@ -276,5 +252,3 @@ class TestTavilyConfigPrecedence:
         # Extract fields
         assert config.tavily_extract_depth == "advanced"
         assert config.tavily_extract_include_images is True
-        assert config.tavily_extract_in_deep_research is True
-        assert config.tavily_extract_max_urls == 10

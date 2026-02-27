@@ -200,6 +200,24 @@ class TestExtractCitedNumbers:
         report = "Ref [1] and link [2](https://x.com) and [3]."
         assert extract_cited_numbers(report) == {1, 3}
 
+    def test_inline_link_followed_by_citation(self):
+        """[Title](URL) [N] pattern: the [N] is extracted as a citation."""
+        report = "According to [MIT Tech Review](https://example.com) [1], the technology is mature."
+        assert extract_cited_numbers(report) == {1}
+
+    def test_inline_link_followed_by_citation_no_space(self):
+        """[Title](URL)[N] pattern without space: [N] is still extracted."""
+        report = "See [Alpha Source](https://alpha.example.com)[1] for details."
+        assert extract_cited_numbers(report) == {1}
+
+    def test_multiple_inline_links_with_citations(self):
+        """Multiple [Title](URL) [N] patterns in one report."""
+        report = (
+            "Research by [Alpha](https://a.com) [1] and [Beta](https://b.com) [2] "
+            "confirms the finding. Later, [1] was cited again."
+        )
+        assert extract_cited_numbers(report) == {1, 2}
+
 
 # =============================================================================
 # remove_dangling_citations
@@ -224,6 +242,19 @@ class TestRemoveDanglingCitations:
         assert "[1]" not in result
         assert "[2]" not in result
         assert "[3]" not in result
+
+    def test_preserves_inline_link_with_valid_citation(self):
+        """[Title](URL) [N] pattern: valid [N] is preserved, markdown link untouched."""
+        report = "According to [Alpha Source](https://alpha.example.com) [1], the data shows..."
+        result = remove_dangling_citations(report, valid_numbers={1})
+        assert "[Alpha Source](https://alpha.example.com) [1]" in result
+
+    def test_removes_dangling_citation_after_inline_link(self):
+        """[Title](URL) [N] pattern: dangling [N] is removed, markdown link untouched."""
+        report = "According to [Alpha Source](https://alpha.example.com) [99], the data shows..."
+        result = remove_dangling_citations(report, valid_numbers={1, 2})
+        assert "[Alpha Source](https://alpha.example.com)" in result
+        assert "[99]" not in result
 
 
 # =============================================================================
@@ -344,6 +375,54 @@ class TestPostprocessCitations:
         processed, meta = postprocess_citations(report, state)
         assert meta["dangling_citations_removed"] == 1
         assert "[1]" not in processed
+
+    def test_inline_links_survive_postprocessing(self, state_with_sources: DeepResearchState):
+        """[Title](URL) [N] inline links survive the full post-processing pipeline."""
+        report = (
+            "# Report\n\n"
+            "According to [Alpha Source](https://alpha.example.com) [1], caffeine affects sleep. "
+            "Research by [Beta Source](https://beta.example.com) [2] confirms this. "
+            "As noted in [1], the effect is dose-dependent.\n"
+        )
+        processed, meta = postprocess_citations(report, state_with_sources)
+
+        body = processed.split("## Sources")[0]
+
+        # Inline markdown links preserved
+        assert "[Alpha Source](https://alpha.example.com) [1]" in body
+        assert "[Beta Source](https://beta.example.com) [2]" in body
+        # Bare [N] subsequent reference preserved
+        assert "As noted in [1]" in body
+        # Citations counted correctly (first [1] + [2] + second [1] = {1, 2})
+        assert meta["total_citations_in_report"] == 2
+        assert meta["dangling_citations_removed"] == 0
+
+    def test_inline_links_with_sources_section_correct(self, state_with_sources: DeepResearchState):
+        """Auto-appended Sources section is correct when inline links are present."""
+        report = "# Report\n\nSee [Alpha Source](https://alpha.example.com) [1] for details.\n"
+        processed, meta = postprocess_citations(report, state_with_sources)
+
+        # Sources section is appended
+        assert "## Sources" in processed
+        # All sources listed in the appended section
+        assert "[1] [Alpha Source](https://alpha.example.com)" in processed
+        assert "[2] [Beta Source](https://beta.example.com)" in processed
+        assert "[3] [Gamma Source](https://gamma.example.com)" in processed
+        # Unreferenced sources counted
+        assert meta["unreferenced_sources"] == 2  # [2] and [3] not cited
+
+    def test_dangling_inline_link_citation_removed(self, state_with_sources: DeepResearchState):
+        """Dangling [N] after an inline link is removed, but the link itself stays."""
+        report = "# Report\n\nAccording to [Unknown Source](https://unknown.example.com) [99], something happened.\n"
+        processed, meta = postprocess_citations(report, state_with_sources)
+
+        body = processed.split("## Sources")[0]
+
+        # The markdown link itself is preserved (it's not a citation)
+        assert "[Unknown Source](https://unknown.example.com)" in body
+        # The dangling [99] is removed
+        assert "[99]" not in body
+        assert meta["dangling_citations_removed"] == 1
 
 
 # =============================================================================

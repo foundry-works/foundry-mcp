@@ -114,8 +114,7 @@ def mock_research_state(mock_sources) -> DeepResearchState:
         id="test-research-001",
         original_query="Test research query",
         sources=mock_sources,
-        phase=DeepResearchPhase.ANALYSIS,
-        analysis_provider="claude",
+        phase=DeepResearchPhase.SYNTHESIS,
         synthesis_provider="claude",
     )
 

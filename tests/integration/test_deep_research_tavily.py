@@ -156,21 +156,6 @@ class TestConfigOverrideBehavior:
 
         assert workflow.config.tavily_country == "US"
 
-    def test_extract_in_deep_research_flag(self, base_config, mock_memory):
-        """Extract in deep research flag should be accessible in workflow."""
-        config = ResearchConfig(
-            **{
-                **base_config.__dict__,
-                "tavily_extract_in_deep_research": True,
-                "tavily_extract_max_urls": 10,
-            }
-        )
-
-        workflow = DeepResearchWorkflow(config=config, memory=mock_memory)
-
-        assert workflow.config.tavily_extract_in_deep_research is True
-        assert workflow.config.tavily_extract_max_urls == 10
-
 
 # =============================================================================
 # Tavily Search Parameter Propagation Tests
@@ -283,7 +268,7 @@ class TestExtractFollowupIntegration:
         """Extract follow-up should be disabled by default."""
         workflow = DeepResearchWorkflow(config=base_config, memory=mock_memory)
 
-        assert workflow.config.tavily_extract_in_deep_research is False
+        assert workflow.config.deep_research_enable_extract is True  # Extract is enabled by default
 
     @pytest.mark.asyncio
     async def test_extract_followup_enabled_when_configured(self, base_config, mock_memory):
@@ -291,28 +276,28 @@ class TestExtractFollowupIntegration:
         config = ResearchConfig(
             **{
                 **base_config.__dict__,
-                "tavily_extract_in_deep_research": True,
+                "deep_research_enable_extract": True,
             }
         )
 
         workflow = DeepResearchWorkflow(config=config, memory=mock_memory)
 
-        assert workflow.config.tavily_extract_in_deep_research is True
+        assert workflow.config.deep_research_enable_extract is True
 
     @pytest.mark.asyncio
     async def test_extract_max_urls_configurable(self, base_config, mock_memory):
-        """Extract max URLs should be configurable."""
+        """Extract max URLs per iteration should be configurable."""
         config = ResearchConfig(
             **{
                 **base_config.__dict__,
-                "tavily_extract_in_deep_research": True,
-                "tavily_extract_max_urls": 10,
+                "deep_research_enable_extract": True,
+                "deep_research_extract_max_per_iteration": 10,
             }
         )
 
         workflow = DeepResearchWorkflow(config=config, memory=mock_memory)
 
-        assert workflow.config.tavily_extract_max_urls == 10
+        assert workflow.config.deep_research_extract_max_per_iteration == 10
 
     @pytest.mark.asyncio
     async def test_extract_followup_method_exists(self, base_config, mock_memory):
@@ -320,7 +305,7 @@ class TestExtractFollowupIntegration:
         config = ResearchConfig(
             **{
                 **base_config.__dict__,
-                "tavily_extract_in_deep_research": True,
+                "deep_research_enable_extract": True,
             }
         )
 

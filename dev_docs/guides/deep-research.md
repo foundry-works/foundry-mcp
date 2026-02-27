@@ -162,6 +162,59 @@ Research sessions are persisted for resume and crash recovery:
 - **Format**: JSON state files per research_id
 - **Crash markers**: `.crash` files with traceback on unhandled exceptions
 
+## Cost-Tiered Model Routing
+
+Deep research uses **cost-tiered model defaults** to route high-volume, low-complexity LLM calls to cheaper models automatically. This reduces cost without meaningful quality loss.
+
+### Role Classification
+
+| Tier | Roles | Default Model | Rationale |
+|------|-------|---------------|-----------|
+| **Cheap** | `summarization`, `compression` | `2.0-flash` | High call volume, structured output, low reasoning complexity |
+| **Standard** | `research`, `report`, `reflection`, `supervision`, `clarification` | Provider default | Requires nuanced reasoning, synthesis, or judgment |
+
+### How It Works
+
+When no explicit model is configured for a role, `resolve_model_for_role()` applies the cost-tier default from `ResearchConfig._COST_TIER_MODEL_DEFAULTS`:
+
+1. **Explicit config** (`deep_research_{role}_model`) takes highest priority
+2. **Provider spec model** (e.g., `[cli]claude:haiku` embeds `haiku`) is next
+3. **Cost-tier default** applies for summarization/compression if nothing above is set
+4. **Provider default** (no model override) is used for all other roles
+
+### Example Configurations
+
+**Default (recommended for most users):**
+```toml
+[research]
+# Summarization and compression automatically use 2.0-flash
+# No configuration needed — cost-tier defaults are built in
+default_provider = "gemini"
+```
+
+**Override cheap roles to a different model:**
+```toml
+[research]
+default_provider = "gemini"
+# Use Claude Haiku for summarization instead of Gemini Flash
+deep_research_summarization_provider = "[cli]claude:haiku"
+# Use a specific model for compression
+deep_research_compression_model = "pro"
+```
+
+**All roles on the same model (opt out of cost tiering):**
+```toml
+[research]
+default_provider = "[cli]claude:sonnet"
+# Force summarization and compression to use the same model as research
+deep_research_summarization_model = "sonnet"
+deep_research_compression_model = "sonnet"
+```
+
+### Cost Impact
+
+Summarization and compression together account for the majority of LLM calls in a deep research session (one call per source fetched, plus one per topic compressed). Routing these to a ~10x cheaper model significantly reduces total cost while the higher-quality model is reserved for reasoning-intensive phases like research, supervision, and synthesis.
+
 ## Configuration
 
 ### Digest Settings
