@@ -28,6 +28,60 @@ from foundry_mcp.core.research.workflows.deep_research._injection_protection imp
 
 logger = logging.getLogger(__name__)
 
+# Minimum ratio of compressed output length to raw input length.
+# If compressed_findings is shorter than this fraction of the original
+# message_history text, the compression is considered suspect and the
+# raw history is retained as a safety net.
+_MIN_COMPRESSION_RATIO = 0.10
+
+# Simple heuristic pattern fragments that indicate a source reference
+# (e.g. "[1]", "[source", "http://", "https://").
+_SOURCE_REFERENCE_INDICATORS = ("[", "http://", "https://")
+
+
+def _compression_output_is_valid(
+    compressed: str | None,
+    message_history: list[dict[str, str]],
+    topic_id: str,
+) -> bool:
+    """Check whether compression output is non-trivial before discarding raw history.
+
+    Returns True if ``compressed`` passes both checks:
+    1. Its length is at least ``_MIN_COMPRESSION_RATIO`` of the raw history text.
+    2. It contains at least one source reference indicator.
+
+    If either check fails, a warning is logged and False is returned so that
+    the caller retains ``message_history`` as a recovery fallback.
+    """
+    if not compressed:
+        logger.warning(
+            "Compression produced empty output for topic %s; retaining message_history.",
+            topic_id,
+        )
+        return False
+
+    raw_length = sum(len(m.get("content", "")) for m in message_history)
+    if raw_length > 0 and len(compressed) < raw_length * _MIN_COMPRESSION_RATIO:
+        logger.warning(
+            "Compression output for topic %s is suspiciously short "
+            "(%d chars vs %d raw, ratio %.2f < %.2f); retaining message_history.",
+            topic_id,
+            len(compressed),
+            raw_length,
+            len(compressed) / raw_length,
+            _MIN_COMPRESSION_RATIO,
+        )
+        return False
+
+    if not any(indicator in compressed for indicator in _SOURCE_REFERENCE_INDICATORS):
+        logger.warning(
+            "Compression output for topic %s contains no source references; retaining message_history.",
+            topic_id,
+        )
+        return False
+
+    return True
+
 
 # ------------------------------------------------------------------
 # Prompt construction helpers for _compress_single_topic_async
@@ -808,9 +862,15 @@ class CompressionMixin:
                 total_input_tokens += inp
                 total_output_tokens += out
                 if success:
-                    # compressed_findings now captures essential content —
-                    # free message_history to bound state memory growth.
-                    results_to_compress[i].message_history.clear()
+                    topic = results_to_compress[i]
+                    if _compression_output_is_valid(
+                        topic.compressed_findings,
+                        topic.message_history,
+                        topic.sub_query_id,
+                    ):
+                        # compressed_findings now captures essential content —
+                        # free message_history to bound state memory growth.
+                        topic.message_history.clear()
                     topics_compressed += 1
                 else:
                     topics_failed += 1

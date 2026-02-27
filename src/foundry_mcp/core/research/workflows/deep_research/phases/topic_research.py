@@ -35,6 +35,9 @@ from foundry_mcp.core.research.models.sources import SourceQuality, SubQuery
 from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
     sanitize_external_content,
 )
+from foundry_mcp.core.research.workflows.deep_research.phases.compression import (
+    _compression_output_is_valid,
+)
 from foundry_mcp.core.research.workflows.deep_research.source_quality import (
     _extract_domain,
     _normalize_title,
@@ -1168,9 +1171,14 @@ class TopicResearchMixin:
                 timeout=timeout,
             )
             if comp_ok:
-                # compressed_findings now captures the essential content —
-                # free the raw message_history to bound state memory growth.
-                result.message_history.clear()
+                if _compression_output_is_valid(
+                    result.compressed_findings,
+                    result.message_history,
+                    sub_query.id,
+                ):
+                    # compressed_findings now captures the essential content —
+                    # free the raw message_history to bound state memory growth.
+                    result.message_history.clear()
                 logger.info(
                     "Inline compression for topic %r: %d tokens",
                     sub_query.id,

@@ -18,6 +18,8 @@ import pytest
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
     DeepResearchState,
+    DelegationResponse,
+    ResearchDirective,
     TopicResearchResult,
 )
 from foundry_mcp.core.research.models.sources import (
@@ -26,10 +28,6 @@ from foundry_mcp.core.research.models.sources import (
     SourceType,
     SubQuery,
 )
-from foundry_mcp.core.research.models.deep_research import (
-    DelegationResponse,
-    ResearchDirective,
-)
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
     StructuredLLMCallResult,
@@ -37,7 +35,6 @@ from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import 
 from foundry_mcp.core.research.workflows.deep_research.phases.supervision import (
     SupervisionPhaseMixin,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -132,13 +129,13 @@ class TestSupervisionStateModel:
     """State model tests for the SUPERVISION phase."""
 
     def test_supervision_phase_in_enum(self):
-        """SUPERVISION exists in enum between GATHERING and SYNTHESIS."""
+        """SUPERVISION exists in enum after GATHERING and before SYNTHESIS."""
         phases = list(DeepResearchPhase)
         gathering_idx = phases.index(DeepResearchPhase.GATHERING)
         supervision_idx = phases.index(DeepResearchPhase.SUPERVISION)
         synthesis_idx = phases.index(DeepResearchPhase.SYNTHESIS)
 
-        assert supervision_idx == gathering_idx + 1
+        assert supervision_idx > gathering_idx
         assert synthesis_idx == supervision_idx + 1
 
     def test_advance_phase_gathering_to_supervision(self):
@@ -263,9 +260,7 @@ class TestSupervisionParsing:
         stub = StubSupervision()
         state = _make_state(num_completed=2, sources_per_query=2)
         # Add a completed sub-query with no sources
-        state.sub_queries.append(
-            SubQuery(id="sq-nosrc", query="No sources query", status="completed")
-        )
+        state.sub_queries.append(SubQuery(id="sq-nosrc", query="No sources query", status="completed"))
         result = stub._assess_coverage_heuristic(state, min_sources=2)
         assert result["overall_coverage"] == "partial"
         assert result["queries_sufficient"] == 2
@@ -304,24 +299,26 @@ class TestSupervisionIntegration:
         state.topic_research_results = []
 
         # Delegation response — research_complete=False signals more work needed
-        delegation_response = json.dumps({
-            "research_complete": False,
-            "directives": [
-                {
-                    "research_topic": "Investigate backpropagation fundamentals and gradient flow.",
-                    "perspective": "technical",
-                    "evidence_needed": "papers, tutorials",
-                    "priority": 2,
-                },
-                {
-                    "research_topic": "Compare CNN vs RNN architecture trade-offs.",
-                    "perspective": "comparative",
-                    "evidence_needed": "benchmarks",
-                    "priority": 2,
-                },
-            ],
-            "rationale": "Need more specific results",
-        })
+        delegation_response = json.dumps(
+            {
+                "research_complete": False,
+                "directives": [
+                    {
+                        "research_topic": "Investigate backpropagation fundamentals and gradient flow.",
+                        "perspective": "technical",
+                        "evidence_needed": "papers, tutorials",
+                        "priority": 2,
+                    },
+                    {
+                        "research_topic": "Compare CNN vs RNN architecture trade-offs.",
+                        "perspective": "comparative",
+                        "evidence_needed": "benchmarks",
+                        "priority": 2,
+                    },
+                ],
+                "rationale": "Need more specific results",
+            }
+        )
 
         async def mock_execute_llm_call(**kwargs):
             result = MagicMock()
@@ -346,18 +343,20 @@ class TestSupervisionIntegration:
         stub._execute_topic_research_async = mock_topic_research
         stub._get_search_provider = MagicMock(return_value=MagicMock())
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-            side_effect=mock_execute_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
-            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+                side_effect=mock_execute_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+                side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+            ),
         ):
-            result = await stub._execute_supervision_async(
-                state=state, provider_id="test-provider", timeout=30.0
-            )
+            result = await stub._execute_supervision_async(state=state, provider_id="test-provider", timeout=30.0)
 
         assert result.success is True
         assert "should_continue_gathering" not in result.metadata
@@ -385,9 +384,7 @@ class TestSupervisionIntegration:
             max_supervision_rounds=3,
         )
 
-        result = await stub._execute_supervision_async(
-            state=state, provider_id="test-provider", timeout=30.0
-        )
+        result = await stub._execute_supervision_async(state=state, provider_id="test-provider", timeout=30.0)
 
         assert result.success is True
         assert "should_continue_gathering" not in result.metadata
@@ -439,7 +436,10 @@ class TestSupervisionIntegration:
 
         stub = StubWorkflowExecution()
         result = await stub._execute_workflow_async(
-            state=state, provider_id="test", timeout_per_operation=60.0, max_concurrent=3,
+            state=state,
+            provider_id="test",
+            timeout_per_operation=60.0,
+            max_concurrent=3,
         )
 
         assert state.phase == DeepResearchPhase.SYNTHESIS
@@ -456,11 +456,13 @@ class TestSupervisionIntegration:
         state.topic_research_results = []
 
         # research_complete=True signals that all dimensions are covered
-        delegation_response = json.dumps({
-            "research_complete": True,
-            "directives": [],
-            "rationale": "All aspects well covered",
-        })
+        delegation_response = json.dumps(
+            {
+                "research_complete": True,
+                "directives": [],
+                "rationale": "All aspects well covered",
+            }
+        )
 
         async def mock_execute_llm_call(**kwargs):
             result = MagicMock()
@@ -474,18 +476,20 @@ class TestSupervisionIntegration:
             )
             return result
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-            side_effect=mock_execute_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
-            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+                side_effect=mock_execute_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+                side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+            ),
         ):
-            result = await stub._execute_supervision_async(
-                state=state, provider_id="test-provider", timeout=30.0
-            )
+            result = await stub._execute_supervision_async(state=state, provider_id="test-provider", timeout=30.0)
 
         assert result.success is True
         assert "should_continue_gathering" not in result.metadata
@@ -511,20 +515,22 @@ class TestSupervisionIntegration:
             error="Provider timeout",
         )
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-            new_callable=AsyncMock,
-            return_value=failed_result,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
-            new_callable=AsyncMock,
-            return_value=failed_result,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+                new_callable=AsyncMock,
+                return_value=failed_result,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+                new_callable=AsyncMock,
+                return_value=failed_result,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+            ),
         ):
-            result = await stub._execute_supervision_async(
-                state=state, provider_id="test-provider", timeout=30.0
-            )
+            result = await stub._execute_supervision_async(state=state, provider_id="test-provider", timeout=30.0)
 
         assert result.success is True  # Graceful degradation
         assert result.metadata["model"] == "delegation"
@@ -551,15 +557,17 @@ class TestSupervisionIntegration:
         state.topic_research_results = []
 
         # LLM proposes 3 directives but only 1 should survive the cap
-        delegation_response = json.dumps({
-            "research_complete": False,
-            "directives": [
-                {"research_topic": "Investigate topic A in detail.", "priority": 2},
-                {"research_topic": "Investigate topic B in detail.", "priority": 2},
-                {"research_topic": "Investigate topic C in detail.", "priority": 2},
-            ],
-            "rationale": "",
-        })
+        delegation_response = json.dumps(
+            {
+                "research_complete": False,
+                "directives": [
+                    {"research_topic": "Investigate topic A in detail.", "priority": 2},
+                    {"research_topic": "Investigate topic B in detail.", "priority": 2},
+                    {"research_topic": "Investigate topic C in detail.", "priority": 2},
+                ],
+                "rationale": "",
+            }
+        )
 
         async def mock_execute_llm_call(**kwargs):
             result = MagicMock()
@@ -584,18 +592,20 @@ class TestSupervisionIntegration:
         stub._execute_topic_research_async = mock_topic_research
         stub._get_search_provider = MagicMock(return_value=MagicMock())
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-            side_effect=mock_execute_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
-            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+                side_effect=mock_execute_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+                side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+            ),
         ):
-            result = await stub._execute_supervision_async(
-                state=state, provider_id="test-provider", timeout=30.0
-            )
+            result = await stub._execute_supervision_async(state=state, provider_id="test-provider", timeout=30.0)
 
         assert result.metadata["total_directives_executed"] == 1  # capped at 1
 
@@ -669,9 +679,7 @@ class TestThinkToolIntegration:
     async def test_think_step_executes_on_round_zero(self):
         """Think step executes on supervision_round=0 and output flows into delegate prompt."""
         stub = StubSupervision()
-        state = _make_state(
-            num_completed=2, sources_per_query=1, supervision_round=0
-        )
+        state = _make_state(num_completed=2, sources_per_query=1, supervision_round=0)
         state.max_sub_queries = 10
         state.topic_research_results = []
 
@@ -680,11 +688,13 @@ class TestThinkToolIntegration:
             "Missing: academic perspectives and peer-reviewed research."
         )
 
-        delegation_response = json.dumps({
-            "research_complete": True,
-            "directives": [],
-            "rationale": "Covered after think analysis",
-        })
+        delegation_response = json.dumps(
+            {
+                "research_complete": True,
+                "directives": [],
+                "rationale": "Covered after think analysis",
+            }
+        )
 
         # Track calls to distinguish think vs delegate LLM calls
         think_call_count = 0
@@ -726,18 +736,20 @@ class TestThinkToolIntegration:
             assert "academic perspectives" in user_prompt
             return await _wrap_as_structured_mock(mock_execute_llm_call)(**kwargs)
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-            side_effect=mock_execute_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
-            side_effect=mock_execute_structured_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+                side_effect=mock_execute_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+                side_effect=mock_execute_structured_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+            ),
         ):
-            result = await stub._execute_supervision_async(
-                state=state, provider_id="test-provider", timeout=30.0
-            )
+            result = await stub._execute_supervision_async(state=state, provider_id="test-provider", timeout=30.0)
 
         assert result.success is True
         assert think_call_count == 1  # think step executed once
@@ -758,9 +770,7 @@ class TestThinkToolIntegration:
         making any LLM calls — meaning the think step is inherently skipped.
         """
         stub = StubSupervision()
-        state = _make_state(
-            num_completed=2, sources_per_query=3, supervision_round=1
-        )
+        state = _make_state(num_completed=2, sources_per_query=3, supervision_round=1)
 
         call_phases: list[str] = []
 
@@ -781,9 +791,7 @@ class TestThinkToolIntegration:
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
             side_effect=mock_execute_llm_call,
         ):
-            result = await stub._execute_supervision_async(
-                state=state, provider_id="test-provider", timeout=30.0
-            )
+            result = await stub._execute_supervision_async(state=state, provider_id="test-provider", timeout=30.0)
 
         assert result.success is True
         assert result.metadata["model"] == "delegation"
@@ -798,17 +806,17 @@ class TestThinkToolIntegration:
     async def test_think_step_failure_is_non_fatal(self):
         """When think step fails, delegation proceeds without gap analysis."""
         stub = StubSupervision()
-        state = _make_state(
-            num_completed=2, sources_per_query=2, supervision_round=0
-        )
+        state = _make_state(num_completed=2, sources_per_query=2, supervision_round=0)
         state.max_sub_queries = 10
         state.topic_research_results = []
 
-        delegation_response = json.dumps({
-            "research_complete": True,
-            "directives": [],
-            "rationale": "Coverage is sufficient",
-        })
+        delegation_response = json.dumps(
+            {
+                "research_complete": True,
+                "directives": [],
+                "rationale": "Coverage is sufficient",
+            }
+        )
 
         async def mock_execute_llm_call(**kwargs):
             if kwargs.get("phase_name") == "supervision_think":
@@ -833,23 +841,23 @@ class TestThinkToolIntegration:
         async def mock_execute_structured_llm_call(**kwargs):
             # Verify no gap_analysis section when think step failed
             user_prompt = kwargs.get("user_prompt", "")
-            assert "<gap_analysis>" not in user_prompt, (
-                "Should NOT have gap analysis when think step fails"
-            )
+            assert "<gap_analysis>" not in user_prompt, "Should NOT have gap analysis when think step fails"
             return await _wrap_as_structured_mock(mock_execute_llm_call)(**kwargs)
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-            side_effect=mock_execute_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
-            side_effect=mock_execute_structured_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+                side_effect=mock_execute_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+                side_effect=mock_execute_structured_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+            ),
         ):
-            result = await stub._execute_supervision_async(
-                state=state, provider_id="test-provider", timeout=30.0
-            )
+            result = await stub._execute_supervision_async(state=state, provider_id="test-provider", timeout=30.0)
 
         assert result.success is True
         # History records delegation_complete since research_complete=True
@@ -862,19 +870,19 @@ class TestThinkToolIntegration:
     async def test_think_step_uses_reflection_role(self):
         """Think step LLM call uses the 'reflection' role for cheap model routing."""
         stub = StubSupervision()
-        state = _make_state(
-            num_completed=2, sources_per_query=1, supervision_round=0
-        )
+        state = _make_state(num_completed=2, sources_per_query=1, supervision_round=0)
         state.max_sub_queries = 10
         state.topic_research_results = []
 
         captured_llm_kwargs: list[dict] = []
 
-        delegation_response = json.dumps({
-            "research_complete": True,
-            "directives": [],
-            "rationale": "OK",
-        })
+        delegation_response = json.dumps(
+            {
+                "research_complete": True,
+                "directives": [],
+                "rationale": "OK",
+            }
+        )
 
         async def mock_execute_llm_call(**kwargs):
             captured_llm_kwargs.append(kwargs)
@@ -901,18 +909,20 @@ class TestThinkToolIntegration:
                 )
                 return result
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-            side_effect=mock_execute_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
-            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+                side_effect=mock_execute_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+                side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+            ),
         ):
-            await stub._execute_supervision_async(
-                state=state, provider_id="test-provider", timeout=30.0
-            )
+            await stub._execute_supervision_async(state=state, provider_id="test-provider", timeout=30.0)
 
         # Verify think step used reflection role
         # captured_llm_kwargs[0] is the think step (first execute_llm_call invocation)
@@ -1012,9 +1022,7 @@ class TestDelegationPrompts:
         state = _make_state(num_completed=2, sources_per_query=2)
         coverage = stub._build_per_query_coverage(state)
 
-        prompt = stub._build_delegation_user_prompt(
-            state, coverage, think_output="Missing: historical context"
-        )
+        prompt = stub._build_delegation_user_prompt(state, coverage, think_output="Missing: historical context")
 
         assert state.original_query in prompt
         assert "Missing: historical context" in prompt
@@ -1045,24 +1053,26 @@ class TestDelegationPrompts:
         stub = StubSupervision(delegation_model=True)
         state = _make_state(num_completed=2, sources_per_query=2)
 
-        response = json.dumps({
-            "research_complete": False,
-            "directives": [
-                {
-                    "research_topic": "Investigate the historical development of deep learning from perceptrons through modern transformers, focusing on key architectural innovations.",
-                    "perspective": "historical",
-                    "evidence_needed": "academic papers, timeline data",
-                    "priority": 1,
-                },
-                {
-                    "research_topic": "Survey current hardware requirements for training large language models.",
-                    "perspective": "technical",
-                    "evidence_needed": "benchmarks, cost data",
-                    "priority": 2,
-                },
-            ],
-            "rationale": "Two key gaps identified",
-        })
+        response = json.dumps(
+            {
+                "research_complete": False,
+                "directives": [
+                    {
+                        "research_topic": "Investigate the historical development of deep learning from perceptrons through modern transformers, focusing on key architectural innovations.",
+                        "perspective": "historical",
+                        "evidence_needed": "academic papers, timeline data",
+                        "priority": 1,
+                    },
+                    {
+                        "research_topic": "Survey current hardware requirements for training large language models.",
+                        "perspective": "technical",
+                        "evidence_needed": "benchmarks, cost data",
+                        "priority": 2,
+                    },
+                ],
+                "rationale": "Two key gaps identified",
+            }
+        )
 
         directives, complete = stub._parse_delegation_response(response, state)
 
@@ -1078,11 +1088,13 @@ class TestDelegationPrompts:
         stub = StubSupervision(delegation_model=True)
         state = _make_state(num_completed=2, sources_per_query=2)
 
-        response = json.dumps({
-            "research_complete": True,
-            "directives": [],
-            "rationale": "All dimensions well covered",
-        })
+        response = json.dumps(
+            {
+                "research_complete": True,
+                "directives": [],
+                "rationale": "All dimensions well covered",
+            }
+        )
 
         directives, complete = stub._parse_delegation_response(response, state)
 
@@ -1095,14 +1107,13 @@ class TestDelegationPrompts:
         stub.config.deep_research_max_concurrent_research_units = 2
         state = _make_state(num_completed=1, sources_per_query=1)
 
-        response = json.dumps({
-            "research_complete": False,
-            "directives": [
-                {"research_topic": f"Topic {i}", "priority": 2}
-                for i in range(5)
-            ],
-            "rationale": "",
-        })
+        response = json.dumps(
+            {
+                "research_complete": False,
+                "directives": [{"research_topic": f"Topic {i}", "priority": 2} for i in range(5)],
+                "rationale": "",
+            }
+        )
 
         directives, _ = stub._parse_delegation_response(response, state)
 
@@ -1133,14 +1144,16 @@ class TestDelegationPrompts:
         stub = StubSupervision(delegation_model=True)
         state = _make_state(num_completed=1, sources_per_query=1)
 
-        response = json.dumps({
-            "research_complete": False,
-            "directives": [
-                {"research_topic": "", "priority": 1},
-                {"research_topic": "Valid topic", "priority": 2},
-            ],
-            "rationale": "",
-        })
+        response = json.dumps(
+            {
+                "research_complete": False,
+                "directives": [
+                    {"research_topic": "", "priority": 1},
+                    {"research_topic": "Valid topic", "priority": 2},
+                ],
+                "rationale": "",
+            }
+        )
 
         directives, _ = stub._parse_delegation_response(response, state)
 
@@ -1152,14 +1165,16 @@ class TestDelegationPrompts:
         stub = StubSupervision(delegation_model=True)
         state = _make_state(num_completed=1, sources_per_query=1)
 
-        response = json.dumps({
-            "research_complete": False,
-            "directives": [
-                {"research_topic": "Topic A", "priority": 0},
-                {"research_topic": "Topic B", "priority": 10},
-            ],
-            "rationale": "",
-        })
+        response = json.dumps(
+            {
+                "research_complete": False,
+                "directives": [
+                    {"research_topic": "Topic A", "priority": 0},
+                    {"research_topic": "Topic B", "priority": 10},
+                ],
+                "rationale": "",
+            }
+        )
 
         directives, _ = stub._parse_delegation_response(response, state)
 
@@ -1180,9 +1195,7 @@ class TestDelegationIntegration:
         with patch(
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
         ):
-            result = await stub._execute_supervision_async(
-                state=state, provider_id="test-provider", timeout=30.0
-            )
+            result = await stub._execute_supervision_async(state=state, provider_id="test-provider", timeout=30.0)
 
         assert result.success is True
         assert result.metadata.get("model") == "delegation"
@@ -1193,19 +1206,19 @@ class TestDelegationIntegration:
         stub = StubSupervision(delegation_model=True)
         state = _make_state(num_completed=2, sources_per_query=2, supervision_round=0)
 
-        delegation_response = json.dumps({
-            "research_complete": True,
-            "directives": [],
-            "rationale": "All dimensions covered",
-        })
+        delegation_response = json.dumps(
+            {
+                "research_complete": True,
+                "directives": [],
+                "rationale": "All dimensions covered",
+            }
+        )
 
         async def mock_execute_llm_call(**kwargs):
             phase = kwargs.get("phase_name")
             if phase == "supervision_think":
                 result = MagicMock()
-                result.result = WorkflowResult(
-                    success=True, content="Gap analysis", tokens_used=50
-                )
+                result.result = WorkflowResult(success=True, content="Gap analysis", tokens_used=50)
                 return result
             elif phase in ("supervision_delegate", "supervision_delegate_generate"):
                 result = MagicMock()
@@ -1221,25 +1234,30 @@ class TestDelegationIntegration:
             elif phase == "supervision_delegate_critique":
                 result = MagicMock()
                 result.result = WorkflowResult(
-                    success=True, content="VERDICT: NO_ISSUES", tokens_used=30,
-                    provider_id="test", model_used="test",
+                    success=True,
+                    content="VERDICT: NO_ISSUES",
+                    tokens_used=30,
+                    provider_id="test",
+                    model_used="test",
                 )
                 return result
             # No other calls expected
             raise AssertionError(f"Unexpected call: {phase}")
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-            side_effect=mock_execute_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
-            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+                side_effect=mock_execute_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+                side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+            ),
         ):
-            result = await stub._execute_supervision_async(
-                state=state, provider_id="test-provider", timeout=30.0
-            )
+            result = await stub._execute_supervision_async(state=state, provider_id="test-provider", timeout=30.0)
 
         assert result.success is True
         assert "should_continue_gathering" not in result.metadata
@@ -1253,17 +1271,21 @@ class TestDelegationIntegration:
         """Delegation loop respects max_supervision_rounds."""
         stub = StubSupervision(delegation_model=True)
         state = _make_state(
-            num_completed=2, sources_per_query=2,
-            supervision_round=0, max_supervision_rounds=1,
+            num_completed=2,
+            sources_per_query=2,
+            supervision_round=0,
+            max_supervision_rounds=1,
         )
 
-        delegation_response = json.dumps({
-            "research_complete": False,
-            "directives": [
-                {"research_topic": "Topic A", "priority": 2},
-            ],
-            "rationale": "Need more",
-        })
+        delegation_response = json.dumps(
+            {
+                "research_complete": False,
+                "directives": [
+                    {"research_topic": "Topic A", "priority": 2},
+                ],
+                "rationale": "Need more",
+            }
+        )
 
         call_phases: list[str] = []
 
@@ -1272,9 +1294,7 @@ class TestDelegationIntegration:
             call_phases.append(phase)
             if phase == "supervision_think":
                 result = MagicMock()
-                result.result = WorkflowResult(
-                    success=True, content="Gaps exist", tokens_used=40
-                )
+                result.result = WorkflowResult(success=True, content="Gaps exist", tokens_used=40)
                 return result
             elif phase in ("supervision_delegate", "supervision_delegate_generate"):
                 result = MagicMock()
@@ -1290,8 +1310,11 @@ class TestDelegationIntegration:
             elif phase == "supervision_delegate_critique":
                 result = MagicMock()
                 result.result = WorkflowResult(
-                    success=True, content="VERDICT: NO_ISSUES", tokens_used=20,
-                    provider_id="test", model_used="test",
+                    success=True,
+                    content="VERDICT: NO_ISSUES",
+                    tokens_used=20,
+                    provider_id="test",
+                    model_used="test",
                 )
                 return result
             raise AssertionError(f"Unexpected: {phase}")
@@ -1313,18 +1336,20 @@ class TestDelegationIntegration:
         stub._execute_topic_research_async = mock_topic_research
         stub._get_search_provider = lambda provider_name: mock_provider
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-            side_effect=mock_execute_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
-            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+                side_effect=mock_execute_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+                side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+            ),
         ):
-            result = await stub._execute_supervision_async(
-                state=state, provider_id="test-provider", timeout=30.0
-            )
+            result = await stub._execute_supervision_async(state=state, provider_id="test-provider", timeout=30.0)
 
         assert result.success is True
         # Only 1 round executed (max_supervision_rounds=1)
@@ -1337,19 +1362,19 @@ class TestDelegationIntegration:
         stub = StubSupervision(delegation_model=True)
         state = _make_state(num_completed=2, sources_per_query=2, supervision_round=0)
 
-        empty_delegation = json.dumps({
-            "research_complete": False,
-            "directives": [],
-            "rationale": "Cannot identify specific gaps",
-        })
+        empty_delegation = json.dumps(
+            {
+                "research_complete": False,
+                "directives": [],
+                "rationale": "Cannot identify specific gaps",
+            }
+        )
 
         async def mock_execute_llm_call(**kwargs):
             phase = kwargs.get("phase_name")
             if phase == "supervision_think":
                 result = MagicMock()
-                result.result = WorkflowResult(
-                    success=True, content="Analysis", tokens_used=40
-                )
+                result.result = WorkflowResult(success=True, content="Analysis", tokens_used=40)
                 return result
             elif phase in ("supervision_delegate", "supervision_delegate_generate"):
                 result = MagicMock()
@@ -1365,24 +1390,29 @@ class TestDelegationIntegration:
             elif phase == "supervision_delegate_critique":
                 result = MagicMock()
                 result.result = WorkflowResult(
-                    success=True, content="VERDICT: NO_ISSUES", tokens_used=20,
-                    provider_id="test", model_used="test",
+                    success=True,
+                    content="VERDICT: NO_ISSUES",
+                    tokens_used=20,
+                    provider_id="test",
+                    model_used="test",
                 )
                 return result
             raise AssertionError(f"Unexpected: {phase}")
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-            side_effect=mock_execute_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
-            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+                side_effect=mock_execute_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+                side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+            ),
         ):
-            result = await stub._execute_supervision_async(
-                state=state, provider_id="test-provider", timeout=30.0
-            )
+            result = await stub._execute_supervision_async(state=state, provider_id="test-provider", timeout=30.0)
 
         assert result.success is True
         assert result.metadata["total_directives_executed"] == 0
@@ -1404,7 +1434,9 @@ class TestSupervisorOwnedDecompositionDetection:
         """Returns True: round 0, no prior topic results."""
         stub = StubSupervision(delegation_model=True)
         state = _make_state(
-            num_completed=0, num_pending=0, supervision_round=0,
+            num_completed=0,
+            num_pending=0,
+            supervision_round=0,
         )
         state.topic_research_results = []
         assert stub._is_first_round_decomposition(state) is True
@@ -1490,7 +1522,10 @@ class TestFirstRoundDecompositionPrompts:
         assert "evidence_needed" in prompt
         assert "priority" in prompt
         # Scaling rules
-        assert "FEWER researchers for simple queries" in prompt.upper() or "fewer researchers for simple queries" in prompt.lower()
+        assert (
+            "FEWER researchers for simple queries" in prompt.upper()
+            or "fewer researchers for simple queries" in prompt.lower()
+        )
         assert "COMPARISONS" in prompt.upper() or "comparison" in prompt.lower()
         # Self-critique is now a separate call — NOT in the generation prompt
         assert "Self-Critique" not in prompt
@@ -1522,20 +1557,12 @@ class TestFirstRoundDecompositionPrompts:
 
     def test_critique_has_issues_detects_verdicts(self):
         """_critique_has_issues correctly parses VERDICT lines."""
-        assert SupervisionPhaseMixin._critique_has_issues(
-            "All good.\nVERDICT: NO_ISSUES"
-        ) is False
-        assert SupervisionPhaseMixin._critique_has_issues(
-            "Problems found.\nVERDICT: REVISION_NEEDED"
-        ) is True
+        assert SupervisionPhaseMixin._critique_has_issues("All good.\nVERDICT: NO_ISSUES") is False
+        assert SupervisionPhaseMixin._critique_has_issues("Problems found.\nVERDICT: REVISION_NEEDED") is True
         # Fallback: ISSUE markers without verdict
-        assert SupervisionPhaseMixin._critique_has_issues(
-            "1. Redundancy: ISSUE: directives 1 and 3 overlap"
-        ) is True
+        assert SupervisionPhaseMixin._critique_has_issues("1. Redundancy: ISSUE: directives 1 and 3 overlap") is True
         # No issues and no verdict
-        assert SupervisionPhaseMixin._critique_has_issues(
-            "Everything looks fine. All criteria pass."
-        ) is False
+        assert SupervisionPhaseMixin._critique_has_issues("Everything looks fine. All criteria pass.") is False
 
     def test_first_round_delegation_user_prompt_includes_brief(self):
         """First-round delegation user prompt includes research brief and query."""
@@ -1555,8 +1582,7 @@ class TestFirstRoundDecompositionPrompts:
         state.research_brief = "Compare React vs Vue"
 
         think_output = (
-            "This is a comparison query. Need one researcher per framework "
-            "plus one for cross-cutting comparison."
+            "This is a comparison query. Need one researcher per framework plus one for cross-cutting comparison."
         )
         prompt = stub._build_first_round_delegation_user_prompt(state, think_output)
 
@@ -1585,7 +1611,9 @@ class TestFirstRoundDecompositionIntegration:
         stub.config.deep_research_providers = ["tavily"]
 
         state = _make_state(
-            num_completed=0, num_pending=0, supervision_round=0,
+            num_completed=0,
+            num_pending=0,
+            supervision_round=0,
         )
         state.research_brief = "Compare React, Vue, and Angular for enterprise apps"
         state.topic_research_results = []
@@ -1598,30 +1626,32 @@ class TestFirstRoundDecompositionIntegration:
         )
 
         # Delegate step returns initial directives
-        delegate_response = json.dumps({
-            "research_complete": False,
-            "directives": [
-                {
-                    "research_topic": "Investigate React's enterprise adoption, performance benchmarks, and ecosystem maturity.",
-                    "perspective": "technical",
-                    "evidence_needed": "benchmarks, case studies, adoption statistics",
-                    "priority": 1,
-                },
-                {
-                    "research_topic": "Investigate Vue's enterprise adoption, performance benchmarks, and ecosystem maturity.",
-                    "perspective": "technical",
-                    "evidence_needed": "benchmarks, case studies, adoption statistics",
-                    "priority": 1,
-                },
-                {
-                    "research_topic": "Investigate Angular's enterprise adoption, performance benchmarks, and ecosystem maturity.",
-                    "perspective": "technical",
-                    "evidence_needed": "benchmarks, case studies, adoption statistics",
-                    "priority": 1,
-                },
-            ],
-            "rationale": "One researcher per framework for balanced comparison",
-        })
+        delegate_response = json.dumps(
+            {
+                "research_complete": False,
+                "directives": [
+                    {
+                        "research_topic": "Investigate React's enterprise adoption, performance benchmarks, and ecosystem maturity.",
+                        "perspective": "technical",
+                        "evidence_needed": "benchmarks, case studies, adoption statistics",
+                        "priority": 1,
+                    },
+                    {
+                        "research_topic": "Investigate Vue's enterprise adoption, performance benchmarks, and ecosystem maturity.",
+                        "perspective": "technical",
+                        "evidence_needed": "benchmarks, case studies, adoption statistics",
+                        "priority": 1,
+                    },
+                    {
+                        "research_topic": "Investigate Angular's enterprise adoption, performance benchmarks, and ecosystem maturity.",
+                        "perspective": "technical",
+                        "evidence_needed": "benchmarks, case studies, adoption statistics",
+                        "priority": 1,
+                    },
+                ],
+                "rationale": "One researcher per framework for balanced comparison",
+            }
+        )
 
         call_count = 0
 
@@ -1668,17 +1698,23 @@ class TestFirstRoundDecompositionIntegration:
         stub._execute_topic_research_async = mock_topic_research
         stub._get_search_provider = MagicMock(return_value=MagicMock())
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-            side_effect=mock_execute_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
-            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+                side_effect=mock_execute_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+                side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+            ),
         ):
             result = await stub._execute_supervision_delegation_async(
-                state=state, provider_id="test-provider", timeout=30.0,
+                state=state,
+                provider_id="test-provider",
+                timeout=30.0,
             )
 
         assert result.success is True
@@ -1703,7 +1739,9 @@ class TestFirstRoundDecompositionIntegration:
         stub.config.deep_research_providers = ["tavily"]
 
         state = _make_state(
-            num_completed=2, num_pending=0, supervision_round=1,
+            num_completed=2,
+            num_pending=0,
+            supervision_round=1,
         )
         state.topic_research_results = [
             TopicResearchResult(
@@ -1715,11 +1753,13 @@ class TestFirstRoundDecompositionIntegration:
         state.max_sub_queries = 10
 
         # Standard gap-driven delegation response (research complete)
-        delegate_response = json.dumps({
-            "research_complete": True,
-            "directives": [],
-            "rationale": "Coverage sufficient",
-        })
+        delegate_response = json.dumps(
+            {
+                "research_complete": True,
+                "directives": [],
+                "rationale": "Coverage sufficient",
+            }
+        )
 
         async def mock_execute_llm_call(**kwargs):
             result = MagicMock()
@@ -1743,17 +1783,24 @@ class TestFirstRoundDecompositionIntegration:
                 "queries_sufficient": 1,
             }
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-            side_effect=mock_execute_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
-            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
-        ), patch.object(stub, "_assess_coverage_heuristic", side_effect=mock_heuristic):
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+                side_effect=mock_execute_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+                side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+            ),
+            patch.object(stub, "_assess_coverage_heuristic", side_effect=mock_heuristic),
+        ):
             result = await stub._execute_supervision_delegation_async(
-                state=state, provider_id="test-provider", timeout=30.0,
+                state=state,
+                provider_id="test-provider",
+                timeout=30.0,
             )
 
         assert result.success is True
@@ -1770,25 +1817,29 @@ class TestFirstRoundDecompositionIntegration:
         stub.config.deep_research_providers = ["tavily"]
 
         state = _make_state(
-            num_completed=0, num_pending=0, supervision_round=0,
+            num_completed=0,
+            num_pending=0,
+            supervision_round=0,
             max_supervision_rounds=1,  # Only 1 round allowed
         )
         state.topic_research_results = []
         state.max_sub_queries = 10
         state.research_brief = "Simple query"
 
-        delegate_response = json.dumps({
-            "research_complete": False,
-            "directives": [
-                {
-                    "research_topic": "Test directive",
-                    "perspective": "general",
-                    "evidence_needed": "articles",
-                    "priority": 1,
-                }
-            ],
-            "rationale": "Initial decomposition",
-        })
+        delegate_response = json.dumps(
+            {
+                "research_complete": False,
+                "directives": [
+                    {
+                        "research_topic": "Test directive",
+                        "perspective": "general",
+                        "evidence_needed": "articles",
+                        "priority": 1,
+                    }
+                ],
+                "rationale": "Initial decomposition",
+            }
+        )
 
         async def mock_execute_llm_call(**kwargs):
             result = MagicMock()
@@ -1813,17 +1864,23 @@ class TestFirstRoundDecompositionIntegration:
         stub._execute_topic_research_async = mock_topic_research
         stub._get_search_provider = MagicMock(return_value=MagicMock())
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-            side_effect=mock_execute_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
-            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+                side_effect=mock_execute_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+                side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+            ),
         ):
             result = await stub._execute_supervision_delegation_async(
-                state=state, provider_id="test-provider", timeout=30.0,
+                state=state,
+                provider_id="test-provider",
+                timeout=30.0,
             )
 
         assert result.success is True
@@ -1971,9 +2028,7 @@ class TestUnifiedSupervisorOrchestration:
         )
 
         # Simulate the workflow_execution.py deprecation logging
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.workflow_execution.logger"
-        ) as mock_logger:
+        with patch("foundry_mcp.core.research.workflows.deep_research.workflow_execution.logger") as mock_logger:
             if state.phase == DeepResearchPhase.GATHERING:
                 mock_logger.warning(
                     "GATHERING phase running from legacy saved state (research %s) "
@@ -2033,7 +2088,9 @@ class TestUnifiedSupervisorOrchestration:
         """Round 0 performs decomposition (no heuristic early-exit)."""
         stub = StubSupervision(delegation_model=True)
         state = _make_state(
-            num_completed=0, num_pending=0, supervision_round=0,
+            num_completed=0,
+            num_pending=0,
+            supervision_round=0,
         )
         state.topic_research_results = []
 
@@ -2045,7 +2102,9 @@ class TestUnifiedSupervisorOrchestration:
         """Round 1 heuristic sees round 0's topic_research_results and sources."""
         stub = StubSupervision(delegation_model=True)
         state = _make_state(
-            num_completed=3, sources_per_query=3, supervision_round=1,
+            num_completed=3,
+            sources_per_query=3,
+            supervision_round=1,
         )
         # Add topic research results (as if round 0 produced them)
         for sq in state.completed_sub_queries():
@@ -2070,7 +2129,9 @@ class TestUnifiedSupervisorOrchestration:
         """Round 1 heuristic identifies insufficient coverage from round 0."""
         stub = StubSupervision(delegation_model=True)
         state = _make_state(
-            num_completed=3, sources_per_query=1, supervision_round=1,
+            num_completed=3,
+            sources_per_query=1,
+            supervision_round=1,
         )
         # Only 1 source per query — below min_sources=2
         heuristic = stub._assess_coverage_heuristic(state, min_sources=2)
@@ -2180,8 +2241,13 @@ class TestSupervisionMessageAccumulation:
         state = DeepResearchState(original_query="test")
         state.supervision_messages = [
             {"role": "assistant", "type": "think", "round": 0, "content": "Gap analysis"},
-            {"role": "tool_result", "type": "research_findings", "round": 0,
-             "directive_id": "sq-1", "content": "Findings about topic A"},
+            {
+                "role": "tool_result",
+                "type": "research_findings",
+                "round": 0,
+                "directive_id": "sq-1",
+                "content": "Findings about topic A",
+            },
         ]
         data = state.model_dump()
         restored = DeepResearchState(**data)
@@ -2198,7 +2264,9 @@ class TestSupervisionMessageAccumulation:
         stub.config.deep_research_providers = ["tavily"]
 
         state = _make_state(
-            num_completed=0, num_pending=0, supervision_round=0,
+            num_completed=0,
+            num_pending=0,
+            supervision_round=0,
             max_supervision_rounds=2,
         )
         state.research_brief = "Investigate AI safety"
@@ -2206,20 +2274,24 @@ class TestSupervisionMessageAccumulation:
         state.max_sub_queries = 10
 
         think_response = "Gap: No coverage of alignment techniques"
-        delegate_response = json.dumps({
-            "research_complete": False,
-            "directives": [
-                {"research_topic": "AI alignment techniques", "priority": 1},
-            ],
-            "rationale": "Need alignment coverage",
-        })
+        delegate_response = json.dumps(
+            {
+                "research_complete": False,
+                "directives": [
+                    {"research_topic": "AI alignment techniques", "priority": 1},
+                ],
+                "rationale": "Need alignment coverage",
+            }
+        )
 
         # Second round: research_complete = true
-        delegate_response_r1 = json.dumps({
-            "research_complete": True,
-            "directives": [],
-            "rationale": "All covered now",
-        })
+        delegate_response_r1 = json.dumps(
+            {
+                "research_complete": True,
+                "directives": [],
+                "rationale": "All covered now",
+            }
+        )
 
         round_counter = {"value": 0}
 
@@ -2227,18 +2299,19 @@ class TestSupervisionMessageAccumulation:
             phase_name = kwargs.get("phase_name", "")
             if "think" in phase_name:
                 result = MagicMock()
-                result.result = WorkflowResult(
-                    success=True, content=think_response, tokens_used=50
-                )
+                result.result = WorkflowResult(success=True, content=think_response, tokens_used=50)
                 return result
             elif "delegate" in phase_name:
                 content = delegate_response if round_counter["value"] == 0 else delegate_response_r1
                 round_counter["value"] += 1
                 result = MagicMock()
                 result.result = WorkflowResult(
-                    success=True, content=content,
-                    provider_id="test", model_used="test",
-                    tokens_used=80, duration_ms=400.0,
+                    success=True,
+                    content=content,
+                    provider_id="test",
+                    model_used="test",
+                    tokens_used=80,
+                    duration_ms=400.0,
                 )
                 return result
             raise AssertionError(f"Unexpected phase: {phase_name}")
@@ -2255,21 +2328,24 @@ class TestSupervisionMessageAccumulation:
         stub._execute_topic_research_async = mock_topic_research
         stub._get_search_provider = MagicMock(return_value=MagicMock())
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-            side_effect=mock_execute_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
-            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.truncate_supervision_messages",
-            side_effect=lambda messages, model: messages,  # no truncation in test
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+                side_effect=mock_execute_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+                side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.truncate_supervision_messages",
+                side_effect=lambda messages, model: messages,  # no truncation in test
+            ),
         ):
-            result = await stub._execute_supervision_async(
-                state=state, provider_id="test-provider", timeout=30.0
-            )
+            result = await stub._execute_supervision_async(state=state, provider_id="test-provider", timeout=30.0)
 
         assert result.success is True
 
@@ -2287,8 +2363,9 @@ class TestSupervisionMessageAccumulation:
         assert len(findings_msgs) >= 1, "Should have at least one findings message"
 
         # Verify findings content
-        assert any("RLHF" in m["content"] for m in findings_msgs), \
+        assert any("RLHF" in m["content"] for m in findings_msgs), (
             "Findings messages should contain compressed research content"
+        )
 
     @pytest.mark.asyncio
     async def test_messages_injected_into_delegation_prompt(self):
@@ -2299,18 +2376,26 @@ class TestSupervisionMessageAccumulation:
         # Pre-populate supervision_messages from a prior round
         state.supervision_messages = [
             {
-                "role": "assistant", "type": "think", "round": 0,
+                "role": "assistant",
+                "type": "think",
+                "round": 0,
                 "content": "The research has a gap in regulatory analysis.",
             },
             {
-                "role": "assistant", "type": "delegation", "round": 0,
-                "content": json.dumps({
-                    "research_complete": False,
-                    "directives": [{"research_topic": "Regulatory framework", "priority": 1}],
-                }),
+                "role": "assistant",
+                "type": "delegation",
+                "round": 0,
+                "content": json.dumps(
+                    {
+                        "research_complete": False,
+                        "directives": [{"research_topic": "Regulatory framework", "priority": 1}],
+                    }
+                ),
             },
             {
-                "role": "tool_result", "type": "research_findings", "round": 0,
+                "role": "tool_result",
+                "type": "research_findings",
+                "round": 0,
                 "directive_id": "sq-reg-1",
                 "content": "EU AI Act imposes strict requirements on high-risk systems...",
             },
@@ -2359,8 +2444,13 @@ class TestSupervisionMessageTruncation:
 
         messages = [
             {"role": "assistant", "type": "think", "round": 0, "content": "Short analysis"},
-            {"role": "tool_result", "type": "research_findings", "round": 0,
-             "directive_id": "d1", "content": "Brief findings"},
+            {
+                "role": "tool_result",
+                "type": "research_findings",
+                "round": 0,
+                "directive_id": "d1",
+                "content": "Brief findings",
+            },
         ]
         result = truncate_supervision_messages(messages, model=None)
         assert result == messages
@@ -2374,20 +2464,30 @@ class TestSupervisionMessageTruncation:
         # Create messages with long content across 3 rounds
         messages = []
         for r in range(3):
-            messages.append({
-                "role": "assistant", "type": "think", "round": r,
-                "content": f"Think output round {r}: " + "x" * 50_000,
-            })
-            messages.append({
-                "role": "tool_result", "type": "research_findings", "round": r,
-                "directive_id": f"d-{r}",
-                "content": f"Findings round {r}: " + "y" * 50_000,
-            })
+            messages.append(
+                {
+                    "role": "assistant",
+                    "type": "think",
+                    "round": r,
+                    "content": f"Think output round {r}: " + "x" * 50_000,
+                }
+            )
+            messages.append(
+                {
+                    "role": "tool_result",
+                    "type": "research_findings",
+                    "round": r,
+                    "directive_id": f"d-{r}",
+                    "content": f"Findings round {r}: " + "y" * 50_000,
+                }
+            )
 
         # Force a small budget to trigger truncation
         small_limits = {"test-model": 10_000}
         result = truncate_supervision_messages(
-            messages, model="test-model", token_limits=small_limits,
+            messages,
+            model="test-model",
+            token_limits=small_limits,
         )
 
         # Should have removed oldest rounds
@@ -2404,15 +2504,21 @@ class TestSupervisionMessageTruncation:
 
         messages = []
         for r in range(5):
-            messages.append({
-                "role": "assistant", "type": "think", "round": r,
-                "content": "x" * 100_000,
-            })
+            messages.append(
+                {
+                    "role": "assistant",
+                    "type": "think",
+                    "round": r,
+                    "content": "x" * 100_000,
+                }
+            )
 
         # Very small budget — only the last round should survive
         tiny_limits = {"tiny": 5_000}
         result = truncate_supervision_messages(
-            messages, model="tiny", token_limits=tiny_limits,
+            messages,
+            model="tiny",
+            token_limits=tiny_limits,
         )
 
         remaining_rounds = {m.get("round") for m in result}
@@ -2456,34 +2562,38 @@ class TestTypeAwareSupervisionTruncation:
         messages = []
         for r in range(3):
             # Think message — smaller, high-value
-            messages.append({
-                "role": "assistant", "type": "think", "round": r,
-                "content": f"Gap analysis round {r}: " + "x" * 5_000,
-            })
+            messages.append(
+                {
+                    "role": "assistant",
+                    "type": "think",
+                    "round": r,
+                    "content": f"Gap analysis round {r}: " + "x" * 5_000,
+                }
+            )
             # Findings message — larger, lower priority
-            messages.append({
-                "role": "tool_result", "type": "research_findings", "round": r,
-                "directive_id": f"d-{r}",
-                "content": f"Findings round {r}: " + "y" * 50_000,
-            })
+            messages.append(
+                {
+                    "role": "tool_result",
+                    "type": "research_findings",
+                    "round": r,
+                    "directive_id": f"d-{r}",
+                    "content": f"Findings round {r}: " + "y" * 50_000,
+                }
+            )
 
-        original_think_chars = sum(
-            len(m["content"]) for m in messages if m["type"] == "think"
-        )
-        original_findings_chars = sum(
-            len(m["content"]) for m in messages if m["type"] == "research_findings"
-        )
+        original_think_chars = sum(len(m["content"]) for m in messages if m["type"] == "think")
+        original_findings_chars = sum(len(m["content"]) for m in messages if m["type"] == "research_findings")
 
         # Budget that can hold thinks but not all findings
         small_limits = {"test-model": 10_000}
         result = truncate_supervision_messages(
-            messages, model="test-model", token_limits=small_limits,
+            messages,
+            model="test-model",
+            token_limits=small_limits,
         )
 
         # Measure surviving content by type
-        surviving_think_chars = sum(
-            len(m.get("content", "")) for m in result if m.get("type") == "think"
-        )
+        surviving_think_chars = sum(len(m.get("content", "")) for m in result if m.get("type") == "think")
         surviving_findings_chars = sum(
             len(m.get("content", "")) for m in result if m.get("type") == "research_findings"
         )
@@ -2506,55 +2616,68 @@ class TestTypeAwareSupervisionTruncation:
 
         messages = []
         for r in range(5):
-            messages.append({
-                "role": "assistant", "type": "think", "round": r,
-                "content": f"Gap analysis round {r}: " + "x" * 20_000,
-            })
-            messages.append({
-                "role": "assistant", "type": "delegation", "round": r,
-                "content": f"Delegation round {r}: " + "d" * 10_000,
-            })
-            messages.append({
-                "role": "tool_result", "type": "research_findings", "round": r,
-                "directive_id": f"d-{r}",
-                "content": f"Findings round {r}: " + "y" * 40_000,
-            })
+            messages.append(
+                {
+                    "role": "assistant",
+                    "type": "think",
+                    "round": r,
+                    "content": f"Gap analysis round {r}: " + "x" * 20_000,
+                }
+            )
+            messages.append(
+                {
+                    "role": "assistant",
+                    "type": "delegation",
+                    "round": r,
+                    "content": f"Delegation round {r}: " + "d" * 10_000,
+                }
+            )
+            messages.append(
+                {
+                    "role": "tool_result",
+                    "type": "research_findings",
+                    "round": r,
+                    "directive_id": f"d-{r}",
+                    "content": f"Findings round {r}: " + "y" * 40_000,
+                }
+            )
 
         # Very small budget — forces aggressive truncation
         tiny_limits = {"tiny": 5_000}
         result = truncate_supervision_messages(
-            messages, model="tiny", token_limits=tiny_limits,
+            messages,
+            model="tiny",
+            token_limits=tiny_limits,
             preserve_last_n_thinks=2,
         )
 
         # The 2 most recent think messages (rounds 3 and 4) must survive
-        surviving_thinks = [
-            m for m in result
-            if m.get("type") == "think"
-        ]
+        surviving_thinks = [m for m in result if m.get("type") == "think"]
         surviving_think_rounds = {m.get("round") for m in surviving_thinks}
 
         assert 4 in surviving_think_rounds, "Most recent think (round 4) must survive"
         assert 3 in surviving_think_rounds, "Second-most-recent think (round 3) must survive"
-        assert len(surviving_thinks) >= 2, (
-            f"At least 2 think messages must survive, got {len(surviving_thinks)}"
-        )
+        assert len(surviving_thinks) >= 2, f"At least 2 think messages must survive, got {len(surviving_thinks)}"
 
     def test_findings_body_truncated_before_dropping(self):
         """4.2: Findings bodies are truncated (keeping headers) before messages are dropped."""
         from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
-            truncate_supervision_messages,
             _FINDINGS_BODY_TRUNCATION_HEADER_CHARS,
+            truncate_supervision_messages,
         )
 
         # One small think message + one large findings message
         messages = [
             {
-                "role": "assistant", "type": "think", "round": 0,
+                "role": "assistant",
+                "type": "think",
+                "round": 0,
                 "content": "Short analysis",
             },
             {
-                "role": "tool_result", "type": "research_findings", "round": 0,
+                "role": "tool_result",
+                "type": "research_findings",
+                "round": 0,
                 "directive_id": "d-0",
                 "content": "# Key Findings Header\nImportant summary line.\n\n" + "y" * 20_000,
             },
@@ -2564,7 +2687,9 @@ class TestTypeAwareSupervisionTruncation:
         # (just with truncated body)
         limits = {"test": 3_000}
         result = truncate_supervision_messages(
-            messages, model="test", token_limits=limits,
+            messages,
+            model="test",
+            token_limits=limits,
         )
 
         # The findings message should still exist (not dropped)
@@ -2575,9 +2700,7 @@ class TestTypeAwareSupervisionTruncation:
         for fm in findings_msgs:
             content = fm.get("content", "")
             if len(content) < 20_000:  # Was truncated
-                assert "Key Findings Header" in content, (
-                    "Truncated findings should preserve the header"
-                )
+                assert "Key Findings Header" in content, "Truncated findings should preserve the header"
                 assert len(content) <= _FINDINGS_BODY_TRUNCATION_HEADER_CHARS + 100, (
                     "Truncated body should be roughly header-sized"
                 )
@@ -2585,29 +2708,39 @@ class TestTypeAwareSupervisionTruncation:
     def test_total_chars_within_budget_after_truncation(self):
         """4.7: Total message content stays within the model's token budget after truncation."""
         from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
-            truncate_supervision_messages,
-            _SUPERVISION_HISTORY_BUDGET_FRACTION,
             _CHARS_PER_TOKEN,
+            _SUPERVISION_HISTORY_BUDGET_FRACTION,
+            truncate_supervision_messages,
         )
 
         messages = []
         for r in range(4):
-            messages.append({
-                "role": "assistant", "type": "think", "round": r,
-                "content": f"Think {r}: " + "t" * 15_000,
-            })
-            messages.append({
-                "role": "tool_result", "type": "research_findings", "round": r,
-                "directive_id": f"d-{r}",
-                "content": f"Findings {r}: " + "f" * 30_000,
-            })
+            messages.append(
+                {
+                    "role": "assistant",
+                    "type": "think",
+                    "round": r,
+                    "content": f"Think {r}: " + "t" * 15_000,
+                }
+            )
+            messages.append(
+                {
+                    "role": "tool_result",
+                    "type": "research_findings",
+                    "round": r,
+                    "directive_id": f"d-{r}",
+                    "content": f"Findings {r}: " + "f" * 30_000,
+                }
+            )
 
         model_limit = 10_000  # tokens
         limits = {"budget-test": model_limit}
         budget_chars = int(model_limit * _SUPERVISION_HISTORY_BUDGET_FRACTION * _CHARS_PER_TOKEN)
 
         result = truncate_supervision_messages(
-            messages, model="budget-test", token_limits=limits,
+            messages,
+            model="budget-test",
+            token_limits=limits,
         )
 
         result_chars = sum(len(m.get("content", "")) for m in result)
@@ -2626,39 +2759,41 @@ class TestTypeAwareSupervisionTruncation:
         # Create scenario where findings are much larger than reasoning
         messages = []
         for r in range(3):
-            messages.append({
-                "role": "assistant", "type": "think", "round": r,
-                "content": f"Think {r}: " + "t" * 8_000,
-            })
-            messages.append({
-                "role": "tool_result", "type": "research_findings", "round": r,
-                "directive_id": f"d-{r}",
-                "content": f"Findings {r}: " + "f" * 40_000,
-            })
+            messages.append(
+                {
+                    "role": "assistant",
+                    "type": "think",
+                    "round": r,
+                    "content": f"Think {r}: " + "t" * 8_000,
+                }
+            )
+            messages.append(
+                {
+                    "role": "tool_result",
+                    "type": "research_findings",
+                    "round": r,
+                    "directive_id": f"d-{r}",
+                    "content": f"Findings {r}: " + "f" * 40_000,
+                }
+            )
 
         limits = {"split-test": 10_000}
         result = truncate_supervision_messages(
-            messages, model="split-test", token_limits=limits,
+            messages,
+            model="split-test",
+            token_limits=limits,
         )
 
         # Reasoning messages should be better preserved proportionally
-        think_chars = sum(
-            len(m.get("content", ""))
-            for m in result if m.get("type") == "think"
-        )
-        findings_chars = sum(
-            len(m.get("content", ""))
-            for m in result if m.get("type") == "research_findings"
-        )
+        think_chars = sum(len(m.get("content", "")) for m in result if m.get("type") == "think")
+        findings_chars = sum(len(m.get("content", "")) for m in result if m.get("type") == "research_findings")
 
         total = think_chars + findings_chars
         if total > 0:
             think_ratio = think_chars / total
             # Think messages should get a larger share than naive proportional
             # (they were ~15% of original but should get ~60% of budget)
-            assert think_ratio > 0.3, (
-                f"Think ratio ({think_ratio:.2f}) should reflect priority budget allocation"
-            )
+            assert think_ratio > 0.3, f"Think ratio ({think_ratio:.2f}) should reflect priority budget allocation"
 
     def test_preserve_last_n_thinks_custom_value(self):
         """4.3: Custom preserve_last_n_thinks value is respected."""
@@ -2668,14 +2803,20 @@ class TestTypeAwareSupervisionTruncation:
 
         messages = []
         for r in range(6):
-            messages.append({
-                "role": "assistant", "type": "think", "round": r,
-                "content": f"Think {r}: " + "t" * 15_000,
-            })
+            messages.append(
+                {
+                    "role": "assistant",
+                    "type": "think",
+                    "round": r,
+                    "content": f"Think {r}: " + "t" * 15_000,
+                }
+            )
 
         tiny_limits = {"tiny": 3_000}
         result = truncate_supervision_messages(
-            messages, model="tiny", token_limits=tiny_limits,
+            messages,
+            model="tiny",
+            token_limits=tiny_limits,
             preserve_last_n_thinks=3,
         )
 
@@ -2693,32 +2834,36 @@ class TestTypeAwareSupervisionTruncation:
 
         messages = []
         for r in range(3):
-            messages.append({
-                "role": "assistant", "type": "delegation", "round": r,
-                "content": f"Delegation {r}: " + "d" * 5_000,
-            })
-            messages.append({
-                "role": "tool_result", "type": "research_findings", "round": r,
-                "directive_id": f"d-{r}",
-                "content": f"Findings {r}: " + "f" * 50_000,
-            })
+            messages.append(
+                {
+                    "role": "assistant",
+                    "type": "delegation",
+                    "round": r,
+                    "content": f"Delegation {r}: " + "d" * 5_000,
+                }
+            )
+            messages.append(
+                {
+                    "role": "tool_result",
+                    "type": "research_findings",
+                    "round": r,
+                    "directive_id": f"d-{r}",
+                    "content": f"Findings {r}: " + "f" * 50_000,
+                }
+            )
 
-        original_deleg_chars = sum(
-            len(m["content"]) for m in messages if m["type"] == "delegation"
-        )
-        original_findings_chars = sum(
-            len(m["content"]) for m in messages if m["type"] == "research_findings"
-        )
+        original_deleg_chars = sum(len(m["content"]) for m in messages if m["type"] == "delegation")
+        original_findings_chars = sum(len(m["content"]) for m in messages if m["type"] == "research_findings")
 
         limits = {"deleg-test": 8_000}
         result = truncate_supervision_messages(
-            messages, model="deleg-test", token_limits=limits,
+            messages,
+            model="deleg-test",
+            token_limits=limits,
         )
 
         # Delegation messages should retain more content than findings
-        surviving_deleg_chars = sum(
-            len(m.get("content", "")) for m in result if m.get("type") == "delegation"
-        )
+        surviving_deleg_chars = sum(len(m.get("content", "")) for m in result if m.get("type") == "delegation")
         surviving_findings_chars = sum(
             len(m.get("content", "")) for m in result if m.get("type") == "research_findings"
         )
@@ -2728,8 +2873,7 @@ class TestTypeAwareSupervisionTruncation:
 
         assert surviving_deleg_chars > 0, "At least some delegation content should survive"
         assert deleg_retention > findings_retention, (
-            f"Delegation retention ({deleg_retention:.2%}) should exceed "
-            f"findings retention ({findings_retention:.2%})"
+            f"Delegation retention ({deleg_retention:.2%}) should exceed findings retention ({findings_retention:.2%})"
         )
 
 
@@ -2762,8 +2906,18 @@ class TestCoverageDelta:
         # Simulate previous snapshot where query had only 1 source (insufficient)
         state.metadata["coverage_snapshots"] = {
             "0": {
-                "sq-0": {"query": "Sub-query 0: aspect 0 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
-                "sq-1": {"query": "Sub-query 1: aspect 1 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
+                "sq-0": {
+                    "query": "Sub-query 0: aspect 0 of deep learning",
+                    "source_count": 1,
+                    "unique_domains": 1,
+                    "status": "completed",
+                },
+                "sq-1": {
+                    "query": "Sub-query 1: aspect 1 of deep learning",
+                    "source_count": 1,
+                    "unique_domains": 1,
+                    "status": "completed",
+                },
             }
         }
 
@@ -2771,7 +2925,9 @@ class TestCoverageDelta:
         delta = stub._compute_coverage_delta(state, coverage_data, min_sources=2)
 
         assert delta is not None, "Delta should be generated for round > 0"
-        assert "NEWLY SUFFICIENT" in delta, "Queries that crossed min_sources threshold should be marked NEWLY SUFFICIENT"
+        assert "NEWLY SUFFICIENT" in delta, (
+            "Queries that crossed min_sources threshold should be marked NEWLY SUFFICIENT"
+        )
         assert "round 0" in delta, "Delta should reference previous round"
         assert "1)" in delta, "Delta should reference current round"
 
@@ -2783,7 +2939,12 @@ class TestCoverageDelta:
         # Previous snapshot had same count — still insufficient
         state.metadata["coverage_snapshots"] = {
             "0": {
-                "sq-0": {"query": "Sub-query 0: aspect 0 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
+                "sq-0": {
+                    "query": "Sub-query 0: aspect 0 of deep learning",
+                    "source_count": 1,
+                    "unique_domains": 1,
+                    "status": "completed",
+                },
             }
         }
 
@@ -2801,7 +2962,12 @@ class TestCoverageDelta:
         # Previous snapshot only had sq-0, so sq-1 is new
         state.metadata["coverage_snapshots"] = {
             "0": {
-                "sq-0": {"query": "Sub-query 0: aspect 0 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
+                "sq-0": {
+                    "query": "Sub-query 0: aspect 0 of deep learning",
+                    "source_count": 1,
+                    "unique_domains": 1,
+                    "status": "completed",
+                },
             }
         }
 
@@ -2873,8 +3039,18 @@ class TestCoverageDelta:
         # Set up previous snapshot
         state.metadata["coverage_snapshots"] = {
             "0": {
-                "sq-0": {"query": "Sub-query 0: aspect 0 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
-                "sq-1": {"query": "Sub-query 1: aspect 1 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
+                "sq-0": {
+                    "query": "Sub-query 0: aspect 0 of deep learning",
+                    "source_count": 1,
+                    "unique_domains": 1,
+                    "status": "completed",
+                },
+                "sq-1": {
+                    "query": "Sub-query 1: aspect 1 of deep learning",
+                    "source_count": 1,
+                    "unique_domains": 1,
+                    "status": "completed",
+                },
             }
         }
 
@@ -2886,8 +3062,9 @@ class TestCoverageDelta:
 
         assert "What Changed Since Last Round" in prompt, "Delta section header should appear"
         assert "Coverage delta" in prompt, "Delta content should be in prompt"
-        assert "STILL INSUFFICIENT" in prompt or "NEWLY SUFFICIENT" in prompt or "SUFFICIENT" in prompt, \
+        assert "STILL INSUFFICIENT" in prompt or "NEWLY SUFFICIENT" in prompt or "SUFFICIENT" in prompt, (
             "Delta status labels should appear in prompt"
+        )
         assert "Focus your analysis" in prompt, "Guidance to focus on changes should appear"
 
     def test_think_prompt_without_delta_on_round_zero(self):
@@ -2910,7 +3087,12 @@ class TestCoverageDelta:
 
         state.metadata["coverage_snapshots"] = {
             "0": {
-                "sq-0": {"query": "Sub-query 0: aspect 0 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
+                "sq-0": {
+                    "query": "Sub-query 0: aspect 0 of deep learning",
+                    "source_count": 1,
+                    "unique_domains": 1,
+                    "status": "completed",
+                },
             }
         }
 
@@ -2947,7 +3129,9 @@ class TestPhase6ThinkAsConversation:
         think_text = "Gap: Missing regulatory analysis for EU markets."
         state.supervision_messages = [
             {
-                "role": "assistant", "type": "think", "round": 1,
+                "role": "assistant",
+                "type": "think",
+                "round": 1,
                 "content": think_text,
             },
         ]
@@ -2974,7 +3158,9 @@ class TestPhase6ThinkAsConversation:
 
         coverage = stub._build_per_query_coverage(state)
         prompt = stub._build_delegation_user_prompt(
-            state, coverage, think_output="Full gap analysis text here",
+            state,
+            coverage,
+            think_output="Full gap analysis text here",
         )
 
         # Full text should be embedded in <gap_analysis> tags
@@ -2992,7 +3178,9 @@ class TestPhase6ThinkAsConversation:
         stub.config.deep_research_supervision_single_call = False
 
         state = _make_state(
-            num_completed=0, num_pending=0, supervision_round=0,
+            num_completed=0,
+            num_pending=0,
+            supervision_round=0,
             max_supervision_rounds=1,
         )
         state.research_brief = "Test research"
@@ -3009,7 +3197,9 @@ class TestPhase6ThinkAsConversation:
                 call_order.append("think")
                 result = MagicMock()
                 result.result = WorkflowResult(
-                    success=True, content="Gap: need more data", tokens_used=50,
+                    success=True,
+                    content="Gap: need more data",
+                    tokens_used=50,
                 )
                 return result
             raise AssertionError(f"Unexpected phase: {phase_name}")
@@ -3021,40 +3211,56 @@ class TestPhase6ThinkAsConversation:
                 # Capture supervision_messages at the time delegation runs
                 messages_at_delegate_time.extend(list(state.supervision_messages))
 
-                content = json.dumps({
-                    "research_complete": True,
-                    "directives": [],
-                    "rationale": "All covered",
-                })
+                content = json.dumps(
+                    {
+                        "research_complete": True,
+                        "directives": [],
+                        "rationale": "All covered",
+                    }
+                )
                 result = MagicMock()
                 result.result = WorkflowResult(
-                    success=True, content=content,
-                    provider_id="test", model_used="test",
-                    tokens_used=80, duration_ms=400.0,
+                    success=True,
+                    content=content,
+                    provider_id="test",
+                    model_used="test",
+                    tokens_used=80,
+                    duration_ms=400.0,
                 )
                 parsed = DelegationResponse(
-                    research_complete=True, directives=[], rationale="All covered",
+                    research_complete=True,
+                    directives=[],
+                    rationale="All covered",
                 )
                 return StructuredLLMCallResult(
-                    result=result.result, llm_call_duration_ms=0.0,
-                    parsed=parsed, parse_retries=0,
+                    result=result.result,
+                    llm_call_duration_ms=0.0,
+                    parsed=parsed,
+                    parse_retries=0,
                 )
             raise AssertionError(f"Unexpected structured phase: {phase_name}")
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-            side_effect=mock_execute_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
-            side_effect=mock_execute_structured_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.truncate_supervision_messages",
-            side_effect=lambda messages, model: messages,
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+                side_effect=mock_execute_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+                side_effect=mock_execute_structured_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.truncate_supervision_messages",
+                side_effect=lambda messages, model: messages,
+            ),
         ):
             result = await stub._execute_supervision_async(
-                state=state, provider_id="test", timeout=30.0,
+                state=state,
+                provider_id="test",
+                timeout=30.0,
             )
 
         assert result.success is True
@@ -3075,7 +3281,9 @@ class TestPhase6ThinkAsConversation:
         stub.config.deep_research_supervision_single_call = False
 
         state = _make_state(
-            num_completed=0, num_pending=0, supervision_round=0,
+            num_completed=0,
+            num_pending=0,
+            supervision_round=0,
             max_supervision_rounds=1,
         )
         state.research_brief = "Test research"
@@ -3095,34 +3303,44 @@ class TestPhase6ThinkAsConversation:
                 )
                 result = MagicMock()
                 result.result = WorkflowResult(
-                    success=True, content=content, tokens_used=50,
+                    success=True,
+                    content=content,
+                    tokens_used=50,
                 )
                 return result
             if "critique" in phase_name:
                 result = MagicMock()
                 result.result = WorkflowResult(
-                    success=True, content="VERDICT: NO_ISSUES", tokens_used=20,
-                    provider_id="test", model_used="test",
+                    success=True,
+                    content="VERDICT: NO_ISSUES",
+                    tokens_used=20,
+                    provider_id="test",
+                    model_used="test",
                 )
                 return result
             raise AssertionError(f"Unexpected phase: {phase_name}")
 
-        delegate_response = json.dumps({
-            "research_complete": False,
-            "directives": [
-                {"research_topic": "Investigate AI safety metrics", "priority": 1},
-            ],
-            "rationale": "Need safety data",
-        })
+        delegate_response = json.dumps(
+            {
+                "research_complete": False,
+                "directives": [
+                    {"research_topic": "Investigate AI safety metrics", "priority": 1},
+                ],
+                "rationale": "Need safety data",
+            }
+        )
 
         async def mock_execute_structured_llm_call(**kwargs):
             phase_name = kwargs.get("phase_name", "")
             if "delegate" in phase_name:
                 result = MagicMock()
                 result.result = WorkflowResult(
-                    success=True, content=delegate_response,
-                    provider_id="test", model_used="test",
-                    tokens_used=80, duration_ms=400.0,
+                    success=True,
+                    content=delegate_response,
+                    provider_id="test",
+                    model_used="test",
+                    tokens_used=80,
+                    duration_ms=400.0,
                 )
                 parsed = DelegationResponse(
                     research_complete=False,
@@ -3135,8 +3353,10 @@ class TestPhase6ThinkAsConversation:
                     rationale="Need safety data",
                 )
                 return StructuredLLMCallResult(
-                    result=result.result, llm_call_duration_ms=0.0,
-                    parsed=parsed, parse_retries=0,
+                    result=result.result,
+                    llm_call_duration_ms=0.0,
+                    parsed=parsed,
+                    parse_retries=0,
                 )
             raise AssertionError(f"Unexpected structured phase: {phase_name}")
 
@@ -3152,20 +3372,27 @@ class TestPhase6ThinkAsConversation:
         stub._execute_topic_research_async = mock_topic_research
         stub._get_search_provider = MagicMock(return_value=MagicMock())
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-            side_effect=mock_execute_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
-            side_effect=mock_execute_structured_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.truncate_supervision_messages",
-            side_effect=lambda messages, model: messages,
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+                side_effect=mock_execute_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+                side_effect=mock_execute_structured_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.truncate_supervision_messages",
+                side_effect=lambda messages, model: messages,
+            ),
         ):
             result = await stub._execute_supervision_async(
-                state=state, provider_id="test", timeout=30.0,
+                state=state,
+                provider_id="test",
+                timeout=30.0,
             )
 
         assert result.success is True
@@ -3218,11 +3445,13 @@ European AI regulation (EU AI Act) is completely missing.
 
     def test_parse_combined_response_no_gap_analysis(self):
         """6.3: Combined response without gap_analysis tags still parses JSON."""
-        content = json.dumps({
-            "research_complete": True,
-            "directives": [],
-            "rationale": "All covered",
-        })
+        content = json.dumps(
+            {
+                "research_complete": True,
+                "directives": [],
+                "rationale": "All covered",
+            }
+        )
         think_output, delegation = SupervisionPhaseMixin._parse_combined_response(content)
 
         assert think_output is None
@@ -3255,7 +3484,9 @@ No JSON in this response."""
         state = _make_state(num_completed=2, sources_per_query=2, supervision_round=1)
         state.supervision_messages = [
             {
-                "role": "assistant", "type": "think", "round": 0,
+                "role": "assistant",
+                "type": "think",
+                "round": 0,
                 "content": "Prior round gap analysis about safety.",
             },
         ]
@@ -3281,8 +3512,11 @@ No JSON in this response."""
         # avoid both first-round decomposition and the round>0 heuristic
         # early exit (which always returns should_continue_gathering=False).
         state = _make_state(
-            num_completed=2, num_pending=0, supervision_round=0,
-            max_supervision_rounds=1, sources_per_query=1,
+            num_completed=2,
+            num_pending=0,
+            supervision_round=0,
+            max_supervision_rounds=1,
+            sources_per_query=1,
         )
         state.research_brief = "Test research"
         state.topic_research_results = [
@@ -3292,13 +3526,12 @@ No JSON in this response."""
 
         llm_calls: list[str] = []
 
-        combined_response = (
-            "<gap_analysis>\nAll topics well covered.\n</gap_analysis>\n\n"
-            + json.dumps({
+        combined_response = "<gap_analysis>\nAll topics well covered.\n</gap_analysis>\n\n" + json.dumps(
+            {
                 "research_complete": True,
                 "directives": [],
                 "rationale": "Sufficient coverage across all dimensions",
-            })
+            }
         )
 
         async def mock_execute_llm_call(**kwargs):
@@ -3306,7 +3539,9 @@ No JSON in this response."""
             llm_calls.append(phase_name)
             result = MagicMock()
             result.result = WorkflowResult(
-                success=True, content="Think output", tokens_used=50,
+                success=True,
+                content="Think output",
+                tokens_used=50,
             )
             return result
 
@@ -3316,9 +3551,12 @@ No JSON in this response."""
 
             result = MagicMock()
             result.result = WorkflowResult(
-                success=True, content=combined_response,
-                provider_id="test", model_used="test",
-                tokens_used=150, duration_ms=600.0,
+                success=True,
+                content=combined_response,
+                provider_id="test",
+                model_used="test",
+                tokens_used=150,
+                duration_ms=600.0,
             )
 
             # Parse the combined response
@@ -3326,24 +3564,33 @@ No JSON in this response."""
                 combined_response,
             )
             return StructuredLLMCallResult(
-                result=result.result, llm_call_duration_ms=0.0,
-                parsed=(think_output, delegation), parse_retries=0,
+                result=result.result,
+                llm_call_duration_ms=0.0,
+                parsed=(think_output, delegation),
+                parse_retries=0,
             )
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-            side_effect=mock_execute_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
-            side_effect=mock_execute_structured_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.truncate_supervision_messages",
-            side_effect=lambda messages, model: messages,
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+                side_effect=mock_execute_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+                side_effect=mock_execute_structured_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.truncate_supervision_messages",
+                side_effect=lambda messages, model: messages,
+            ),
         ):
             result = await stub._execute_supervision_async(
-                state=state, provider_id="test", timeout=30.0,
+                state=state,
+                provider_id="test",
+                timeout=30.0,
             )
 
         assert result.success is True
@@ -3368,8 +3615,11 @@ No JSON in this response."""
 
         # Use supervision_round=0 with existing topic_research_results
         state = _make_state(
-            num_completed=2, num_pending=0, supervision_round=0,
-            max_supervision_rounds=1, sources_per_query=1,
+            num_completed=2,
+            num_pending=0,
+            supervision_round=0,
+            max_supervision_rounds=1,
+            sources_per_query=1,
         )
         state.research_brief = "Test research"
         state.topic_research_results = [
@@ -3379,41 +3629,55 @@ No JSON in this response."""
 
         combined_response = (
             "<gap_analysis>\nRegulatory gap identified in EU coverage.\n</gap_analysis>\n\n"
-            + json.dumps({
-                "research_complete": True,
-                "directives": [],
-                "rationale": "Sufficient",
-            })
+            + json.dumps(
+                {
+                    "research_complete": True,
+                    "directives": [],
+                    "rationale": "Sufficient",
+                }
+            )
         )
 
         async def mock_execute_structured_llm_call(**kwargs):
             result = MagicMock()
             result.result = WorkflowResult(
-                success=True, content=combined_response,
-                provider_id="test", model_used="test",
-                tokens_used=150, duration_ms=600.0,
+                success=True,
+                content=combined_response,
+                provider_id="test",
+                model_used="test",
+                tokens_used=150,
+                duration_ms=600.0,
             )
             think_output, delegation = SupervisionPhaseMixin._parse_combined_response(
                 combined_response,
             )
             return StructuredLLMCallResult(
-                result=result.result, llm_call_duration_ms=0.0,
-                parsed=(think_output, delegation), parse_retries=0,
+                result=result.result,
+                llm_call_duration_ms=0.0,
+                parsed=(think_output, delegation),
+                parse_retries=0,
             )
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
-            side_effect=mock_execute_structured_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.truncate_supervision_messages",
-            side_effect=lambda messages, model: messages,
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+                side_effect=mock_execute_structured_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.truncate_supervision_messages",
+                side_effect=lambda messages, model: messages,
+            ),
         ):
             result = await stub._execute_supervision_async(
-                state=state, provider_id="test", timeout=30.0,
+                state=state,
+                provider_id="test",
+                timeout=30.0,
             )
 
         assert result.success is True
@@ -3482,9 +3746,7 @@ class TestConfidenceScoredCoverage:
         stub = self._make_stub()
         state = _make_state(num_completed=2, sources_per_query=2)
         # Add a completed sub-query with no sources
-        state.sub_queries.append(
-            SubQuery(id="sq-nosrc", query="No sources query", status="completed")
-        )
+        state.sub_queries.append(SubQuery(id="sq-nosrc", query="No sources query", status="completed"))
 
         result = stub._assess_coverage_heuristic(state, min_sources=2)
 
@@ -3657,7 +3919,9 @@ class TestConfidenceScoredCoverage:
         """Audit event data includes the full confidence breakdown."""
         stub = self._make_stub()
         state = _make_state(
-            num_completed=3, sources_per_query=3, supervision_round=1,
+            num_completed=3,
+            sources_per_query=3,
+            supervision_round=1,
         )
 
         heuristic = stub._assess_coverage_heuristic(state, min_sources=2)
@@ -4000,16 +4264,24 @@ class TestEvidenceInventoryInPrompts:
         state = _make_state(num_completed=2, supervision_round=1)
         state.supervision_messages = [
             {
-                "role": "assistant", "type": "think", "round": 0,
+                "role": "assistant",
+                "type": "think",
+                "round": 0,
                 "content": "Gap analysis text",
             },
             {
-                "role": "tool_result", "type": "research_findings", "round": 0,
-                "directive_id": "dir-1", "content": "Compressed findings",
+                "role": "tool_result",
+                "type": "research_findings",
+                "round": 0,
+                "directive_id": "dir-1",
+                "content": "Compressed findings",
             },
             {
-                "role": "tool_result", "type": "evidence_inventory", "round": 0,
-                "directive_id": "dir-1", "content": "Sources: 3 found, 2 unique domains",
+                "role": "tool_result",
+                "type": "evidence_inventory",
+                "round": 0,
+                "directive_id": "dir-1",
+                "content": "Sources: 3 found, 2 unique domains",
             },
         ]
 
@@ -4026,12 +4298,18 @@ class TestEvidenceInventoryInPrompts:
         state = _make_state(num_completed=2, supervision_round=1)
         state.supervision_messages = [
             {
-                "role": "tool_result", "type": "evidence_inventory", "round": 0,
-                "directive_id": "dir-abc", "content": "Sources: 5 found, 3 unique domains",
+                "role": "tool_result",
+                "type": "evidence_inventory",
+                "round": 0,
+                "directive_id": "dir-abc",
+                "content": "Sources: 5 found, 3 unique domains",
             },
             {
-                "role": "tool_result", "type": "research_findings", "round": 0,
-                "directive_id": "dir-abc", "content": "Detailed compressed findings here",
+                "role": "tool_result",
+                "type": "research_findings",
+                "round": 0,
+                "directive_id": "dir-abc",
+                "content": "Detailed compressed findings here",
             },
         ]
 
@@ -4047,8 +4325,11 @@ class TestEvidenceInventoryInPrompts:
         state = _make_state(num_completed=2, supervision_round=1)
         state.supervision_messages = [
             {
-                "role": "tool_result", "type": "research_findings", "round": 0,
-                "directive_id": "dir-old", "content": "Old findings",
+                "role": "tool_result",
+                "type": "research_findings",
+                "round": 0,
+                "directive_id": "dir-old",
+                "content": "Old findings",
             },
         ]
 
@@ -4074,38 +4355,70 @@ class TestEvidenceInventoryTruncation:
 
         messages = []
         # Round 0: findings + evidence inventory
-        messages.append({
-            "role": "tool_result", "type": "research_findings", "round": 0,
-            "directive_id": "d-0", "content": "F" * 30_000,
-        })
-        messages.append({
-            "role": "tool_result", "type": "evidence_inventory", "round": 0,
-            "directive_id": "d-0", "content": "E" * 10_000,
-        })
+        messages.append(
+            {
+                "role": "tool_result",
+                "type": "research_findings",
+                "round": 0,
+                "directive_id": "d-0",
+                "content": "F" * 30_000,
+            }
+        )
+        messages.append(
+            {
+                "role": "tool_result",
+                "type": "evidence_inventory",
+                "round": 0,
+                "directive_id": "d-0",
+                "content": "E" * 10_000,
+            }
+        )
         # Round 1: findings + evidence inventory
-        messages.append({
-            "role": "tool_result", "type": "research_findings", "round": 1,
-            "directive_id": "d-1", "content": "G" * 30_000,
-        })
-        messages.append({
-            "role": "tool_result", "type": "evidence_inventory", "round": 1,
-            "directive_id": "d-1", "content": "H" * 10_000,
-        })
+        messages.append(
+            {
+                "role": "tool_result",
+                "type": "research_findings",
+                "round": 1,
+                "directive_id": "d-1",
+                "content": "G" * 30_000,
+            }
+        )
+        messages.append(
+            {
+                "role": "tool_result",
+                "type": "evidence_inventory",
+                "round": 1,
+                "directive_id": "d-1",
+                "content": "H" * 10_000,
+            }
+        )
         # Round 2: findings + evidence inventory (most recent)
-        messages.append({
-            "role": "tool_result", "type": "research_findings", "round": 2,
-            "directive_id": "d-2", "content": "I" * 30_000,
-        })
-        messages.append({
-            "role": "tool_result", "type": "evidence_inventory", "round": 2,
-            "directive_id": "d-2", "content": "J" * 10_000,
-        })
+        messages.append(
+            {
+                "role": "tool_result",
+                "type": "research_findings",
+                "round": 2,
+                "directive_id": "d-2",
+                "content": "I" * 30_000,
+            }
+        )
+        messages.append(
+            {
+                "role": "tool_result",
+                "type": "evidence_inventory",
+                "round": 2,
+                "directive_id": "d-2",
+                "content": "J" * 10_000,
+            }
+        )
 
         # Budget that forces some removal but not all
         # 40% findings budget of 20k tokens * 4 chars = 32k chars
         small_limits = {"test-model": 20_000}
         result = truncate_supervision_messages(
-            messages, model="test-model", token_limits=small_limits,
+            messages,
+            model="test-model",
+            token_limits=small_limits,
         )
 
         # Evidence inventories from oldest round should be removed first
@@ -4131,10 +4444,7 @@ class TestEvidenceInventoryTruncation:
             if msg_type == "research_findings":
                 # The inventory for this round should also be removed
                 # (it should have been dropped first)
-                inv_kept = any(
-                    m.get("type") == "evidence_inventory" and m.get("round") == msg_round
-                    for m in result
-                )
+                inv_kept = any(m.get("type") == "evidence_inventory" and m.get("round") == msg_round for m in result)
                 assert not inv_kept, (
                     f"Research findings from round {msg_round} were removed but "
                     f"evidence_inventory from the same round was kept"
@@ -4159,24 +4469,38 @@ class TestEvidenceInventoryTruncation:
 
         messages = []
         for r in range(4):
-            messages.append({
-                "role": "assistant", "type": "think", "round": r,
-                "content": f"Think {r}: " + "x" * 20_000,
-            })
-            messages.append({
-                "role": "tool_result", "type": "research_findings", "round": r,
-                "directive_id": f"d-{r}",
-                "content": f"Findings {r}: " + "y" * 20_000,
-            })
-            messages.append({
-                "role": "tool_result", "type": "evidence_inventory", "round": r,
-                "directive_id": f"d-{r}",
-                "content": f"Inventory {r}: " + "z" * 5_000,
-            })
+            messages.append(
+                {
+                    "role": "assistant",
+                    "type": "think",
+                    "round": r,
+                    "content": f"Think {r}: " + "x" * 20_000,
+                }
+            )
+            messages.append(
+                {
+                    "role": "tool_result",
+                    "type": "research_findings",
+                    "round": r,
+                    "directive_id": f"d-{r}",
+                    "content": f"Findings {r}: " + "y" * 20_000,
+                }
+            )
+            messages.append(
+                {
+                    "role": "tool_result",
+                    "type": "evidence_inventory",
+                    "round": r,
+                    "directive_id": f"d-{r}",
+                    "content": f"Inventory {r}: " + "z" * 5_000,
+                }
+            )
 
         tiny_limits = {"test-model": 10_000}
         result = truncate_supervision_messages(
-            messages, model="test-model", token_limits=tiny_limits,
+            messages,
+            model="test-model",
+            token_limits=tiny_limits,
         )
 
         remaining_rounds = {m.get("round") for m in result}
@@ -4204,14 +4528,18 @@ class TestDirectiveExecutionCancellation:
 
         async def ok_task():
             return TopicResearchResult(
-                sub_query_id="sq-0", sources_found=2, source_ids=[],
+                sub_query_id="sq-0",
+                sources_found=2,
+                source_ids=[],
             )
 
         async def cancelled_task():
             raise asyncio.CancelledError()
 
         gather_results = await asyncio.gather(
-            ok_task(), cancelled_task(), return_exceptions=True,
+            ok_task(),
+            cancelled_task(),
+            return_exceptions=True,
         )
 
         # Apply the same cancellation-propagation pattern as supervision.py
@@ -4227,14 +4555,18 @@ class TestDirectiveExecutionCancellation:
 
         async def ok_task():
             return TopicResearchResult(
-                sub_query_id="sq-0", sources_found=2, source_ids=[],
+                sub_query_id="sq-0",
+                sources_found=2,
+                source_ids=[],
             )
 
         async def failing_task():
             raise RuntimeError("unexpected error")
 
         gather_results = await asyncio.gather(
-            ok_task(), failing_task(), return_exceptions=True,
+            ok_task(),
+            failing_task(),
+            return_exceptions=True,
         )
 
         # CancelledError check — should NOT raise for RuntimeError
@@ -4258,7 +4590,9 @@ class TestDirectiveExecutionCancellation:
 
         async def ok_task():
             return TopicResearchResult(
-                sub_query_id="sq-ok", sources_found=3, source_ids=[],
+                sub_query_id="sq-ok",
+                sources_found=3,
+                source_ids=[],
             )
 
         async def slow_cancelled_task():
@@ -4266,22 +4600,20 @@ class TestDirectiveExecutionCancellation:
             raise asyncio.CancelledError()
 
         gather_results = await asyncio.gather(
-            ok_task(), slow_cancelled_task(), return_exceptions=True,
+            ok_task(),
+            slow_cancelled_task(),
+            return_exceptions=True,
         )
 
         # Collect partial results before propagating cancellation
-        completed_results = [
-            r for r in gather_results if not isinstance(r, BaseException)
-        ]
+        completed_results = [r for r in gather_results if not isinstance(r, BaseException)]
 
         # Partial results should be preserved
         assert len(completed_results) == 1
         assert completed_results[0].sub_query_id == "sq-ok"
 
         # Cancellation should still be detected
-        has_cancellation = any(
-            isinstance(r, asyncio.CancelledError) for r in gather_results
-        )
+        has_cancellation = any(isinstance(r, asyncio.CancelledError) for r in gather_results)
         assert has_cancellation
 
 
@@ -4388,8 +4720,8 @@ class TestCoverageSnapshotSuffix:
     def test_delta_uses_prev_post_snapshot(self):
         """compute_coverage_delta compares against previous round's post snapshot."""
         from foundry_mcp.core.research.workflows.deep_research.phases.supervision_coverage import (
-            compute_coverage_delta,
             build_per_query_coverage,
+            compute_coverage_delta,
         )
 
         state = _make_state(num_completed=2, sources_per_query=2, supervision_round=1)
@@ -4397,8 +4729,18 @@ class TestCoverageSnapshotSuffix:
         # Store round 0 post snapshot (simulating what supervision loop does)
         state.metadata["coverage_snapshots"] = {
             "0_post": {
-                "sq-0": {"query": "Sub-query 0: aspect 0 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
-                "sq-1": {"query": "Sub-query 1: aspect 1 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
+                "sq-0": {
+                    "query": "Sub-query 0: aspect 0 of deep learning",
+                    "source_count": 1,
+                    "unique_domains": 1,
+                    "status": "completed",
+                },
+                "sq-1": {
+                    "query": "Sub-query 1: aspect 1 of deep learning",
+                    "source_count": 1,
+                    "unique_domains": 1,
+                    "status": "completed",
+                },
             }
         }
 
@@ -4411,8 +4753,8 @@ class TestCoverageSnapshotSuffix:
     def test_delta_falls_back_to_bare_key(self):
         """compute_coverage_delta falls back to bare round key for backward compatibility."""
         from foundry_mcp.core.research.workflows.deep_research.phases.supervision_coverage import (
-            compute_coverage_delta,
             build_per_query_coverage,
+            compute_coverage_delta,
         )
 
         state = _make_state(num_completed=2, sources_per_query=2, supervision_round=1)
@@ -4420,8 +4762,18 @@ class TestCoverageSnapshotSuffix:
         # Store using bare key (old format)
         state.metadata["coverage_snapshots"] = {
             "0": {
-                "sq-0": {"query": "Sub-query 0: aspect 0 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
-                "sq-1": {"query": "Sub-query 1: aspect 1 of deep learning", "source_count": 1, "unique_domains": 1, "status": "completed"},
+                "sq-0": {
+                    "query": "Sub-query 0: aspect 0 of deep learning",
+                    "source_count": 1,
+                    "unique_domains": 1,
+                    "status": "completed",
+                },
+                "sq-1": {
+                    "query": "Sub-query 1: aspect 1 of deep learning",
+                    "source_count": 1,
+                    "unique_domains": 1,
+                    "status": "completed",
+                },
             }
         }
 
@@ -4450,7 +4802,9 @@ class TestShouldExitHeuristicPure:
         """When heuristic says sufficient, returns (True, heuristic_data) without mutating state."""
         stub = self._make_stub()
         state = _make_state(
-            num_completed=3, sources_per_query=5, supervision_round=1,
+            num_completed=3,
+            sources_per_query=5,
+            supervision_round=1,
         )
 
         original_round = state.supervision_round
@@ -4470,7 +4824,9 @@ class TestShouldExitHeuristicPure:
         """When heuristic says insufficient, returns (False, heuristic_data)."""
         stub = self._make_stub()
         state = _make_state(
-            num_completed=2, sources_per_query=1, supervision_round=1,
+            num_completed=2,
+            sources_per_query=1,
+            supervision_round=1,
         )
 
         should_exit, data = stub._should_exit_heuristic(state, min_sources=10)
@@ -4515,7 +4871,9 @@ class TestSupervisionWallClockTimeout:
             "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
         ):
             result = await stub._execute_supervision_async(
-                state=state, provider_id="test-provider", timeout=30.0,
+                state=state,
+                provider_id="test-provider",
+                timeout=30.0,
             )
 
         assert result.success is True
@@ -4566,24 +4924,26 @@ class TestAllDirectivesFail:
         state.topic_research_results = []
 
         # Delegation response with directives
-        delegation_response = json.dumps({
-            "research_complete": False,
-            "directives": [
-                {
-                    "research_topic": "Topic A",
-                    "perspective": "technical",
-                    "evidence_needed": "papers",
-                    "priority": 1,
-                },
-                {
-                    "research_topic": "Topic B",
-                    "perspective": "comparative",
-                    "evidence_needed": "benchmarks",
-                    "priority": 2,
-                },
-            ],
-            "rationale": "Need more data",
-        })
+        delegation_response = json.dumps(
+            {
+                "research_complete": False,
+                "directives": [
+                    {
+                        "research_topic": "Topic A",
+                        "perspective": "technical",
+                        "evidence_needed": "papers",
+                        "priority": 1,
+                    },
+                    {
+                        "research_topic": "Topic B",
+                        "perspective": "comparative",
+                        "evidence_needed": "benchmarks",
+                        "priority": 2,
+                    },
+                ],
+                "rationale": "Need more data",
+            }
+        )
 
         async def mock_execute_llm_call(**kwargs):
             result = MagicMock()
@@ -4604,17 +4964,23 @@ class TestAllDirectivesFail:
         stub._execute_topic_research_async = mock_topic_research_always_fails
         stub._get_search_provider = MagicMock(return_value=MagicMock())
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-            side_effect=mock_execute_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
-            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+                side_effect=mock_execute_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+                side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+            ),
         ):
             result = await stub._execute_supervision_async(
-                state=state, provider_id="test-provider", timeout=30.0,
+                state=state,
+                provider_id="test-provider",
+                timeout=30.0,
             )
 
         # Should complete without crashing
@@ -4650,18 +5016,20 @@ class TestAllDirectivesFail:
         state.max_sub_queries = 10
         state.topic_research_results = []
 
-        delegation_response = json.dumps({
-            "research_complete": False,
-            "directives": [
-                {
-                    "research_topic": "Failing topic",
-                    "perspective": "technical",
-                    "evidence_needed": "none",
-                    "priority": 1,
-                },
-            ],
-            "rationale": "Test",
-        })
+        delegation_response = json.dumps(
+            {
+                "research_complete": False,
+                "directives": [
+                    {
+                        "research_topic": "Failing topic",
+                        "perspective": "technical",
+                        "evidence_needed": "none",
+                        "priority": 1,
+                    },
+                ],
+                "rationale": "Test",
+            }
+        )
 
         async def mock_execute_llm_call(**kwargs):
             result = MagicMock()
@@ -4681,17 +5049,23 @@ class TestAllDirectivesFail:
         stub._execute_topic_research_async = mock_topic_research_fails
         stub._get_search_provider = MagicMock(return_value=MagicMock())
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
-            side_effect=mock_execute_llm_call,
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
-            side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
-        ), patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+                side_effect=mock_execute_llm_call,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+                side_effect=_wrap_as_structured_mock(mock_execute_llm_call),
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+            ),
         ):
             result = await stub._execute_supervision_async(
-                state=state, provider_id="test-provider", timeout=30.0,
+                state=state,
+                provider_id="test-provider",
+                timeout=30.0,
             )
 
         assert result.success is True

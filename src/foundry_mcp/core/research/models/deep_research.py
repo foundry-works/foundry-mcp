@@ -732,6 +732,8 @@ class DeepResearchPhase(str, Enum):
     BRIEF = "brief"
     PLANNING = "planning"  # DEPRECATED: legacy-resume-only; retained for deserialization
     GATHERING = "gathering"  # DEPRECATED: legacy-resume-only; new workflows skip to SUPERVISION
+    ANALYSIS = "analysis"  # DEPRECATED: legacy-resume-only; retained for deserialization
+    REFINEMENT = "refinement"  # DEPRECATED: legacy-resume-only; retained for deserialization
     SUPERVISION = "supervision"
     SYNTHESIS = "synthesis"
 
@@ -934,6 +936,25 @@ class DeepResearchState(BaseModel):
         default=1,
         description="Next citation number to assign (auto-maintained).",
     )
+
+    # Deprecated phase values — log a warning when loaded from persisted state.
+    _DEPRECATED_PHASES: ClassVar[set[DeepResearchPhase]] = {
+        DeepResearchPhase.PLANNING,
+        DeepResearchPhase.GATHERING,
+        DeepResearchPhase.ANALYSIS,
+        DeepResearchPhase.REFINEMENT,
+    }
+
+    @field_validator("phase", mode="after")
+    @classmethod
+    def _warn_deprecated_phase(cls, v: DeepResearchPhase) -> DeepResearchPhase:
+        """Log a deprecation warning when loading a session with a removed phase."""
+        if v in cls._DEPRECATED_PHASES:
+            logger.warning(
+                "DeepResearchState loaded with deprecated phase %r; advance_phase() will skip past it automatically.",
+                v.value,
+            )
+        return v
 
     @model_validator(mode="after")
     def _sync_citation_counter(self) -> "DeepResearchState":
@@ -1241,6 +1262,8 @@ class DeepResearchState(BaseModel):
     _SKIP_PHASES: ClassVar[set[DeepResearchPhase]] = {
         DeepResearchPhase.PLANNING,
         DeepResearchPhase.GATHERING,
+        DeepResearchPhase.ANALYSIS,
+        DeepResearchPhase.REFINEMENT,
     }
 
     def advance_phase(self) -> DeepResearchPhase:
