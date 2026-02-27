@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -949,6 +949,194 @@ class TestReActLoop:
         )
 
         assert state.total_tokens_used == 175  # 100 + 75
+
+    @pytest.mark.asyncio
+    async def test_unknown_tool_ignored_and_loop_continues(self) -> None:
+        """Unknown tool name is logged and skipped; loop continues normally."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+        provider = _make_mock_provider("tavily")
+
+        call_count = 0
+
+        async def mock_llm(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 30
+            result.error = None
+            if call_count == 1:
+                # Return an unknown tool
+                result.content = _react_response(
+                    {"tool": "invalid_tool", "arguments": {"foo": "bar"}}
+                )
+            elif call_count == 2:
+                # Follow up with a valid search
+                result.content = _react_response(_web_search_call("valid query"))
+            else:
+                result.content = _react_response(_complete_call("Done"))
+            return result
+
+        mixin._provider_async_fn = mock_llm
+
+        topic_result = await mixin._execute_topic_research_async(
+            sub_query=sq, state=state, available_providers=[provider],
+            max_searches=5, timeout=30.0,
+            seen_urls=set(), seen_titles={},
+            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+        )
+
+        # Unknown tool should not count against budget
+        assert topic_result.searches_performed == 1
+        # Loop continued past the unknown tool and completed normally
+        assert topic_result.early_completion is True
+        assert call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_budget_exhaustion_without_research_complete(self) -> None:
+        """Budget exhausted mid-loop terminates without research_complete signal."""
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+        provider = _make_mock_provider("tavily")
+
+        call_count = 0
+
+        async def mock_llm(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 30
+            result.error = None
+            # Alternate search → think to satisfy reflection protocol,
+            # but never call research_complete
+            if call_count % 2 == 1:
+                result.content = _react_response(
+                    _web_search_call(f"query {call_count}")
+                )
+            else:
+                result.content = _react_response(
+                    _think_call(f"Reflecting on iteration {call_count}...")
+                )
+            return result
+
+        mixin._provider_async_fn = mock_llm
+
+        topic_result = await mixin._execute_topic_research_async(
+            sub_query=sq, state=state, available_providers=[provider],
+            max_searches=2, timeout=30.0,
+            seen_urls=set(), seen_titles={},
+            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+        )
+
+        # Exactly 2 searches should have been performed (budget cap)
+        assert topic_result.searches_performed == 2
+        # research_complete was never called
+        assert topic_result.early_completion is False
+
+    @pytest.mark.asyncio
+    async def test_extract_content_failure_non_fatal(self) -> None:
+        """Extract content failure is non-fatal; loop continues and budget is charged."""
+        mixin = StubTopicResearch()
+        mixin.config.deep_research_enable_extract = True
+        mixin.config.tavily_api_key = "test-key"
+        mixin.config.tavily_extract_depth = "basic"
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+        provider = _make_mock_provider("tavily")
+
+        call_count = 0
+
+        async def mock_llm(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 30
+            result.error = None
+            if call_count == 1:
+                result.content = _react_response(
+                    _extract_call(["https://example.com/article"])
+                )
+            else:
+                result.content = _react_response(_complete_call("Done"))
+            return result
+
+        mixin._provider_async_fn = mock_llm
+
+        # Mock the extract provider to raise an exception
+        with patch(
+            "foundry_mcp.core.research.providers.tavily_extract.TavilyExtractProvider"
+        ) as mock_extract_cls:
+            mock_extract_instance = MagicMock()
+            mock_extract_instance.extract = AsyncMock(side_effect=RuntimeError("Network error"))
+            mock_extract_cls.return_value = mock_extract_instance
+
+            topic_result = await mixin._execute_topic_research_async(
+                sub_query=sq, state=state, available_providers=[provider],
+                max_searches=5, timeout=30.0,
+                seen_urls=set(), seen_titles={},
+                state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            )
+
+        # Extract failure is non-fatal — loop continued to completion
+        assert topic_result.early_completion is True
+        # No sources from the failed extraction
+        assert topic_result.sources_found == 0
+        # Extract counted against budget (1 extract call used)
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_extract_content_timeout_non_fatal(self) -> None:
+        """Extract content timeout is non-fatal; loop continues."""
+        mixin = StubTopicResearch()
+        mixin.config.deep_research_enable_extract = True
+        mixin.config.tavily_api_key = "test-key"
+        mixin.config.tavily_extract_depth = "basic"
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+        provider = _make_mock_provider("tavily")
+
+        call_count = 0
+
+        async def mock_llm(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 30
+            result.error = None
+            if call_count == 1:
+                result.content = _react_response(
+                    _extract_call(["https://example.com/slow-page"])
+                )
+            else:
+                result.content = _react_response(_complete_call("Done"))
+            return result
+
+        mixin._provider_async_fn = mock_llm
+
+        # Mock the extract provider to raise a TimeoutError
+        with patch(
+            "foundry_mcp.core.research.providers.tavily_extract.TavilyExtractProvider"
+        ) as mock_extract_cls:
+            mock_extract_instance = MagicMock()
+            mock_extract_instance.extract = AsyncMock(side_effect=asyncio.TimeoutError())
+            mock_extract_cls.return_value = mock_extract_instance
+
+            topic_result = await mixin._execute_topic_research_async(
+                sub_query=sq, state=state, available_providers=[provider],
+                max_searches=5, timeout=30.0,
+                seen_urls=set(), seen_titles={},
+                state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            )
+
+        # Timeout is non-fatal — loop continued to completion
+        assert topic_result.early_completion is True
+        assert topic_result.sources_found == 0
 
 
 # =============================================================================

@@ -399,17 +399,53 @@ class TestSupervisionIntegration:
 
     @pytest.mark.asyncio
     async def test_supervision_skipped_when_disabled(self):
-        """When supervision is disabled, the workflow skips SUPERVISION entirely."""
-        # This tests the workflow_execution.py logic, not the mixin
-        state = _make_state(phase=DeepResearchPhase.SUPERVISION)
-        config = MagicMock()
-        config.deep_research_enable_supervision = False
+        """When supervision is disabled, workflow_execution skips SUPERVISION entirely."""
+        from foundry_mcp.core.research.workflows.deep_research.workflow_execution import (
+            WorkflowExecutionMixin,
+        )
 
-        # Simulate the workflow_execution.py logic
-        if not getattr(config, "deep_research_enable_supervision", True):
-            state.advance_phase()
+        state = _make_state(phase=DeepResearchPhase.SUPERVISION)
+        audit_events: list[tuple[str, dict]] = []
+
+        class StubWorkflowExecution(WorkflowExecutionMixin):
+            def __init__(self):
+                self.config = MagicMock()
+                self.config.deep_research_enable_supervision = False
+                self.config.get_phase_timeout.return_value = 60.0
+                self.memory = MagicMock()
+                self.hooks = MagicMock()
+                self.orchestrator = MagicMock()
+                self._tasks: dict = {}
+                self._tasks_lock = __import__("threading").Lock()
+                self._search_providers: dict = {}
+
+            def _write_audit_event(self, _state, event, **kwargs):
+                audit_events.append((event, kwargs))
+
+            def _flush_state(self, _state):
+                pass
+
+            def _record_workflow_error(self, *a, **kw):
+                pass
+
+            def _safe_orchestrator_transition(self, *a, **kw):
+                pass
+
+            async def _execute_supervision_async(self, **kw):
+                raise AssertionError("Should not be called when supervision is disabled")
+
+            async def _execute_synthesis_async(self, **kw):
+                return WorkflowResult(success=True, content="report")
+
+        stub = StubWorkflowExecution()
+        result = await stub._execute_workflow_async(
+            state=state, provider_id="test", timeout_per_operation=60.0, max_concurrent=3,
+        )
 
         assert state.phase == DeepResearchPhase.SYNTHESIS
+        # Verify audit event was emitted for the skip
+        skip_events = [e for e, _ in audit_events if e == "supervision_skipped"]
+        assert len(skip_events) == 1
 
     @pytest.mark.asyncio
     async def test_supervision_proceeds_when_all_covered(self):

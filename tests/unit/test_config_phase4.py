@@ -18,6 +18,7 @@ import pytest
 from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.research.workflows.deep_research._helpers import (
     estimate_token_limit_for_model,
+    extract_json,
 )
 
 
@@ -178,3 +179,104 @@ class TestPlanningCritiqueConfig:
             {"deep_research_enable_planning_critique": False}
         )
         assert config.deep_research_enable_planning_critique is False
+
+
+# ===========================================================================
+# 6b — extract_json() backslash handling
+# ===========================================================================
+
+
+class TestExtractJsonBackslashHandling:
+    """Backslashes outside JSON strings must not break brace matching."""
+
+    def test_backslash_outside_string_does_not_break_parsing(self):
+        """A backslash outside a JSON string should be treated as a regular char."""
+        # Backslash before the opening brace
+        text = r'Some text \ {"key": "value"}'
+        result = extract_json(text)
+        assert result == '{"key": "value"}'
+
+    def test_backslash_between_json_objects(self):
+        """Backslashes between content and JSON should not confuse the parser."""
+        text = r'prefix \ text {"a": 1}'
+        result = extract_json(text)
+        assert result == '{"a": 1}'
+
+    def test_backslash_in_string_still_escapes(self):
+        """Backslash inside a JSON string should still escape the next char."""
+        text = r'{"msg": "hello \"world\""}'
+        result = extract_json(text)
+        assert result is not None
+        parsed = json.loads(result)
+        assert parsed["msg"] == 'hello "world"'
+
+    def test_nested_braces_with_external_backslash(self):
+        """Nested braces with backslash outside string."""
+        text = r'\ {"outer": {"inner": 42}}'
+        result = extract_json(text)
+        assert result == '{"outer": {"inner": 42}}'
+
+    def test_backslash_before_quote_outside_string(self):
+        r"""Backslash before a quote outside a string boundary.
+
+        In ``\"{"key": 1}`` the backslash is outside any JSON string,
+        so it must NOT escape the quote — the quote starts a new string.
+        """
+        text = '\\{"key": 1}'
+        result = extract_json(text)
+        assert result is not None
+        parsed = json.loads(result)
+        assert parsed["key"] == 1
+
+
+# ===========================================================================
+# 6c — JSON / fallback token limits sync
+# ===========================================================================
+
+
+class TestTokenLimitsSyncJsonFallback:
+    """model_token_limits.json and _FALLBACK_MODEL_TOKEN_LIMITS must stay in sync."""
+
+    @pytest.fixture()
+    def json_limits(self) -> dict[str, int]:
+        limits_path = (
+            Path(__file__).resolve().parents[2]
+            / "src"
+            / "foundry_mcp"
+            / "config"
+            / "model_token_limits.json"
+        )
+        with open(limits_path) as f:
+            return json.load(f)["limits"]
+
+    @pytest.fixture()
+    def fallback_limits(self) -> dict[str, int]:
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            _FALLBACK_MODEL_TOKEN_LIMITS,
+        )
+        return _FALLBACK_MODEL_TOKEN_LIMITS
+
+    def test_same_keys(self, json_limits: dict[str, int], fallback_limits: dict[str, int]):
+        """JSON and fallback registries must have identical key sets."""
+        json_keys = set(json_limits.keys())
+        fallback_keys = set(fallback_limits.keys())
+        missing_from_json = fallback_keys - json_keys
+        missing_from_fallback = json_keys - fallback_keys
+        assert not missing_from_json, (
+            f"Keys in _FALLBACK_MODEL_TOKEN_LIMITS but not in JSON: {missing_from_json}"
+        )
+        assert not missing_from_fallback, (
+            f"Keys in JSON but not in _FALLBACK_MODEL_TOKEN_LIMITS: {missing_from_fallback}"
+        )
+
+    def test_same_values(self, json_limits: dict[str, int], fallback_limits: dict[str, int]):
+        """JSON and fallback registries must have identical values for shared keys."""
+        mismatches: list[str] = []
+        for key in set(json_limits.keys()) & set(fallback_limits.keys()):
+            if json_limits[key] != fallback_limits[key]:
+                mismatches.append(
+                    f"  {key}: JSON={json_limits[key]} vs fallback={fallback_limits[key]}"
+                )
+        assert not mismatches, (
+            f"Value mismatches between JSON and fallback:\n" + "\n".join(mismatches)
+        )

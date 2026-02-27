@@ -269,21 +269,33 @@ class WorkflowExecutionMixin:
 
             # SUPERVISION (handles decomposition + research + gap-fill internally)
             if state.phase == DeepResearchPhase.SUPERVISION:
-                state.metadata["iteration_in_progress"] = True
+                if not self.config.deep_research_enable_supervision:
+                    logger.info(
+                        "Supervision disabled via config for research %s, skipping to SYNTHESIS",
+                        state.id,
+                    )
+                    self._write_audit_event(
+                        state,
+                        "supervision_skipped",
+                        data={"reason": "disabled_via_config"},
+                    )
+                    state.phase = DeepResearchPhase.SYNTHESIS
+                else:
+                    state.metadata["iteration_in_progress"] = True
 
-                err = await self._run_phase(
-                    state,
-                    DeepResearchPhase.SUPERVISION,
-                    self._execute_supervision_async(
-                        state=state,
-                        provider_id=resolve_phase_provider(self.config, "supervision", "reflection"),
-                        timeout=self.config.get_phase_timeout("supervision"),
-                    ),
-                    skip_transition=True,
-                )
-                if err:
-                    return err
-                state.phase = DeepResearchPhase.SYNTHESIS
+                    err = await self._run_phase(
+                        state,
+                        DeepResearchPhase.SUPERVISION,
+                        self._execute_supervision_async(
+                            state=state,
+                            provider_id=resolve_phase_provider(self.config, "supervision", "reflection"),
+                            timeout=self.config.get_phase_timeout("supervision"),
+                        ),
+                        skip_transition=True,
+                    )
+                    if err:
+                        return err
+                    state.phase = DeepResearchPhase.SYNTHESIS
 
             # SYNTHESIS
             if state.phase == DeepResearchPhase.SYNTHESIS:

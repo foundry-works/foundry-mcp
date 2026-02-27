@@ -53,9 +53,9 @@ def _make_state(
     sources_per_query: int = 3,
 ) -> DeepResearchState:
     """Create a DeepResearchState with sub-queries and sources for testing."""
-    from tests.core.research.workflows.deep_research.conftest import make_test_state
+    from tests.core.research.workflows.deep_research.conftest import make_gathering_state
 
-    return make_test_state(
+    return make_gathering_state(
         id="deepres-test-inline-compression",
         query=query,
         research_brief="Detailed investigation of renewable energy benefits",

@@ -14,6 +14,7 @@ from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
 )
 from foundry_mcp.core.research.workflows.deep_research._helpers import (
+    build_sanitized_context,
     sanitize_external_content,
 )
 
@@ -153,15 +154,16 @@ def build_combined_think_delegate_user_prompt(
     coverage_data: list[dict[str, Any]],
 ) -> str:
     """Build user prompt for the combined think+delegate step."""
+    ctx = build_sanitized_context(state)
     parts = [
-        f"# Research Query\n{sanitize_external_content(state.original_query)}",
+        f"# Research Query\n{ctx['original_query']}",
         "",
     ]
 
     if state.research_brief and state.research_brief != state.original_query:
         parts.extend([
             "## Research Brief",
-            sanitize_external_content(state.research_brief),
+            ctx["research_brief"],
             "",
         ])
 
@@ -284,15 +286,16 @@ def build_delegation_user_prompt(
     Returns:
         User prompt string
     """
+    ctx = build_sanitized_context(state)
     parts = [
-        f"# Research Query\n{sanitize_external_content(state.original_query)}",
+        f"# Research Query\n{ctx['original_query']}",
         "",
     ]
 
     if state.research_brief and state.research_brief != state.original_query:
         parts.extend([
             "## Research Brief",
-            sanitize_external_content(state.research_brief),
+            ctx["research_brief"],
             "",
         ])
 
@@ -440,13 +443,14 @@ def build_first_round_think_prompt(state: DeepResearchState) -> str:
     Returns:
         Think prompt string for decomposition strategy
     """
+    ctx = build_sanitized_context(state)
     parts = [
         "# Research Decomposition Strategy\n",
-        f"**Research Query:** {sanitize_external_content(state.original_query)}\n",
+        f"**Research Query:** {ctx['original_query']}\n",
     ]
 
     if state.research_brief and state.research_brief != state.original_query:
-        parts.append(f"**Research Brief:**\n{sanitize_external_content(state.research_brief)}\n")
+        parts.append(f"**Research Brief:**\n{ctx['research_brief']}\n")
 
     if state.clarification_constraints:
         parts.append("**Clarification Constraints:**")
@@ -455,7 +459,7 @@ def build_first_round_think_prompt(state: DeepResearchState) -> str:
         parts.append("")
 
     if state.system_prompt:
-        parts.append(f"**Additional Context:** {sanitize_external_content(state.system_prompt)}\n")
+        parts.append(f"**Additional Context:** {ctx['system_prompt']}\n")
 
     parts.append(f"**Date:** {datetime.now(timezone.utc).strftime('%Y-%m-%d')}\n")
 
@@ -538,15 +542,16 @@ def build_first_round_delegation_user_prompt(
     Returns:
         User prompt string
     """
+    ctx = build_sanitized_context(state)
     parts = [
-        f"# Research Query\n{sanitize_external_content(state.original_query)}",
+        f"# Research Query\n{ctx['original_query']}",
         "",
     ]
 
     if state.research_brief and state.research_brief != state.original_query:
         parts.extend([
             "## Research Brief",
-            sanitize_external_content(state.research_brief),
+            ctx["research_brief"],
             "",
         ])
 
@@ -559,7 +564,7 @@ def build_first_round_delegation_user_prompt(
     if state.system_prompt:
         parts.extend([
             "## Additional Context",
-            sanitize_external_content(state.system_prompt),
+            ctx["system_prompt"],
             "",
         ])
 
@@ -633,8 +638,9 @@ def build_critique_user_prompt(
         state: Current research state (for the original query)
         directives_json: JSON string of the initial directives
     """
+    ctx = build_sanitized_context(state)
     return "\n".join([
-        f"# Original Research Query\n{sanitize_external_content(state.original_query)}",
+        f"# Original Research Query\n{ctx['original_query']}",
         "",
         "# Directives to Critique",
         directives_json,
@@ -689,8 +695,9 @@ def build_revision_user_prompt(
         directives_json: JSON string of the initial directives
         critique_text: Critique feedback from call 2
     """
+    ctx = build_sanitized_context(state)
     return "\n".join([
-        f"# Original Research Query\n{sanitize_external_content(state.original_query)}",
+        f"# Original Research Query\n{ctx['original_query']}",
         "",
         "# Current Directives",
         sanitize_external_content(directives_json),
@@ -738,13 +745,14 @@ def build_think_prompt(
     Returns:
         Think prompt string for gap analysis
     """
+    ctx = build_sanitized_context(state)
     parts = [
         f"# Research Gap Analysis\n",
-        f"**Original Query:** {sanitize_external_content(state.original_query)}\n",
+        f"**Original Query:** {ctx['original_query']}\n",
     ]
 
     if state.research_brief:
-        brief_excerpt = sanitize_external_content(state.research_brief[:500])
+        brief_excerpt = ctx["research_brief"][:500]
         parts.append(f"**Research Brief:** {brief_excerpt}\n")
 
     parts.append(f"**Iteration:** {state.iteration}/{state.max_iterations}")

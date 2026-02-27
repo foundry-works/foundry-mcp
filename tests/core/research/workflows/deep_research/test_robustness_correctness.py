@@ -31,23 +31,14 @@ from foundry_mcp.core.research.workflows.deep_research.phases.topic_research imp
     _truncate_researcher_history,
 )
 
-
-# =============================================================================
-# Helpers
-# =============================================================================
+from tests.core.research.workflows.deep_research.conftest import make_brief_state
 
 
 def _make_state(
     phase: DeepResearchPhase = DeepResearchPhase.BRIEF,
 ) -> DeepResearchState:
     """Create a minimal DeepResearchState for phase testing."""
-    return DeepResearchState(
-        id="deepres-test-phase4",
-        original_query="test query",
-        phase=phase,
-        iteration=1,
-        max_iterations=3,
-    )
+    return make_brief_state(id="deepres-test-phase4", query="test query", phase=phase)
 
 
 # =============================================================================

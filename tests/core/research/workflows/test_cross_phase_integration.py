@@ -46,6 +46,9 @@ from foundry_mcp.core.research.workflows.deep_research.phases.clarification impo
 from foundry_mcp.core.research.workflows.deep_research.phases.planning import (
     PlanningPhaseMixin,
 )
+from foundry_mcp.core.research.workflows.deep_research.phases.supervision import (
+    SupervisionPhaseMixin,
+)
 from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
     SynthesisPhaseMixin,
 )
@@ -55,7 +58,12 @@ from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
 # =============================================================================
 
 
-class StubWorkflow(ClarificationPhaseMixin, PlanningPhaseMixin, SynthesisPhaseMixin):
+class StubWorkflow(
+    ClarificationPhaseMixin,
+    PlanningPhaseMixin,
+    SupervisionPhaseMixin,
+    SynthesisPhaseMixin,
+):
     """Minimal composite mixin for cross-phase testing.
 
     Provides the common attributes and methods that each phase mixin
@@ -66,6 +74,13 @@ class StubWorkflow(ClarificationPhaseMixin, PlanningPhaseMixin, SynthesisPhaseMi
         self.config = MagicMock()
         self.config.audit_verbosity = "minimal"
         self.config.deep_research_enable_planning_critique = False  # Disable critique — not under test
+        # Supervision config defaults
+        self.config.deep_research_supervision_min_sources_per_query = 2
+        self.config.deep_research_max_concurrent_research_units = 5
+        self.config.deep_research_reflection_timeout = 60.0
+        self.config.deep_research_coverage_confidence_threshold = 0.75
+        self.config.deep_research_coverage_confidence_weights = None
+        self.config.deep_research_supervision_wall_clock_timeout = 1800.0
         self.memory = MagicMock()
         self.memory.save_deep_research = MagicMock()
         self._audit_events: list[tuple[str, dict]] = []
@@ -1078,3 +1093,248 @@ class TestPlanningPriorityParsing:
         parsed = stub._parse_planning_response(response, state)
         assert parsed["sub_queries"][0]["priority"] == 3
         assert parsed["sub_queries"][1]["priority"] == 1
+
+
+# =============================================================================
+# Test: full pipeline with supervision phase (5b)
+# =============================================================================
+
+
+def _wrap_as_structured_mock(mock_execute_llm_call):
+    """Wrap a mock_execute_llm_call to work as mock_execute_structured_llm_call.
+
+    The delegate step uses execute_structured_llm_call() which accepts a parse_fn.
+    """
+    from foundry_mcp.core.research.models.deep_research import DelegationResponse
+
+    async def mock_execute_structured_llm_call(**kwargs):
+        parse_fn = kwargs.pop("parse_fn", None)
+        llm_result = await mock_execute_llm_call(**kwargs)
+
+        if isinstance(llm_result, WorkflowResult):
+            return llm_result
+
+        content = llm_result.result.content or ""
+        parsed = None
+        if parse_fn:
+            try:
+                parsed = parse_fn(content)
+            except Exception:
+                pass
+
+        return StructuredLLMCallResult(
+            result=llm_result.result,
+            llm_call_duration_ms=0.0,
+            parsed=parsed,
+            parse_retries=0,
+        )
+
+    return mock_execute_structured_llm_call
+
+
+class TestFullPipelineWithSupervision:
+    """Integration test: CLARIFICATION → BRIEF → SUPERVISION → SYNTHESIS.
+
+    Exercises real phase logic through supervision with mocked LLM responses,
+    verifying state propagation across all four active phases.
+    """
+
+    @pytest.fixture
+    def workflow(self) -> StubWorkflow:
+        return StubWorkflow()
+
+    @pytest.mark.asyncio
+    async def test_full_pipeline_with_supervision(
+        self,
+        workflow: StubWorkflow,
+    ) -> None:
+        """State flows correctly through all four phases including supervision."""
+        state = DeepResearchState(
+            id="deepres-full-supervision",
+            original_query="Compare PostgreSQL vs MySQL for OLTP workloads in 2024",
+            phase=DeepResearchPhase.CLARIFICATION,
+            iteration=1,
+            max_iterations=3,
+        )
+
+        # ------------------------------------------------------------------
+        # Phase 1: CLARIFICATION
+        # ------------------------------------------------------------------
+        clarification_decision = ClarificationDecision(
+            need_clarification=False,
+            question="",
+            verification="User wants a comparison of PostgreSQL and MySQL for OLTP.",
+        )
+
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.clarification.execute_structured_llm_call",
+                return_value=StructuredLLMCallResult(
+                    result=_make_llm_result(json.dumps(clarification_decision.to_dict())),
+                    llm_call_duration_ms=500.0,
+                    parsed=clarification_decision,
+                    parse_retries=0,
+                ),
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.clarification.finalize_phase",
+            ),
+        ):
+            result = await workflow._execute_clarification_async(
+                state=state, provider_id="test-provider", timeout=60.0,
+            )
+        assert result.success is True
+        assert "verification" in state.clarification_constraints
+
+        # ------------------------------------------------------------------
+        # Phase 2: BRIEF
+        # ------------------------------------------------------------------
+        state.phase = DeepResearchPhase.BRIEF
+
+        planning_response = json.dumps({
+            "research_brief": "Comparing PostgreSQL and MySQL for OLTP.",
+            "sub_queries": [
+                {"query": "PostgreSQL OLTP benchmarks 2024", "rationale": "PG perf", "priority": 1},
+                {"query": "MySQL OLTP benchmarks 2024", "rationale": "MySQL perf", "priority": 1},
+            ],
+        })
+
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.planning.execute_llm_call",
+                return_value=LLMCallResult(result=_make_llm_result(planning_response), llm_call_duration_ms=500.0),
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.planning.finalize_phase",
+            ),
+        ):
+            result = await workflow._execute_planning_async(
+                state=state, provider_id="test-provider", timeout=60.0,
+            )
+        assert result.success is True
+        assert len(state.sub_queries) == 2
+
+        # ------------------------------------------------------------------
+        # Phase 3: GATHERING (simulated)
+        # ------------------------------------------------------------------
+        state.phase = DeepResearchPhase.GATHERING
+
+        source1 = state.add_source(
+            title="PostgreSQL 16 OLTP Benchmarks",
+            url="https://example.com/pg-bench",
+            source_type=SourceType.WEB,
+            snippet="PostgreSQL 16 achieves 150K TPS.",
+            sub_query_id=state.sub_queries[0].id,
+        )
+        source2 = state.add_source(
+            title="MySQL 8.0 OLTP Comparison",
+            url="https://example.com/mysql-bench",
+            source_type=SourceType.WEB,
+            snippet="MySQL 8.0 shows 120K TPS.",
+            sub_query_id=state.sub_queries[1].id,
+        )
+        for sq in state.sub_queries:
+            sq.status = "completed"
+
+        # ------------------------------------------------------------------
+        # Phase 4: SUPERVISION — LLM signals research_complete immediately
+        # ------------------------------------------------------------------
+        state.phase = DeepResearchPhase.SUPERVISION
+        state.supervision_round = 0
+        state.max_supervision_rounds = 3
+        state.supervision_messages = []
+        state.topic_research_results = []
+
+        delegation_response = json.dumps({
+            "research_complete": True,
+            "directives": [],
+            "rationale": "All aspects well covered with existing sources",
+        })
+
+        async def mock_supervision_llm(**kwargs):
+            return LLMCallResult(
+                result=_make_llm_result(delegation_response, model_used="delegation"),
+                llm_call_duration_ms=400.0,
+            )
+
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_llm_call",
+                side_effect=mock_supervision_llm,
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.execute_structured_llm_call",
+                side_effect=_wrap_as_structured_mock(mock_supervision_llm),
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.supervision.finalize_phase",
+            ),
+        ):
+            result = await workflow._execute_supervision_async(
+                state=state, provider_id="test-provider", timeout=60.0,
+            )
+        assert result.success is True
+        # No directives were executed (research was complete)
+        assert result.metadata["total_directives_executed"] == 0
+
+        # Supervision should have recorded history
+        assert "supervision_history" in state.metadata
+        assert len(state.metadata["supervision_history"]) >= 1
+
+        # ------------------------------------------------------------------
+        # Phase 5: SYNTHESIS
+        # ------------------------------------------------------------------
+        state.phase = DeepResearchPhase.SYNTHESIS
+
+        # Add findings (normally done by supervision directives)
+        state.add_finding(
+            content="PostgreSQL outperforms MySQL by 25% in write-heavy OLTP.",
+            confidence=ConfidenceLevel.HIGH,
+            category="Performance",
+            source_ids=[source1.id, source2.id],
+        )
+
+        synthesis_response = "# PostgreSQL vs MySQL OLTP Report\nPostgreSQL outperforms MySQL by 25% [1][2]."
+
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.synthesis.execute_llm_call",
+                return_value=LLMCallResult(result=_make_llm_result(synthesis_response), llm_call_duration_ms=800.0),
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.synthesis.finalize_phase",
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.synthesis.allocate_synthesis_budget",
+            ) as mock_budget,
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases.synthesis.final_fit_validate",
+                return_value=(True, {}, "system prompt", "user prompt"),
+            ),
+        ):
+            mock_allocation = MagicMock()
+            mock_allocation.dropped_ids = []
+            mock_allocation.items = []
+            mock_allocation.fidelity = 1.0
+            mock_allocation.to_dict.return_value = {"fidelity": 1.0}
+            mock_budget.return_value = mock_allocation
+
+            result = await workflow._execute_synthesis_async(
+                state=state, provider_id="test-provider", timeout=120.0,
+            )
+
+        assert result.success is True
+        assert state.report is not None
+
+        # ------------------------------------------------------------------
+        # Cross-phase consistency checks
+        # ------------------------------------------------------------------
+        assert len(state.sub_queries) == 2
+        assert all(sq.status == "completed" for sq in state.sub_queries)
+        assert len(state.sources) == 2
+        assert len(state.findings) == 1
+        assert state.sources[0].citation_number == 1
+        assert state.sources[1].citation_number == 2
+        assert state.report is not None
+        assert "verification" in state.clarification_constraints
+        assert state.research_brief is not None

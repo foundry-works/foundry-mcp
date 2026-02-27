@@ -29,6 +29,8 @@ from foundry_mcp.core.research.workflows.deep_research.phases.brief import (
     BriefPhaseMixin,
 )
 
+from tests.core.research.workflows.deep_research.conftest import make_brief_state
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -42,18 +44,14 @@ def _make_state(
     clarification_constraints: dict[str, str] | None = None,
 ) -> DeepResearchState:
     """Create a DeepResearchState pre-populated for brief tests."""
-    state = DeepResearchState(
+    return make_brief_state(
         id="deepres-brief-test",
-        original_query=query,
+        query=query,
+        research_brief=None,  # Brief tests start without a brief
         phase=phase,
-        iteration=1,
-        max_iterations=3,
+        system_prompt=system_prompt,
+        clarification_constraints=clarification_constraints,
     )
-    if system_prompt is not None:
-        state.system_prompt = system_prompt
-    if clarification_constraints is not None:
-        state.clarification_constraints = clarification_constraints
-    return state
 
 
 class StubBrief(BriefPhaseMixin):

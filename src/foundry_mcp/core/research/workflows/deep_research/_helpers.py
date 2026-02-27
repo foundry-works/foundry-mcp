@@ -20,6 +20,7 @@ from foundry_mcp.core.research.workflows.deep_research.source_quality import (
 
 if TYPE_CHECKING:
     from foundry_mcp.config.research import ResearchConfig
+    from foundry_mcp.core.research.models.deep_research import DeepResearchState
 
 logger = logging.getLogger(__name__)
 
@@ -58,9 +59,8 @@ def extract_json(content: str) -> Optional[str]:
         if escape:
             escape = False
             continue
-        if char == "\\":
-            if in_string:
-                escape = True
+        if char == "\\" and in_string:
+            escape = True
             continue
         if char == '"':
             in_string = not in_string
@@ -941,6 +941,31 @@ def sanitize_external_content(text: str) -> str:
     # Strip markdown heading injection patterns
     sanitized = _INJECTION_HEADING_PATTERN.sub("", sanitized)
     return sanitized
+
+
+def build_sanitized_context(state: "DeepResearchState") -> dict[str, str]:
+    """Return pre-sanitized versions of common state fields for prompt building.
+
+    Centralises the ``sanitize_external_content`` calls for the four fields
+    that are interpolated into almost every LLM prompt across brief, planning,
+    and supervision phases.  Callers can destructure the dict instead of
+    repeating inline sanitisation.
+
+    Args:
+        state: Current research state
+
+    Returns:
+        Dict with keys ``original_query``, ``system_prompt``, ``constraints``,
+        and ``research_brief`` — all sanitised and safe for prompt interpolation.
+    """
+    return {
+        "original_query": sanitize_external_content(state.original_query or ""),
+        "system_prompt": sanitize_external_content(state.system_prompt or ""),
+        "constraints": sanitize_external_content(
+            str(state.clarification_constraints) if state.clarification_constraints else ""
+        ),
+        "research_brief": sanitize_external_content(state.research_brief or ""),
+    }
 
 
 def build_novelty_summary(

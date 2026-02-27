@@ -68,15 +68,11 @@ def _make_state(
 def _make_valid_eval_response(scores: dict[str, int] | None = None) -> str:
     """Build a valid JSON evaluation response."""
     if scores is None:
+        # Build defaults dynamically from DIMENSIONS to prevent drift
+        default_pattern = [4, 3, 4, 3, 4, 5, 4, 3]
         scores = {
-            "depth": 4,
-            "source_quality": 3,
-            "analytical_rigor": 4,
-            "completeness": 3,
-            "groundedness": 4,
-            "structure": 5,
-            "practical_value": 4,
-            "balance": 3,
+            d.name: default_pattern[i % len(default_pattern)]
+            for i, d in enumerate(DIMENSIONS)
         }
     response = {
         "scores": {

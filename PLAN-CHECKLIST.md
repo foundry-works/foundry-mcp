@@ -78,37 +78,38 @@
 
 ## Phase 5: Test Improvements
 
-- [ ] **5a.** Add topic research error path tests
-  - [ ] Test unknown tool name dispatch
-  - [ ] Test budget exhaustion forced termination
-  - [ ] Test `extract_content` failure handling
+- [x] **5a.** Add topic research error path tests
+  - [x] Test unknown tool name dispatch
+  - [x] Test budget exhaustion forced termination
+  - [x] Test `extract_content` failure handling (RuntimeError + TimeoutError)
 
-- [ ] **5b.** Add supervision to cross-phase integration test
-  - [ ] Add `SupervisionPhaseMixin` to `StubWorkflow`
-  - [ ] Add full-path test case: CLARIFICATION → BRIEF → SUPERVISION → SYNTHESIS
+- [x] **5b.** Add supervision to cross-phase integration test
+  - [x] Add `SupervisionPhaseMixin` to `StubWorkflow`
+  - [x] Add full-path test case: CLARIFICATION → BRIEF → SUPERVISION → SYNTHESIS
 
-- [ ] **5c.** Fix `test_supervision_skipped_when_disabled`
-  - [ ] Rewrite to call actual production code instead of reimplementing logic inline
+- [x] **5c.** Fix `test_supervision_skipped_when_disabled`
+  - [x] Add `deep_research_enable_supervision` check in `workflow_execution.py`
+  - [x] Rewrite test to call actual `WorkflowExecutionMixin` code
 
-- [ ] **5d.** Build evaluation mock responses from `DIMENSIONS` keys
-  - [ ] `test_evaluator.py` — dynamically construct dimension names
+- [x] **5d.** Build evaluation mock responses from `DIMENSIONS` keys
+  - [x] `test_evaluator.py` — dynamically construct dimension names from `DIMENSIONS`
 
 ## Phase 6: Low-Priority Cleanup
 
-- [ ] **6a.** Extract `build_sanitized_context(state)` helper
-  - [ ] Add to `_helpers.py`
-  - [ ] Update `brief.py`, `planning.py`, `supervision_prompts.py`
+- [x] **6a.** Extract `build_sanitized_context(state)` helper
+  - [x] Add to `_helpers.py`
+  - [x] Update `brief.py`, `planning.py`, `supervision_prompts.py`
 
-- [ ] **6b.** Fix `extract_json()` backslash handling
-  - [ ] `_helpers.py:50-77` — only skip on `\` when inside a string
-  - [ ] Add test for backslash outside JSON string
+- [x] **6b.** Fix `extract_json()` backslash handling
+  - [x] `_helpers.py:50-77` — only skip on `\` when inside a string
+  - [x] Add test for backslash outside JSON string
 
-- [ ] **6c.** Add JSON/fallback token limits sync test
-  - [ ] Verify `model_token_limits.json` keys match `_FALLBACK_MODEL_TOKEN_LIMITS`
+- [x] **6c.** Add JSON/fallback token limits sync test
+  - [x] Verify `model_token_limits.json` keys match `_FALLBACK_MODEL_TOKEN_LIMITS`
 
-- [ ] **6d.** Consolidate `_make_state()` test helpers
-  - [ ] Add preset factories to `conftest.py`
-  - [ ] Migrate test files incrementally
+- [x] **6d.** Consolidate `_make_state()` test helpers
+  - [x] Add preset factories to `conftest.py`
+  - [x] Migrate test files incrementally
 
 ---
 

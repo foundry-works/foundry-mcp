@@ -123,3 +123,91 @@ def make_test_state(
         )
 
     return state
+
+
+# ---------------------------------------------------------------------------
+# Phase-specific preset factories
+# ---------------------------------------------------------------------------
+
+
+def make_brief_state(**overrides) -> DeepResearchState:
+    """Create a state at the BRIEF phase with sensible defaults."""
+    defaults = {
+        "id": "deepres-brief-test",
+        "phase": DeepResearchPhase.BRIEF,
+    }
+    defaults.update(overrides)
+    return make_test_state(**defaults)
+
+
+def make_gathering_state(
+    *,
+    num_sub_queries: int = 2,
+    sources_per_query: int = 3,
+    **overrides,
+) -> DeepResearchState:
+    """Create a state at the GATHERING phase with sub-queries and sources."""
+    defaults = {
+        "id": "deepres-gathering-test",
+        "phase": DeepResearchPhase.GATHERING,
+        "num_sub_queries": num_sub_queries,
+        "sources_per_query": sources_per_query,
+    }
+    defaults.update(overrides)
+    return make_test_state(**defaults)
+
+
+def make_supervision_state(
+    *,
+    num_sub_queries: int = 2,
+    sources_per_query: int = 3,
+    supervision_round: int = 0,
+    **overrides,
+) -> DeepResearchState:
+    """Create a state at the SUPERVISION phase with completed sub-queries."""
+    defaults = {
+        "id": "deepres-supervision-test",
+        "phase": DeepResearchPhase.SUPERVISION,
+        "num_sub_queries": num_sub_queries,
+        "sources_per_query": sources_per_query,
+        "supervision_round": supervision_round,
+    }
+    defaults.update(overrides)
+    return make_test_state(**defaults)
+
+
+def make_synthesis_state(
+    *,
+    num_sub_queries: int = 2,
+    sources_per_query: int = 2,
+    report: str | None = None,
+    **overrides,
+) -> DeepResearchState:
+    """Create a state at the SYNTHESIS phase, optionally with a report."""
+    defaults = {
+        "id": "deepres-synthesis-test",
+        "phase": DeepResearchPhase.SYNTHESIS,
+        "num_sub_queries": num_sub_queries,
+        "sources_per_query": sources_per_query,
+    }
+    defaults.update(overrides)
+    state = make_test_state(**defaults)
+    if report is not None:
+        state.report = report
+    return state
+
+
+def make_evaluation_state(
+    *,
+    report: str = "A comprehensive research report.",
+    num_sub_queries: int = 2,
+    sources_per_query: int = 2,
+    **overrides,
+) -> DeepResearchState:
+    """Create a state at SYNTHESIS with a report, ready for evaluation."""
+    return make_synthesis_state(
+        report=report,
+        num_sub_queries=num_sub_queries,
+        sources_per_query=sources_per_query,
+        **overrides,
+    )

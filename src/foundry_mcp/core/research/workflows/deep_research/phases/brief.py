@@ -26,6 +26,7 @@ from foundry_mcp.core.research.models.deep_research import (
 )
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research._helpers import (
+    build_sanitized_context,
     sanitize_external_content,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
@@ -269,13 +270,14 @@ class BriefPhaseMixin:
         Returns:
             User prompt string
         """
+        ctx = build_sanitized_context(state)
         parts: list[str] = [
-            f"Research request:\n{sanitize_external_content(state.original_query)}",
+            f"Research request:\n{ctx['original_query']}",
         ]
 
         if state.system_prompt:
             parts.append(
-                f"\nAdditional context provided by the user:\n{sanitize_external_content(state.system_prompt)}"
+                f"\nAdditional context provided by the user:\n{ctx['system_prompt']}"
             )
 
         if state.clarification_constraints:
