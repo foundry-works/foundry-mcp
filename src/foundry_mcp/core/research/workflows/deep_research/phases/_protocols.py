@@ -16,6 +16,7 @@ Usage in mixins::
         from foundry_mcp.config.research import ResearchConfig
         from foundry_mcp.core.research.memory import ResearchMemory
 
+
     class SomePhaseMixin:
         # Properly typed — catches config attribute typos at type-check time
         config: ResearchConfig

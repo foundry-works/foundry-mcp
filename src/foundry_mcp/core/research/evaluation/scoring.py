@@ -125,13 +125,11 @@ def compute_composite(
     if real_scores:
         real_total_w = sum(effective_weights[ds.name] for ds in real_scores)
         if real_total_w > 0:
-            weighted_mean = sum(
-                ds.normalized_score * effective_weights[ds.name] for ds in real_scores
-            ) / real_total_w
-            variance = sum(
-                effective_weights[ds.name] * (ds.normalized_score - weighted_mean) ** 2
-                for ds in real_scores
-            ) / real_total_w
+            weighted_mean = sum(ds.normalized_score * effective_weights[ds.name] for ds in real_scores) / real_total_w
+            variance = (
+                sum(effective_weights[ds.name] * (ds.normalized_score - weighted_mean) ** 2 for ds in real_scores)
+                / real_total_w
+            )
         else:
             variance = 0.0
     else:

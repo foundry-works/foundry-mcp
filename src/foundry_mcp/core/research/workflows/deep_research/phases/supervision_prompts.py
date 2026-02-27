@@ -18,7 +18,6 @@ from foundry_mcp.core.research.workflows.deep_research._injection_protection imp
     sanitize_external_content,
 )
 
-
 # ======================================================================
 # Shared helpers
 # ======================================================================
@@ -161,20 +160,24 @@ def build_combined_think_delegate_user_prompt(
     ]
 
     if state.research_brief and state.research_brief != state.original_query:
-        parts.extend([
-            "## Research Brief",
-            ctx["research_brief"],
-            "",
-        ])
+        parts.extend(
+            [
+                "## Research Brief",
+                ctx["research_brief"],
+                "",
+            ]
+        )
 
-    parts.extend([
-        "## Research Status",
-        f"- Iteration: {state.iteration}/{state.max_iterations}",
-        f"- Supervision round: {state.supervision_round + 1}/{state.max_supervision_rounds}",
-        f"- Completed sub-queries: {len(state.completed_sub_queries())}",
-        f"- Total sources: {len(state.sources)}",
-        "",
-    ])
+    parts.extend(
+        [
+            "## Research Status",
+            f"- Iteration: {state.iteration}/{state.max_iterations}",
+            f"- Supervision round: {state.supervision_round + 1}/{state.max_supervision_rounds}",
+            f"- Completed sub-queries: {len(state.completed_sub_queries())}",
+            f"- Total sources: {len(state.sources)}",
+            "",
+        ]
+    )
 
     # Prior supervisor conversation
     if state.supervision_messages:
@@ -184,9 +187,12 @@ def build_combined_think_delegate_user_prompt(
             "Reference your prior reasoning and research findings."
         )
         parts.append("")
-        parts.extend(render_supervision_conversation_history(
-            state, state.supervision_messages,
-        ))
+        parts.extend(
+            render_supervision_conversation_history(
+                state,
+                state.supervision_messages,
+            )
+        )
         parts.append("---")
         parts.append("")
 
@@ -209,14 +215,16 @@ def build_combined_think_delegate_user_prompt(
             parts.append(f"- [P{d.priority}] {sanitize_external_content(d.research_topic[:120])}")
         parts.append("")
 
-    parts.extend([
-        "## Instructions",
-        "1. First, write your gap analysis inside <gap_analysis> tags",
-        "2. Then, if coverage is sufficient, return JSON with research_complete=true",
-        "3. Otherwise, generate 1-5 detailed research directives as JSON",
-        "4. Your directives must directly address gaps from your analysis",
-        "",
-    ])
+    parts.extend(
+        [
+            "## Instructions",
+            "1. First, write your gap analysis inside <gap_analysis> tags",
+            "2. Then, if coverage is sufficient, return JSON with research_complete=true",
+            "3. Otherwise, generate 1-5 detailed research directives as JSON",
+            "4. Your directives must directly address gaps from your analysis",
+            "",
+        ]
+    )
 
     return "\n".join(parts)
 
@@ -305,11 +313,13 @@ def build_delegation_user_prompt(
     ]
 
     if state.research_brief and state.research_brief != state.original_query:
-        parts.extend([
-            "## Research Brief",
-            ctx["research_brief"],
-            "",
-        ])
+        parts.extend(
+            [
+                "## Research Brief",
+                ctx["research_brief"],
+                "",
+            ]
+        )
 
     # Complexity signal for directive scaling
     complexity = classify_query_complexity(state)
@@ -319,17 +329,19 @@ def build_delegation_user_prompt(
         "complex": "This is a **complex** multi-dimensional query — target 3-5 directives for remaining gaps.",
     }
 
-    parts.extend([
-        "## Research Status",
-        f"- Iteration: {state.iteration}/{state.max_iterations}",
-        f"- Supervision round: {state.supervision_round + 1}/{state.max_supervision_rounds}",
-        f"- Completed sub-queries: {len(state.completed_sub_queries())}",
-        f"- Total sources: {len(state.sources)}",
-        f"- Query complexity: **{complexity}**",
-        "",
-        complexity_guidance[complexity],
-        "",
-    ])
+    parts.extend(
+        [
+            "## Research Status",
+            f"- Iteration: {state.iteration}/{state.max_iterations}",
+            f"- Supervision round: {state.supervision_round + 1}/{state.max_supervision_rounds}",
+            f"- Completed sub-queries: {len(state.completed_sub_queries())}",
+            f"- Total sources: {len(state.sources)}",
+            f"- Query complexity: **{complexity}**",
+            "",
+            complexity_guidance[complexity],
+            "",
+        ]
+    )
 
     # Prior supervisor conversation (accumulated across rounds)
     if state.supervision_messages:
@@ -340,9 +352,12 @@ def build_delegation_user_prompt(
             "to avoid re-delegating already-covered topics."
         )
         parts.append("")
-        parts.extend(render_supervision_conversation_history(
-            state, state.supervision_messages,
-        ))
+        parts.extend(
+            render_supervision_conversation_history(
+                state,
+                state.supervision_messages,
+            )
+        )
         parts.append("---")
         parts.append("")
 
@@ -364,31 +379,32 @@ def build_delegation_user_prompt(
     # rather than duplicating the full analysis text.
     if think_output:
         if state.supervision_messages:
-            parts.extend([
-                "## Gap Analysis",
-                "",
-                "Your gap analysis from this round is in the conversation "
-                "history above. Generate research directives that DIRECTLY "
-                "address the gaps you identified.",
-                "Each directive should target a specific gap with a detailed "
-                "research plan.",
-                "",
-            ])
+            parts.extend(
+                [
+                    "## Gap Analysis",
+                    "",
+                    "Your gap analysis from this round is in the conversation "
+                    "history above. Generate research directives that DIRECTLY "
+                    "address the gaps you identified.",
+                    "Each directive should target a specific gap with a detailed research plan.",
+                    "",
+                ]
+            )
         else:
             # Fallback: no conversation history (shouldn't happen, but safe)
-            parts.extend([
-                "## Gap Analysis",
-                "",
-                "<gap_analysis>",
-                sanitize_external_content(think_output.strip()),
-                "</gap_analysis>",
-                "",
-                "Generate research directives that DIRECTLY address the gaps "
-                "identified above.",
-                "Each directive should target a specific gap with a detailed "
-                "research plan.",
-                "",
-            ])
+            parts.extend(
+                [
+                    "## Gap Analysis",
+                    "",
+                    "<gap_analysis>",
+                    sanitize_external_content(think_output.strip()),
+                    "</gap_analysis>",
+                    "",
+                    "Generate research directives that DIRECTLY address the gaps identified above.",
+                    "Each directive should target a specific gap with a detailed research plan.",
+                    "",
+                ]
+            )
 
     # Previously executed directives (to avoid repetition)
     if state.directives:
@@ -397,16 +413,18 @@ def build_delegation_user_prompt(
             parts.append(f"- [P{d.priority}] {sanitize_external_content(d.research_topic[:120])}")
         parts.append("")
 
-    parts.extend([
-        "## Instructions",
-        "1. Analyze the current coverage and gap analysis",
-        "2. If all research dimensions are well-covered, set research_complete=true",
-        "3. Otherwise, generate 1-5 detailed research directives targeting specific gaps",
-        "4. Each directive should be a paragraph-length research assignment",
-        "5. Prioritize critical gaps (priority 1) over nice-to-have improvements (priority 3)",
-        "",
-        "Return your response as JSON.",
-    ])
+    parts.extend(
+        [
+            "## Instructions",
+            "1. Analyze the current coverage and gap analysis",
+            "2. If all research dimensions are well-covered, set research_complete=true",
+            "3. Otherwise, generate 1-5 detailed research directives targeting specific gaps",
+            "4. Each directive should be a paragraph-length research assignment",
+            "5. Prioritize critical gaps (priority 1) over nice-to-have improvements (priority 3)",
+            "",
+            "Return your response as JSON.",
+        ]
+    )
 
     return "\n".join(parts)
 
@@ -475,29 +493,25 @@ def build_first_round_think_prompt(state: DeepResearchState) -> str:
 
     parts.append(f"**Date:** {datetime.now(timezone.utc).strftime('%Y-%m-%d')}\n")
 
-    parts.extend([
-        "## Instructions\n",
-        "You are given a research brief. Determine how to decompose this "
-        "into parallel research tasks.\n",
-        "Analyze the query and decide:",
-        "1. **Query type**: Is this a simple factual query, a comparison, "
-        "a list/ranking, or a complex multi-dimensional topic?",
-        "2. **Decomposition strategy**: How many parallel researchers are "
-        "needed and what angle should each cover?",
-        "3. **Priorities**: Which research angles are critical (must-have) "
-        "vs. important (improves comprehensiveness) vs. nice-to-have?",
-        "4. **Self-critique**: Verify no redundant directives and no "
-        "missing perspectives for this query type.\n",
-        "Guidelines for researcher count:",
-        "- Simple factual queries: 1-2 researchers",
-        "- Comparisons: one researcher per comparison element",
-        "- Lists/rankings: single researcher if straightforward, or one per "
-        "category if complex",
-        "- Complex multi-dimensional topics: 3-5 researchers covering "
-        "different facets\n",
-        "Output your decomposition strategy as structured analysis with "
-        "clear headings.",
-    ])
+    parts.extend(
+        [
+            "## Instructions\n",
+            "You are given a research brief. Determine how to decompose this into parallel research tasks.\n",
+            "Analyze the query and decide:",
+            "1. **Query type**: Is this a simple factual query, a comparison, "
+            "a list/ranking, or a complex multi-dimensional topic?",
+            "2. **Decomposition strategy**: How many parallel researchers are needed and what angle should each cover?",
+            "3. **Priorities**: Which research angles are critical (must-have) "
+            "vs. important (improves comprehensiveness) vs. nice-to-have?",
+            "4. **Self-critique**: Verify no redundant directives and no missing perspectives for this query type.\n",
+            "Guidelines for researcher count:",
+            "- Simple factual queries: 1-2 researchers",
+            "- Comparisons: one researcher per comparison element",
+            "- Lists/rankings: single researcher if straightforward, or one per category if complex",
+            "- Complex multi-dimensional topics: 3-5 researchers covering different facets\n",
+            "Output your decomposition strategy as structured analysis with clear headings.",
+        ]
+    )
 
     return "\n".join(parts)
 
@@ -545,11 +559,13 @@ def build_first_round_delegation_user_prompt(
     ]
 
     if state.research_brief and state.research_brief != state.original_query:
-        parts.extend([
-            "## Research Brief",
-            ctx["research_brief"],
-            "",
-        ])
+        parts.extend(
+            [
+                "## Research Brief",
+                ctx["research_brief"],
+                "",
+            ]
+        )
 
     if state.clarification_constraints:
         parts.append("## Clarification Constraints")
@@ -558,37 +574,43 @@ def build_first_round_delegation_user_prompt(
         parts.append("")
 
     if state.system_prompt:
-        parts.extend([
-            "## Additional Context",
-            ctx["system_prompt"],
-            "",
-        ])
+        parts.extend(
+            [
+                "## Additional Context",
+                ctx["system_prompt"],
+                "",
+            ]
+        )
 
     # Decomposition strategy from think step
     if think_output:
-        parts.extend([
-            "## Decomposition Strategy",
-            "",
-            "<decomposition_strategy>",
-            sanitize_external_content(think_output.strip()),
-            "</decomposition_strategy>",
-            "",
-            "Generate research directives that implement the decomposition "
-            "strategy above. Each directive should be a detailed, self-contained "
-            "research assignment for a specialized researcher — sub-agents cannot "
-            "see other agents' work, so every directive must include full context.",
-            "",
-        ])
+        parts.extend(
+            [
+                "## Decomposition Strategy",
+                "",
+                "<decomposition_strategy>",
+                sanitize_external_content(think_output.strip()),
+                "</decomposition_strategy>",
+                "",
+                "Generate research directives that implement the decomposition "
+                "strategy above. Each directive should be a detailed, self-contained "
+                "research assignment for a specialized researcher — sub-agents cannot "
+                "see other agents' work, so every directive must include full context.",
+                "",
+            ]
+        )
 
-    parts.extend([
-        "## Instructions",
-        "1. Decompose the research query into 2-5 focused research directives",
-        "2. Each directive should target a distinct aspect of the query",
-        "3. Each directive should be specific enough to yield targeted results",
-        "4. Prioritize: 1=critical to the core question, 2=important for comprehensiveness, 3=supplementary",
-        "",
-        "Return your response as JSON.",
-    ])
+    parts.extend(
+        [
+            "## Instructions",
+            "1. Decompose the research query into 2-5 focused research directives",
+            "2. Each directive should target a distinct aspect of the query",
+            "3. Each directive should be specific enough to yield targeted results",
+            "4. Prioritize: 1=critical to the core question, 2=important for comprehensiveness, 3=supplementary",
+            "",
+            "Return your response as JSON.",
+        ]
+    )
 
     return "\n".join(parts)
 
@@ -635,15 +657,17 @@ def build_critique_user_prompt(
         directives_json: JSON string of the initial directives
     """
     ctx = build_sanitized_context(state)
-    return "\n".join([
-        f"# Original Research Query\n{ctx['original_query']}",
-        "",
-        "# Directives to Critique",
-        directives_json,
-        "",
-        "Evaluate the directives above against the four criteria "
-        "(redundancy, coverage, proportionality, specificity).",
-    ])
+    return "\n".join(
+        [
+            f"# Original Research Query\n{ctx['original_query']}",
+            "",
+            "# Directives to Critique",
+            directives_json,
+            "",
+            "Evaluate the directives above against the four criteria "
+            "(redundancy, coverage, proportionality, specificity).",
+        ]
+    )
 
 
 def build_revision_system_prompt() -> str:
@@ -692,18 +716,19 @@ def build_revision_user_prompt(
         critique_text: Critique feedback from call 2
     """
     ctx = build_sanitized_context(state)
-    return "\n".join([
-        f"# Original Research Query\n{ctx['original_query']}",
-        "",
-        "# Current Directives",
-        sanitize_external_content(directives_json),
-        "",
-        "# Critique Feedback",
-        sanitize_external_content(critique_text),
-        "",
-        "Revise the directives based on the critique above. "
-        "Return the improved directive set as JSON.",
-    ])
+    return "\n".join(
+        [
+            f"# Original Research Query\n{ctx['original_query']}",
+            "",
+            "# Current Directives",
+            sanitize_external_content(directives_json),
+            "",
+            "# Critique Feedback",
+            sanitize_external_content(critique_text),
+            "",
+            "Revise the directives based on the critique above. Return the improved directive set as JSON.",
+        ]
+    )
 
 
 # ======================================================================
@@ -743,7 +768,7 @@ def build_think_prompt(
     """
     ctx = build_sanitized_context(state)
     parts = [
-        f"# Research Gap Analysis\n",
+        "# Research Gap Analysis\n",
         f"**Original Query:** {ctx['original_query']}\n",
     ]
 
@@ -774,30 +799,29 @@ def build_think_prompt(
             parts.append(f"- **Status:** {entry['status']}")
             parts.append(f"- **Sources found:** {entry['source_count']}")
             qd = entry["quality_distribution"]
-            parts.append(
-                f"- **Quality:** HIGH={qd['HIGH']}, MEDIUM={qd['MEDIUM']}, "
-                f"LOW={qd['LOW']}"
-            )
+            parts.append(f"- **Quality:** HIGH={qd['HIGH']}, MEDIUM={qd['MEDIUM']}, LOW={qd['LOW']}")
             parts.append(f"- **Domains:** {', '.join(entry['domain_list']) if entry['domain_list'] else 'none'}")
             if entry.get("findings_summary"):
                 parts.append(f"- **Findings:** {sanitize_external_content(entry['findings_summary'])}")
             parts.append("")
 
-    parts.extend([
-        "## Instructions\n",
-        "Analyze the research coverage above. For EACH sub-query, articulate:",
-        "1. What key information was found",
-        "2. What domains and perspectives are represented",
-        "3. What specific information gaps exist",
-        "4. What types of sources or angles would fill those gaps\n",
-        "Then provide an overall assessment of:",
-        "- Which research dimensions are well-covered",
-        "- Which dimensions are missing or underrepresented",
-        "- What specific knowledge gaps, if addressed, would most improve the research\n",
-        "DO NOT generate follow-up queries. Focus ONLY on analysis of what exists and what's missing.",
-        "Be specific: name exact topics, perspectives, or data types that are absent.\n",
-        "Respond in plain text with clear section headings.",
-    ])
+    parts.extend(
+        [
+            "## Instructions\n",
+            "Analyze the research coverage above. For EACH sub-query, articulate:",
+            "1. What key information was found",
+            "2. What domains and perspectives are represented",
+            "3. What specific information gaps exist",
+            "4. What types of sources or angles would fill those gaps\n",
+            "Then provide an overall assessment of:",
+            "- Which research dimensions are well-covered",
+            "- Which dimensions are missing or underrepresented",
+            "- What specific knowledge gaps, if addressed, would most improve the research\n",
+            "DO NOT generate follow-up queries. Focus ONLY on analysis of what exists and what's missing.",
+            "Be specific: name exact topics, perspectives, or data types that are absent.\n",
+            "Respond in plain text with clear section headings.",
+        ]
+    )
 
     return "\n".join(parts)
 

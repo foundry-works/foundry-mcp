@@ -26,7 +26,6 @@ from foundry_mcp.core.research.models.deep_research import (
 from foundry_mcp.core.research.models.fidelity import PhaseMetrics
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 
-
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -381,6 +380,7 @@ class TestExecuteLLMCallRole:
         from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
             LLMCallResult,
         )
+
         assert isinstance(result, LLMCallResult)
 
 
@@ -457,32 +457,34 @@ class TestGetModelRoleCosts:
     def test_multiple_roles(self) -> None:
         """Different roles are tracked separately."""
         state = _make_state()
-        state.phase_metrics.extend([
-            PhaseMetrics(
-                phase="analysis",
-                input_tokens=200,
-                output_tokens=100,
-                provider_id="claude",
-                model_used="opus",
-                metadata={"role": "research"},
-            ),
-            PhaseMetrics(
-                phase="synthesis",
-                input_tokens=300,
-                output_tokens=200,
-                provider_id="claude",
-                model_used="sonnet",
-                metadata={"role": "report"},
-            ),
-            PhaseMetrics(
-                phase="topic_reflection",
-                input_tokens=50,
-                output_tokens=20,
-                provider_id="openai",
-                model_used="gpt-4o-mini",
-                metadata={"role": "reflection"},
-            ),
-        ])
+        state.phase_metrics.extend(
+            [
+                PhaseMetrics(
+                    phase="analysis",
+                    input_tokens=200,
+                    output_tokens=100,
+                    provider_id="claude",
+                    model_used="opus",
+                    metadata={"role": "research"},
+                ),
+                PhaseMetrics(
+                    phase="synthesis",
+                    input_tokens=300,
+                    output_tokens=200,
+                    provider_id="claude",
+                    model_used="sonnet",
+                    metadata={"role": "report"},
+                ),
+                PhaseMetrics(
+                    phase="topic_reflection",
+                    input_tokens=50,
+                    output_tokens=20,
+                    provider_id="openai",
+                    model_used="gpt-4o-mini",
+                    metadata={"role": "reflection"},
+                ),
+            ]
+        )
         costs = state.get_model_role_costs()
         assert len(costs) == 3
         assert costs["research"]["provider"] == "claude"
@@ -493,22 +495,24 @@ class TestGetModelRoleCosts:
     def test_mixed_with_and_without_role(self) -> None:
         """Metrics without role are excluded, with role are included."""
         state = _make_state()
-        state.phase_metrics.extend([
-            PhaseMetrics(
-                phase="planning",
-                input_tokens=100,
-                output_tokens=50,
-                provider_id="gemini",
-                metadata={},  # no role
-            ),
-            PhaseMetrics(
-                phase="analysis",
-                input_tokens=200,
-                output_tokens=100,
-                provider_id="claude",
-                metadata={"role": "research"},
-            ),
-        ])
+        state.phase_metrics.extend(
+            [
+                PhaseMetrics(
+                    phase="planning",
+                    input_tokens=100,
+                    output_tokens=50,
+                    provider_id="gemini",
+                    metadata={},  # no role
+                ),
+                PhaseMetrics(
+                    phase="analysis",
+                    input_tokens=200,
+                    output_tokens=100,
+                    provider_id="claude",
+                    metadata={"role": "research"},
+                ),
+            ]
+        )
         costs = state.get_model_role_costs()
         assert len(costs) == 1
         assert "research" in costs
@@ -524,37 +528,47 @@ class TestConfigFromToml:
     """Test that from_toml_dict correctly parses Phase 6 config fields."""
 
     def test_parses_research_role_fields(self) -> None:
-        config = ResearchConfig.from_toml_dict({
-            "deep_research_research_provider": "claude",
-            "deep_research_research_model": "opus",
-        })
+        config = ResearchConfig.from_toml_dict(
+            {
+                "deep_research_research_provider": "claude",
+                "deep_research_research_model": "opus",
+            }
+        )
         assert config.deep_research_research_provider == "claude"
         assert config.deep_research_research_model == "opus"
 
     def test_parses_report_role_fields(self) -> None:
-        config = ResearchConfig.from_toml_dict({
-            "deep_research_report_provider": "openai",
-            "deep_research_report_model": "gpt-4o",
-        })
+        config = ResearchConfig.from_toml_dict(
+            {
+                "deep_research_report_provider": "openai",
+                "deep_research_report_model": "gpt-4o",
+            }
+        )
         assert config.deep_research_report_provider == "openai"
         assert config.deep_research_report_model == "gpt-4o"
 
     def test_parses_reflection_model(self) -> None:
-        config = ResearchConfig.from_toml_dict({
-            "deep_research_reflection_model": "haiku",
-        })
+        config = ResearchConfig.from_toml_dict(
+            {
+                "deep_research_reflection_model": "haiku",
+            }
+        )
         assert config.deep_research_reflection_model == "haiku"
 
     def test_parses_topic_reflection_model(self) -> None:
-        config = ResearchConfig.from_toml_dict({
-            "deep_research_topic_reflection_model": "gpt-4o-mini",
-        })
+        config = ResearchConfig.from_toml_dict(
+            {
+                "deep_research_topic_reflection_model": "gpt-4o-mini",
+            }
+        )
         assert config.deep_research_topic_reflection_model == "gpt-4o-mini"
 
     def test_parses_clarification_model(self) -> None:
-        config = ResearchConfig.from_toml_dict({
-            "deep_research_clarification_model": "flash",
-        })
+        config = ResearchConfig.from_toml_dict(
+            {
+                "deep_research_clarification_model": "flash",
+            }
+        )
         assert config.deep_research_clarification_model == "flash"
 
     def test_defaults_to_none(self) -> None:

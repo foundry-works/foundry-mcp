@@ -67,12 +67,11 @@ from foundry_mcp.core.research.workflows.deep_research.phases.clarification impo
 from foundry_mcp.core.research.workflows.deep_research.phases.gathering import (
     GatheringPhaseMixin,
 )
-
-from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
-    SynthesisPhaseMixin,
-)
 from foundry_mcp.core.research.workflows.deep_research.phases.supervision import (
     SupervisionPhaseMixin,
+)
+from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
+    SynthesisPhaseMixin,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
     TopicResearchMixin,

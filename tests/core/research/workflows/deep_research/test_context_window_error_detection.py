@@ -11,7 +11,6 @@ from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import 
     _is_context_window_error,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helper: create an exception with a specific class name
 # ---------------------------------------------------------------------------

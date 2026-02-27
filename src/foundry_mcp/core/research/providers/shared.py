@@ -909,11 +909,7 @@ class SourceSummarizer:
                 summary = str(data.get("summary", "")).strip()
                 raw_excerpts = data.get("key_excerpts", [])
                 if isinstance(raw_excerpts, list):
-                    excerpts = [
-                        str(e).strip().strip('"').strip("'")
-                        for e in raw_excerpts[:5]
-                        if e
-                    ]
+                    excerpts = [str(e).strip().strip('"').strip("'") for e in raw_excerpts[:5] if e]
                 else:
                     excerpts = []
                 if summary:

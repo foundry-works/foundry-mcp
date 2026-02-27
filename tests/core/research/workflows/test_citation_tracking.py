@@ -399,10 +399,7 @@ class TestPostprocessCitations:
 
     def test_inline_links_with_sources_section_correct(self, state_with_sources: DeepResearchState):
         """Auto-appended Sources section is correct when inline links are present."""
-        report = (
-            "# Report\n\n"
-            "See [Alpha Source](https://alpha.example.com) [1] for details.\n"
-        )
+        report = "# Report\n\nSee [Alpha Source](https://alpha.example.com) [1] for details.\n"
         processed, meta = postprocess_citations(report, state_with_sources)
 
         # Sources section is appended
@@ -416,10 +413,7 @@ class TestPostprocessCitations:
 
     def test_dangling_inline_link_citation_removed(self, state_with_sources: DeepResearchState):
         """Dangling [N] after an inline link is removed, but the link itself stays."""
-        report = (
-            "# Report\n\n"
-            "According to [Unknown Source](https://unknown.example.com) [99], something happened.\n"
-        )
+        report = "# Report\n\nAccording to [Unknown Source](https://unknown.example.com) [99], something happened.\n"
         processed, meta = postprocess_citations(report, state_with_sources)
 
         body = processed.split("## Sources")[0]

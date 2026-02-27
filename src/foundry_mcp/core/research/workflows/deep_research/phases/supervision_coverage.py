@@ -16,7 +16,6 @@ from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
 )
 
-
 # ======================================================================
 # Verdict / issue parsing patterns
 # ======================================================================
@@ -228,10 +227,7 @@ def compute_coverage_delta(
     # Prefer suffixed keys ("{round}_post" / "{round}_pre") written by the
     # updated store_coverage_snapshot; fall back to bare round keys for
     # backward compatibility with snapshots written before the suffix change.
-    prev_snapshot = (
-        snapshots.get(f"{prev_round}_post")
-        or snapshots.get(str(prev_round))
-    )
+    prev_snapshot = snapshots.get(f"{prev_round}_post") or snapshots.get(str(prev_round))
     if prev_snapshot is None:
         return None
 
@@ -278,10 +274,7 @@ def compute_coverage_delta(
     for sq_id in sorted(current_ids - prev_ids):
         curr = current_by_id[sq_id]
         query_text = curr.get("query", sq_id)[:80]
-        lines.append(
-            f"- {query_text} [NEW]: "
-            f"{curr['source_count']} sources, {curr['unique_domains']} domains"
-        )
+        lines.append(f"- {query_text} [NEW]: {curr['source_count']} sources, {curr['unique_domains']} domains")
 
     # Process removed queries (in previous but not current — rare)
     for sq_id in sorted(prev_ids - current_ids):
@@ -392,9 +385,9 @@ def assess_coverage_heuristic(
         "domain_diversity": domain_diversity,
         "query_completion_rate": query_completion_rate,
     }
-    confidence = sum(
-        dimensions[k] * weights.get(k, 0.0) for k in dimensions
-    ) / total_weight if total_weight > 0 else 0.0
+    confidence = (
+        sum(dimensions[k] * weights.get(k, 0.0) for k in dimensions) / total_weight if total_weight > 0 else 0.0
+    )
 
     # --- Factor classification ---
     strong_threshold = 0.7

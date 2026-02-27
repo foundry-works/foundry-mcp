@@ -219,6 +219,7 @@ class TestHeartbeatTiming:
 
         # Mock the LLM provider for the ReAct researcher loop
         import json as _json
+
         _llm_cc = 0
 
         async def _mock_llm(**kw):
@@ -229,14 +230,20 @@ class TestHeartbeatTiming:
             r.tokens_used = 10
             r.error = None
             if _llm_cc % 2 == 1:
-                r.content = _json.dumps({"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]})
+                r.content = _json.dumps(
+                    {"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]}
+                )
             else:
-                r.content = _json.dumps({"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]})
+                r.content = _json.dumps(
+                    {"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]}
+                )
             return r
 
-        with patch.object(workflow, "_get_search_provider", side_effect=get_search_provider), \
-             patch.object(workflow, "_execute_provider_async", side_effect=_mock_llm), \
-             patch.object(workflow, "_check_cancellation"):
+        with (
+            patch.object(workflow, "_get_search_provider", side_effect=get_search_provider),
+            patch.object(workflow, "_execute_provider_async", side_effect=_mock_llm),
+            patch.object(workflow, "_check_cancellation"),
+        ):
             await workflow._execute_gathering_async(
                 state=state,
                 provider_id=None,

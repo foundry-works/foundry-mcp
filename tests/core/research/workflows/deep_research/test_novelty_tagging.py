@@ -32,14 +32,13 @@ from foundry_mcp.core.research.models.sources import (
 )
 from foundry_mcp.core.research.workflows.deep_research._helpers import (
     NoveltyTag,
+    _extract_domain,
     build_novelty_summary,
     compute_novelty_tag,
-    _extract_domain,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
     TopicResearchMixin,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

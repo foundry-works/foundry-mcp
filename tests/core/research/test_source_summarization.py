@@ -22,7 +22,6 @@ from foundry_mcp.core.research.providers.shared import (
     SourceSummarizer,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -144,14 +143,16 @@ class TestParseSummaryResponse:
         """Parse a JSON response with summary + key_excerpts fields."""
         import json
 
-        response = json.dumps({
-            "summary": "This article discusses the impact of AI on healthcare.",
-            "key_excerpts": [
-                "AI is transforming healthcare",
-                "Machine learning models can predict outcomes",
-                "Deep learning enables new applications",
-            ],
-        })
+        response = json.dumps(
+            {
+                "summary": "This article discusses the impact of AI on healthcare.",
+                "key_excerpts": [
+                    "AI is transforming healthcare",
+                    "Machine learning models can predict outcomes",
+                    "Deep learning enables new applications",
+                ],
+            }
+        )
         summary, excerpts = SourceSummarizer._parse_summary_response(response)
         assert "impact of AI" in summary
         assert len(excerpts) == 3
@@ -159,12 +160,7 @@ class TestParseSummaryResponse:
 
     def test_parse_json_with_code_fences(self):
         """Parse JSON wrapped in markdown code fences."""
-        response = (
-            '```json\n'
-            '{"summary": "AI is changing the world.", '
-            '"key_excerpts": ["Quote one", "Quote two"]}\n'
-            '```'
-        )
+        response = '```json\n{"summary": "AI is changing the world.", "key_excerpts": ["Quote one", "Quote two"]}\n```'
         summary, excerpts = SourceSummarizer._parse_summary_response(response)
         assert "AI is changing the world" in summary
         assert len(excerpts) == 2
@@ -173,10 +169,12 @@ class TestParseSummaryResponse:
         """Parser limits to 5 excerpts even if more are provided in JSON."""
         import json
 
-        response = json.dumps({
-            "summary": "Summary text.",
-            "key_excerpts": [f"Excerpt number {i}" for i in range(10)],
-        })
+        response = json.dumps(
+            {
+                "summary": "Summary text.",
+                "key_excerpts": [f"Excerpt number {i}" for i in range(10)],
+            }
+        )
         _, excerpts = SourceSummarizer._parse_summary_response(response)
         assert len(excerpts) == 5
 
@@ -203,12 +201,7 @@ class TestParseSummaryResponse:
 
     def test_parse_only_excerpts_section(self):
         """Handles response with only Key Excerpts section."""
-        response = (
-            "Some introductory text.\n\n"
-            "## Key Excerpts\n"
-            '- "First quote"\n'
-            '- "Second quote"\n'
-        )
+        response = 'Some introductory text.\n\n## Key Excerpts\n- "First quote"\n- "Second quote"\n'
         summary, excerpts = SourceSummarizer._parse_summary_response(response)
         assert "introductory text" in summary
         assert len(excerpts) == 2
@@ -293,12 +286,13 @@ class TestSummarizeSource:
         mock_provider = MagicMock()
         mock_provider.generate = MagicMock(return_value=mock_result)
 
-        with patch(
-            "foundry_mcp.core.providers.registry.resolve_provider",
-            return_value=mock_provider,
-        ), patch(
-            "foundry_mcp.core.providers.ProviderStatus"
-        ) as mock_status:
+        with (
+            patch(
+                "foundry_mcp.core.providers.registry.resolve_provider",
+                return_value=mock_provider,
+            ),
+            patch("foundry_mcp.core.providers.ProviderStatus") as mock_status,
+        ):
             mock_status.SUCCESS = mock_result.status
             result = await mock_summarizer.summarize_source("Long content here...")
 
@@ -320,12 +314,13 @@ class TestSummarizeSource:
         mock_provider = MagicMock()
         mock_provider.generate = MagicMock(return_value=mock_result)
 
-        with patch(
-            "foundry_mcp.core.providers.registry.resolve_provider",
-            return_value=mock_provider,
-        ), patch(
-            "foundry_mcp.core.providers.ProviderStatus"
-        ) as mock_status:
+        with (
+            patch(
+                "foundry_mcp.core.providers.registry.resolve_provider",
+                return_value=mock_provider,
+            ),
+            patch("foundry_mcp.core.providers.ProviderStatus") as mock_status,
+        ):
             # Make the status check fail (result.status != SUCCESS)
             mock_status.SUCCESS = MagicMock()  # Different from mock_result.status
             with pytest.raises(RuntimeError, match="Summarization failed"):
@@ -448,7 +443,7 @@ class TestMaxContentLengthTruncation:
         mock_result = MagicMock()
         mock_result.status = MagicMock()
         mock_result.status.name = "SUCCESS"
-        mock_result.content = "## Executive Summary\nSummary.\n\n## Key Excerpts\n- \"Quote\""
+        mock_result.content = '## Executive Summary\nSummary.\n\n## Key Excerpts\n- "Quote"'
         mock_result.tokens = MagicMock(input_tokens=50, output_tokens=25)
         mock_result.stderr = None
 
@@ -460,12 +455,13 @@ class TestMaxContentLengthTruncation:
 
         mock_provider.generate = capture_generate
 
-        with patch(
-            "foundry_mcp.core.providers.registry.resolve_provider",
-            return_value=mock_provider,
-        ), patch(
-            "foundry_mcp.core.providers.ProviderStatus"
-        ) as mock_status:
+        with (
+            patch(
+                "foundry_mcp.core.providers.registry.resolve_provider",
+                return_value=mock_provider,
+            ),
+            patch("foundry_mcp.core.providers.ProviderStatus") as mock_status,
+        ):
             mock_status.SUCCESS = mock_result.status
             await summarizer.summarize_source(long_content)
 
@@ -502,12 +498,13 @@ class TestMaxContentLengthTruncation:
 
         mock_provider.generate = capture_generate
 
-        with patch(
-            "foundry_mcp.core.providers.registry.resolve_provider",
-            return_value=mock_provider,
-        ), patch(
-            "foundry_mcp.core.providers.ProviderStatus"
-        ) as mock_status:
+        with (
+            patch(
+                "foundry_mcp.core.providers.registry.resolve_provider",
+                return_value=mock_provider,
+            ),
+            patch("foundry_mcp.core.providers.ProviderStatus") as mock_status,
+        ):
             mock_status.SUCCESS = mock_result.status
             await summarizer.summarize_source(short_content)
 
@@ -543,12 +540,13 @@ class TestMaxContentLengthTruncation:
 
             mock_provider.generate = capture_generate
 
-            with patch(
-                "foundry_mcp.core.providers.registry.resolve_provider",
-                return_value=mock_provider,
-            ), patch(
-                "foundry_mcp.core.providers.ProviderStatus"
-            ) as mock_status:
+            with (
+                patch(
+                    "foundry_mcp.core.providers.registry.resolve_provider",
+                    return_value=mock_provider,
+                ),
+                patch("foundry_mcp.core.providers.ProviderStatus") as mock_status,
+            ):
                 mock_status.SUCCESS = mock_result.status
                 await summarizer.summarize_source(content)
 
@@ -575,9 +573,7 @@ class TestMaxContentLengthTruncation:
         """deep_research_max_content_length is parsed from TOML config."""
         from foundry_mcp.config.research import ResearchConfig
 
-        config = ResearchConfig.from_toml_dict(
-            {"deep_research_max_content_length": 75000}
-        )
+        config = ResearchConfig.from_toml_dict({"deep_research_max_content_length": 75000})
         assert config.deep_research_max_content_length == 75_000
 
     def test_max_content_length_toml_default(self):

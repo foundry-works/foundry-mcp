@@ -238,12 +238,14 @@ class TestParseResearcherResponse:
     """Tests for parse_researcher_response()."""
 
     def test_valid_tool_calls(self) -> None:
-        content = json.dumps({
-            "tool_calls": [
-                {"tool": "web_search", "arguments": {"query": "test"}},
-                {"tool": "think", "arguments": {"reasoning": "hmm"}},
-            ]
-        })
+        content = json.dumps(
+            {
+                "tool_calls": [
+                    {"tool": "web_search", "arguments": {"query": "test"}},
+                    {"tool": "think", "arguments": {"reasoning": "hmm"}},
+                ]
+            }
+        )
         resp = parse_researcher_response(content)
         assert len(resp.tool_calls) == 2
         assert resp.tool_calls[0].tool == "web_search"
@@ -298,15 +300,11 @@ class TestBuildResearcherSystemPrompt:
         assert "2026-02-24" in prompt
 
     def test_extract_disabled_removes_tool(self) -> None:
-        prompt = _build_researcher_system_prompt(
-            budget_total=5, budget_remaining=5, extract_enabled=False
-        )
+        prompt = _build_researcher_system_prompt(budget_total=5, budget_remaining=5, extract_enabled=False)
         assert "### extract_content" not in prompt
 
     def test_extract_enabled_includes_tool(self) -> None:
-        prompt = _build_researcher_system_prompt(
-            budget_total=5, budget_remaining=5, extract_enabled=True
-        )
+        prompt = _build_researcher_system_prompt(budget_total=5, budget_remaining=5, extract_enabled=True)
         assert "extract_content" in prompt
 
 
@@ -320,7 +318,10 @@ class TestBuildReactUserPrompt:
 
     def test_initial_prompt_has_topic(self) -> None:
         prompt = _build_react_user_prompt(
-            topic="deep learning", message_history=[], budget_remaining=5, budget_total=5,
+            topic="deep learning",
+            message_history=[],
+            budget_remaining=5,
+            budget_total=5,
         )
         assert "deep learning" in prompt
         assert "5 of 5" in prompt
@@ -331,7 +332,10 @@ class TestBuildReactUserPrompt:
             {"role": "tool", "tool": "web_search", "content": "Found 3 sources"},
         ]
         prompt = _build_react_user_prompt(
-            topic="test", message_history=history, budget_remaining=4, budget_total=5,
+            topic="test",
+            message_history=history,
+            budget_remaining=4,
+            budget_total=5,
         )
         assert "conversation_history" in prompt
         assert "Found 3 sources" in prompt
@@ -354,10 +358,16 @@ class TestTopicSearch:
         provider = _make_mock_provider("tavily")
 
         added = await mixin._topic_search(
-            query=sq.query, sub_query=sq, state=state,
-            available_providers=[provider], max_sources_per_provider=5,
-            timeout=30.0, seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            query=sq.query,
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_sources_per_provider=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
         assert added == 1
         assert len(state.sources) == 1
@@ -371,10 +381,16 @@ class TestTopicSearch:
         provider = _make_mock_provider("tavily", [source])
 
         added = await mixin._topic_search(
-            query=sq.query, sub_query=sq, state=state,
-            available_providers=[provider], max_sources_per_provider=5,
-            timeout=30.0, seen_urls={"https://example.com/dup"}, seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            query=sq.query,
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_sources_per_provider=5,
+            timeout=30.0,
+            seen_urls={"https://example.com/dup"},
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
         assert added == 0
 
@@ -386,10 +402,16 @@ class TestTopicSearch:
         provider = _make_mock_provider("tavily", [])
 
         await mixin._topic_search(
-            query=sq.query, sub_query=sq, state=state,
-            available_providers=[provider], max_sources_per_provider=2,
-            timeout=30.0, seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            query=sq.query,
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_sources_per_provider=2,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
         call_kwargs = provider.search.call_args
         assert call_kwargs.kwargs.get("max_results") == 2
@@ -402,10 +424,16 @@ class TestTopicSearch:
         provider = _make_mock_provider("tavily", [])
 
         await mixin._topic_search(
-            query=sq.query, sub_query=sq, state=state,
-            available_providers=[provider], max_sources_per_provider=None,
-            timeout=30.0, seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            query=sq.query,
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_sources_per_provider=None,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
         call_kwargs = provider.search.call_args
         assert call_kwargs.kwargs.get("max_results") == 7
@@ -424,11 +452,16 @@ class TestTopicSearch:
         good_provider = _make_mock_provider("good")
 
         added = await mixin._topic_search(
-            query=sq.query, sub_query=sq, state=state,
+            query=sq.query,
+            sub_query=sq,
+            state=state,
             available_providers=[bad_provider, good_provider],
-            max_sources_per_provider=5, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            max_sources_per_provider=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
         assert added == 1
 
@@ -443,10 +476,16 @@ class TestTopicSearch:
         slow_provider.search = AsyncMock(side_effect=asyncio.TimeoutError())
 
         added = await mixin._topic_search(
-            query=sq.query, sub_query=sq, state=state,
-            available_providers=[slow_provider], max_sources_per_provider=5,
-            timeout=30.0, seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            query=sq.query,
+            sub_query=sq,
+            state=state,
+            available_providers=[slow_provider],
+            max_sources_per_provider=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
         assert added == 0
 
@@ -462,10 +501,16 @@ class TestTopicSearch:
         provider = _make_mock_provider("tavily", sources)
 
         await mixin._topic_search(
-            query=sq.query, sub_query=sq, state=state,
-            available_providers=[provider], max_sources_per_provider=5,
-            timeout=30.0, seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            query=sq.query,
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_sources_per_provider=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
         assert len(state.sources) == 2
         assert state.sources[0].citation_number == 1
@@ -479,10 +524,16 @@ class TestTopicSearch:
         provider = _make_mock_provider("tavily")
 
         await mixin._topic_search(
-            query=sq.query, sub_query=sq, state=state,
-            available_providers=[provider], max_sources_per_provider=5,
-            timeout=30.0, seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            query=sq.query,
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_sources_per_provider=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
         assert state.search_provider_stats.get("tavily") == 1
 
@@ -513,22 +564,23 @@ class TestReActLoop:
             result.tokens_used = 50
             result.error = None
             if call_count == 1:
-                result.content = _react_response(
-                    _web_search_call("deep learning basics")
-                )
+                result.content = _react_response(_web_search_call("deep learning basics"))
             else:
-                result.content = _react_response(
-                    _complete_call("Found comprehensive information on deep learning")
-                )
+                result.content = _react_response(_complete_call("Found comprehensive information on deep learning"))
             return result
 
         mixin._provider_async_fn = mock_llm
 
         topic_result = await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=5, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         assert topic_result.early_completion is True
@@ -562,10 +614,15 @@ class TestReActLoop:
         mixin._provider_async_fn = mock_llm
 
         topic_result = await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=5, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         assert topic_result.searches_performed == 1
@@ -602,10 +659,15 @@ class TestReActLoop:
         mixin._provider_async_fn = mock_llm
 
         topic_result = await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=5, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         # Think note was recorded
@@ -634,22 +696,23 @@ class TestReActLoop:
             result.error = None
             # Alternate search → think → search → think to follow reflection protocol
             if call_count % 2 == 1:
-                result.content = _react_response(
-                    _web_search_call(f"query iteration {call_count}")
-                )
+                result.content = _react_response(_web_search_call(f"query iteration {call_count}"))
             else:
-                result.content = _react_response(
-                    _think_call(f"Reflecting on iteration {call_count}...")
-                )
+                result.content = _react_response(_think_call(f"Reflecting on iteration {call_count}..."))
             return result
 
         mixin._provider_async_fn = mock_llm
 
         topic_result = await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=2, timeout=30.0,  # Budget of 2
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=2,
+            timeout=30.0,  # Budget of 2
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         # Exactly 2 searches should have been performed (budget cap)
@@ -674,10 +737,15 @@ class TestReActLoop:
         mixin._provider_async_fn = mock_llm
 
         topic_result = await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=5, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         assert topic_result.searches_performed == 0
@@ -700,10 +768,15 @@ class TestReActLoop:
         mixin._provider_async_fn = mock_llm
 
         topic_result = await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=5, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         assert topic_result.searches_performed == 0
@@ -755,10 +828,15 @@ class TestReActLoop:
         mixin._provider_async_fn = mock_llm
 
         await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=5, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         # Think should appear before search in execution order
@@ -795,10 +873,15 @@ class TestReActLoop:
         mixin._provider_async_fn = mock_llm
 
         await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=5, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         # Second prompt should contain conversation history from first turn
@@ -823,9 +906,7 @@ class TestReActLoop:
             result.tokens_used = 30
             result.error = None
             if call_count == 1:
-                result.content = _react_response(
-                    _web_search_call("completely different refined query")
-                )
+                result.content = _react_response(_web_search_call("completely different refined query"))
             else:
                 result.content = _react_response(_complete_call("Done"))
             return result
@@ -833,10 +914,15 @@ class TestReActLoop:
         mixin._provider_async_fn = mock_llm
 
         topic_result = await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=5, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         assert "completely different refined query" in topic_result.refined_queries
@@ -867,10 +953,15 @@ class TestReActLoop:
         mixin._provider_async_fn = mock_llm
 
         await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=5, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         assert sq.status == "completed"
@@ -894,10 +985,15 @@ class TestReActLoop:
         mixin._provider_async_fn = mock_llm
 
         await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=1, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=1,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         assert sq.status == "failed"
@@ -911,10 +1007,15 @@ class TestReActLoop:
         provider = _make_mock_provider("tavily")
 
         topic_result = await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=5, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         assert len(mixin._audit_events) >= 1
@@ -942,10 +1043,15 @@ class TestReActLoop:
         mixin._provider_async_fn = mock_llm
 
         await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=5, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         assert state.total_tokens_used == 175  # 100 + 75
@@ -969,9 +1075,7 @@ class TestReActLoop:
             result.error = None
             if call_count == 1:
                 # Return an unknown tool
-                result.content = _react_response(
-                    {"tool": "invalid_tool", "arguments": {"foo": "bar"}}
-                )
+                result.content = _react_response({"tool": "invalid_tool", "arguments": {"foo": "bar"}})
             elif call_count == 2:
                 # Follow up with a valid search
                 result.content = _react_response(_web_search_call("valid query"))
@@ -982,10 +1086,15 @@ class TestReActLoop:
         mixin._provider_async_fn = mock_llm
 
         topic_result = await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=5, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         # Unknown tool should not count against budget
@@ -1014,22 +1123,23 @@ class TestReActLoop:
             # Alternate search → think to satisfy reflection protocol,
             # but never call research_complete
             if call_count % 2 == 1:
-                result.content = _react_response(
-                    _web_search_call(f"query {call_count}")
-                )
+                result.content = _react_response(_web_search_call(f"query {call_count}"))
             else:
-                result.content = _react_response(
-                    _think_call(f"Reflecting on iteration {call_count}...")
-                )
+                result.content = _react_response(_think_call(f"Reflecting on iteration {call_count}..."))
             return result
 
         mixin._provider_async_fn = mock_llm
 
         topic_result = await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=2, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=2,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         # Exactly 2 searches should have been performed (budget cap)
@@ -1058,9 +1168,7 @@ class TestReActLoop:
             result.tokens_used = 30
             result.error = None
             if call_count == 1:
-                result.content = _react_response(
-                    _extract_call(["https://example.com/article"])
-                )
+                result.content = _react_response(_extract_call(["https://example.com/article"]))
             else:
                 result.content = _react_response(_complete_call("Done"))
             return result
@@ -1068,18 +1176,21 @@ class TestReActLoop:
         mixin._provider_async_fn = mock_llm
 
         # Mock the extract provider to raise an exception
-        with patch(
-            "foundry_mcp.core.research.providers.tavily_extract.TavilyExtractProvider"
-        ) as mock_extract_cls:
+        with patch("foundry_mcp.core.research.providers.tavily_extract.TavilyExtractProvider") as mock_extract_cls:
             mock_extract_instance = MagicMock()
             mock_extract_instance.extract = AsyncMock(side_effect=RuntimeError("Network error"))
             mock_extract_cls.return_value = mock_extract_instance
 
             topic_result = await mixin._execute_topic_research_async(
-                sub_query=sq, state=state, available_providers=[provider],
-                max_searches=5, timeout=30.0,
-                seen_urls=set(), seen_titles={},
-                state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+                sub_query=sq,
+                state=state,
+                available_providers=[provider],
+                max_searches=5,
+                timeout=30.0,
+                seen_urls=set(),
+                seen_titles={},
+                state_lock=asyncio.Lock(),
+                semaphore=asyncio.Semaphore(3),
             )
 
         # Extract failure is non-fatal — loop continued to completion
@@ -1110,9 +1221,7 @@ class TestReActLoop:
             result.tokens_used = 30
             result.error = None
             if call_count == 1:
-                result.content = _react_response(
-                    _extract_call(["https://example.com/slow-page"])
-                )
+                result.content = _react_response(_extract_call(["https://example.com/slow-page"]))
             else:
                 result.content = _react_response(_complete_call("Done"))
             return result
@@ -1120,18 +1229,21 @@ class TestReActLoop:
         mixin._provider_async_fn = mock_llm
 
         # Mock the extract provider to raise a TimeoutError
-        with patch(
-            "foundry_mcp.core.research.providers.tavily_extract.TavilyExtractProvider"
-        ) as mock_extract_cls:
+        with patch("foundry_mcp.core.research.providers.tavily_extract.TavilyExtractProvider") as mock_extract_cls:
             mock_extract_instance = MagicMock()
             mock_extract_instance.extract = AsyncMock(side_effect=asyncio.TimeoutError())
             mock_extract_cls.return_value = mock_extract_instance
 
             topic_result = await mixin._execute_topic_research_async(
-                sub_query=sq, state=state, available_providers=[provider],
-                max_searches=5, timeout=30.0,
-                seen_urls=set(), seen_titles={},
-                state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+                sub_query=sq,
+                state=state,
+                available_providers=[provider],
+                max_searches=5,
+                timeout=30.0,
+                seen_urls=set(),
+                seen_titles={},
+                state_lock=asyncio.Lock(),
+                semaphore=asyncio.Semaphore(3),
             )
 
         # Timeout is non-fatal — loop continued to completion
@@ -1175,23 +1287,24 @@ class TestParseFailureRetry:
                 result.content = "Sure, here is my research plan..."
             elif call_count == 2:
                 # Retry: return valid JSON after clarification
-                result.content = _react_response(
-                    _think_call("Reflecting on findings")
-                )
+                result.content = _react_response(_think_call("Reflecting on findings"))
             else:
                 # Complete
-                result.content = _react_response(
-                    _complete_call("Done after retry")
-                )
+                result.content = _react_response(_complete_call("Done after retry"))
             return result
 
         mixin._provider_async_fn = mock_llm
 
         topic_result = await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=3, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=3,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         assert topic_result.tool_parse_failures == 1
@@ -1222,10 +1335,15 @@ class TestParseFailureRetry:
         mixin._provider_async_fn = mock_llm
 
         topic_result = await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=3, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=3,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         assert topic_result.tool_parse_failures == 2  # 2 retries
@@ -1253,26 +1371,25 @@ class TestParseFailureRetry:
             if call_count == 1:
                 result.content = "not json at all"
             else:
-                result.content = _react_response(
-                    _complete_call("Done")
-                )
+                result.content = _react_response(_complete_call("Done"))
             return result
 
         mixin._provider_async_fn = mock_llm
 
         await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=3, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=3,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         # Check audit event includes parse failure count
-        audit_events = [
-            (name, data)
-            for name, data in mixin._audit_events
-            if name == "topic_research_complete"
-        ]
+        audit_events = [(name, data) for name, data in mixin._audit_events if name == "topic_research_complete"]
         assert len(audit_events) == 1
         event_data = audit_events[0][1]["data"]
         assert event_data["tool_parse_failures"] == 1
@@ -1302,10 +1419,15 @@ class TestParseFailureRetry:
         mixin._provider_async_fn = mock_llm
 
         await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=3, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=3,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         # First call: normal temp (0.3), retry: lower temp (0.2)
@@ -1336,10 +1458,15 @@ class TestParseFailureRetry:
         mixin._provider_async_fn = mock_llm
 
         topic_result = await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=3, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=3,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         assert call_count == 1  # no retry
@@ -1422,22 +1549,26 @@ class TestToolSchemas:
 
     def test_web_search_tool_validates(self) -> None:
         from foundry_mcp.core.research.models.deep_research import WebSearchTool
+
         tool = WebSearchTool(query="test query", max_results=3)
         assert tool.query == "test query"
         assert tool.max_results == 3
 
     def test_extract_content_tool_caps_urls(self) -> None:
         from foundry_mcp.core.research.models.deep_research import ExtractContentTool
+
         tool = ExtractContentTool(urls=["https://a.com", "https://b.com", "https://c.com"])
         assert len(tool.urls) == 2  # Capped at 2
 
     def test_think_tool_validates(self) -> None:
         from foundry_mcp.core.research.models.deep_research import ThinkTool
+
         tool = ThinkTool(reasoning="Analyzing coverage gaps")
         assert tool.reasoning == "Analyzing coverage gaps"
 
     def test_research_complete_tool_validates(self) -> None:
         from foundry_mcp.core.research.models.deep_research import ResearchCompleteTool
+
         tool = ResearchCompleteTool(summary="All findings address the question")
         assert tool.summary == "All findings address the question"
 
@@ -1453,12 +1584,14 @@ class TestToolSchemas:
 
     def test_budget_exempt_tools(self) -> None:
         from foundry_mcp.core.research.models.deep_research import BUDGET_EXEMPT_TOOLS
+
         assert "think" in BUDGET_EXEMPT_TOOLS
         assert "research_complete" in BUDGET_EXEMPT_TOOLS
         assert "web_search" not in BUDGET_EXEMPT_TOOLS
 
     def test_researcher_tool_registry(self) -> None:
         from foundry_mcp.core.research.models.deep_research import RESEARCHER_TOOL_SCHEMAS
+
         assert "web_search" in RESEARCHER_TOOL_SCHEMAS
         assert "extract_content" in RESEARCHER_TOOL_SCHEMAS
         assert "think" in RESEARCHER_TOOL_SCHEMAS
@@ -1475,9 +1608,7 @@ class TestForcedReflection:
 
     def test_prompt_contains_reflection_protocol(self) -> None:
         """System prompt includes reflection guidance in think tool description."""
-        prompt = _build_researcher_system_prompt(
-            budget_total=5, budget_remaining=5, extract_enabled=True
-        )
+        prompt = _build_researcher_system_prompt(budget_total=5, budget_remaining=5, extract_enabled=True)
         assert "call think as your next action before issuing another search" in prompt
         assert "queries" in prompt  # batch guidance replaces first-turn exception
 
@@ -1503,17 +1634,13 @@ class TestForcedReflection:
                 result.content = _react_response(_web_search_call("query 1"))
             elif call_count == 2:
                 # Second turn: think (correct — reflecting after search)
-                result.content = _react_response(
-                    _think_call("Analyzing first search results...")
-                )
+                result.content = _react_response(_think_call("Analyzing first search results..."))
             elif call_count == 3:
                 # Third turn: search (allowed — think was done)
                 result.content = _react_response(_web_search_call("query 2"))
             elif call_count == 4:
                 # Fourth turn: think (correct — reflecting after search)
-                result.content = _react_response(
-                    _think_call("Analyzing second search results...")
-                )
+                result.content = _react_response(_think_call("Analyzing second search results..."))
             else:
                 result.content = _react_response(_complete_call("Done"))
             return result
@@ -1521,10 +1648,15 @@ class TestForcedReflection:
         mixin._provider_async_fn = mock_llm
 
         topic_result = await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=5, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         assert topic_result.searches_performed == 2
@@ -1576,9 +1708,7 @@ class TestForcedReflection:
                 )
             elif llm_call_count == 2:
                 # Second turn: think (reflecting on broadening)
-                result.content = _react_response(
-                    _think_call("Got broad coverage from initial searches...")
-                )
+                result.content = _react_response(_think_call("Got broad coverage from initial searches..."))
             else:
                 result.content = _react_response(_complete_call("Done"))
             return result
@@ -1586,10 +1716,15 @@ class TestForcedReflection:
         mixin._provider_async_fn = mock_llm
 
         topic_result = await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=5, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         # Both searches on the first turn should have executed
@@ -1623,9 +1758,7 @@ class TestForcedReflection:
                 result.content = _react_response(_web_search_call("query 2"))
             elif llm_call_count == 3:
                 # Turn 3: after injection, model should think
-                result.content = _react_response(
-                    _think_call("Reflecting after being prompted...")
-                )
+                result.content = _react_response(_think_call("Reflecting after being prompted..."))
             elif llm_call_count == 4:
                 # Turn 4: now can search
                 result.content = _react_response(_web_search_call("query 3"))
@@ -1636,10 +1769,15 @@ class TestForcedReflection:
         mixin._provider_async_fn = mock_llm
 
         topic_result = await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=5, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         # Reflection was injected once (turn 2 skipped think)
@@ -1656,7 +1794,8 @@ class TestForcedReflection:
 
         # Message history should contain the injection
         injection_msgs = [
-            m for m in topic_result.message_history
+            m
+            for m in topic_result.message_history
             if m.get("tool") == "system" and "REFLECTION REQUIRED" in m.get("content", "")
         ]
         assert len(injection_msgs) == 1
@@ -1694,10 +1833,15 @@ class TestForcedReflection:
         mixin._provider_async_fn = mock_llm
 
         topic_result = await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=5, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         # No reflection injections — think was present
@@ -1717,7 +1861,10 @@ class TestResearcherStopHeuristics:
     def test_system_prompt_contains_stop_heuristics(self) -> None:
         """5.1: System prompt includes 'Stop Immediately When' block with all three rules."""
         prompt = _build_researcher_system_prompt(
-            budget_total=5, budget_remaining=5, extract_enabled=True, date_str="2026-02-24",
+            budget_total=5,
+            budget_remaining=5,
+            extract_enabled=True,
+            date_str="2026-02-24",
         )
         assert "Stop Immediately When" in prompt
         assert "3 or more high-quality" in prompt or "3+" in prompt
@@ -1727,7 +1874,10 @@ class TestResearcherStopHeuristics:
     def test_stop_heuristics_present_with_extract_disabled(self) -> None:
         """Stop heuristics remain when extract_content tool is removed."""
         prompt = _build_researcher_system_prompt(
-            budget_total=5, budget_remaining=5, extract_enabled=False, date_str="2026-02-24",
+            budget_total=5,
+            budget_remaining=5,
+            extract_enabled=False,
+            date_str="2026-02-24",
         )
         assert "Stop Immediately When" in prompt
         assert "research_complete" in prompt
@@ -1743,7 +1893,9 @@ class TestResearcherStopHeuristics:
             arguments={"reasoning": "Found several good sources on the topic."},
         )
         response_text = mixin._handle_think_tool(
-            tool_call=tool_call, sub_query=sq, result=result,
+            tool_call=tool_call,
+            sub_query=sq,
+            result=result,
         )
 
         # The response should include the stop-criteria checklist
@@ -1764,8 +1916,7 @@ class TestResearcherStopHeuristics:
 
         # Provider returns 3 high-quality sources per search
         sources = [
-            _make_source(f"src-{i}", f"https://example.com/{i}", f"Source {i}", SourceQuality.HIGH)
-            for i in range(3)
+            _make_source(f"src-{i}", f"https://example.com/{i}", f"Source {i}", SourceQuality.HIGH) for i in range(3)
         ]
         provider = _make_mock_provider("tavily", sources=sources)
 
@@ -1799,10 +1950,15 @@ class TestResearcherStopHeuristics:
         mixin._provider_async_fn = mock_llm
 
         topic_result = await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=10, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=10,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         # Researcher stopped early after only 1 search (budget of 10)
@@ -1863,9 +2019,7 @@ class TestResearcherStopHeuristics:
                 result.content = _react_response(_web_search_call("deep learning"))
             elif llm_call_count == 2:
                 # Turn 2: think after first search
-                result.content = _react_response(
-                    _think_call("Found 1 source. Need more information.")
-                )
+                result.content = _react_response(_think_call("Found 1 source. Need more information."))
             elif llm_call_count == 3:
                 # Turn 3: second search (different query, similar results)
                 result.content = _react_response(_web_search_call("deep learning overview"))
@@ -1879,9 +2033,7 @@ class TestResearcherStopHeuristics:
                 )
             elif llm_call_count == 5:
                 # Turn 5: research_complete — correct stop on diminishing returns
-                result.content = _react_response(
-                    _complete_call("Stopping due to diminishing returns from searches.")
-                )
+                result.content = _react_response(_complete_call("Stopping due to diminishing returns from searches."))
             else:
                 result.content = _react_response(_complete_call("Fallback"))
             return result
@@ -1889,10 +2041,15 @@ class TestResearcherStopHeuristics:
         mixin._provider_async_fn = mock_llm
 
         topic_result = await mixin._execute_topic_research_async(
-            sub_query=sq, state=state, available_providers=[provider],
-            max_searches=10, timeout=30.0,
-            seen_urls=set(), seen_titles={},
-            state_lock=asyncio.Lock(), semaphore=asyncio.Semaphore(3),
+            sub_query=sq,
+            state=state,
+            available_providers=[provider],
+            max_searches=10,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
         )
 
         # Researcher stopped after 2 searches (budget of 10) due to overlap
@@ -1950,17 +2107,11 @@ class TestPerResultSummarization:
             output_tokens=50,
         )
 
-        with patch(
-            "foundry_mcp.core.research.providers.shared.SourceSummarizer"
-        ) as MockSummarizer:
+        with patch("foundry_mcp.core.research.providers.shared.SourceSummarizer") as MockSummarizer:
             mock_instance = AsyncMock()
-            mock_instance.summarize_sources = AsyncMock(
-                return_value={"src-long-1": mock_summary_result}
-            )
+            mock_instance.summarize_sources = AsyncMock(return_value={"src-long-1": mock_summary_result})
             MockSummarizer.return_value = mock_instance
-            MockSummarizer.format_summarized_content = (
-                lambda summary, excerpts: f"<summary>{summary}</summary>"
-            )
+            MockSummarizer.format_summarized_content = lambda summary, excerpts: f"<summary>{summary}</summary>"
 
             tool_call = ResearcherToolCall(
                 tool="web_search",
@@ -2012,14 +2163,10 @@ class TestPerResultSummarization:
         )
         provider = _make_mock_provider("tavily", [source])
 
-        with patch(
-            "foundry_mcp.core.research.providers.shared.SourceSummarizer"
-        ) as MockSummarizer:
+        with patch("foundry_mcp.core.research.providers.shared.SourceSummarizer") as MockSummarizer:
             # Summarizer raises an exception
             mock_instance = AsyncMock()
-            mock_instance.summarize_sources = AsyncMock(
-                side_effect=RuntimeError("Summarization provider unavailable")
-            )
+            mock_instance.summarize_sources = AsyncMock(side_effect=RuntimeError("Summarization provider unavailable"))
             MockSummarizer.return_value = mock_instance
 
             tool_call = ResearcherToolCall(
@@ -2071,9 +2218,7 @@ class TestPerResultSummarization:
         )
         provider = _make_mock_provider("tavily", [source])
 
-        with patch(
-            "foundry_mcp.core.research.providers.shared.SourceSummarizer"
-        ) as MockSummarizer:
+        with patch("foundry_mcp.core.research.providers.shared.SourceSummarizer") as MockSummarizer:
             mock_instance = AsyncMock()
             mock_instance.summarize_sources = AsyncMock(return_value={})
             MockSummarizer.return_value = mock_instance
@@ -2126,9 +2271,7 @@ class TestPerResultSummarization:
         )
         provider = _make_mock_provider("tavily", [source])
 
-        with patch(
-            "foundry_mcp.core.research.providers.shared.SourceSummarizer"
-        ) as MockSummarizer:
+        with patch("foundry_mcp.core.research.providers.shared.SourceSummarizer") as MockSummarizer:
             mock_instance = AsyncMock()
             # Should return empty because the source is already summarized
             mock_instance.summarize_sources = AsyncMock(return_value={})
@@ -2188,17 +2331,11 @@ class TestPerResultSummarization:
             output_tokens=30,
         )
 
-        with patch(
-            "foundry_mcp.core.research.providers.shared.SourceSummarizer"
-        ) as MockSummarizer:
+        with patch("foundry_mcp.core.research.providers.shared.SourceSummarizer") as MockSummarizer:
             mock_instance = AsyncMock()
-            mock_instance.summarize_sources = AsyncMock(
-                return_value={"src-raw-1": mock_summary}
-            )
+            mock_instance.summarize_sources = AsyncMock(return_value={"src-raw-1": mock_summary})
             MockSummarizer.return_value = mock_instance
-            MockSummarizer.format_summarized_content = (
-                lambda summary, excerpts: f"<summary>{summary}</summary>"
-            )
+            MockSummarizer.format_summarized_content = lambda summary, excerpts: f"<summary>{summary}</summary>"
 
             tool_call = ResearcherToolCall(
                 tool="web_search",
@@ -2259,17 +2396,11 @@ class TestPerResultSummarization:
             output_tokens=100,
         )
 
-        with patch(
-            "foundry_mcp.core.research.providers.shared.SourceSummarizer"
-        ) as MockSummarizer:
+        with patch("foundry_mcp.core.research.providers.shared.SourceSummarizer") as MockSummarizer:
             mock_instance = AsyncMock()
-            mock_instance.summarize_sources = AsyncMock(
-                return_value={"src-tok-1": mock_summary}
-            )
+            mock_instance.summarize_sources = AsyncMock(return_value={"src-tok-1": mock_summary})
             MockSummarizer.return_value = mock_instance
-            MockSummarizer.format_summarized_content = (
-                lambda summary, excerpts: f"<summary>{summary}</summary>"
-            )
+            MockSummarizer.format_summarized_content = lambda summary, excerpts: f"<summary>{summary}</summary>"
 
             tool_call = ResearcherToolCall(
                 tool="web_search",
@@ -2314,7 +2445,7 @@ class TestSearchResultPresentationFormat:
             id="src-fmt-1",
             title="Deep Learning Survey",
             url="https://arxiv.org/abs/2301.00001",
-            content="<summary>A comprehensive survey of deep learning.</summary>\n\n<key_excerpts>\"Quote one\", \"Quote two\"</key_excerpts>",
+            content='<summary>A comprehensive survey of deep learning.</summary>\n\n<key_excerpts>"Quote one", "Quote two"</key_excerpts>',
             quality=SourceQuality.HIGH,
             metadata={
                 "summarized": True,
@@ -2354,7 +2485,9 @@ class TestSearchResultPresentationFormat:
             snippet="A brief snippet about the topic.",
             quality=SourceQuality.MEDIUM,
         )
-        tag = NoveltyTag(tag="[RELATED: Other Source]", category="related", similarity=0.5, matched_title="Other Source")
+        tag = NoveltyTag(
+            tag="[RELATED: Other Source]", category="related", similarity=0.5, matched_title="Other Source"
+        )
 
         result = _format_source_block(2, src, tag)
 
@@ -2806,9 +2939,7 @@ class TestExtractContentVisibility:
             return 1
 
         mixin._topic_extract = AsyncMock(side_effect=fake_extract)
-        mixin._summarize_search_results = AsyncMock(
-            side_effect=RuntimeError("Summarizer unavailable")
-        )
+        mixin._summarize_search_results = AsyncMock(side_effect=RuntimeError("Summarizer unavailable"))
 
         tool_call = ResearcherToolCall(
             tool="extract_content",
@@ -3085,7 +3216,9 @@ class TestBatchSearchBudgetAccounting:
     async def test_batch_prompt_documents_queries_param(self) -> None:
         """System prompt documents the batch queries parameter."""
         prompt = _build_researcher_system_prompt(
-            budget_total=10, budget_remaining=10, extract_enabled=True,
+            budget_total=10,
+            budget_remaining=10,
+            extract_enabled=True,
         )
         assert "queries" in prompt
         assert "batch" in prompt.lower()
@@ -3138,18 +3271,23 @@ class TestContentDedupOutsideLock:
         mixin = StubTopicResearch()
         state = _make_state(num_sub_queries=2)
         sub_query = SubQuery(
-            id="sq-1", query="test query", rationale="test", priority=1,
+            id="sq-1",
+            query="test query",
+            rationale="test",
+            priority=1,
         )
 
         # Create a mock provider that returns sources with content
         mock_provider = AsyncMock()
         mock_provider.get_provider_name.return_value = "tavily"
         source1 = ResearchSource(
-            title="Source A", url="https://example.com/a",
+            title="Source A",
+            url="https://example.com/a",
             content="unique content about topic A " * 50,
         )
         source2 = ResearchSource(
-            title="Source B", url="https://example.com/b",
+            title="Source B",
+            url="https://example.com/b",
             content="unique content about topic B " * 50,
         )
         mock_provider.search.return_value = [source1, source2]
@@ -3162,16 +3300,28 @@ class TestContentDedupOutsideLock:
         seen_titles: dict[str, str] = {}
         results = await asyncio.gather(
             mixin._topic_search(
-                "query 1", sub_query, state, [mock_provider],
-                max_sources_per_provider=5, timeout=30,
-                seen_urls=seen_urls, seen_titles=seen_titles,
-                state_lock=lock, semaphore=semaphore,
+                "query 1",
+                sub_query,
+                state,
+                [mock_provider],
+                max_sources_per_provider=5,
+                timeout=30,
+                seen_urls=seen_urls,
+                seen_titles=seen_titles,
+                state_lock=lock,
+                semaphore=semaphore,
             ),
             mixin._topic_search(
-                "query 2", sub_query, state, [mock_provider],
-                max_sources_per_provider=5, timeout=30,
-                seen_urls=seen_urls, seen_titles=seen_titles,
-                state_lock=lock, semaphore=semaphore,
+                "query 2",
+                sub_query,
+                state,
+                [mock_provider],
+                max_sources_per_provider=5,
+                timeout=30,
+                seen_urls=seen_urls,
+                seen_titles=seen_titles,
+                state_lock=lock,
+                semaphore=semaphore,
             ),
         )
         # Both should complete without deadlock; exact count depends on dedup

@@ -27,10 +27,10 @@ from foundry_mcp.core.research.models.sources import (
     SourceQuality,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
-    SynthesisPhaseMixin,
-    _classify_query_type,
     _SUPPLEMENTARY_HEADROOM_THRESHOLD,
     _SUPPLEMENTARY_MAX_FRACTION,
+    SynthesisPhaseMixin,
+    _classify_query_type,
 )
 
 # =============================================================================
@@ -493,9 +493,7 @@ class TestSynthesisPromptAlignment:
         ]:
             state = _make_state(query=query)
             prompt = stub._build_synthesis_system_prompt(state)
-            assert expected_keyword in prompt, (
-                f"Missing '{expected_keyword}' for query '{query}'"
-            )
+            assert expected_keyword in prompt, f"Missing '{expected_keyword}' for query '{query}'"
 
 
 # =============================================================================

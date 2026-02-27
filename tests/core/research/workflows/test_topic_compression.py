@@ -35,11 +35,11 @@ from foundry_mcp.core.research.models.sources import (
     SubQuery,
 )
 from foundry_mcp.core.research.workflows.base import WorkflowResult
-from foundry_mcp.core.research.workflows.deep_research.phases.gathering import (
-    GatheringPhaseMixin,
-)
 from foundry_mcp.core.research.workflows.deep_research.phases._analysis_prompts import (
     AnalysisPromptsMixin,
+)
+from foundry_mcp.core.research.workflows.deep_research.phases.gathering import (
+    GatheringPhaseMixin,
 )
 
 # =============================================================================
@@ -139,9 +139,7 @@ class StubGatheringMixin(GatheringPhaseMixin):
         self.config.deep_research_retry_delay = 0.1
         self.config.deep_research_compression_max_content_length = 50_000
         # resolve_model_for_role must return a proper tuple
-        self.config.resolve_model_for_role = MagicMock(
-            return_value=("test-provider", None)
-        )
+        self.config.resolve_model_for_role = MagicMock(return_value=("test-provider", None))
         self.memory = MagicMock()
         self._search_providers: dict[str, Any] = {}
         self._audit_events: list[tuple[str, dict]] = []
@@ -186,6 +184,7 @@ class StubGatheringMixin(GatheringPhaseMixin):
 
 class StubAnalysisPrompts(AnalysisPromptsMixin):
     """Concrete class inheriting AnalysisPromptsMixin for testing."""
+
     pass
 
 
@@ -834,9 +833,7 @@ class TestFullReActContext:
 
         topic_result = _add_sources_for_topic(state, "sq-0", num_sources=2)
         topic_result.early_completion = True
-        topic_result.completion_rationale = (
-            "Sufficient evidence gathered — all major renewable energy types covered."
-        )
+        topic_result.completion_rationale = "Sufficient evidence gathered — all major renewable energy types covered."
         state.topic_research_results.append(topic_result)
 
         captured_prompts: list[str] = []
@@ -950,7 +947,7 @@ class TestParallelCompression:
                     break
             result = MagicMock()
             result.success = True
-            result.content = f"## Findings for topic\nCompressed [1] [2]."
+            result.content = "## Findings for topic\nCompressed [1] [2]."
             result.tokens_used = 100
             result.input_tokens = 75
             result.output_tokens = 25
@@ -1117,9 +1114,7 @@ class TestCompressionTokenTracking:
 
         # execute_llm_call records per-topic PhaseMetrics
         assert len(state.phase_metrics) > initial_metrics_count
-        compression_metrics = [
-            m for m in state.phase_metrics if m.phase == "compression"
-        ]
+        compression_metrics = [m for m in state.phase_metrics if m.phase == "compression"]
         assert len(compression_metrics) >= 1
         assert compression_metrics[0].input_tokens == 150
         assert compression_metrics[0].output_tokens == 50
@@ -1172,9 +1167,7 @@ class TestCompressionAuditEvents:
         assert "topic_compression_complete" in events
 
         # Check event data
-        compression_event = next(
-            e for e in mixin._audit_events if e[0] == "topic_compression_complete"
-        )
+        compression_event = next(e for e in mixin._audit_events if e[0] == "topic_compression_complete")
         event_data = compression_event[1]["data"]
         assert event_data["topics_compressed"] == 1
         assert event_data["topics_failed"] == 0
@@ -1279,11 +1272,13 @@ class TestAnalysisUsesCompressedFindings:
 
         # Add sources directly (no topic research results)
         for i in range(3):
-            state.append_source(_make_source(
-                source_id=f"src-{i}",
-                url=f"https://example.com/{i}",
-                title=f"Direct Source {i}",
-            ))
+            state.append_source(
+                _make_source(
+                    source_id=f"src-{i}",
+                    url=f"https://example.com/{i}",
+                    title=f"Direct Source {i}",
+                )
+            )
 
         prompt = mixin._build_analysis_user_prompt(state)
 

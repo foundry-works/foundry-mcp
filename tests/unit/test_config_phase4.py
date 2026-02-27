@@ -21,7 +21,6 @@ from foundry_mcp.core.research.workflows.deep_research._helpers import (
     extract_json,
 )
 
-
 # ---------------------------------------------------------------------------
 # 4.1 — per_provider_rate_limits default consistency
 # ---------------------------------------------------------------------------
@@ -48,9 +47,7 @@ class TestPerProviderRateLimitsConsistency:
 
     def test_toml_override_respected(self):
         """User-supplied rate limit overrides the default."""
-        config = ResearchConfig.from_toml_dict(
-            {"per_provider_rate_limits": {"semantic_scholar": 100, "tavily": 30}}
-        )
+        config = ResearchConfig.from_toml_dict({"per_provider_rate_limits": {"semantic_scholar": 100, "tavily": 30}})
         assert config.per_provider_rate_limits["semantic_scholar"] == 100
         assert config.per_provider_rate_limits["tavily"] == 30
 
@@ -96,13 +93,7 @@ class TestGemini20ModelEntries:
 
     @pytest.fixture()
     def json_limits(self) -> dict[str, int]:
-        limits_path = (
-            Path(__file__).resolve().parents[2]
-            / "src"
-            / "foundry_mcp"
-            / "config"
-            / "model_token_limits.json"
-        )
+        limits_path = Path(__file__).resolve().parents[2] / "src" / "foundry_mcp" / "config" / "model_token_limits.json"
         with open(limits_path) as f:
             return json.load(f)["limits"]
 
@@ -111,6 +102,7 @@ class TestGemini20ModelEntries:
         from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
             _FALLBACK_MODEL_TOKEN_LIMITS,
         )
+
         return _FALLBACK_MODEL_TOKEN_LIMITS
 
     @pytest.mark.parametrize("model", ["gemini-2.0-pro", "gemini-2.0-flash"])
@@ -175,9 +167,7 @@ class TestPlanningCritiqueConfig:
         assert config.deep_research_enable_planning_critique is True
 
     def test_from_toml_dict_override(self):
-        config = ResearchConfig.from_toml_dict(
-            {"deep_research_enable_planning_critique": False}
-        )
+        config = ResearchConfig.from_toml_dict({"deep_research_enable_planning_critique": False})
         assert config.deep_research_enable_planning_critique is False
 
 
@@ -239,13 +229,7 @@ class TestTokenLimitsSyncJsonFallback:
 
     @pytest.fixture()
     def json_limits(self) -> dict[str, int]:
-        limits_path = (
-            Path(__file__).resolve().parents[2]
-            / "src"
-            / "foundry_mcp"
-            / "config"
-            / "model_token_limits.json"
-        )
+        limits_path = Path(__file__).resolve().parents[2] / "src" / "foundry_mcp" / "config" / "model_token_limits.json"
         with open(limits_path) as f:
             return json.load(f)["limits"]
 
@@ -254,6 +238,7 @@ class TestTokenLimitsSyncJsonFallback:
         from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
             _FALLBACK_MODEL_TOKEN_LIMITS,
         )
+
         return _FALLBACK_MODEL_TOKEN_LIMITS
 
     def test_same_keys(self, json_limits: dict[str, int], fallback_limits: dict[str, int]):
@@ -262,9 +247,7 @@ class TestTokenLimitsSyncJsonFallback:
         fallback_keys = set(fallback_limits.keys())
         missing_from_json = fallback_keys - json_keys
         missing_from_fallback = json_keys - fallback_keys
-        assert not missing_from_json, (
-            f"Keys in _FALLBACK_MODEL_TOKEN_LIMITS but not in JSON: {missing_from_json}"
-        )
+        assert not missing_from_json, f"Keys in _FALLBACK_MODEL_TOKEN_LIMITS but not in JSON: {missing_from_json}"
         assert not missing_from_fallback, (
             f"Keys in JSON but not in _FALLBACK_MODEL_TOKEN_LIMITS: {missing_from_fallback}"
         )
@@ -274,9 +257,5 @@ class TestTokenLimitsSyncJsonFallback:
         mismatches: list[str] = []
         for key in set(json_limits.keys()) & set(fallback_limits.keys()):
             if json_limits[key] != fallback_limits[key]:
-                mismatches.append(
-                    f"  {key}: JSON={json_limits[key]} vs fallback={fallback_limits[key]}"
-                )
-        assert not mismatches, (
-            f"Value mismatches between JSON and fallback:\n" + "\n".join(mismatches)
-        )
+                mismatches.append(f"  {key}: JSON={json_limits[key]} vs fallback={fallback_limits[key]}")
+        assert not mismatches, "Value mismatches between JSON and fallback:\n" + "\n".join(mismatches)

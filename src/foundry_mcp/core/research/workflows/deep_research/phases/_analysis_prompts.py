@@ -111,10 +111,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         ]
 
         # Check if we have compressed findings from per-topic compression
-        compressed_topics = [
-            tr for tr in state.topic_research_results
-            if tr.compressed_findings
-        ]
+        compressed_topics = [tr for tr in state.topic_research_results if tr.compressed_findings]
 
         if compressed_topics:
             # Use compressed findings as primary analysis input

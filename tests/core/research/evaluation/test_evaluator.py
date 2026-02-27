@@ -33,7 +33,6 @@ from foundry_mcp.core.research.models.deep_research import (
 from foundry_mcp.core.research.models.sources import SourceType
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 
-
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -70,15 +69,9 @@ def _make_valid_eval_response(scores: dict[str, int] | None = None) -> str:
     if scores is None:
         # Build defaults dynamically from DIMENSIONS to prevent drift
         default_pattern = [4, 3, 4, 3, 4, 5, 4, 3]
-        scores = {
-            d.name: default_pattern[i % len(default_pattern)]
-            for i, d in enumerate(DIMENSIONS)
-        }
+        scores = {d.name: default_pattern[i % len(default_pattern)] for i, d in enumerate(DIMENSIONS)}
     response = {
-        "scores": {
-            name: {"score": score, "rationale": f"Score {score} for {name}"}
-            for name, score in scores.items()
-        }
+        "scores": {name: {"score": score, "rationale": f"Score {score} for {name}"} for name, score in scores.items()}
     }
     return json.dumps(response)
 
@@ -191,9 +184,16 @@ class TestParseEvaluationResponse:
         assert 0.0 <= result.composite_score <= 1.0
 
     def test_extracts_all_dimension_scores(self):
-        scores = {"depth": 5, "source_quality": 4, "analytical_rigor": 3,
-                  "completeness": 2, "groundedness": 1, "structure": 4,
-                  "practical_value": 3, "balance": 4}
+        scores = {
+            "depth": 5,
+            "source_quality": 4,
+            "analytical_rigor": 3,
+            "completeness": 2,
+            "groundedness": 1,
+            "structure": 4,
+            "practical_value": 3,
+            "balance": 4,
+        }
         content = _make_valid_eval_response(scores)
         result = _parse_evaluation_response(content)
 
@@ -207,9 +207,16 @@ class TestParseEvaluationResponse:
 
     def test_dimensions_produce_independent_scores(self):
         """Different raw scores should produce different normalized values."""
-        scores = {"depth": 5, "source_quality": 1, "analytical_rigor": 3,
-                  "completeness": 4, "groundedness": 2, "structure": 5,
-                  "practical_value": 3, "balance": 4}
+        scores = {
+            "depth": 5,
+            "source_quality": 1,
+            "analytical_rigor": 3,
+            "completeness": 4,
+            "groundedness": 2,
+            "structure": 5,
+            "practical_value": 3,
+            "balance": 4,
+        }
         content = _make_valid_eval_response(scores)
         result = _parse_evaluation_response(content)
 
@@ -235,7 +242,7 @@ class TestParseEvaluationResponse:
         assert score_map["source_quality"].rationale == "Not evaluated"
 
     def test_handles_json_in_code_block(self):
-        content = '```json\n' + _make_valid_eval_response() + '\n```'
+        content = "```json\n" + _make_valid_eval_response() + "\n```"
         result = _parse_evaluation_response(content)
         assert len(result.dimension_scores) == 8
 
@@ -274,12 +281,14 @@ class TestParseEvaluationResponse:
         assert 0.0 <= result.composite_score <= 1.0
 
     def test_non_integer_score_defaults_to_3(self):
-        content = json.dumps({
-            "scores": {
-                "depth": {"score": "high", "rationale": "non-numeric"},
-                "source_quality": {"score": 4, "rationale": "ok"},
+        content = json.dumps(
+            {
+                "scores": {
+                    "depth": {"score": "high", "rationale": "non-numeric"},
+                    "source_quality": {"score": 4, "rationale": "ok"},
+                }
             }
-        })
+        )
         result = _parse_evaluation_response(content)
         depth = next(ds for ds in result.dimension_scores if ds.name == "depth")
         assert depth.raw_score == 3  # default for non-numeric
@@ -630,9 +639,16 @@ class TestQualityDifferentiation:
         assert result.score_variance == pytest.approx(0.0)
 
     def test_variance_nonzero_for_varied_scores(self):
-        scores = {"depth": 5, "source_quality": 1, "analytical_rigor": 3,
-                  "completeness": 4, "groundedness": 2, "structure": 5,
-                  "practical_value": 3, "balance": 4}
+        scores = {
+            "depth": 5,
+            "source_quality": 1,
+            "analytical_rigor": 3,
+            "completeness": 4,
+            "groundedness": 2,
+            "structure": 5,
+            "practical_value": 3,
+            "balance": 4,
+        }
         content = _make_valid_eval_response(scores)
         result = _parse_evaluation_response(content)
         assert result.score_variance > 0.0
@@ -708,7 +724,7 @@ class TestRawNotesGroundedness:
         assert "Groundedness" in prompt
         # Check the section instructs the judge to use notes for groundedness
         evidence_section_start = prompt.index("Raw Research Evidence")
-        evidence_section = prompt[evidence_section_start:evidence_section_start + 500]
+        evidence_section = prompt[evidence_section_start : evidence_section_start + 500]
         assert "groundedness" in evidence_section.lower()
 
     @pytest.mark.asyncio

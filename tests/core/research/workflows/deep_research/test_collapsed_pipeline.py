@@ -30,7 +30,6 @@ from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
     SynthesisPhaseMixin,
 )
 
-
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -313,17 +312,13 @@ class TestSynthesisEntryCheck:
     def test_has_compressed_findings_detected(self) -> None:
         """Synthesis detects per-topic compressed findings as valid input."""
         state = _make_state(with_compressed_topics=True)
-        has_compressed = any(
-            tr.compressed_findings for tr in state.topic_research_results
-        )
+        has_compressed = any(tr.compressed_findings for tr in state.topic_research_results)
         assert has_compressed is True
 
     def test_no_material_detected(self) -> None:
         """Synthesis detects no material when all sources are empty."""
         state = _make_state()
-        has_compressed = any(
-            tr.compressed_findings for tr in state.topic_research_results
-        )
+        has_compressed = any(tr.compressed_findings for tr in state.topic_research_results)
         assert has_compressed is False
         assert len(state.findings) == 0
         assert state.compressed_digest is None
@@ -339,9 +334,7 @@ class TestSynthesisEntryCheck:
                 compressed_findings=None,  # Explicitly None
             )
         )
-        has_compressed = any(
-            tr.compressed_findings for tr in state.topic_research_results
-        )
+        has_compressed = any(tr.compressed_findings for tr in state.topic_research_results)
         assert has_compressed is False
 
 

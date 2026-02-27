@@ -12,7 +12,6 @@ import pytest
 
 from foundry_mcp.config.research import ResearchConfig
 
-
 # ---------------------------------------------------------------------------
 # 2A / 5B.1 — Supervision config validation
 # ---------------------------------------------------------------------------
@@ -38,9 +37,7 @@ class TestSupervisionConfigValidation:
             config = ResearchConfig(deep_research_max_supervision_rounds=20)
 
         assert config.deep_research_max_supervision_rounds == 20
-        supervision_warnings = [
-            x for x in w if "max_supervision_rounds" in str(x.message)
-        ]
+        supervision_warnings = [x for x in w if "max_supervision_rounds" in str(x.message)]
         assert len(supervision_warnings) == 0
 
     def test_max_supervision_rounds_below_minimum_raises(self):
@@ -100,9 +97,7 @@ class TestSupervisionConfigValidation:
         """from_toml_dict also triggers validation (via __post_init__)."""
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            config = ResearchConfig.from_toml_dict(
-                {"deep_research_max_supervision_rounds": 100}
-            )
+            config = ResearchConfig.from_toml_dict({"deep_research_max_supervision_rounds": 100})
 
         assert config.deep_research_max_supervision_rounds == 20
         assert any("clamping to 20" in str(x.message) for x in w)
@@ -134,9 +129,7 @@ class TestDeepResearchBoundsValidation:
             config = ResearchConfig(deep_research_max_iterations=20)
 
         assert config.deep_research_max_iterations == 20
-        iteration_warnings = [
-            x for x in w if "deep_research_max_iterations" in str(x.message)
-        ]
+        iteration_warnings = [x for x in w if "deep_research_max_iterations" in str(x.message)]
         assert len(iteration_warnings) == 0
 
     def test_max_iterations_below_minimum_raises(self):
@@ -420,9 +413,7 @@ class TestDeprecatedFieldWarnings:
         """Warning message includes migration guidance."""
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            ResearchConfig.from_toml_dict(
-                {"deep_research_enable_reflection": True}
-            )
+            ResearchConfig.from_toml_dict({"deep_research_enable_reflection": True})
 
         deprecation_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
         msg = str(deprecation_warnings[0].message)
@@ -432,11 +423,13 @@ class TestDeprecatedFieldWarnings:
         """Multiple deprecated fields each get their own warning."""
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            ResearchConfig.from_toml_dict({
-                "deep_research_enable_reflection": True,
-                "deep_research_digest_policy": "auto",
-                "tavily_extract_in_deep_research": False,
-            })
+            ResearchConfig.from_toml_dict(
+                {
+                    "deep_research_enable_reflection": True,
+                    "deep_research_digest_policy": "auto",
+                    "tavily_extract_in_deep_research": False,
+                }
+            )
 
         deprecation_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
         assert len(deprecation_warnings) == 3
@@ -445,9 +438,7 @@ class TestDeprecatedFieldWarnings:
         """Known active fields do not trigger deprecation warnings."""
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            ResearchConfig.from_toml_dict(
-                {"deep_research_max_supervision_rounds": 6}
-            )
+            ResearchConfig.from_toml_dict({"deep_research_max_supervision_rounds": 6})
 
         deprecation_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
         assert len(deprecation_warnings) == 0
@@ -466,13 +457,7 @@ class TestCostTierModelDefaults:
         import json
         from pathlib import Path
 
-        limits_path = (
-            Path(__file__).resolve().parents[2]
-            / "src"
-            / "foundry_mcp"
-            / "config"
-            / "model_token_limits.json"
-        )
+        limits_path = Path(__file__).resolve().parents[2] / "src" / "foundry_mcp" / "config" / "model_token_limits.json"
         with open(limits_path) as f:
             token_limits = json.load(f)["limits"]
 

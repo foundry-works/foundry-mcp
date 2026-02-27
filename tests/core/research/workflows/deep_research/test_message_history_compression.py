@@ -35,7 +35,6 @@ from foundry_mcp.core.research.workflows.deep_research.phases.compression import
     _build_structured_metadata_prompt,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -98,13 +97,33 @@ def _make_topic_result(
     )
     if with_message_history:
         tr.message_history = [
-            {"role": "assistant", "content": '{"tool_calls": [{"tool": "web_search", "arguments": {"query": "renewable energy benefits"}}]}'},
-            {"role": "tool", "tool": "web_search", "content": "Found 3 new source(s):\n--- SOURCE 1: Solar Benefits ---\nURL: https://example0.com\nSNIPPET: Solar energy reduces costs..."},
-            {"role": "assistant", "content": '{"tool_calls": [{"tool": "think", "arguments": {"reasoning": "I found sources about solar but need wind energy too"}}]}'},
+            {
+                "role": "assistant",
+                "content": '{"tool_calls": [{"tool": "web_search", "arguments": {"query": "renewable energy benefits"}}]}',
+            },
+            {
+                "role": "tool",
+                "tool": "web_search",
+                "content": "Found 3 new source(s):\n--- SOURCE 1: Solar Benefits ---\nURL: https://example0.com\nSNIPPET: Solar energy reduces costs...",
+            },
+            {
+                "role": "assistant",
+                "content": '{"tool_calls": [{"tool": "think", "arguments": {"reasoning": "I found sources about solar but need wind energy too"}}]}',
+            },
             {"role": "tool", "tool": "think", "content": "Reflection recorded."},
-            {"role": "assistant", "content": '{"tool_calls": [{"tool": "web_search", "arguments": {"query": "wind energy advantages"}}]}'},
-            {"role": "tool", "tool": "web_search", "content": "Found 2 new source(s):\n--- SOURCE 1: Wind Power ---\nURL: https://example1.com\nSNIPPET: Wind farms produce clean electricity..."},
-            {"role": "assistant", "content": '{"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Found comprehensive sources on both solar and wind"}}]}'},
+            {
+                "role": "assistant",
+                "content": '{"tool_calls": [{"tool": "web_search", "arguments": {"query": "wind energy advantages"}}]}',
+            },
+            {
+                "role": "tool",
+                "tool": "web_search",
+                "content": "Found 2 new source(s):\n--- SOURCE 1: Wind Power ---\nURL: https://example1.com\nSNIPPET: Wind farms produce clean electricity...",
+            },
+            {
+                "role": "assistant",
+                "content": '{"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Found comprehensive sources on both solar and wind"}}]}',
+            },
             {"role": "tool", "tool": "research_complete", "content": "Research complete. Findings recorded."},
         ]
     state.topic_research_results.append(tr)
@@ -117,9 +136,7 @@ class StubCompression(CompressionMixin):
     def __init__(self) -> None:
         self.config = MagicMock()
         self.config.default_provider = "test-provider"
-        self.config.resolve_model_for_role = MagicMock(
-            return_value=("test-provider", None)
-        )
+        self.config.resolve_model_for_role = MagicMock(return_value=("test-provider", None))
         self.config.get_phase_fallback_providers = MagicMock(return_value=[])
         self.config.deep_research_max_retries = 1
         self.config.deep_research_retry_delay = 0.1
@@ -255,10 +272,7 @@ class TestBuildMessageHistoryPrompt:
     def test_truncates_oldest_messages_first(self):
         """When over max_content_length, oldest messages are dropped first."""
         # Create messages where each is ~100 chars
-        history = [
-            {"role": "assistant", "content": f"Message number {i} " + "x" * 80}
-            for i in range(20)
-        ]
+        history = [{"role": "assistant", "content": f"Message number {i} " + "x" * 80} for i in range(20)]
         prompt = _build_message_history_prompt(
             query_text="test",
             message_history=history,
@@ -613,10 +627,7 @@ class TestMessageHistoryTruncation:
         state = _make_state()
         tr = _make_topic_result(state, with_message_history=False)
         # Add many small messages (each ~80 chars) that together exceed budget
-        tr.message_history = [
-            {"role": "assistant", "content": f"Message {i}: finding about topic"}
-            for i in range(50)
-        ]
+        tr.message_history = [{"role": "assistant", "content": f"Message {i}: finding about topic"} for i in range(50)]
         stub = StubCompression()
         # Set max content length to allow only ~10-15 messages
         stub.config.deep_research_compression_max_content_length = 1500
@@ -706,9 +717,7 @@ class TestBackwardCompatibility:
         state.topic_research_results.append(tr)
         stub = StubCompression()
 
-        inp, out, success = await stub._compress_single_topic_async(
-            topic_result=tr, state=state, timeout=120.0
-        )
+        inp, out, success = await stub._compress_single_topic_async(topic_result=tr, state=state, timeout=120.0)
         assert success is True
         assert inp == 0
         assert out == 0
@@ -731,9 +740,7 @@ class TestBackwardCompatibility:
             new_callable=AsyncMock,
             return_value=mock_result,
         ):
-            inp, out, success = await stub._compress_single_topic_async(
-                topic_result=tr, state=state, timeout=120.0
-            )
+            inp, out, success = await stub._compress_single_topic_async(topic_result=tr, state=state, timeout=120.0)
 
         assert success is True
         assert tr.compressed_findings == "Compressed: [1] Solar [2] Wind benefits"
@@ -760,9 +767,7 @@ class TestBackwardCompatibility:
             new_callable=AsyncMock,
             return_value=error_result,
         ):
-            inp, out, success = await stub._compress_single_topic_async(
-                topic_result=tr, state=state, timeout=120.0
-            )
+            inp, out, success = await stub._compress_single_topic_async(topic_result=tr, state=state, timeout=120.0)
 
         assert success is False
         assert inp == 0

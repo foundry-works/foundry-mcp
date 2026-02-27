@@ -29,13 +29,13 @@ from foundry_mcp.core.research.models.deep_research import (
 )
 from foundry_mcp.core.research.models.enums import ConfidenceLevel
 from foundry_mcp.core.research.models.sources import SourceType, SubQuery
+from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research._helpers import (
     ClarificationDecision,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._analysis_prompts import (
     AnalysisPromptsMixin,
 )
-from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
     LLMCallResult,
     StructuredLLMCallResult,
@@ -190,26 +190,28 @@ class TestCrossPhaseIntegration:
         # ------------------------------------------------------------------
         state.phase = DeepResearchPhase.BRIEF
 
-        planning_response = json.dumps({
-            "research_brief": "Comparing PostgreSQL and MySQL for OLTP with focus on write performance, cost, and 2024 benchmarks.",
-            "sub_queries": [
-                {
-                    "query": "PostgreSQL OLTP write performance benchmarks 2024",
-                    "rationale": "Latest write-heavy workload benchmarks",
-                    "priority": 1,
-                },
-                {
-                    "query": "MySQL 8.0 OLTP performance comparison",
-                    "rationale": "MySQL-side performance data",
-                    "priority": 1,
-                },
-                {
-                    "query": "PostgreSQL vs MySQL cloud hosting cost 2024",
-                    "rationale": "Cost comparison for managed database services",
-                    "priority": 2,
-                },
-            ],
-        })
+        planning_response = json.dumps(
+            {
+                "research_brief": "Comparing PostgreSQL and MySQL for OLTP with focus on write performance, cost, and 2024 benchmarks.",
+                "sub_queries": [
+                    {
+                        "query": "PostgreSQL OLTP write performance benchmarks 2024",
+                        "rationale": "Latest write-heavy workload benchmarks",
+                        "priority": 1,
+                    },
+                    {
+                        "query": "MySQL 8.0 OLTP performance comparison",
+                        "rationale": "MySQL-side performance data",
+                        "priority": 1,
+                    },
+                    {
+                        "query": "PostgreSQL vs MySQL cloud hosting cost 2024",
+                        "rationale": "Cost comparison for managed database services",
+                        "priority": 2,
+                    },
+                ],
+            }
+        )
 
         planning_llm_result = _make_llm_result(planning_response)
 
@@ -418,12 +420,18 @@ For write-intensive OLTP applications, PostgreSQL offers superior performance at
             "depth": "comprehensive",
         }
 
-        planning_response = json.dumps({
-            "research_brief": "Research on web application caching mechanisms.",
-            "sub_queries": [
-                {"query": "HTTP caching headers and CDN strategies", "rationale": "Core caching mechanism", "priority": 1},
-            ],
-        })
+        planning_response = json.dumps(
+            {
+                "research_brief": "Research on web application caching mechanisms.",
+                "sub_queries": [
+                    {
+                        "query": "HTTP caching headers and CDN strategies",
+                        "rationale": "Core caching mechanism",
+                        "priority": 1,
+                    },
+                ],
+            }
+        )
 
         with (
             patch(
@@ -466,12 +474,14 @@ For write-intensive OLTP applications, PostgreSQL offers superior performance at
         )
         state.clarification_constraints = {}
 
-        planning_response = json.dumps({
-            "research_brief": "Compare the two databases.",
-            "sub_queries": [
-                {"query": "PostgreSQL vs MySQL comparison", "rationale": "Main query", "priority": 1},
-            ],
-        })
+        planning_response = json.dumps(
+            {
+                "research_brief": "Compare the two databases.",
+                "sub_queries": [
+                    {"query": "PostgreSQL vs MySQL comparison", "rationale": "Main query", "priority": 1},
+                ],
+            }
+        )
 
         with (
             patch(
@@ -855,16 +865,18 @@ class TestBriefRefinement:
             "and current market adoption."
         )
         # Mock: the planning LLM returns sub-queries
-        planning_response = json.dumps({
-            "research_brief": "Databases overview",  # Should be ignored
-            "sub_queries": [
-                {
-                    "query": "relational vs document database trade-offs",
-                    "rationale": "Core architectural comparison",
-                    "priority": 1,
-                },
-            ],
-        })
+        planning_response = json.dumps(
+            {
+                "research_brief": "Databases overview",  # Should be ignored
+                "sub_queries": [
+                    {
+                        "query": "relational vs document database trade-offs",
+                        "rationale": "Core architectural comparison",
+                        "priority": 1,
+                    },
+                ],
+            }
+        )
 
         with (
             patch(
@@ -922,21 +934,23 @@ class TestBriefRefinement:
             "including HTTP cache headers, CDN edge caching, and "
             "in-memory stores such as Redis and Memcached."
         )
-        planning_response = json.dumps({
-            "research_brief": "Caching overview",
-            "sub_queries": [
-                {
-                    "query": "HTTP caching headers best practices",
-                    "rationale": "Core mechanism",
-                    "priority": 1,
-                },
-                {
-                    "query": "Redis vs Memcached comparison 2024",
-                    "rationale": "In-memory store trade-offs",
-                    "priority": 2,
-                },
-            ],
-        })
+        planning_response = json.dumps(
+            {
+                "research_brief": "Caching overview",
+                "sub_queries": [
+                    {
+                        "query": "HTTP caching headers best practices",
+                        "rationale": "Core mechanism",
+                        "priority": 1,
+                    },
+                    {
+                        "query": "Redis vs Memcached comparison 2024",
+                        "rationale": "In-memory store trade-offs",
+                        "priority": 2,
+                    },
+                ],
+            }
+        )
 
         with (
             patch(
@@ -996,16 +1010,18 @@ class TestBriefRefinement:
             max_iterations=3,
         )
 
-        planning_response = json.dumps({
-            "research_brief": "React vs Vue comparison",
-            "sub_queries": [
-                {
-                    "query": "React vs Vue performance 2024",
-                    "rationale": "Performance comparison",
-                    "priority": 1,
-                },
-            ],
-        })
+        planning_response = json.dumps(
+            {
+                "research_brief": "React vs Vue comparison",
+                "sub_queries": [
+                    {
+                        "query": "React vs Vue performance 2024",
+                        "rationale": "Performance comparison",
+                        "priority": 1,
+                    },
+                ],
+            }
+        )
 
         # Brief refinement returns a WorkflowResult (error), planning succeeds
         brief_error = WorkflowResult(
@@ -1061,13 +1077,15 @@ class TestPlanningPriorityParsing:
             original_query="test",
             max_sub_queries=5,
         )
-        response = json.dumps({
-            "research_brief": "Brief",
-            "sub_queries": [
-                {"query": "First query", "rationale": "r1", "priority": "high"},
-                {"query": "Second query", "rationale": "r2", "priority": "medium"},
-            ],
-        })
+        response = json.dumps(
+            {
+                "research_brief": "Brief",
+                "sub_queries": [
+                    {"query": "First query", "rationale": "r1", "priority": "high"},
+                    {"query": "Second query", "rationale": "r2", "priority": "medium"},
+                ],
+            }
+        )
         parsed = stub._parse_planning_response(response, state)
         assert parsed["success"] is True
         assert len(parsed["sub_queries"]) == 2
@@ -1083,13 +1101,15 @@ class TestPlanningPriorityParsing:
             original_query="test",
             max_sub_queries=5,
         )
-        response = json.dumps({
-            "research_brief": "Brief",
-            "sub_queries": [
-                {"query": "First", "priority": 3},
-                {"query": "Second", "priority": 1},
-            ],
-        })
+        response = json.dumps(
+            {
+                "research_brief": "Brief",
+                "sub_queries": [
+                    {"query": "First", "priority": 3},
+                    {"query": "Second", "priority": 1},
+                ],
+            }
+        )
         parsed = stub._parse_planning_response(response, state)
         assert parsed["sub_queries"][0]["priority"] == 3
         assert parsed["sub_queries"][1]["priority"] == 1
@@ -1181,7 +1201,9 @@ class TestFullPipelineWithSupervision:
             ),
         ):
             result = await workflow._execute_clarification_async(
-                state=state, provider_id="test-provider", timeout=60.0,
+                state=state,
+                provider_id="test-provider",
+                timeout=60.0,
             )
         assert result.success is True
         assert "verification" in state.clarification_constraints
@@ -1191,13 +1213,15 @@ class TestFullPipelineWithSupervision:
         # ------------------------------------------------------------------
         state.phase = DeepResearchPhase.BRIEF
 
-        planning_response = json.dumps({
-            "research_brief": "Comparing PostgreSQL and MySQL for OLTP.",
-            "sub_queries": [
-                {"query": "PostgreSQL OLTP benchmarks 2024", "rationale": "PG perf", "priority": 1},
-                {"query": "MySQL OLTP benchmarks 2024", "rationale": "MySQL perf", "priority": 1},
-            ],
-        })
+        planning_response = json.dumps(
+            {
+                "research_brief": "Comparing PostgreSQL and MySQL for OLTP.",
+                "sub_queries": [
+                    {"query": "PostgreSQL OLTP benchmarks 2024", "rationale": "PG perf", "priority": 1},
+                    {"query": "MySQL OLTP benchmarks 2024", "rationale": "MySQL perf", "priority": 1},
+                ],
+            }
+        )
 
         with (
             patch(
@@ -1209,7 +1233,9 @@ class TestFullPipelineWithSupervision:
             ),
         ):
             result = await workflow._execute_planning_async(
-                state=state, provider_id="test-provider", timeout=60.0,
+                state=state,
+                provider_id="test-provider",
+                timeout=60.0,
             )
         assert result.success is True
         assert len(state.sub_queries) == 2
@@ -1245,11 +1271,13 @@ class TestFullPipelineWithSupervision:
         state.supervision_messages = []
         state.topic_research_results = []
 
-        delegation_response = json.dumps({
-            "research_complete": True,
-            "directives": [],
-            "rationale": "All aspects well covered with existing sources",
-        })
+        delegation_response = json.dumps(
+            {
+                "research_complete": True,
+                "directives": [],
+                "rationale": "All aspects well covered with existing sources",
+            }
+        )
 
         async def mock_supervision_llm(**kwargs):
             return LLMCallResult(
@@ -1271,7 +1299,9 @@ class TestFullPipelineWithSupervision:
             ),
         ):
             result = await workflow._execute_supervision_async(
-                state=state, provider_id="test-provider", timeout=60.0,
+                state=state,
+                provider_id="test-provider",
+                timeout=60.0,
             )
         assert result.success is True
         # No directives were executed (research was complete)
@@ -1320,7 +1350,9 @@ class TestFullPipelineWithSupervision:
             mock_budget.return_value = mock_allocation
 
             result = await workflow._execute_synthesis_async(
-                state=state, provider_id="test-provider", timeout=120.0,
+                state=state,
+                provider_id="test-provider",
+                timeout=120.0,
             )
 
         assert result.success is True

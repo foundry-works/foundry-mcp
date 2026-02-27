@@ -43,13 +43,12 @@ from foundry_mcp.core.research.workflows.deep_research.phases.compression import
     CompressionMixin,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
-    SynthesisPhaseMixin,
     _FINDINGS_START_MARKERS,
     _MAX_FINDINGS_TRUNCATION_RETRIES,
     _SOURCE_REF_MARKER,
+    SynthesisPhaseMixin,
     _truncate_findings_section,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -95,13 +94,40 @@ def _make_topic_result(
         # Generate enough message history to exceed 1000 chars (truncation minimum)
         tr.message_history = [
             {"role": "assistant", "content": "Search for renewable energy benefits " + "context " * 30},
-            {"role": "tool", "tool": "web_search", "content": "Found 3 sources about solar energy and its benefits to the environment and economy. " * 5},
-            {"role": "assistant", "content": "Good results on solar, now searching for wind energy advantages and applications " + "reasoning " * 20},
-            {"role": "tool", "tool": "web_search", "content": "Found 2 sources about wind power including offshore and onshore installations. " * 5},
-            {"role": "assistant", "content": "I need to verify some contradicting data about energy costs " + "analysis " * 20},
-            {"role": "tool", "tool": "think", "content": "Reflection: Sources agree on environmental benefits but disagree on cost effectiveness. " * 3},
-            {"role": "assistant", "content": "Comprehensive coverage achieved across solar, wind, and cost analysis " + "summary " * 15},
-            {"role": "tool", "tool": "research_complete", "content": "Research complete. Findings recorded with high confidence. " * 3},
+            {
+                "role": "tool",
+                "tool": "web_search",
+                "content": "Found 3 sources about solar energy and its benefits to the environment and economy. " * 5,
+            },
+            {
+                "role": "assistant",
+                "content": "Good results on solar, now searching for wind energy advantages and applications "
+                + "reasoning " * 20,
+            },
+            {
+                "role": "tool",
+                "tool": "web_search",
+                "content": "Found 2 sources about wind power including offshore and onshore installations. " * 5,
+            },
+            {
+                "role": "assistant",
+                "content": "I need to verify some contradicting data about energy costs " + "analysis " * 20,
+            },
+            {
+                "role": "tool",
+                "tool": "think",
+                "content": "Reflection: Sources agree on environmental benefits but disagree on cost effectiveness. "
+                * 3,
+            },
+            {
+                "role": "assistant",
+                "content": "Comprehensive coverage achieved across solar, wind, and cost analysis " + "summary " * 15,
+            },
+            {
+                "role": "tool",
+                "tool": "research_complete",
+                "content": "Research complete. Findings recorded with high confidence. " * 3,
+            },
         ]
     state.topic_research_results.append(tr)
     return tr
@@ -113,9 +139,7 @@ class StubCompression(CompressionMixin):
     def __init__(self) -> None:
         self.config = MagicMock()
         self.config.default_provider = "test-provider"
-        self.config.resolve_model_for_role = MagicMock(
-            return_value=("test-provider", None)
-        )
+        self.config.resolve_model_for_role = MagicMock(return_value=("test-provider", None))
         self.config.get_phase_fallback_providers = MagicMock(return_value=[])
         self.config.deep_research_max_retries = 1
         self.config.deep_research_retry_delay = 0.1
@@ -139,9 +163,7 @@ class StubSynthesis(SynthesisPhaseMixin):
     def __init__(self) -> None:
         self.config = MagicMock()
         self.config.default_provider = "test-provider"
-        self.config.resolve_model_for_role = MagicMock(
-            return_value=("test-provider", None)
-        )
+        self.config.resolve_model_for_role = MagicMock(return_value=("test-provider", None))
         self.config.get_phase_fallback_providers = MagicMock(return_value=[])
         self.config.deep_research_max_retries = 1
         self.config.deep_research_retry_delay = 0.1
@@ -295,10 +317,7 @@ class TestTruncatePromptForRetry:
     def test_progressive_truncation_is_monotonic(self):
         """Each successive attempt should produce a shorter result."""
         prompt = "A" * 10_000
-        lengths = [
-            len(truncate_prompt_for_retry(prompt, attempt=i))
-            for i in range(1, 4)
-        ]
+        lengths = [len(truncate_prompt_for_retry(prompt, attempt=i)) for i in range(1, 4)]
         assert lengths[0] > lengths[1] > lengths[2]
 
 
@@ -528,16 +547,21 @@ class TestSynthesisRetry:
         stub = StubSynthesis()
         state = self._make_synthesis_state()
 
-        with patch(
-            _SYNTHESIS_LLM_PATCH,
-            side_effect=[_make_success_llm_result("# Report\n\nFindings here")],
-        ), patch(
-            _SYNTHESIS_BUDGET_PATCH,
-        ) as mock_budget, patch(
-            _SYNTHESIS_FIT_PATCH,
-        ) as mock_fit, patch(
-            _SYNTHESIS_CITE_PATCH,
-            return_value=("# Report\n\nFindings here", {"citations_processed": 0}),
+        with (
+            patch(
+                _SYNTHESIS_LLM_PATCH,
+                side_effect=[_make_success_llm_result("# Report\n\nFindings here")],
+            ),
+            patch(
+                _SYNTHESIS_BUDGET_PATCH,
+            ) as mock_budget,
+            patch(
+                _SYNTHESIS_FIT_PATCH,
+            ) as mock_fit,
+            patch(
+                _SYNTHESIS_CITE_PATCH,
+                return_value=("# Report\n\nFindings here", {"citations_processed": 0}),
+            ),
         ):
             mock_budget.return_value = MagicMock(
                 items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
@@ -568,16 +592,21 @@ class TestSynthesisRetry:
             captured_prompts.append(kwargs.get("user_prompt", ""))
             return call_results.pop(0)
 
-        with patch(
-            _SYNTHESIS_LLM_PATCH,
-            side_effect=capture_llm_call,
-        ), patch(
-            _SYNTHESIS_BUDGET_PATCH,
-        ) as mock_budget, patch(
-            _SYNTHESIS_FIT_PATCH,
-        ) as mock_fit, patch(
-            _SYNTHESIS_CITE_PATCH,
-            return_value=("# Report\n\nRetried findings", {"citations_processed": 0}),
+        with (
+            patch(
+                _SYNTHESIS_LLM_PATCH,
+                side_effect=capture_llm_call,
+            ),
+            patch(
+                _SYNTHESIS_BUDGET_PATCH,
+            ) as mock_budget,
+            patch(
+                _SYNTHESIS_FIT_PATCH,
+            ) as mock_fit,
+            patch(
+                _SYNTHESIS_CITE_PATCH,
+                return_value=("# Report\n\nRetried findings", {"citations_processed": 0}),
+            ),
         ):
             mock_budget.return_value = MagicMock(
                 items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
@@ -602,16 +631,21 @@ class TestSynthesisRetry:
             _make_success_llm_result("# Report"),
         ]
 
-        with patch(
-            _SYNTHESIS_LLM_PATCH,
-            side_effect=call_results,
-        ), patch(
-            _SYNTHESIS_BUDGET_PATCH,
-        ) as mock_budget, patch(
-            _SYNTHESIS_FIT_PATCH,
-        ) as mock_fit, patch(
-            _SYNTHESIS_CITE_PATCH,
-            return_value=("# Report", {}),
+        with (
+            patch(
+                _SYNTHESIS_LLM_PATCH,
+                side_effect=call_results,
+            ),
+            patch(
+                _SYNTHESIS_BUDGET_PATCH,
+            ) as mock_budget,
+            patch(
+                _SYNTHESIS_FIT_PATCH,
+            ) as mock_fit,
+            patch(
+                _SYNTHESIS_CITE_PATCH,
+                return_value=("# Report", {}),
+            ),
         ):
             mock_budget.return_value = MagicMock(
                 items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
@@ -629,18 +663,20 @@ class TestSynthesisRetry:
         stub = StubSynthesis()
         state = self._make_synthesis_state()
 
-        call_results = [
-            _make_context_window_error_result(phase="synthesis")
-        ] * (MAX_PHASE_TOKEN_RETRIES + 1)
+        call_results = [_make_context_window_error_result(phase="synthesis")] * (MAX_PHASE_TOKEN_RETRIES + 1)
 
-        with patch(
-            _SYNTHESIS_LLM_PATCH,
-            side_effect=call_results,
-        ), patch(
-            _SYNTHESIS_BUDGET_PATCH,
-        ) as mock_budget, patch(
-            _SYNTHESIS_FIT_PATCH,
-        ) as mock_fit:
+        with (
+            patch(
+                _SYNTHESIS_LLM_PATCH,
+                side_effect=call_results,
+            ),
+            patch(
+                _SYNTHESIS_BUDGET_PATCH,
+            ) as mock_budget,
+            patch(
+                _SYNTHESIS_FIT_PATCH,
+            ) as mock_fit,
+        ):
             mock_budget.return_value = MagicMock(
                 items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
             )
@@ -656,18 +692,20 @@ class TestSynthesisRetry:
         stub = StubSynthesis()
         state = self._make_synthesis_state()
 
-        call_results = [
-            _make_context_window_error_result(phase="synthesis")
-        ] * (MAX_PHASE_TOKEN_RETRIES + 1)
+        call_results = [_make_context_window_error_result(phase="synthesis")] * (MAX_PHASE_TOKEN_RETRIES + 1)
 
-        with patch(
-            _SYNTHESIS_LLM_PATCH,
-            side_effect=call_results,
-        ), patch(
-            _SYNTHESIS_BUDGET_PATCH,
-        ) as mock_budget, patch(
-            _SYNTHESIS_FIT_PATCH,
-        ) as mock_fit:
+        with (
+            patch(
+                _SYNTHESIS_LLM_PATCH,
+                side_effect=call_results,
+            ),
+            patch(
+                _SYNTHESIS_BUDGET_PATCH,
+            ) as mock_budget,
+            patch(
+                _SYNTHESIS_FIT_PATCH,
+            ) as mock_fit,
+        ):
             mock_budget.return_value = MagicMock(
                 items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
             )
@@ -691,14 +729,18 @@ class TestSynthesisRetry:
             call_count += 1
             return _make_non_token_error_result()
 
-        with patch(
-            _SYNTHESIS_LLM_PATCH,
-            side_effect=count_calls,
-        ), patch(
-            _SYNTHESIS_BUDGET_PATCH,
-        ) as mock_budget, patch(
-            _SYNTHESIS_FIT_PATCH,
-        ) as mock_fit:
+        with (
+            patch(
+                _SYNTHESIS_LLM_PATCH,
+                side_effect=count_calls,
+            ),
+            patch(
+                _SYNTHESIS_BUDGET_PATCH,
+            ) as mock_budget,
+            patch(
+                _SYNTHESIS_FIT_PATCH,
+            ) as mock_fit,
+        ):
             mock_budget.return_value = MagicMock(
                 items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
             )
@@ -726,16 +768,21 @@ class TestSynthesisRetry:
             captured_system_prompts.append(kwargs.get("system_prompt", ""))
             return call_results.pop(0)
 
-        with patch(
-            _SYNTHESIS_LLM_PATCH,
-            side_effect=capture_system,
-        ), patch(
-            _SYNTHESIS_BUDGET_PATCH,
-        ) as mock_budget, patch(
-            _SYNTHESIS_FIT_PATCH,
-        ) as mock_fit, patch(
-            _SYNTHESIS_CITE_PATCH,
-            return_value=("# Report", {}),
+        with (
+            patch(
+                _SYNTHESIS_LLM_PATCH,
+                side_effect=capture_system,
+            ),
+            patch(
+                _SYNTHESIS_BUDGET_PATCH,
+            ) as mock_budget,
+            patch(
+                _SYNTHESIS_FIT_PATCH,
+            ) as mock_fit,
+            patch(
+                _SYNTHESIS_CITE_PATCH,
+                return_value=("# Report", {}),
+            ),
         ):
             mock_budget.return_value = MagicMock(
                 items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
@@ -1001,16 +1048,21 @@ class TestSynthesisFindingsTruncationRetry:
             captured_prompts.append(kwargs.get("user_prompt", ""))
             return call_results.pop(0)
 
-        with patch(
-            _SYNTHESIS_LLM_PATCH,
-            side_effect=capture_llm_call,
-        ), patch(
-            _SYNTHESIS_BUDGET_PATCH,
-        ) as mock_budget, patch(
-            _SYNTHESIS_FIT_PATCH,
-        ) as mock_fit, patch(
-            _SYNTHESIS_CITE_PATCH,
-            return_value=("# Report\n\nSynthesized after truncation", {}),
+        with (
+            patch(
+                _SYNTHESIS_LLM_PATCH,
+                side_effect=capture_llm_call,
+            ),
+            patch(
+                _SYNTHESIS_BUDGET_PATCH,
+            ) as mock_budget,
+            patch(
+                _SYNTHESIS_FIT_PATCH,
+            ) as mock_fit,
+            patch(
+                _SYNTHESIS_CITE_PATCH,
+                return_value=("# Report\n\nSynthesized after truncation", {}),
+            ),
         ):
             mock_budget.return_value = MagicMock(
                 items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
@@ -1044,16 +1096,21 @@ class TestSynthesisFindingsTruncationRetry:
                 return _make_context_window_error_result(phase="synthesis")
             return _make_success_llm_result("# Report")
 
-        with patch(
-            _SYNTHESIS_LLM_PATCH,
-            side_effect=capture_and_fail,
-        ), patch(
-            _SYNTHESIS_BUDGET_PATCH,
-        ) as mock_budget, patch(
-            _SYNTHESIS_FIT_PATCH,
-        ) as mock_fit, patch(
-            _SYNTHESIS_CITE_PATCH,
-            return_value=("# Report", {}),
+        with (
+            patch(
+                _SYNTHESIS_LLM_PATCH,
+                side_effect=capture_and_fail,
+            ),
+            patch(
+                _SYNTHESIS_BUDGET_PATCH,
+            ) as mock_budget,
+            patch(
+                _SYNTHESIS_FIT_PATCH,
+            ) as mock_fit,
+            patch(
+                _SYNTHESIS_CITE_PATCH,
+                return_value=("# Report", {}),
+            ),
         ):
             mock_budget.return_value = MagicMock(
                 items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
@@ -1085,16 +1142,21 @@ class TestSynthesisFindingsTruncationRetry:
             captured_system.append(kwargs.get("system_prompt", ""))
             return call_results.pop(0)
 
-        with patch(
-            _SYNTHESIS_LLM_PATCH,
-            side_effect=capture,
-        ), patch(
-            _SYNTHESIS_BUDGET_PATCH,
-        ) as mock_budget, patch(
-            _SYNTHESIS_FIT_PATCH,
-        ) as mock_fit, patch(
-            _SYNTHESIS_CITE_PATCH,
-            return_value=("# Report", {}),
+        with (
+            patch(
+                _SYNTHESIS_LLM_PATCH,
+                side_effect=capture,
+            ),
+            patch(
+                _SYNTHESIS_BUDGET_PATCH,
+            ) as mock_budget,
+            patch(
+                _SYNTHESIS_FIT_PATCH,
+            ) as mock_fit,
+            patch(
+                _SYNTHESIS_CITE_PATCH,
+                return_value=("# Report", {}),
+            ),
         ):
             mock_budget.return_value = MagicMock(
                 items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
@@ -1141,16 +1203,21 @@ class TestSynthesisGenericFallback:
             captured_prompts.append(kwargs.get("user_prompt", ""))
             return call_results.pop(0)
 
-        with patch(
-            _SYNTHESIS_LLM_PATCH,
-            side_effect=capture,
-        ), patch(
-            _SYNTHESIS_BUDGET_PATCH,
-        ) as mock_budget, patch(
-            _SYNTHESIS_FIT_PATCH,
-        ) as mock_fit, patch(
-            _SYNTHESIS_CITE_PATCH,
-            return_value=("# Report", {}),
+        with (
+            patch(
+                _SYNTHESIS_LLM_PATCH,
+                side_effect=capture,
+            ),
+            patch(
+                _SYNTHESIS_BUDGET_PATCH,
+            ) as mock_budget,
+            patch(
+                _SYNTHESIS_FIT_PATCH,
+            ) as mock_fit,
+            patch(
+                _SYNTHESIS_CITE_PATCH,
+                return_value=("# Report", {}),
+            ),
         ):
             mock_budget.return_value = MagicMock(
                 items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
@@ -1165,9 +1232,7 @@ class TestSynthesisGenericFallback:
         assert len(captured_prompts[1]) < len(captured_prompts[0])
         # Audit should show generic fallback was used
         truncation_events = [
-            kwargs.get("data", {})
-            for e, kwargs in stub._audit_events
-            if e == "synthesis_findings_truncation"
+            kwargs.get("data", {}) for e, kwargs in stub._audit_events if e == "synthesis_findings_truncation"
         ]
         assert len(truncation_events) == 1
         assert truncation_events[0]["used_generic_fallback"] is True
@@ -1178,7 +1243,9 @@ class TestSynthesisGenericFallback:
 # =============================================================================
 
 
-_SYNTHESIS_TOKEN_LIMITS_PATCH = "foundry_mcp.core.research.workflows.deep_research.phases.synthesis.get_model_token_limits"
+_SYNTHESIS_TOKEN_LIMITS_PATCH = (
+    "foundry_mcp.core.research.workflows.deep_research.phases.synthesis.get_model_token_limits"
+)
 
 
 class TestSynthesisTruncationAudit:
@@ -1207,19 +1274,25 @@ class TestSynthesisTruncationAudit:
         # Use a tiny token limit so max_findings_chars = 2000 * 4 = 8000 < 20000
         tiny_limits = {"tiny-model": 2_000}
 
-        with patch(
-            _SYNTHESIS_LLM_PATCH,
-            side_effect=call_results,
-        ), patch(
-            _SYNTHESIS_BUDGET_PATCH,
-        ) as mock_budget, patch(
-            _SYNTHESIS_FIT_PATCH,
-        ) as mock_fit, patch(
-            _SYNTHESIS_CITE_PATCH,
-            return_value=("# Report", {}),
-        ), patch(
-            _SYNTHESIS_TOKEN_LIMITS_PATCH,
-            return_value=tiny_limits,
+        with (
+            patch(
+                _SYNTHESIS_LLM_PATCH,
+                side_effect=call_results,
+            ),
+            patch(
+                _SYNTHESIS_BUDGET_PATCH,
+            ) as mock_budget,
+            patch(
+                _SYNTHESIS_FIT_PATCH,
+            ) as mock_fit,
+            patch(
+                _SYNTHESIS_CITE_PATCH,
+                return_value=("# Report", {}),
+            ),
+            patch(
+                _SYNTHESIS_TOKEN_LIMITS_PATCH,
+                return_value=tiny_limits,
+            ),
         ):
             mock_budget.return_value = MagicMock(
                 items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
@@ -1230,9 +1303,7 @@ class TestSynthesisTruncationAudit:
 
         # Find the findings truncation audit event
         truncation_events = [
-            kwargs.get("data", {})
-            for e, kwargs in stub._audit_events
-            if e == "synthesis_findings_truncation"
+            kwargs.get("data", {}) for e, kwargs in stub._audit_events if e == "synthesis_findings_truncation"
         ]
         assert len(truncation_events) >= 1
 
@@ -1270,19 +1341,25 @@ class TestSynthesisTruncationAudit:
 
         tiny_limits = {"tiny-model": 2_000}
 
-        with patch(
-            _SYNTHESIS_LLM_PATCH,
-            side_effect=call_results,
-        ), patch(
-            _SYNTHESIS_BUDGET_PATCH,
-        ) as mock_budget, patch(
-            _SYNTHESIS_FIT_PATCH,
-        ) as mock_fit, patch(
-            _SYNTHESIS_CITE_PATCH,
-            return_value=("# Report", {}),
-        ), patch(
-            _SYNTHESIS_TOKEN_LIMITS_PATCH,
-            return_value=tiny_limits,
+        with (
+            patch(
+                _SYNTHESIS_LLM_PATCH,
+                side_effect=call_results,
+            ),
+            patch(
+                _SYNTHESIS_BUDGET_PATCH,
+            ) as mock_budget,
+            patch(
+                _SYNTHESIS_FIT_PATCH,
+            ) as mock_fit,
+            patch(
+                _SYNTHESIS_CITE_PATCH,
+                return_value=("# Report", {}),
+            ),
+            patch(
+                _SYNTHESIS_TOKEN_LIMITS_PATCH,
+                return_value=tiny_limits,
+            ),
         ):
             mock_budget.return_value = MagicMock(
                 items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
@@ -1292,9 +1369,7 @@ class TestSynthesisTruncationAudit:
             await stub._execute_synthesis_async(state, "test-provider", 120.0)
 
         succeeded_events = [
-            kwargs.get("data", {})
-            for e, kwargs in stub._audit_events
-            if e == "synthesis_retry_succeeded"
+            kwargs.get("data", {}) for e, kwargs in stub._audit_events if e == "synthesis_retry_succeeded"
         ]
         assert len(succeeded_events) == 1
         event = succeeded_events[0]
@@ -1310,22 +1385,25 @@ class TestSynthesisTruncationAudit:
 
         large_prompt = _build_synthesis_prompt(findings_content="L" * 20_000)
 
-        call_results = [
-            _make_context_window_error_result(phase="synthesis")
-        ] * (_MAX_FINDINGS_TRUNCATION_RETRIES + 1)
+        call_results = [_make_context_window_error_result(phase="synthesis")] * (_MAX_FINDINGS_TRUNCATION_RETRIES + 1)
 
         tiny_limits = {"tiny-model": 2_000}
 
-        with patch(
-            _SYNTHESIS_LLM_PATCH,
-            side_effect=call_results,
-        ), patch(
-            _SYNTHESIS_BUDGET_PATCH,
-        ) as mock_budget, patch(
-            _SYNTHESIS_FIT_PATCH,
-        ) as mock_fit, patch(
-            _SYNTHESIS_TOKEN_LIMITS_PATCH,
-            return_value=tiny_limits,
+        with (
+            patch(
+                _SYNTHESIS_LLM_PATCH,
+                side_effect=call_results,
+            ),
+            patch(
+                _SYNTHESIS_BUDGET_PATCH,
+            ) as mock_budget,
+            patch(
+                _SYNTHESIS_FIT_PATCH,
+            ) as mock_fit,
+            patch(
+                _SYNTHESIS_TOKEN_LIMITS_PATCH,
+                return_value=tiny_limits,
+            ),
         ):
             mock_budget.return_value = MagicMock(
                 items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
@@ -1337,9 +1415,7 @@ class TestSynthesisTruncationAudit:
         assert result.success is False
 
         exhausted_events = [
-            kwargs.get("data", {})
-            for e, kwargs in stub._audit_events
-            if e == "synthesis_retry_exhausted"
+            kwargs.get("data", {}) for e, kwargs in stub._audit_events if e == "synthesis_retry_exhausted"
         ]
         assert len(exhausted_events) == 1
         event = exhausted_events[0]

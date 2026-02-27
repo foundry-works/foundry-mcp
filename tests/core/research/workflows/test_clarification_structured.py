@@ -26,15 +26,13 @@ from foundry_mcp.core.research.workflows.deep_research._helpers import (
     ClarificationDecision,
     parse_clarification_decision,
 )
-from foundry_mcp.core.research.workflows.deep_research.phases.clarification import (
-    _extract_inferred_constraints,
-)
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
     LLMCallResult,
     StructuredLLMCallResult,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases.clarification import (
     ClarificationPhaseMixin,
+    _extract_inferred_constraints,
     _strict_parse_clarification,
 )
 
@@ -132,22 +130,26 @@ class TestParseClarificationDecision:
     """Tests for the lenient parse_clarification_decision() function."""
 
     def test_valid_json_need_clarification_true(self) -> None:
-        text = json.dumps({
-            "need_clarification": True,
-            "question": "What specific area of AI interests you?",
-            "verification": "User wants to learn about AI in general.",
-        })
+        text = json.dumps(
+            {
+                "need_clarification": True,
+                "question": "What specific area of AI interests you?",
+                "verification": "User wants to learn about AI in general.",
+            }
+        )
         decision = parse_clarification_decision(text)
         assert decision.need_clarification is True
         assert decision.question == "What specific area of AI interests you?"
         assert decision.verification == "User wants to learn about AI in general."
 
     def test_valid_json_need_clarification_false(self) -> None:
-        text = json.dumps({
-            "need_clarification": False,
-            "question": "",
-            "verification": "User wants to compare PostgreSQL vs MySQL for OLTP.",
-        })
+        text = json.dumps(
+            {
+                "need_clarification": False,
+                "question": "",
+                "verification": "User wants to compare PostgreSQL vs MySQL for OLTP.",
+            }
+        )
         decision = parse_clarification_decision(text)
         assert decision.need_clarification is False
         assert decision.question == ""
@@ -208,21 +210,25 @@ class TestParseClarificationDecision:
 
     def test_truthy_values_coerced(self) -> None:
         for val in [True, 1, "yes"]:
-            text = json.dumps({
-                "need_clarification": val,
-                "question": "Q?",
-                "verification": "V",
-            })
+            text = json.dumps(
+                {
+                    "need_clarification": val,
+                    "question": "Q?",
+                    "verification": "V",
+                }
+            )
             decision = parse_clarification_decision(text)
             assert decision.need_clarification is True, f"Failed for {val!r}"
 
     def test_falsy_values_coerced(self) -> None:
         for val in [False, 0, "", None]:
-            text = json.dumps({
-                "need_clarification": val,
-                "question": "",
-                "verification": "V",
-            })
+            text = json.dumps(
+                {
+                    "need_clarification": val,
+                    "question": "",
+                    "verification": "V",
+                }
+            )
             decision = parse_clarification_decision(text)
             assert decision.need_clarification is False, f"Failed for {val!r}"
 
@@ -236,11 +242,13 @@ class TestStrictParseClarification:
     """Tests for _strict_parse_clarification() used by execute_structured_llm_call."""
 
     def test_valid_json_returns_decision(self) -> None:
-        content = json.dumps({
-            "need_clarification": True,
-            "question": "What?",
-            "verification": "Broad query",
-        })
+        content = json.dumps(
+            {
+                "need_clarification": True,
+                "question": "What?",
+                "verification": "Broad query",
+            }
+        )
         decision = _strict_parse_clarification(content)
         assert decision.need_clarification is True
         assert decision.question == "What?"
@@ -389,11 +397,13 @@ class TestStructuredClarificationPhase:
         )
 
         # The LLM response content (used by legacy parser for backward-compat)
-        content = json.dumps({
-            "need_clarification": True,
-            "question": "What specific area of AI?",
-            "verification": "User asking broadly about AI.",
-        })
+        content = json.dumps(
+            {
+                "need_clarification": True,
+                "question": "What specific area of AI?",
+                "verification": "User asking broadly about AI.",
+            }
+        )
 
         call_result = self._make_structured_result(content=content, parsed=decision)
 
@@ -498,8 +508,7 @@ class TestStructuredClarificationPhase:
 
         # Find the verification audit event
         verification_events = [
-            (event, data) for event, data in mixin._audit_events
-            if event == "clarification_verification"
+            (event, data) for event, data in mixin._audit_events if event == "clarification_verification"
         ]
         assert len(verification_events) == 1
         event_data = verification_events[0][1]["data"]
@@ -543,8 +552,7 @@ class TestStructuredClarificationPhase:
             )
 
         verification_events = [
-            (event, data) for event, data in mixin._audit_events
-            if event == "clarification_verification"
+            (event, data) for event, data in mixin._audit_events if event == "clarification_verification"
         ]
         assert len(verification_events) == 0
 
@@ -700,10 +708,7 @@ class TestStructuredClarificationPhase:
                 timeout=60.0,
             )
 
-        result_events = [
-            (event, data) for event, data in mixin._audit_events
-            if event == "clarification_result"
-        ]
+        result_events = [(event, data) for event, data in mixin._audit_events if event == "clarification_result"]
         assert len(result_events) == 1
         event_data = result_events[0][1]["data"]
         assert event_data["need_clarification"] is True
@@ -905,10 +910,7 @@ class TestExecuteStructuredLLMCallRetry:
         bad_result.success = True
 
         # 4 calls: 1 initial + 3 retries
-        call_results = [
-            LLMCallResult(result=bad_result, llm_call_duration_ms=200.0)
-            for _ in range(4)
-        ]
+        call_results = [LLMCallResult(result=bad_result, llm_call_duration_ms=200.0) for _ in range(4)]
 
         def parse_fn(content: str) -> dict:
             raise ValueError("Cannot parse")
@@ -995,10 +997,7 @@ class TestExecuteStructuredLLMCallRetry:
         bad_result.cached_tokens = 0
         bad_result.success = True
 
-        call_results = [
-            LLMCallResult(result=bad_result, llm_call_duration_ms=100.0)
-            for _ in range(4)
-        ]
+        call_results = [LLMCallResult(result=bad_result, llm_call_duration_ms=100.0) for _ in range(4)]
 
         def parse_fn(content: str) -> dict:
             raise ValueError("nope")
@@ -1047,16 +1046,18 @@ class TestExtractInferredConstraints:
 
     def test_empty_constraint_values_filtered(self) -> None:
         """Constraint values that are empty/falsy are filtered out."""
-        content = json.dumps({
-            "need_clarification": True,
-            "question": "What domain?",
-            "inferred_constraints": {
-                "scope": "AI research",
-                "timeframe": "",
-                "domain": None,
-                "depth": "overview",
-            },
-        })
+        content = json.dumps(
+            {
+                "need_clarification": True,
+                "question": "What domain?",
+                "inferred_constraints": {
+                    "scope": "AI research",
+                    "timeframe": "",
+                    "domain": None,
+                    "depth": "overview",
+                },
+            }
+        )
         result = _extract_inferred_constraints(content)
         assert "scope" in result
         assert "depth" in result
@@ -1065,16 +1066,18 @@ class TestExtractInferredConstraints:
 
     def test_non_string_constraint_values_converted(self) -> None:
         """Non-string constraint values (int, float, bool) are converted to string."""
-        content = json.dumps({
-            "need_clarification": True,
-            "question": "Details?",
-            "inferred_constraints": {
-                "depth": "detailed",
-                "max_results": 10,
-                "include_images": True,
-                "score_threshold": 0.8,
-            },
-        })
+        content = json.dumps(
+            {
+                "need_clarification": True,
+                "question": "Details?",
+                "inferred_constraints": {
+                    "depth": "detailed",
+                    "max_results": 10,
+                    "include_images": True,
+                    "score_threshold": 0.8,
+                },
+            }
+        )
         result = _extract_inferred_constraints(content)
         assert result["depth"] == "detailed"
         assert result["max_results"] == "10"
@@ -1083,25 +1086,29 @@ class TestExtractInferredConstraints:
 
     def test_nested_dict_constraint_values_filtered(self) -> None:
         """Constraint values that are dicts/lists are filtered (only scalars kept)."""
-        content = json.dumps({
-            "need_clarification": True,
-            "question": "Scope?",
-            "inferred_constraints": {
-                "scope": "narrow",
-                "nested_object": {"key": "value"},
-                "list_value": [1, 2, 3],
-            },
-        })
+        content = json.dumps(
+            {
+                "need_clarification": True,
+                "question": "Scope?",
+                "inferred_constraints": {
+                    "scope": "narrow",
+                    "nested_object": {"key": "value"},
+                    "list_value": [1, 2, 3],
+                },
+            }
+        )
         result = _extract_inferred_constraints(content)
         assert result == {"scope": "narrow"}
 
     def test_non_dict_constraints_returns_empty(self) -> None:
         """If inferred_constraints is not a dict, return empty dict."""
-        content = json.dumps({
-            "need_clarification": True,
-            "question": "Scope?",
-            "inferred_constraints": ["scope=AI"],
-        })
+        content = json.dumps(
+            {
+                "need_clarification": True,
+                "question": "Scope?",
+                "inferred_constraints": ["scope=AI"],
+            }
+        )
         result = _extract_inferred_constraints(content)
         assert result == {}
 
@@ -1114,11 +1121,13 @@ class TestExtractInferredConstraints:
             "depth": "comprehensive",
             "geographic_focus": "global",
         }
-        content = json.dumps({
-            "need_clarification": True,
-            "question": "Any specifics?",
-            "inferred_constraints": constraints,
-        })
+        content = json.dumps(
+            {
+                "need_clarification": True,
+                "question": "Any specifics?",
+                "inferred_constraints": constraints,
+            }
+        )
         result = _extract_inferred_constraints(content)
         assert result == constraints
 
@@ -1138,11 +1147,13 @@ class TestExtractInferredConstraints:
 
     def test_no_constraints_field_returns_empty(self) -> None:
         """Response without inferred_constraints field returns empty dict."""
-        content = json.dumps({
-            "need_clarification": False,
-            "question": "",
-            "verification": "I understand you want to research AI",
-        })
+        content = json.dumps(
+            {
+                "need_clarification": False,
+                "question": "",
+                "verification": "I understand you want to research AI",
+            }
+        )
         result = _extract_inferred_constraints(content)
         assert result == {}
 

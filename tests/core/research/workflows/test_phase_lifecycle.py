@@ -559,9 +559,7 @@ class TestModelTokenLimitsConfig:
             _load_model_token_limits,
         )
 
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases._lifecycle._config_pkg"
-        ) as mock_pkg:
+        with patch("foundry_mcp.core.research.workflows.deep_research.phases._lifecycle._config_pkg") as mock_pkg:
             mock_pkg.__file__ = str(tmp_path / "__init__.py")
             result = _load_model_token_limits()
 
@@ -575,9 +573,7 @@ class TestModelTokenLimitsConfig:
         )
 
         (tmp_path / "model_token_limits.json").write_text("not valid json")
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases._lifecycle._config_pkg"
-        ) as mock_pkg:
+        with patch("foundry_mcp.core.research.workflows.deep_research.phases._lifecycle._config_pkg") as mock_pkg:
             mock_pkg.__file__ = str(tmp_path / "__init__.py")
             result = _load_model_token_limits()
 
@@ -629,9 +625,7 @@ class TestModelTokenLimitsConfig:
             }
         }
         (tmp_path / "model_token_limits.json").write_text(json.dumps(data))
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases._lifecycle._config_pkg"
-        ) as mock_pkg:
+        with patch("foundry_mcp.core.research.workflows.deep_research.phases._lifecycle._config_pkg") as mock_pkg:
             mock_pkg.__file__ = str(tmp_path / "__init__.py")
             result = _load_model_token_limits()
 
@@ -651,9 +645,7 @@ class TestModelTokenLimitsConfig:
 
         data = {"limits": {"bad-model": 500, "worse-model": 10}}
         (tmp_path / "model_token_limits.json").write_text(json.dumps(data))
-        with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases._lifecycle._config_pkg"
-        ) as mock_pkg:
+        with patch("foundry_mcp.core.research.workflows.deep_research.phases._lifecycle._config_pkg") as mock_pkg:
             mock_pkg.__file__ = str(tmp_path / "__init__.py")
             result = _load_model_token_limits()
 

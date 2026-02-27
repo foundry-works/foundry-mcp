@@ -382,7 +382,7 @@ class TestCancellationRaceConditionFix:
         if state.completed_at is None:
             # This should NOT execute
             state.mark_cancelled(phase_state=f"phase={state.phase.value}, iteration={state.iteration}")
-            assert False, "Should not have called mark_cancelled again"
+            raise AssertionError("Should not have called mark_cancelled again")
 
         # State should be unchanged from inner handler's write
         assert state.completed_at == inner_completed_at
@@ -466,14 +466,16 @@ class TestCancellationRaceConditionFix:
 
         def capture_save(s):
             # Capture a snapshot of key fields at save time
-            saves.append({
-                "iteration": s.iteration,
-                "phase": s.phase.value,
-                "completed_at": s.completed_at,
-                "discarded_iteration": s.metadata.get("discarded_iteration"),
-                "cancellation_state": s.metadata.get("cancellation_state"),
-                "cancelled_phase_state": s.metadata.get("cancelled_phase_state"),
-            })
+            saves.append(
+                {
+                    "iteration": s.iteration,
+                    "phase": s.phase.value,
+                    "completed_at": s.completed_at,
+                    "discarded_iteration": s.metadata.get("discarded_iteration"),
+                    "cancellation_state": s.metadata.get("cancellation_state"),
+                    "cancelled_phase_state": s.metadata.get("cancelled_phase_state"),
+                }
+            )
 
         mock_memory.save_deep_research.side_effect = capture_save
 

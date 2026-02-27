@@ -297,4 +297,3 @@ class AnalysisPhaseMixin(AnalysisPromptsMixin, AnalysisParsingMixin):
                 "parse_method": parsed.get("parse_method"),
             },
         )
-

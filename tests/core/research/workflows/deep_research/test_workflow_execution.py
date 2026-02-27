@@ -15,6 +15,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from tests.core.research.workflows.deep_research.conftest import make_test_state
 
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
@@ -24,8 +25,6 @@ from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research.workflow_execution import (
     WorkflowExecutionMixin,
 )
-from tests.core.research.workflows.deep_research.conftest import make_test_state
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -140,7 +139,10 @@ class TestPhaseSequence:
         state = make_test_state(phase=DeepResearchPhase.BRIEF)
 
         result = await stub._execute_workflow_async(
-            state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
+            state=state,
+            provider_id=None,
+            timeout_per_operation=60.0,
+            max_concurrent=3,
         )
 
         assert result.success is True
@@ -163,7 +165,10 @@ class TestPhaseSequence:
         state = make_test_state(phase=DeepResearchPhase.BRIEF)
 
         result = await stub._execute_workflow_async(
-            state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
+            state=state,
+            provider_id=None,
+            timeout_per_operation=60.0,
+            max_concurrent=3,
         )
 
         assert result.success is True
@@ -187,7 +192,10 @@ class TestPhaseSequence:
         state = make_test_state(phase=DeepResearchPhase.CLARIFICATION)
 
         result = await stub._execute_workflow_async(
-            state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
+            state=state,
+            provider_id=None,
+            timeout_per_operation=60.0,
+            max_concurrent=3,
         )
 
         assert result.success is True
@@ -221,7 +229,10 @@ class TestLegacyGatheringResume:
         state = make_test_state(phase=DeepResearchPhase.GATHERING)
 
         result = await stub._execute_workflow_async(
-            state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
+            state=state,
+            provider_id=None,
+            timeout_per_operation=60.0,
+            max_concurrent=3,
         )
 
         assert result.success is True
@@ -257,7 +268,10 @@ class TestLegacyGatheringResume:
         state = make_test_state(phase=DeepResearchPhase.GATHERING)
 
         await stub._execute_workflow_async(
-            state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
+            state=state,
+            provider_id=None,
+            timeout_per_operation=60.0,
+            max_concurrent=3,
         )
 
         assert state.metadata.get("iteration_in_progress") is not None
@@ -283,7 +297,10 @@ class TestCancellationBetweenPhases:
 
         with pytest.raises(asyncio.CancelledError):
             await stub._execute_workflow_async(
-                state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
+                state=state,
+                provider_id=None,
+                timeout_per_operation=60.0,
+                max_concurrent=3,
             )
 
         assert state.metadata.get("rollback_note") == "partial_iteration_data_retained"
@@ -314,7 +331,10 @@ class TestCancellationBetweenPhases:
 
         with pytest.raises(asyncio.CancelledError):
             await stub._execute_workflow_async(
-                state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
+                state=state,
+                provider_id=None,
+                timeout_per_operation=60.0,
+                max_concurrent=3,
             )
 
         assert state.metadata.get("cancelled") is True
@@ -336,7 +356,10 @@ class TestCancellationBetweenPhases:
 
         with pytest.raises(asyncio.CancelledError):
             await stub._execute_workflow_async(
-                state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
+                state=state,
+                provider_id=None,
+                timeout_per_operation=60.0,
+                max_concurrent=3,
             )
 
         assert state.metadata.get("rollback_note") == "partial_iteration_data_retained"
@@ -355,7 +378,10 @@ class TestPhaseErrorHandling:
         state = make_test_state(phase=DeepResearchPhase.BRIEF)
 
         result = await stub._execute_workflow_async(
-            state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
+            state=state,
+            provider_id=None,
+            timeout_per_operation=60.0,
+            max_concurrent=3,
         )
 
         assert result.success is False
@@ -381,7 +407,10 @@ class TestPhaseErrorHandling:
         state = make_test_state(phase=DeepResearchPhase.SUPERVISION)
 
         result = await stub._execute_workflow_async(
-            state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
+            state=state,
+            provider_id=None,
+            timeout_per_operation=60.0,
+            max_concurrent=3,
         )
 
         assert result.success is False
@@ -400,7 +429,10 @@ class TestPhaseErrorHandling:
         state = make_test_state(phase=DeepResearchPhase.BRIEF)
 
         result = await stub._execute_workflow_async(
-            state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
+            state=state,
+            provider_id=None,
+            timeout_per_operation=60.0,
+            max_concurrent=3,
         )
 
         assert result.success is False
@@ -420,7 +452,10 @@ class TestPhaseErrorHandling:
         state = make_test_state(phase=DeepResearchPhase.SUPERVISION)
 
         result = await stub._execute_workflow_async(
-            state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
+            state=state,
+            provider_id=None,
+            timeout_per_operation=60.0,
+            max_concurrent=3,
         )
 
         # The orchestrator error propagates to the exception handler
@@ -441,7 +476,10 @@ class TestCompletionMetadata:
         state = make_test_state(phase=DeepResearchPhase.BRIEF)
 
         result = await stub._execute_workflow_async(
-            state=state, provider_id="test-provider", timeout_per_operation=60.0, max_concurrent=3,
+            state=state,
+            provider_id="test-provider",
+            timeout_per_operation=60.0,
+            max_concurrent=3,
         )
 
         assert result.success is True
@@ -472,7 +510,10 @@ class TestLegacyPlanningResume:
         state = make_test_state(phase=DeepResearchPhase.PLANNING)
 
         result = await stub._execute_workflow_async(
-            state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
+            state=state,
+            provider_id=None,
+            timeout_per_operation=60.0,
+            max_concurrent=3,
         )
 
         assert result.success is True
@@ -509,7 +550,10 @@ class TestCancelledErrorPropagation:
 
         task = asyncio.create_task(
             stub._execute_workflow_async(
-                state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
+                state=state,
+                provider_id=None,
+                timeout_per_operation=60.0,
+                max_concurrent=3,
             )
         )
 

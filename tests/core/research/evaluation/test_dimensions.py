@@ -16,8 +16,14 @@ class TestDimensionDefinitions:
 
     def test_dimension_names(self):
         expected = {
-            "depth", "source_quality", "analytical_rigor", "completeness",
-            "groundedness", "structure", "practical_value", "balance",
+            "depth",
+            "source_quality",
+            "analytical_rigor",
+            "completeness",
+            "groundedness",
+            "structure",
+            "practical_value",
+            "balance",
         }
         actual = {d.name for d in DIMENSIONS}
         assert actual == expected
@@ -46,7 +52,7 @@ class TestDimensionDefinitions:
         dim = DIMENSIONS[0]
         try:
             dim.name = "modified"  # type: ignore[misc]
-            assert False, "Expected FrozenInstanceError"
+            raise AssertionError("Expected FrozenInstanceError")
         except AttributeError:
             pass  # Expected — frozen dataclass
 

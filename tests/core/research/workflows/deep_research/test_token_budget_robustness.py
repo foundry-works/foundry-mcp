@@ -21,7 +21,6 @@ from foundry_mcp.core.research.workflows.deep_research._token_budget import (
     truncate_to_token_estimate,
 )
 
-
 # =============================================================================
 # 3a: Guard against zero/negative token budgets
 # =============================================================================
@@ -80,6 +79,7 @@ class TestSupplementaryNotesTokenSafetyMargin:
 
     def _make_state(self, *, raw_notes: list[str] | None = None, synthesis_model: str = "test-model"):
         from foundry_mcp.core.research.models.deep_research import DeepResearchState
+
         state = DeepResearchState(
             id="test-supplementary",
             original_query="test query",
@@ -97,7 +97,9 @@ class TestSupplementaryNotesTokenSafetyMargin:
         "foundry_mcp.core.research.workflows.deep_research.phases.synthesis.estimate_token_limit_for_model",
     )
     def test_margin_reduces_effective_context(
-        self, mock_estimate, mock_limits,
+        self,
+        mock_estimate,
+        mock_limits,
     ) -> None:
         """With safety margin, headroom is computed from effective context,
         not raw context. A prompt that fits under raw context but not under
@@ -132,7 +134,9 @@ class TestSupplementaryNotesTokenSafetyMargin:
         "foundry_mcp.core.research.workflows.deep_research.phases.synthesis.estimate_token_limit_for_model",
     )
     def test_zero_margin_uses_full_context(
-        self, mock_estimate, mock_limits,
+        self,
+        mock_estimate,
+        mock_limits,
     ) -> None:
         """With zero safety margin, effective context equals raw context."""
         mock_estimate.return_value = 100_000
@@ -154,7 +158,9 @@ class TestSupplementaryNotesTokenSafetyMargin:
         "foundry_mcp.core.research.workflows.deep_research.phases.synthesis.estimate_token_limit_for_model",
     )
     def test_no_raw_notes_returns_prompt(
-        self, mock_estimate, mock_limits,
+        self,
+        mock_estimate,
+        mock_limits,
     ) -> None:
         """No raw notes → prompt returned unchanged regardless of margin."""
         mock_estimate.return_value = 100_000

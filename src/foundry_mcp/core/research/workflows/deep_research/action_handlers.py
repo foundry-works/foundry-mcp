@@ -60,13 +60,22 @@ class ActionHandlersMixin:
     # Stubs for Pyright — canonical signatures live in phases/_protocols.py
     if TYPE_CHECKING:
 
-        def _write_audit_event(self, state: DeepResearchState | None, event_name: str, *, data: dict[str, Any] | None = ..., level: str = ...) -> None: ...
+        def _write_audit_event(
+            self,
+            state: DeepResearchState | None,
+            event_name: str,
+            *,
+            data: dict[str, Any] | None = ...,
+            level: str = ...,
+        ) -> None: ...
         def _persist_state_if_needed(self, state: DeepResearchState) -> bool: ...
         def _flush_state(self, state: DeepResearchState) -> None: ...
         def get_background_task(self, research_id: str) -> Any: ...
         def _start_background_task(self, **kwargs: Any) -> Any: ...
         def _cleanup_completed_task(self, research_id: str) -> None: ...
-        async def _execute_workflow_async(self, state: DeepResearchState, provider_id: str | None, timeout_per_operation: float, max_concurrent: int) -> Any: ...
+        async def _execute_workflow_async(
+            self, state: DeepResearchState, provider_id: str | None, timeout_per_operation: float, max_concurrent: int
+        ) -> Any: ...
 
     def _start_research(
         self,
@@ -95,7 +104,9 @@ class ActionHandlersMixin:
         if len(query) > MAX_PROMPT_LENGTH:
             violations.append(f"query length {len(query)} exceeds maximum {MAX_PROMPT_LENGTH} characters")
         if system_prompt and len(system_prompt) > MAX_PROMPT_LENGTH:
-            violations.append(f"system_prompt length {len(system_prompt)} exceeds maximum {MAX_PROMPT_LENGTH} characters")
+            violations.append(
+                f"system_prompt length {len(system_prompt)} exceeds maximum {MAX_PROMPT_LENGTH} characters"
+            )
         if max_iterations > MAX_ITERATIONS:
             violations.append(f"max_iterations {max_iterations} exceeds maximum {MAX_ITERATIONS}")
         if max_sub_queries > MAX_SUB_QUERIES:

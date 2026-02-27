@@ -27,7 +27,6 @@ from foundry_mcp.core.research.models.sources import (
     SubQuery,
 )
 
-
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -302,7 +301,8 @@ class TestMultiTopicAgentConcurrency:
                     if url not in seen_urls:
                         seen_urls.add(url)
                         source = _make_source(
-                            f"src-{topic_idx}-{i}", url,
+                            f"src-{topic_idx}-{i}",
+                            url,
                         )
                         state.append_source(source)
                         added += 1

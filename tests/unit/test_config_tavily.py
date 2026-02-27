@@ -90,7 +90,6 @@ class TestTavilyExtractConfigParsing:
         assert config.tavily_extract_include_images is True
 
 
-
 class TestTavilyConfigDefaults:
     """Tests for Tavily configuration default values."""
 
@@ -138,7 +137,6 @@ class TestTavilyConfigDefaults:
         """Test default tavily_extract_include_images is False."""
         config = ResearchConfig()
         assert config.tavily_extract_include_images is False
-
 
 
 class TestTavilyConfigValidation:

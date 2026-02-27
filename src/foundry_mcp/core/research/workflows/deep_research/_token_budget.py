@@ -76,8 +76,7 @@ def truncate_to_token_estimate(text: str, max_tokens: int) -> str:
     """
     if max_tokens <= 0:
         logger.warning(
-            "truncate_to_token_estimate called with max_tokens=%d; "
-            "returning full text (budget exhausted upstream)",
+            "truncate_to_token_estimate called with max_tokens=%d; returning full text (budget exhausted upstream)",
             max_tokens,
         )
         return text
@@ -187,9 +186,7 @@ def structured_truncate_blocks(prompt: str, max_tokens: int) -> str:
         truncatable = []
         for i, (header, content) in enumerate(sections):
             header_lower = header.lower()
-            is_protected = any(
-                kw in header_lower for kw in _PROTECTED_SECTION_KEYWORDS
-            )
+            is_protected = any(kw in header_lower for kw in _PROTECTED_SECTION_KEYWORDS)
             if not is_protected and len(content) > 100:
                 truncatable.append((i, len(content)))
 

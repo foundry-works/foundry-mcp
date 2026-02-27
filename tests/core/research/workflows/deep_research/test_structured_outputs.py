@@ -25,7 +25,6 @@ from foundry_mcp.core.research.models.deep_research import (
     parse_reflection_decision,
 )
 
-
 # ===========================================================================
 # 4.1 Schema validation tests
 # ===========================================================================
@@ -81,9 +80,7 @@ class TestDelegationResponseSchema:
 
     def test_validator_forces_complete_when_no_directives(self):
         """Validator forces research_complete=True when directives empty."""
-        resp = DelegationResponse(
-            research_complete=False, directives=[], rationale="test"
-        )
+        resp = DelegationResponse(research_complete=False, directives=[], rationale="test")
         assert resp.research_complete is True
 
     def test_validator_does_not_override_when_directives_present(self):
@@ -120,22 +117,26 @@ class TestReflectionDecisionSchema:
 
     def test_urls_coercion_from_none(self):
         """urls_to_extract accepts None and converts to empty list."""
-        resp = ReflectionDecision.model_validate({
-            "continue_searching": False,
-            "urls_to_extract": None,
-        })
+        resp = ReflectionDecision.model_validate(
+            {
+                "continue_searching": False,
+                "urls_to_extract": None,
+            }
+        )
         assert resp.urls_to_extract == []
 
     def test_urls_coercion_filters_invalid(self):
         """urls_to_extract filters non-HTTP strings."""
-        resp = ReflectionDecision.model_validate({
-            "urls_to_extract": [
-                "https://example.com/good",
-                "not-a-url",
-                "http://valid.org",
-                123,  # non-string
-            ],
-        })
+        resp = ReflectionDecision.model_validate(
+            {
+                "urls_to_extract": [
+                    "https://example.com/good",
+                    "not-a-url",
+                    "http://valid.org",
+                    123,  # non-string
+                ],
+            }
+        )
         assert resp.urls_to_extract == [
             "https://example.com/good",
             "http://valid.org",
@@ -209,18 +210,20 @@ class TestParseDelegationResponse:
     """Tests for parse_delegation_response() parse function."""
 
     def test_valid_json(self):
-        content = json.dumps({
-            "research_complete": False,
-            "directives": [
-                {
-                    "research_topic": "Investigate topic A",
-                    "perspective": "technical",
-                    "evidence_needed": "benchmarks",
-                    "priority": 1,
-                },
-            ],
-            "rationale": "Gap in coverage",
-        })
+        content = json.dumps(
+            {
+                "research_complete": False,
+                "directives": [
+                    {
+                        "research_topic": "Investigate topic A",
+                        "perspective": "technical",
+                        "evidence_needed": "benchmarks",
+                        "priority": 1,
+                    },
+                ],
+                "rationale": "Gap in coverage",
+            }
+        )
         resp = parse_delegation_response(content)
         assert isinstance(resp, DelegationResponse)
         assert resp.research_complete is False
@@ -255,23 +258,27 @@ class TestParseDelegationResponse:
             parse_delegation_response('{"research_complete": true, broken}')
 
     def test_research_complete_with_empty_directives(self):
-        content = json.dumps({
-            "research_complete": True,
-            "directives": [],
-            "rationale": "All covered",
-        })
+        content = json.dumps(
+            {
+                "research_complete": True,
+                "directives": [],
+                "rationale": "All covered",
+            }
+        )
         resp = parse_delegation_response(content)
         assert resp.research_complete is True
         assert resp.directives == []
 
     def test_directive_priority_validation(self):
         """Priority values are validated by Pydantic (1-3 range)."""
-        content = json.dumps({
-            "directives": [
-                {"research_topic": "Topic", "priority": 1},
-            ],
-            "rationale": "test",
-        })
+        content = json.dumps(
+            {
+                "directives": [
+                    {"research_topic": "Topic", "priority": 1},
+                ],
+                "rationale": "test",
+            }
+        )
         resp = parse_delegation_response(content)
         assert resp.directives[0].priority == 1
 
@@ -285,13 +292,15 @@ class TestParseReflectionDecision:
     """Tests for parse_reflection_decision() parse function."""
 
     def test_valid_json(self):
-        content = json.dumps({
-            "continue_searching": True,
-            "research_complete": False,
-            "refined_query": "more specific search",
-            "urls_to_extract": ["https://example.com"],
-            "rationale": "Need more sources",
-        })
+        content = json.dumps(
+            {
+                "continue_searching": True,
+                "research_complete": False,
+                "refined_query": "more specific search",
+                "urls_to_extract": ["https://example.com"],
+                "rationale": "Need more sources",
+            }
+        )
         resp = parse_reflection_decision(content)
         assert isinstance(resp, ReflectionDecision)
         assert resp.continue_searching is True
@@ -299,21 +308,25 @@ class TestParseReflectionDecision:
         assert resp.urls_to_extract == ["https://example.com"]
 
     def test_research_complete(self):
-        content = json.dumps({
-            "continue_searching": False,
-            "research_complete": True,
-            "rationale": "Sufficient coverage",
-        })
+        content = json.dumps(
+            {
+                "continue_searching": False,
+                "research_complete": True,
+                "rationale": "Sufficient coverage",
+            }
+        )
         resp = parse_reflection_decision(content)
         assert resp.research_complete is True
         assert resp.continue_searching is False
 
     def test_null_urls_handled(self):
-        content = json.dumps({
-            "continue_searching": False,
-            "urls_to_extract": None,
-            "rationale": "Done",
-        })
+        content = json.dumps(
+            {
+                "continue_searching": False,
+                "urls_to_extract": None,
+                "rationale": "Done",
+            }
+        )
         resp = parse_reflection_decision(content)
         assert resp.urls_to_extract == []
 
@@ -327,14 +340,16 @@ class TestParseReflectionDecision:
         assert resp.continue_searching is False
 
     def test_urls_filtered_to_http(self):
-        content = json.dumps({
-            "urls_to_extract": [
-                "https://good.com",
-                "ftp://bad.com",
-                "not-url",
-            ],
-            "rationale": "test",
-        })
+        content = json.dumps(
+            {
+                "urls_to_extract": [
+                    "https://good.com",
+                    "ftp://bad.com",
+                    "not-url",
+                ],
+                "rationale": "test",
+            }
+        )
         resp = parse_reflection_decision(content)
         assert resp.urls_to_extract == ["https://good.com"]
 
@@ -348,11 +363,13 @@ class TestParseBriefOutput:
     """Tests for parse_brief_output() parse function."""
 
     def test_valid_json(self):
-        content = json.dumps({
-            "research_brief": "A detailed brief about AI safety.",
-            "scope_boundaries": "Focus on transformers only",
-            "source_preferences": "Peer-reviewed papers",
-        })
+        content = json.dumps(
+            {
+                "research_brief": "A detailed brief about AI safety.",
+                "scope_boundaries": "Focus on transformers only",
+                "source_preferences": "Peer-reviewed papers",
+            }
+        )
         resp = parse_brief_output(content)
         assert isinstance(resp, ResearchBriefOutput)
         assert resp.research_brief == "A detailed brief about AI safety."
@@ -379,9 +396,7 @@ class TestParseBriefOutput:
             parse_brief_output("   \n  ")
 
     def test_json_in_code_block(self):
-        content = (
-            '```json\n{"research_brief": "Brief in code block."}\n```'
-        )
+        content = '```json\n{"research_brief": "Brief in code block."}\n```'
         resp = parse_brief_output(content)
         assert resp.research_brief == "Brief in code block."
 
@@ -404,29 +419,35 @@ class TestSchemaValidationEdgeCases:
     def test_delegation_invalid_priority_rejected(self):
         """Priority outside 1-3 range is rejected by Pydantic."""
         with pytest.raises(Exception):
-            DelegationResponse.model_validate({
-                "directives": [
-                    {"research_topic": "Topic", "priority": 10},
-                ],
-                "rationale": "test",
-            })
+            DelegationResponse.model_validate(
+                {
+                    "directives": [
+                        {"research_topic": "Topic", "priority": 10},
+                    ],
+                    "rationale": "test",
+                }
+            )
 
     def test_reflection_extra_fields_ignored(self):
         """Extra fields in JSON are handled gracefully."""
-        content = json.dumps({
-            "continue_searching": True,
-            "rationale": "test",
-            "unknown_field": "should be ignored",
-        })
+        content = json.dumps(
+            {
+                "continue_searching": True,
+                "rationale": "test",
+                "unknown_field": "should be ignored",
+            }
+        )
         # Should not raise — Pydantic ignores extra by default
         resp = parse_reflection_decision(content)
         assert resp.continue_searching is True
 
     def test_delegation_empty_topic_allowed_by_schema(self):
         """Empty research_topic passes schema but filtered by _apply_directive_caps."""
-        resp = DelegationResponse.model_validate({
-            "directives": [{"research_topic": ""}],
-            "rationale": "test",
-        })
+        resp = DelegationResponse.model_validate(
+            {
+                "directives": [{"research_topic": ""}],
+                "rationale": "test",
+            }
+        )
         assert len(resp.directives) == 1
         assert resp.directives[0].research_topic == ""

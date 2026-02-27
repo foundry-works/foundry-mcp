@@ -128,7 +128,14 @@ class ClarificationPhaseMixin:
     # Stubs for Pyright — canonical signatures live in _protocols.py
     if TYPE_CHECKING:
 
-        def _write_audit_event(self, state: DeepResearchState | None, event_name: str, *, data: dict[str, Any] | None = ..., level: str = ...) -> None: ...
+        def _write_audit_event(
+            self,
+            state: DeepResearchState | None,
+            event_name: str,
+            *,
+            data: dict[str, Any] | None = ...,
+            level: str = ...,
+        ) -> None: ...
         def _check_cancellation(self, state: DeepResearchState) -> None: ...
 
     async def _execute_clarification_async(
@@ -207,9 +214,7 @@ class ClarificationPhaseMixin:
         if decision.need_clarification:
             # Store question for transparency; infer constraints from existing
             # parsing for backward compatibility
-            state.metadata["clarification_questions"] = (
-                [decision.question] if decision.question else []
-            )
+            state.metadata["clarification_questions"] = [decision.question] if decision.question else []
             # Extract inferred_constraints (if present) for the planning phase
             state.clarification_constraints = _extract_inferred_constraints(result.content)
             logger.info(
@@ -311,4 +316,3 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             prompt += f"\n\nAdditional context provided by user: {sanitize_external_content(state.system_prompt)}"
 
         return prompt
-

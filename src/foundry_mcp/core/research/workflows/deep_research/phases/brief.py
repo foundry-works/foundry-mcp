@@ -56,7 +56,9 @@ class BriefPhaseMixin:
     if TYPE_CHECKING:
         from foundry_mcp.core.research.models.deep_research import DeepResearchState as _S
 
-        def _write_audit_event(self, state: _S | None, event_name: str, *, data: dict[str, Any] | None = ..., level: str = ...) -> None: ...
+        def _write_audit_event(
+            self, state: _S | None, event_name: str, *, data: dict[str, Any] | None = ..., level: str = ...
+        ) -> None: ...
         def _check_cancellation(self, state: _S) -> None: ...
 
     async def _execute_brief_async(
@@ -120,8 +122,7 @@ class BriefPhaseMixin:
         if isinstance(call_result, WorkflowResult):
             # Brief generation failed — non-fatal, proceed with original query
             logger.warning(
-                "Brief generation LLM call failed for research %s, "
-                "proceeding with original query: %s",
+                "Brief generation LLM call failed for research %s, proceeding with original query: %s",
                 state.id,
                 call_result.error,
             )
@@ -165,8 +166,7 @@ class BriefPhaseMixin:
             )
         else:
             logger.warning(
-                "Brief generation returned empty content for research %s, "
-                "proceeding with original query",
+                "Brief generation returned empty content for research %s, proceeding with original query",
                 state.id,
             )
 
@@ -276,20 +276,14 @@ class BriefPhaseMixin:
         ]
 
         if state.system_prompt:
-            parts.append(
-                f"\nAdditional context provided by the user:\n{ctx['system_prompt']}"
-            )
+            parts.append(f"\nAdditional context provided by the user:\n{ctx['system_prompt']}")
 
         if state.clarification_constraints:
-            parts.append(
-                "\nClarification constraints (already confirmed with the user):"
-            )
+            parts.append("\nClarification constraints (already confirmed with the user):")
             for key, value in state.clarification_constraints.items():
                 parts.append(f"- {sanitize_external_content(key)}: {sanitize_external_content(value)}")
 
         # Temporal context helps the brief scope time-sensitive research
-        parts.append(
-            f"\nCurrent date: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
-        )
+        parts.append(f"\nCurrent date: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}")
 
         return "\n".join(parts)

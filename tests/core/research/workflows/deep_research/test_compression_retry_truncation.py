@@ -42,7 +42,6 @@ from foundry_mcp.core.research.workflows.deep_research.phases.compression import
     truncate_message_history_for_retry,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -107,36 +106,48 @@ def _make_topic_result_with_history(
 
     # Interleave search and think pairs
     for i in range(num_search_pairs):
-        history.append({
-            "role": "assistant",
-            "content": f'{{"tool_calls": [{{"tool": "web_search", "arguments": {{"query": "search {i}"}}}}]}}',
-        })
-        history.append({
-            "role": "tool",
-            "tool": "web_search",
-            "content": f"Found results for search {i}",
-        })
-        if i < num_think_pairs:
-            history.append({
+        history.append(
+            {
                 "role": "assistant",
-                "content": f'{{"tool_calls": [{{"tool": "think", "arguments": {{"reasoning": "thinking about {i}"}}}}]}}',
-            })
-            history.append({
+                "content": f'{{"tool_calls": [{{"tool": "web_search", "arguments": {{"query": "search {i}"}}}}]}}',
+            }
+        )
+        history.append(
+            {
                 "role": "tool",
-                "tool": "think",
-                "content": f"Reflection {i} recorded.",
-            })
+                "tool": "web_search",
+                "content": f"Found results for search {i}",
+            }
+        )
+        if i < num_think_pairs:
+            history.append(
+                {
+                    "role": "assistant",
+                    "content": f'{{"tool_calls": [{{"tool": "think", "arguments": {{"reasoning": "thinking about {i}"}}}}]}}',
+                }
+            )
+            history.append(
+                {
+                    "role": "tool",
+                    "tool": "think",
+                    "content": f"Reflection {i} recorded.",
+                }
+            )
 
     if include_research_complete:
-        history.append({
-            "role": "assistant",
-            "content": '{"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]}',
-        })
-        history.append({
-            "role": "tool",
-            "tool": "research_complete",
-            "content": "Research complete.",
-        })
+        history.append(
+            {
+                "role": "assistant",
+                "content": '{"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]}',
+            }
+        )
+        history.append(
+            {
+                "role": "tool",
+                "tool": "research_complete",
+                "content": "Research complete.",
+            }
+        )
 
     tr.message_history = history
     state.topic_research_results.append(tr)
@@ -149,9 +160,7 @@ class StubCompression(CompressionMixin):
     def __init__(self) -> None:
         self.config = MagicMock()
         self.config.default_provider = "test-provider"
-        self.config.resolve_model_for_role = MagicMock(
-            return_value=("test-provider", None)
-        )
+        self.config.resolve_model_for_role = MagicMock(return_value=("test-provider", None))
         self.config.get_phase_fallback_providers = MagicMock(return_value=[])
         self.config.deep_research_max_retries = 1
         self.config.deep_research_retry_delay = 0.1
@@ -448,9 +457,7 @@ class TestCompressionRetryWithMessageBoundary:
             new_callable=AsyncMock,
             return_value=mock_result,
         ):
-            inp, out, success = await stub._compress_single_topic_async(
-                tr, state, 120.0
-            )
+            inp, out, success = await stub._compress_single_topic_async(tr, state, 120.0)
 
         assert success is True
         assert tr.compression_retry_count == 0
@@ -462,7 +469,9 @@ class TestCompressionRetryWithMessageBoundary:
         """On context-window error with message_history, uses message-boundary truncation."""
         state = _make_state()
         tr = _make_topic_result_with_history(
-            state, num_search_pairs=5, num_think_pairs=3,
+            state,
+            num_search_pairs=5,
+            num_think_pairs=3,
         )
         stub = StubCompression()
 
@@ -494,9 +503,7 @@ class TestCompressionRetryWithMessageBoundary:
             "foundry_mcp.core.research.workflows.deep_research.phases._lifecycle.execute_llm_call",
             side_effect=mock_execute_llm_call,
         ):
-            inp, out, success = await stub._compress_single_topic_async(
-                tr, state, 120.0
-            )
+            inp, out, success = await stub._compress_single_topic_async(tr, state, 120.0)
 
         assert success is True
         assert tr.compression_retry_count == 1
@@ -510,7 +517,9 @@ class TestCompressionRetryWithMessageBoundary:
         """After retry truncation, the prompt still contains the most recent messages."""
         state = _make_state()
         tr = _make_topic_result_with_history(
-            state, num_search_pairs=5, num_think_pairs=3,
+            state,
+            num_search_pairs=5,
+            num_think_pairs=3,
         )
         stub = StubCompression()
 
@@ -524,7 +533,9 @@ class TestCompressionRetryWithMessageBoundary:
 
             if call_count <= 2:
                 return WorkflowResult(
-                    success=False, content="", error="overflow",
+                    success=False,
+                    content="",
+                    error="overflow",
                     metadata={"error_type": "context_window_exceeded"},
                 )
             result = MagicMock()
@@ -553,7 +564,9 @@ class TestCompressionRetryWithMessageBoundary:
 
         async def always_fail(**kwargs: Any) -> Any:
             return WorkflowResult(
-                success=False, content="", error="overflow",
+                success=False,
+                content="",
+                error="overflow",
                 metadata={"error_type": "context_window_exceeded"},
             )
 
@@ -561,9 +574,7 @@ class TestCompressionRetryWithMessageBoundary:
             "foundry_mcp.core.research.workflows.deep_research.phases._lifecycle.execute_llm_call",
             side_effect=always_fail,
         ):
-            inp, out, success = await stub._compress_single_topic_async(
-                tr, state, 120.0
-            )
+            inp, out, success = await stub._compress_single_topic_async(tr, state, 120.0)
 
         assert success is False
         assert tr.compression_retry_count == 3  # MAX_PHASE_TOKEN_RETRIES
@@ -594,7 +605,9 @@ class TestCompressionRetryWithMessageBoundary:
             call_count += 1
             if call_count == 1:
                 return WorkflowResult(
-                    success=False, content="", error="overflow",
+                    success=False,
+                    content="",
+                    error="overflow",
                     metadata={"error_type": "context_window_exceeded"},
                 )
             result = MagicMock()
@@ -608,9 +621,7 @@ class TestCompressionRetryWithMessageBoundary:
             "foundry_mcp.core.research.workflows.deep_research.phases._lifecycle.execute_llm_call",
             side_effect=mock_execute,
         ):
-            inp, out, success = await stub._compress_single_topic_async(
-                tr, state, 120.0
-            )
+            inp, out, success = await stub._compress_single_topic_async(tr, state, 120.0)
 
         assert success is True
         # Without message_history, messages_dropped stays 0
@@ -633,7 +644,9 @@ class TestCompressionRetryWithMessageBoundary:
             call_count += 1
             if call_count == 1:
                 return WorkflowResult(
-                    success=False, content="", error="overflow",
+                    success=False,
+                    content="",
+                    error="overflow",
                     metadata={"error_type": "context_window_exceeded"},
                 )
             result = MagicMock()
@@ -650,10 +663,7 @@ class TestCompressionRetryWithMessageBoundary:
             await stub._compress_single_topic_async(tr, state, 120.0)
 
         # Check audit events
-        retry_events = [
-            (evt, data) for evt, data in stub._audit_events
-            if evt == "compression_retry_succeeded"
-        ]
+        retry_events = [(evt, data) for evt, data in stub._audit_events if evt == "compression_retry_succeeded"]
         assert len(retry_events) == 1
         event_data = retry_events[0][1]["data"]
         assert "messages_dropped" in event_data
@@ -860,9 +870,7 @@ class TestCompressionTokenDoubleCountingFix:
 
         mock_workflow = MagicMock()
         mock_workflow.config = MagicMock()
-        mock_workflow.config.resolve_model_for_role = MagicMock(
-            return_value=(None, None)
-        )
+        mock_workflow.config.resolve_model_for_role = MagicMock(return_value=(None, None))
         mock_workflow.config.get_phase_fallback_providers = MagicMock(return_value=[])
         mock_workflow.config.deep_research_max_retries = 0
         mock_workflow.config.deep_research_retry_delay = 0.1
@@ -883,9 +891,7 @@ class TestCompressionTokenDoubleCountingFix:
             timeout=30.0,
             skip_token_tracking=True,
         )
-        assert state.total_tokens_used == 0, (
-            "skip_token_tracking=True should prevent token addition"
-        )
+        assert state.total_tokens_used == 0, "skip_token_tracking=True should prevent token addition"
 
         # With skip_token_tracking=False (default): tokens SHOULD be added
         await execute_llm_call(
@@ -900,9 +906,7 @@ class TestCompressionTokenDoubleCountingFix:
             timeout=30.0,
             skip_token_tracking=False,
         )
-        assert state.total_tokens_used == 500, (
-            "skip_token_tracking=False should add tokens as before"
-        )
+        assert state.total_tokens_used == 500, "skip_token_tracking=False should add tokens as before"
 
 
 # =============================================================================
@@ -936,9 +940,7 @@ class TestCompressionEmptyResultLogging:
             input_tokens=30,
             output_tokens=20,
         )
-        mock_llm = AsyncMock(
-            return_value=LLMCallResult(result=empty_result, llm_call_duration_ms=10.0)
-        )
+        mock_llm = AsyncMock(return_value=LLMCallResult(result=empty_result, llm_call_duration_ms=10.0))
 
         with (
             patch(
@@ -947,7 +949,9 @@ class TestCompressionEmptyResultLogging:
             ),
             pytest.raises(Exception, match=".*") if False else _noop_ctx(),
         ):
-            with _capture_logs("foundry_mcp.core.research.workflows.deep_research.phases.compression", logging.WARNING) as log_records:
+            with _capture_logs(
+                "foundry_mcp.core.research.workflows.deep_research.phases.compression", logging.WARNING
+            ) as log_records:
                 inp, out, ok = await stub._compress_single_topic_async(
                     topic_result=tr,
                     state=state,
@@ -966,9 +970,7 @@ class TestCompressionEmptyResultLogging:
 
         # Verify audit event was written
         audit_events = [e for e, _ in stub._audit_events if e == "compression_empty_result"]
-        assert len(audit_events) == 1, (
-            f"Expected 1 compression_empty_result audit event, got {len(audit_events)}"
-        )
+        assert len(audit_events) == 1, f"Expected 1 compression_empty_result audit event, got {len(audit_events)}"
 
     @pytest.mark.asyncio
     async def test_failed_result_logs_warning_and_audit_event(self):
@@ -997,7 +999,9 @@ class TestCompressionEmptyResultLogging:
             "foundry_mcp.core.research.workflows.deep_research.phases._lifecycle.execute_llm_call",
             mock_llm,
         ):
-            with _capture_logs("foundry_mcp.core.research.workflows.deep_research.phases.compression", logging.WARNING) as log_records:
+            with _capture_logs(
+                "foundry_mcp.core.research.workflows.deep_research.phases.compression", logging.WARNING
+            ) as log_records:
                 inp, out, ok = await stub._compress_single_topic_async(
                     topic_result=tr,
                     state=state,
