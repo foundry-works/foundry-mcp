@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0b1] - 2026-02-27
+
+### Added
+
+- **Supervision phase**: New iterative supervisor that assesses topic coverage across research dimensions, issues targeted research directives to fill gaps, and drives convergence before synthesis. Includes coverage scoring, delegation scaling heuristics, and full audit trail integration.
+- **Research brief generation**: Dedicated `BRIEF` phase produces domain-specific guidance and source recommendations for topic researchers, improving research focus and quality.
+- **Inline compression pipeline**: Per-topic and cross-phase compression to manage token budgets within context windows. Includes message-boundary-aware truncation, retry logic, and incremental compression strategies.
+- **Structured clarification gate**: Schema-validated clarification step with forced-choice options before research begins, replacing free-form clarification.
+- **Research evaluation framework**: Multi-dimensional scoring system (depth, breadth, practical value, balance) for assessing research output quality.
+- **Token budget management**: Centralized budget tracking with cost-tiered model defaults and progressive token-limit recovery across all LLM call sites.
+- **Novelty-tagged search results**: Search results are tagged with novelty scores to inform researcher stop decisions and reduce redundant queries.
+- **Supervisor think-tool deliberation**: Supervisor uses think-tool for structured self-critique at coverage assessment boundaries.
+- **Researcher forced reflection**: Topic researchers use think-tool for mandatory reflection between search iterations.
+- **Content deduplication module** (`_content_dedup.py`): Centralized dedup logic extracted from scattered inline implementations.
+- **Model resolution module** (`_model_resolution.py`): Centralized cost-tiered model selection for summarization, compression, and evaluation tasks.
+- **Token budget module** (`_token_budget.py`): Dedicated token budget tracking and allocation logic.
+- **Injection protection module** (`_injection_protection.py`): Consolidated prompt injection sanitization for all external content surfaces.
+- **JSON parsing module** (`_json_parsing.py`): Robust JSON extraction with retry and fallback for LLM responses.
+- **Protocol-based type safety** (`_protocols.py`): Protocol classes replacing `getattr`-based attribute access in phase mixins.
+- **~25,000 lines of new tests**: Comprehensive coverage for supervision, compression, topic research, synthesis, cross-phase integration, structured outputs, sanitization, concurrent state, model routing, and robustness scenarios.
+
+### Changed
+
+- **Collapsed post-gathering pipeline**: Merged `GATHERING` → `SUPERVISION` → `SYNTHESIS` flow, removing the deprecated `GATHERING` phase from the active workflow loop.
+- **Supervisor-owned decomposition**: Planning logic merged into supervision, with a 3-call decompose → critique → revise pipeline for supervision round 0.
+- **Synthesis prompt alignment**: Synthesis prompts restructured with raw-notes fallback, inline citation format, and source format alignment.
+- **Cost-tiered model defaults**: Summarization, compression, and evaluation use cheaper models by default; supervision and synthesis use capable models.
+- **Supervisor delegation scaling**: Dynamic directive count based on coverage gaps and iteration budget.
+- **Message-aware token recovery**: Structured truncation that respects message boundaries when recovering from context window errors.
+- **Researcher stop heuristics**: Improved stop conditions based on novelty scores and diminishing returns detection.
+- **Config validation hardening**: Model validators, SSRF protection, and unknown key warnings for research configuration.
+
+### Fixed
+
+- **SSRF protection**: DNS rebinding guards, TOCTOU-safe URL validation, and unified SSRF protection across all external fetch paths.
+- **Prompt injection sanitization**: `sanitize_external_content()` applied consistently across synthesis, compression, researcher, supervision, and planning prompts.
+- **Token double-counting**: Fixed duplicate token accounting in compression and synthesis paths.
+- **Silent compression failure**: Compression now raises on failure instead of silently returning uncompressed content.
+- **Triple `mark_cancelled` race condition**: Eliminated concurrent cancellation calls during deep research teardown.
+- **Context window error detection**: Improved detection and recovery from provider context window errors.
+- **State growth caps**: Bounded growth for notes, sources, and message history in long-running research sessions.
+- **Wall-clock timeout enforcement**: Enforced wall-clock timeouts on synchronous deep research paths.
+- **Dead code removal**: Removed unused mixins, legacy supervision module, deprecated phase references, and `_analysis_digest.py`.
+
+### Security
+
+- **DNS rebinding SSRF protection**: Added TOCTOU-safe DNS resolution checks to prevent DNS rebinding attacks on URL fetch operations.
+- **Input validation tightening**: Stricter bounds on configuration values for timeouts, thresholds, and iteration limits.
+- **Summary sanitization**: External content summaries are sanitized before inclusion in LLM prompts.
+
 ## [0.16.0] - 2026-02-22
 
 ### Added
