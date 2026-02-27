@@ -11,9 +11,12 @@ import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Optional
 
+if TYPE_CHECKING:
+    from foundry_mcp.config.research import ResearchConfig
+    from foundry_mcp.core.research.memory import ResearchMemory
+
 from foundry_mcp.core import task_registry
 from foundry_mcp.core.research.models.deep_research import (
-    DEFAULT_MAX_SUPERVISION_ROUNDS,
     DeepResearchPhase,
     DeepResearchState,
 )
@@ -46,20 +49,24 @@ class ActionHandlersMixin:
     - self._start_background_task(): from BackgroundTaskMixin
     - self._cleanup_completed_task(): from BackgroundTaskMixin
     - self._execute_workflow_async(): from WorkflowExecutionMixin
+
+    See ``DeepResearchWorkflowProtocol`` in ``phases/_protocols.py`` for
+    the full structural contract.
     """
 
-    config: Any
-    memory: Any
+    config: ResearchConfig
+    memory: ResearchMemory
 
+    # Stubs for Pyright — canonical signatures live in phases/_protocols.py
     if TYPE_CHECKING:
 
-        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
-        def _persist_state_if_needed(self, *args: Any, **kwargs: Any) -> None: ...
-        def _flush_state(self, *args: Any, **kwargs: Any) -> None: ...
-        def get_background_task(self, *args: Any, **kwargs: Any) -> Any: ...
-        def _start_background_task(self, *args: Any, **kwargs: Any) -> Any: ...
-        def _cleanup_completed_task(self, *args: Any, **kwargs: Any) -> None: ...
-        async def _execute_workflow_async(self, *args: Any, **kwargs: Any) -> Any: ...
+        def _write_audit_event(self, state: DeepResearchState | None, event_name: str, *, data: dict[str, Any] | None = ..., level: str = ...) -> None: ...
+        def _persist_state_if_needed(self, state: DeepResearchState) -> bool: ...
+        def _flush_state(self, state: DeepResearchState) -> None: ...
+        def get_background_task(self, research_id: str) -> Any: ...
+        def _start_background_task(self, **kwargs: Any) -> Any: ...
+        def _cleanup_completed_task(self, research_id: str) -> None: ...
+        async def _execute_workflow_async(self, state: DeepResearchState, provider_id: str | None, timeout_per_operation: float, max_concurrent: int) -> Any: ...
 
     def _start_research(
         self,
@@ -112,7 +119,7 @@ class ActionHandlersMixin:
 
         # Determine initial phase: CLARIFICATION if enabled, else SUPERVISION
         initial_phase = DeepResearchPhase.SUPERVISION
-        if getattr(self.config, "deep_research_allow_clarification", False):
+        if self.config.deep_research_allow_clarification:
             initial_phase = DeepResearchPhase.CLARIFICATION
 
         # Create initial state with per-phase provider configuration
@@ -132,7 +139,7 @@ class ActionHandlersMixin:
             planning_model=None if provider_id else planning_model,
             synthesis_model=None if provider_id else synthesis_model,
             # Supervision configuration
-            max_supervision_rounds=getattr(self.config, "deep_research_max_supervision_rounds", DEFAULT_MAX_SUPERVISION_ROUNDS),
+            max_supervision_rounds=self.config.deep_research_max_supervision_rounds,
         )
 
         # Save initial state
@@ -553,9 +560,9 @@ class ActionHandlersMixin:
             )
 
         # Resolve evaluation provider/model/timeout from config
-        eval_provider = getattr(self.config, "deep_research_evaluation_provider", None)
-        eval_model = getattr(self.config, "deep_research_evaluation_model", None)
-        eval_timeout = getattr(self.config, "deep_research_evaluation_timeout", 360.0)
+        eval_provider = self.config.deep_research_evaluation_provider
+        eval_model = self.config.deep_research_evaluation_model
+        eval_timeout = self.config.deep_research_evaluation_timeout
 
         from foundry_mcp.core.research.evaluation.evaluator import evaluate_report
 

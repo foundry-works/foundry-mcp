@@ -18,6 +18,10 @@ import re
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
+if TYPE_CHECKING:
+    from foundry_mcp.config.research import ResearchConfig
+    from foundry_mcp.core.research.memory import ResearchMemory
+
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
     ExtractContentTool,
@@ -512,21 +516,25 @@ class TopicResearchMixin:
     - _write_audit_event(), _check_cancellation() (cross-cutting methods)
     - _get_search_provider(), _get_tavily_search_kwargs(), etc. (from GatheringPhaseMixin)
     - _execute_provider_async() (from ResearchWorkflowBase)
+
+    See ``DeepResearchWorkflowProtocol`` in ``_protocols.py`` for the
+    full structural contract.
     """
 
-    config: Any
-    memory: Any
+    config: ResearchConfig
+    memory: ResearchMemory
     _search_providers: dict[str, Any]
 
+    # Stubs for Pyright — canonical signatures live in _protocols.py
     if TYPE_CHECKING:
 
-        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
-        def _check_cancellation(self, *args: Any, **kwargs: Any) -> None: ...
+        def _write_audit_event(self, state: DeepResearchState | None, event_name: str, *, data: dict[str, Any] | None = ..., level: str = ...) -> None: ...
+        def _check_cancellation(self, state: DeepResearchState) -> None: ...
         def _get_search_provider(self, provider_name: str) -> Any: ...
         def _get_tavily_search_kwargs(self, state: DeepResearchState) -> dict[str, Any]: ...
         def _get_perplexity_search_kwargs(self, state: DeepResearchState) -> dict[str, Any]: ...
         def _get_semantic_scholar_search_kwargs(self, state: DeepResearchState) -> dict[str, Any]: ...
-        async def _execute_provider_async(self, *args: Any, **kwargs: Any) -> Any: ...
+        async def _execute_provider_async(self, **kwargs: Any) -> Any: ...
         async def _compress_single_topic_async(self, *args: Any, **kwargs: Any) -> tuple[int, int, bool]: ...
 
     # ------------------------------------------------------------------
@@ -585,9 +593,9 @@ class TopicResearchMixin:
         import os as _os
 
         extract_enabled = (
-            getattr(self.config, "deep_research_enable_extract", True)
+            self.config.deep_research_enable_extract
             and bool(
-                getattr(self.config, "tavily_api_key", None)
+                self.config.tavily_api_key
                 or _os.environ.get("TAVILY_API_KEY")
             )
         )
@@ -926,7 +934,7 @@ class TopicResearchMixin:
             raw_notes_text = "\n".join(raw_notes_parts)
             try:
                 max_raw_notes_len = int(
-                    getattr(self.config, "deep_research_max_content_length", 50_000)
+                    self.config.deep_research_max_content_length
                 )
             except (TypeError, ValueError):
                 max_raw_notes_len = 50_000
@@ -1076,10 +1084,10 @@ class TopicResearchMixin:
         )
 
         min_content_length = int(
-            getattr(self.config, "deep_research_summarization_min_content_length", 300)
+            self.config.deep_research_summarization_min_content_length
         )
         per_result_timeout = float(
-            getattr(self.config, "deep_research_summarization_timeout", 60)
+            self.config.deep_research_summarization_timeout
         )
         # Cap per-result timeout for inline summarization (30s default)
         per_result_timeout = min(per_result_timeout, 30.0)
@@ -1620,7 +1628,7 @@ class TopicResearchMixin:
         if not urls:
             return 0
 
-        api_key = getattr(self.config, "tavily_api_key", None) or os.environ.get(
+        api_key = self.config.tavily_api_key or os.environ.get(
             "TAVILY_API_KEY"
         )
         if not api_key:
@@ -1631,7 +1639,7 @@ class TopicResearchMixin:
         async with semaphore:
             try:
                 provider = TavilyExtractProvider(api_key=api_key)
-                extract_depth = getattr(self.config, "tavily_extract_depth", "basic")
+                extract_depth = self.config.tavily_extract_depth
 
                 extracted_sources = await asyncio.wait_for(
                     provider.extract(

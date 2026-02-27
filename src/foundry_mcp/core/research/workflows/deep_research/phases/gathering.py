@@ -12,6 +12,10 @@ import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Optional
 
+if TYPE_CHECKING:
+    from foundry_mcp.config.research import ResearchConfig
+    from foundry_mcp.core.research.memory import ResearchMemory
+
 from foundry_mcp.core.observability import audit_log, get_metrics
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.models.sources import SourceQuality
@@ -43,14 +47,17 @@ class GatheringPhaseMixin(CompressionMixin):
     - config, memory, hooks, orchestrator (instance attributes)
     - _search_providers (cache dict on instance)
     - _write_audit_event(), _check_cancellation() (cross-cutting methods)
+
+    See ``DeepResearchWorkflowProtocol`` in ``_protocols.py`` for the
+    full structural contract.
     """
 
     _search_providers: dict[str, Any]
 
+    # Stubs for Pyright — canonical signatures live in _protocols.py
     if TYPE_CHECKING:
 
         async def _execute_topic_research_async(self, *args: Any, **kwargs: Any) -> Any: ...
-        def _attach_source_summarizer(self, provider: Any) -> None: ...
 
     # ------------------------------------------------------------------
     # Search provider configuration
@@ -257,11 +264,11 @@ class GatheringPhaseMixin(CompressionMixin):
         role_provider, role_model = safe_resolve_model_for_role(self.config, "summarization")
         summarization_provider: str = role_provider or self.config.default_provider
         summarization_model: str | None = role_model
-        max_concurrent = getattr(self.config, "deep_research_max_concurrent", 3)
-        max_content_length = getattr(self.config, "deep_research_max_content_length", 50000)
+        max_concurrent = self.config.deep_research_max_concurrent
+        max_content_length = self.config.deep_research_max_content_length
 
         summarization_timeout = float(
-            getattr(self.config, "deep_research_summarization_timeout", 60)
+            self.config.deep_research_summarization_timeout
         )
         provider._source_summarizer = SourceSummarizer(
             provider_id=summarization_provider,
@@ -427,7 +434,7 @@ class GatheringPhaseMixin(CompressionMixin):
         # --- Topic agent delegation path ---
         # Each sub-query runs its own ReAct loop (search -> reflect -> refine -> search)
         # instead of flat parallel search.
-        topic_max_searches = getattr(self.config, "deep_research_topic_max_tool_calls", 10)
+        topic_max_searches = self.config.deep_research_topic_max_tool_calls
 
         # Budget splitting: divide max_sources_per_query across topic agents
         # so the aggregate source count stays within a reasonable bound.

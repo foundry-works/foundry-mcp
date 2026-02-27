@@ -18,6 +18,10 @@ import logging
 import re
 import time
 from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    from foundry_mcp.config.research import ResearchConfig
+    from foundry_mcp.core.research.memory import ResearchMemory
 from urllib.parse import urlparse
 
 from foundry_mcp.core.research.models.deep_research import (
@@ -110,15 +114,19 @@ class SupervisionPhaseMixin:
     - _execute_provider_async() (inherited from ResearchWorkflowBase)
     - _execute_topic_research_async() (from TopicResearchMixin, for delegation)
     - _get_search_provider() (from GatheringPhaseMixin, for delegation)
+
+    See ``DeepResearchWorkflowProtocol`` in ``_protocols.py`` for the
+    full structural contract.
     """
 
-    config: Any
-    memory: Any
+    config: ResearchConfig
+    memory: ResearchMemory
 
+    # Stubs for Pyright — canonical signatures live in _protocols.py
     if TYPE_CHECKING:
 
-        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
-        def _check_cancellation(self, *args: Any, **kwargs: Any) -> None: ...
+        def _write_audit_event(self, state: DeepResearchState | None, event_name: str, *, data: dict[str, Any] | None = ..., level: str = ...) -> None: ...
+        def _check_cancellation(self, state: DeepResearchState) -> None: ...
         async def _execute_topic_research_async(self, *args: Any, **kwargs: Any) -> Any: ...
         def _get_search_provider(self, provider_name: str) -> Any: ...
         def _get_tavily_search_kwargs(self, state: DeepResearchState) -> dict[str, Any]: ...
@@ -751,7 +759,7 @@ class SupervisionPhaseMixin:
             provider_id=None,
             model=None,
             temperature=0.2,
-            timeout=getattr(self.config, "deep_research_reflection_timeout", 60.0),
+            timeout=self.config.deep_research_reflection_timeout,
             role="reflection",
         )
         if isinstance(think_result, WorkflowResult):

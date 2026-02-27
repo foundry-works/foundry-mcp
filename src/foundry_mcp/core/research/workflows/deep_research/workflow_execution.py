@@ -16,6 +16,10 @@ import time
 import traceback
 from typing import TYPE_CHECKING, Any, Optional
 
+if TYPE_CHECKING:
+    from foundry_mcp.config.research import ResearchConfig
+    from foundry_mcp.core.research.memory import ResearchMemory
+
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
     DeepResearchState,
@@ -50,18 +54,19 @@ class WorkflowExecutionMixin:
     - Phase execution methods: clarification, brief, gathering, supervision, synthesis
     """
 
-    config: Any
-    memory: Any
+    config: ResearchConfig
+    memory: ResearchMemory
     hooks: Any
     orchestrator: Any
     _tasks: dict[str, Any]
     _tasks_lock: threading.Lock
     _search_providers: dict[str, Any]
 
+    # Stubs for Pyright — canonical signatures live in phases/_protocols.py
     if TYPE_CHECKING:
 
-        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
-        def _flush_state(self, *args: Any, **kwargs: Any) -> None: ...
+        def _write_audit_event(self, state: DeepResearchState | None, event_name: str, *, data: dict[str, Any] | None = ..., level: str = ...) -> None: ...
+        def _flush_state(self, state: DeepResearchState) -> None: ...
         def _record_workflow_error(self, *args: Any, **kwargs: Any) -> None: ...
         def _safe_orchestrator_transition(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_clarification_async(self, *args: Any, **kwargs: Any) -> Any: ...

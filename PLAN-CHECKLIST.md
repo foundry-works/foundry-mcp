@@ -43,24 +43,24 @@
 
 ## Phase 3: Type Safety & Config Hardening
 
-- [ ] **3a.** Wire `DeepResearchWorkflowProtocol` into phase mixins
-  - [ ] Extend `_protocols.py` protocol with missing method stubs
-  - [ ] Update supervision.py mixin to use protocol
-  - [ ] Update topic_research.py mixin to use protocol
-  - [ ] Update synthesis.py mixin to use protocol
-  - [ ] Update compression.py mixin to use protocol
-  - [ ] Update brief.py mixin to use protocol
-  - [ ] Update gathering.py mixin to use protocol
-  - [ ] Update clarification.py mixin to use protocol
-  - [ ] Remove duplicated `config: Any` / `memory: Any` stubs from each
+- [x] **3a.** Wire `DeepResearchWorkflowProtocol` into phase mixins
+  - [x] Extend `_protocols.py` protocol with missing method stubs
+  - [x] Update supervision.py mixin to use protocol
+  - [x] Update topic_research.py mixin to use protocol
+  - [x] Update synthesis.py mixin to use protocol
+  - [x] Update compression.py mixin to use protocol
+  - [x] Update brief.py mixin to use protocol
+  - [x] Update gathering.py mixin to use protocol
+  - [x] Update clarification.py mixin to use protocol
+  - [x] Remove duplicated `config: Any` / `memory: Any` stubs from each
 
-- [ ] **3b.** Replace `getattr(self.config, ...)` with direct access
-  - [ ] `action_handlers.py` — 4 occurrences
-  - [ ] `phases/supervision.py` — occurrences
-  - [ ] `phases/topic_research.py` — occurrences
-  - [ ] `phases/gathering.py` — occurrences
-  - [ ] `audit.py` — occurrences
-  - [ ] `persistence.py` — occurrences
+- [x] **3b.** Replace `getattr(self.config, ...)` with direct access
+  - [x] `action_handlers.py` — 4 occurrences
+  - [x] `phases/supervision.py` — 1 occurrence
+  - [x] `phases/topic_research.py` — 7 occurrences
+  - [x] `phases/gathering.py` — 4 occurrences
+  - [x] `audit.py` — 1 occurrence
+  - [x] `persistence.py` — 1 occurrence
 
 ## Phase 4: Module-Level Side Effects & Bounded Growth
 

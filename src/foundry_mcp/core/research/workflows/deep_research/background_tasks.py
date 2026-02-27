@@ -13,6 +13,9 @@ import time
 import traceback
 from typing import TYPE_CHECKING, Any, Optional
 
+if TYPE_CHECKING:
+    from foundry_mcp.core.research.memory import ResearchMemory
+
 from foundry_mcp.core import task_registry
 from foundry_mcp.core.background_task import BackgroundTask, TaskStatus
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
@@ -35,15 +38,16 @@ class BackgroundTaskMixin:
     - memory (inherited from ResearchWorkflowBase)
     """
 
-    memory: Any
+    memory: ResearchMemory
     _tasks: dict[str, BackgroundTask]
     _tasks_lock: threading.Lock
 
+    # Stubs for Pyright — canonical signatures live in phases/_protocols.py
     if TYPE_CHECKING:
 
-        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
+        def _write_audit_event(self, state: DeepResearchState | None, event_name: str, *, data: dict[str, Any] | None = ..., level: str = ...) -> None: ...
         def _record_workflow_error(self, *args: Any, **kwargs: Any) -> None: ...
-        def _flush_state(self, *args: Any, **kwargs: Any) -> None: ...
+        def _flush_state(self, state: DeepResearchState) -> None: ...
         async def _execute_workflow_async(self, *args: Any, **kwargs: Any) -> Any: ...
 
     def _start_background_task(

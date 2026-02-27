@@ -16,6 +16,10 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, Optional
 
+if TYPE_CHECKING:
+    from foundry_mcp.config.research import ResearchConfig
+    from foundry_mcp.core.research.memory import ResearchMemory
+
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research._helpers import (
@@ -109,15 +113,19 @@ class ClarificationPhaseMixin:
     - config, memory, hooks, orchestrator (instance attributes)
     - _write_audit_event(), _check_cancellation() (cross-cutting methods)
     - _execute_provider_async() (inherited from ResearchWorkflowBase)
+
+    See ``DeepResearchWorkflowProtocol`` in ``_protocols.py`` for the
+    full structural contract.
     """
 
-    config: Any
-    memory: Any
+    config: ResearchConfig
+    memory: ResearchMemory
 
+    # Stubs for Pyright — canonical signatures live in _protocols.py
     if TYPE_CHECKING:
 
-        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
-        def _check_cancellation(self, *args: Any, **kwargs: Any) -> None: ...
+        def _write_audit_event(self, state: DeepResearchState | None, event_name: str, *, data: dict[str, Any] | None = ..., level: str = ...) -> None: ...
+        def _check_cancellation(self, state: DeepResearchState) -> None: ...
 
     async def _execute_clarification_async(
         self,

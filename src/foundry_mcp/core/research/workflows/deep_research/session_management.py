@@ -9,6 +9,9 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Optional
 
+if TYPE_CHECKING:
+    from foundry_mcp.core.research.memory import ResearchMemory
+
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 
@@ -23,8 +26,9 @@ class SessionManagementMixin:
     - _execute_workflow_async() (orchestration loop on core)
     """
 
-    memory: Any
+    memory: ResearchMemory
 
+    # Stubs for Pyright — canonical signatures live in phases/_protocols.py
     if TYPE_CHECKING:
 
         async def _execute_workflow_async(self, *args: Any, **kwargs: Any) -> Any: ...
