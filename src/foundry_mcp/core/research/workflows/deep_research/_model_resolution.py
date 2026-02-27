@@ -94,8 +94,7 @@ def parse_reflection_decision(text: str) -> TopicReflectionDecision:
             urls_to_extract: Optional[list[str]] = None
             if isinstance(raw_urls, list):
                 urls_to_extract = [
-                    str(u).strip() for u in raw_urls
-                    if isinstance(u, str) and u.strip().startswith("http")
+                    str(u).strip() for u in raw_urls if isinstance(u, str) and u.strip().startswith("http")
                 ][:5]  # hard cap for safety
                 if not urls_to_extract:
                     urls_to_extract = None
@@ -256,7 +255,14 @@ def resolve_phase_provider(config: "ResearchConfig", *phase_names: str) -> str:
         Provider ID string (never None).
     """
     for name in phase_names:
-        value = getattr(config, f"deep_research_{name}_provider", None)
+        attr = f"deep_research_{name}_provider"
+        value = getattr(config, attr, None)
         if value is not None:
             return value
+        logger.debug("resolve_phase_provider: %s is None, trying next", attr)
+    logger.debug(
+        "resolve_phase_provider: no phase-specific provider for %s, falling back to default_provider=%s",
+        phase_names,
+        config.default_provider,
+    )
     return config.default_provider

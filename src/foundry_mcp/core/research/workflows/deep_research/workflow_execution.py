@@ -65,7 +65,14 @@ class WorkflowExecutionMixin:
     # Stubs for Pyright — canonical signatures live in phases/_protocols.py
     if TYPE_CHECKING:
 
-        def _write_audit_event(self, state: DeepResearchState | None, event_name: str, *, data: dict[str, Any] | None = ..., level: str = ...) -> None: ...
+        def _write_audit_event(
+            self,
+            state: DeepResearchState | None,
+            event_name: str,
+            *,
+            data: dict[str, Any] | None = ...,
+            level: str = ...,
+        ) -> None: ...
         def _flush_state(self, state: DeepResearchState) -> None: ...
         def _record_workflow_error(self, *args: Any, **kwargs: Any) -> None: ...
         def _safe_orchestrator_transition(self, *args: Any, **kwargs: Any) -> Any: ...
@@ -224,8 +231,7 @@ class WorkflowExecutionMixin:
             if state.phase == DeepResearchPhase.PLANNING:
                 # Legacy saved states may resume at PLANNING; skip to SUPERVISION.
                 logger.warning(
-                    "PLANNING phase running from legacy saved state (research %s) "
-                    "— advancing to SUPERVISION",
+                    "PLANNING phase running from legacy saved state (research %s) — advancing to SUPERVISION",
                     state.id,
                 )
                 self._write_audit_event(
@@ -272,6 +278,11 @@ class WorkflowExecutionMixin:
                     return err
                 state.advance_phase()  # GATHERING → SUPERVISION
             elif state.phase not in (DeepResearchPhase.SUPERVISION, DeepResearchPhase.SYNTHESIS):
+                logger.warning(
+                    "Unexpected phase %s at iteration entry for research %s, advancing to next active phase",
+                    state.phase,
+                    state.id,
+                )
                 state.advance_phase()  # Skip to next active phase
 
             # SUPERVISION (handles decomposition + research + gap-fill internally)

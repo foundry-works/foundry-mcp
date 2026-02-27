@@ -163,17 +163,17 @@ def _handle_deep_research_status(
     )
 
     if result.success:
-        # Add next_action guidance based on check count
+        # Add next_action guidance — research runs in the background,
+        # so the caller should relay progress to the user and poll again.
         status_data = dict(result.metadata) if result.metadata else {}
-        check_count = status_data.get("status_check_count", 1)
-        checks_remaining = max(0, 5 - check_count)
+        research_status = status_data.get("status", "unknown")
 
-        if checks_remaining > 0:
-            status_data["next_action"] = (
-                f"BEFORE next check: Tell user about progress. {checks_remaining} checks remaining."
-            )
+        if research_status in ("completed", "failed", "cancelled"):
+            status_data["next_action"] = "Research finished. Use deep-research-report to retrieve results."
         else:
-            status_data["next_action"] = "Max checks reached. Offer user options: wait, background, or cancel."
+            status_data["next_action"] = (
+                "Research is running in the background. Tell the user about current progress, then check again shortly."
+            )
 
         return asdict(success_response(data=status_data))
     else:

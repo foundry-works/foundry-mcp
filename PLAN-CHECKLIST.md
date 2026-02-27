@@ -31,8 +31,8 @@
 - [x] 4.7 Add PLANNING to `PHASE_TO_AGENT` mapping (already done)
 
 ## Phase 5 — Code Quality & Observability
-- [ ] 5.1 Add debug logging for `resolve_phase_provider` fallthrough
-- [ ] 5.2 Inject `max_sub_queries` into critique system prompt
-- [ ] 5.3 Add warning when catch-all `elif` fires in `advance_phase`
-- [ ] 5.4 Update status handler polling guidance (coordinate with Phase 1.1)
-- [ ] 5.5 Build compression history incrementally to avoid memory spikes
+- [x] 5.1 Add debug logging for `resolve_phase_provider` fallthrough
+- [x] 5.2 Inject `max_sub_queries` into critique system prompt
+- [x] 5.3 Add warning when catch-all `elif` fires in `advance_phase`
+- [x] 5.4 Update status handler polling guidance (coordinate with Phase 1.1)
+- [x] 5.5 Build compression history incrementally to avoid memory spikes

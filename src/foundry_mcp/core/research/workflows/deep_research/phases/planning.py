@@ -271,7 +271,7 @@ class PlanningPhaseMixin:
                 workflow=self,
                 state=state,
                 phase_name="planning_critique",
-                system_prompt=self._build_critique_system_prompt(),
+                system_prompt=self._build_critique_system_prompt(max_sub_queries=state.max_sub_queries),
                 user_prompt=critique_prompt,
                 provider_id=None,  # Resolved by role
                 model=None,  # Resolved by role
@@ -536,8 +536,11 @@ Generate the research plan as JSON."""
     # Decomposition self-critique (Phase 2 of think-tool plan)
     # ------------------------------------------------------------------
 
-    def _build_critique_system_prompt(self) -> str:
+    def _build_critique_system_prompt(self, *, max_sub_queries: int = 5) -> str:
         """Build system prompt for the decomposition critique step.
+
+        Args:
+            max_sub_queries: Maximum sub-query count from state/config.
 
         Returns:
             System prompt instructing analytical critique of sub-queries
@@ -567,7 +570,7 @@ Generate the research plan as JSON."""
             "Guidelines:\n"
             "- Only flag TRUE redundancies (significant content overlap, not just related topics). Related-but-distinct topics often have unique angles worth preserving — over-merging loses coverage breadth.\n"
             "- Only add gaps for GENUINELY missing critical perspectives\n"
-            "- Keep the total sub-query count reasonable (2-7 after changes). Too few misses dimensions; too many dilutes per-topic depth given fixed researcher budget.\n"
+            f"- Keep the total sub-query count reasonable (2-{max_sub_queries} after changes). Too few misses dimensions; too many dilutes per-topic depth given fixed researcher budget.\n"
             "- If the decomposition is already good, return empty arrays. Unnecessary changes introduce instability — only intervene when the improvement clearly exceeds the disruption.\n"
             "- merged_query in redundancies replaces ALL the redundant queries with one\n\n"
             "IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."

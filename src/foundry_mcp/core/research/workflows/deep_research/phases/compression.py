@@ -57,42 +57,37 @@ def _build_message_history_prompt(
     Returns:
         Formatted user prompt string.
     """
-    # Format each message in chronological order, sanitizing tool results
-    # which contain web-sourced content that could inject into prompts.
-    history_lines: list[str] = []
-    for msg in message_history:
+
+    # Build history incrementally from the most recent messages backward,
+    # formatting and sanitizing only the entries we'll actually keep.
+    # This avoids a transient memory spike from materializing the full
+    # formatted history before truncation.
+    def _format_msg(msg: dict[str, str]) -> str:
         role = msg.get("role", "unknown")
         tool_name = msg.get("tool", "")
         content = msg.get("content", "")
-
         if role == "assistant":
-            history_lines.append(f"[Assistant]\n{sanitize_external_content(content)}")
+            return f"[Assistant]\n{sanitize_external_content(content)}"
         elif role == "tool":
             label = f"[Tool: {tool_name}]" if tool_name else "[Tool Result]"
-            history_lines.append(f"{label}\n{sanitize_external_content(content)}")
-        else:
-            history_lines.append(f"[{role}]\n{sanitize_external_content(content)}")
+            return f"{label}\n{sanitize_external_content(content)}"
+        return f"[{role}]\n{sanitize_external_content(content)}"
 
-    history_block = "\n\n".join(history_lines)
-
-    # Truncate oldest messages first if over budget
-    if len(history_block) > max_content_length:
-        # Walk forward from the end, keeping the most recent messages
-        kept: list[str] = []
-        remaining = max_content_length
-        for line in reversed(history_lines):
-            entry_len = len(line) + 2  # +2 for "\n\n" separator
-            if remaining >= entry_len:
-                kept.append(line)
-                remaining -= entry_len
-            else:
-                break
-        kept.reverse()
-        if kept:
-            history_block = "\n\n".join(kept)
+    kept: list[str] = []
+    budget = max_content_length
+    for msg in reversed(message_history):
+        formatted = _format_msg(msg)
+        entry_len = len(formatted) + 2  # +2 for "\n\n" separator
+        if budget >= entry_len:
+            kept.append(formatted)
+            budget -= entry_len
         else:
-            # Single very large message — hard-truncate from end
-            history_block = history_block[-max_content_length:]
+            if not kept:
+                # Single very large message — hard-truncate from end
+                kept.append(formatted[-max_content_length:])
+            break
+    kept.reverse()
+    history_block = "\n\n".join(kept)
 
     # Build source reference list so the model can map citations
     source_ref_lines: list[str] = []
