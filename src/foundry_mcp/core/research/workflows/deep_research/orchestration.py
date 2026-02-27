@@ -277,11 +277,21 @@ class SupervisorOrchestrator:
 
         elif phase == DeepResearchPhase.SUPERVISION:
             pending = len(state.pending_sub_queries())
+            source_count = len(state.sources)
+            has_sources = source_count > 0
+            has_completed_round = state.supervision_round >= 1
+            quality_ok = has_sources and has_completed_round
+            rationale_parts = [f"Supervision round {state.supervision_round}: {pending} follow-up queries queued."]
+            if not has_sources:
+                rationale_parts.append("No sources collected — quality gate failed.")
+            if not has_completed_round:
+                rationale_parts.append("No supervision round completed — quality gate failed.")
             return {
                 "supervision_round": state.supervision_round,
                 "pending_follow_ups": pending,
-                "quality_ok": True,
-                "rationale": f"Supervision round {state.supervision_round}: {pending} follow-up queries queued.",
+                "source_count": source_count,
+                "quality_ok": quality_ok,
+                "rationale": " ".join(rationale_parts),
             }
 
         elif phase == DeepResearchPhase.SYNTHESIS:

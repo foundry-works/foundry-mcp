@@ -745,11 +745,21 @@ Generate the research plan as JSON."""
                 )
 
         # 2. Merge redundancies (collect indices to remove, add merged query)
+        #    Skip groups whose indices overlap with already-claimed indices
+        #    to avoid double-removing the same query.
         indices_to_remove: set[int] = set()
         merged_queries: list[dict[str, Any]] = []
         for red in critique.get("redundancies", []):
             valid_indices = [i for i in red["indices"] if 0 <= i < len(current_queries)]
             if len(valid_indices) < 2:
+                continue
+            # Skip this group if any of its indices were already claimed
+            if indices_to_remove & set(valid_indices):
+                logger.debug(
+                    "Skipping redundancy group with overlapping indices %s (already claimed: %s)",
+                    valid_indices,
+                    indices_to_remove & set(valid_indices),
+                )
                 continue
             # Keep the best (lowest number) priority from the merged set
             min_priority = min(current_queries[i].priority for i in valid_indices)

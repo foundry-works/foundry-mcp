@@ -22,13 +22,13 @@
 - [x] 3.5 Fix `\b` word boundary to catch underscore-extended tags (`<system_prompt>` etc.)
 
 ## Phase 4 — Correctness: Orchestration & Config Validation
-- [ ] 4.1 Validate `coverage_confidence_weights` schema (numeric values, known keys)
-- [ ] 4.2 Add supervision quality gate in `evaluate_phase_completion`
-- [ ] 4.3 Fix cancellation rollback — check `rollback_note` on resume or clean partial data
-- [ ] 4.4 Handle overlapping redundancy indices in critique merge logic
-- [ ] 4.5 Fix gap priority parsing — wrap in `try/except` with default
-- [ ] 4.6 Add `deep_research_timeout` to timeout validation list
-- [ ] 4.7 Add PLANNING to `PHASE_TO_AGENT` mapping (or document omission)
+- [x] 4.1 Validate `coverage_confidence_weights` schema (numeric values, known keys)
+- [x] 4.2 Add supervision quality gate in `evaluate_phase_completion`
+- [x] 4.3 Fix cancellation rollback — check `rollback_note` on resume or clean partial data
+- [x] 4.4 Handle overlapping redundancy indices in critique merge logic
+- [x] 4.5 Fix gap priority parsing — wrap in `try/except` with default (already done)
+- [x] 4.6 Add `deep_research_timeout` to timeout validation list (already done)
+- [x] 4.7 Add PLANNING to `PHASE_TO_AGENT` mapping (already done)
 
 ## Phase 5 — Code Quality & Observability
 - [ ] 5.1 Add debug logging for `resolve_phase_provider` fallthrough

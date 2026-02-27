@@ -794,6 +794,36 @@ class ResearchConfig:
                 f"{self.deep_research_max_concurrent_research_units!r}. Must be >= 1."
             )
 
+        # Validate coverage_confidence_weights schema
+        _VALID_WEIGHT_KEYS = {"source_adequacy", "domain_diversity", "query_completion_rate"}
+        if self.deep_research_coverage_confidence_weights is not None:
+            weights = self.deep_research_coverage_confidence_weights
+            if not isinstance(weights, dict):
+                logger.warning(
+                    "deep_research_coverage_confidence_weights must be a dict, got %s; resetting to None",
+                    type(weights).__name__,
+                )
+                self.deep_research_coverage_confidence_weights = None
+            else:
+                unknown_keys = set(weights.keys()) - _VALID_WEIGHT_KEYS
+                if unknown_keys:
+                    logger.warning(
+                        "deep_research_coverage_confidence_weights contains unknown keys: %s "
+                        "(valid keys: %s); removing them",
+                        unknown_keys,
+                        _VALID_WEIGHT_KEYS,
+                    )
+                    for k in unknown_keys:
+                        del weights[k]
+                for k, v in list(weights.items()):
+                    if not isinstance(v, (int, float)):
+                        logger.warning(
+                            "deep_research_coverage_confidence_weights[%r]=%r is not numeric; removing",
+                            k,
+                            v,
+                        )
+                        del weights[k]
+
     def _validate_tavily_config(self) -> None:
         """Validate all Tavily configuration fields.
 
