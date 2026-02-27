@@ -1178,7 +1178,7 @@ class TestSynthesisGenericFallback:
 # =============================================================================
 
 
-_SYNTHESIS_TOKEN_LIMITS_PATCH = "foundry_mcp.core.research.workflows.deep_research.phases.synthesis.MODEL_TOKEN_LIMITS"
+_SYNTHESIS_TOKEN_LIMITS_PATCH = "foundry_mcp.core.research.workflows.deep_research.phases.synthesis.get_model_token_limits"
 
 
 class TestSynthesisTruncationAudit:
@@ -1219,7 +1219,7 @@ class TestSynthesisTruncationAudit:
             return_value=("# Report", {}),
         ), patch(
             _SYNTHESIS_TOKEN_LIMITS_PATCH,
-            tiny_limits,
+            return_value=tiny_limits,
         ):
             mock_budget.return_value = MagicMock(
                 items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
@@ -1282,7 +1282,7 @@ class TestSynthesisTruncationAudit:
             return_value=("# Report", {}),
         ), patch(
             _SYNTHESIS_TOKEN_LIMITS_PATCH,
-            tiny_limits,
+            return_value=tiny_limits,
         ):
             mock_budget.return_value = MagicMock(
                 items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}
@@ -1325,7 +1325,7 @@ class TestSynthesisTruncationAudit:
             _SYNTHESIS_FIT_PATCH,
         ) as mock_fit, patch(
             _SYNTHESIS_TOKEN_LIMITS_PATCH,
-            tiny_limits,
+            return_value=tiny_limits,
         ):
             mock_budget.return_value = MagicMock(
                 items=[], dropped_ids=[], fidelity=1.0, to_dict=lambda: {"fidelity": 1.0}

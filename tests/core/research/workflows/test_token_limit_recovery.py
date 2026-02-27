@@ -31,7 +31,7 @@ from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import 
     LLMCallResult,
     _CONTEXT_WINDOW_ERROR_CLASSES,
     _CONTEXT_WINDOW_ERROR_PATTERNS,
-    _FALLBACK_CONTEXT_WINDOW,
+    FALLBACK_CONTEXT_WINDOW,
     _MAX_TOKEN_LIMIT_RETRIES,
     _TRUNCATION_FACTOR,
     _is_context_window_error,
@@ -264,7 +264,7 @@ class TestTruncateForRetry:
             estimate_limit_fn=estimate_token_limit_for_model,
             token_limits={},
         )
-        # Should truncate using _FALLBACK_CONTEXT_WINDOW (128K)
+        # Should truncate using FALLBACK_CONTEXT_WINDOW (128K)
         assert len(result) < 1000000
 
     def test_progressive_reduction(self):
@@ -632,7 +632,7 @@ class TestConstants:
         assert _TRUNCATION_FACTOR == 0.9
 
     def test_fallback_context_window(self):
-        assert _FALLBACK_CONTEXT_WINDOW == 128_000
+        assert FALLBACK_CONTEXT_WINDOW == 128_000
 
     def test_error_patterns_cover_major_providers(self):
         # Verify patterns match representative error messages from each provider

@@ -289,11 +289,11 @@ class TestTokenLimitsSortedByLongestMatch:
         assert keys[2] == "gpt-4"         # 5 chars
 
     def test_loaded_limits_are_sorted(self) -> None:
-        """MODEL_TOKEN_LIMITS loaded at import time are sorted longest-first."""
+        """get_model_token_limits() returns limits sorted longest-first."""
         from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
-            MODEL_TOKEN_LIMITS,
+            get_model_token_limits,
         )
-        keys = list(MODEL_TOKEN_LIMITS.keys())
+        keys = list(get_model_token_limits().keys())
         if len(keys) > 1:
             # Verify that keys are sorted by length descending
             for i in range(len(keys) - 1):

@@ -675,6 +675,15 @@ class SupervisionPhaseMixin:
         })
         _trim_supervision_history(state)
 
+        # Truncate supervision messages *before* persisting state so that
+        # in-memory growth from directive results + post-think is bounded
+        # within the same round (not deferred to the next round's guard).
+        if state.supervision_messages:
+            state.supervision_messages = truncate_supervision_messages(
+                state.supervision_messages,
+                model=state.supervision_model,
+            )
+
         state.supervision_round += 1
         self.memory.save_deep_research(state)
 

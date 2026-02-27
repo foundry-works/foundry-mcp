@@ -540,16 +540,17 @@ class TestModelTokenLimitsConfig:
     """Tests for externalized MODEL_TOKEN_LIMITS config loading."""
 
     def test_loaded_from_json_config(self):
-        """MODEL_TOKEN_LIMITS should load from the external JSON config file."""
+        """get_model_token_limits() should load from the external JSON config file."""
         from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
-            MODEL_TOKEN_LIMITS,
+            get_model_token_limits,
         )
 
-        assert isinstance(MODEL_TOKEN_LIMITS, dict)
-        assert len(MODEL_TOKEN_LIMITS) > 0
+        limits = get_model_token_limits()
+        assert isinstance(limits, dict)
+        assert len(limits) > 0
         # Spot-check known entries
-        assert MODEL_TOKEN_LIMITS["claude-opus-4-6"] == 200_000
-        assert MODEL_TOKEN_LIMITS["gemini-3"] == 1_000_000
+        assert limits["claude-opus-4-6"] == 200_000
+        assert limits["gemini-3"] == 1_000_000
 
     def test_fallback_on_missing_file(self, tmp_path):
         """Should fall back to hardcoded limits when JSON file is missing."""
@@ -585,10 +586,10 @@ class TestModelTokenLimitsConfig:
     def test_ordering_preserved(self):
         """More-specific substrings should precede less-specific ones."""
         from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
-            MODEL_TOKEN_LIMITS,
+            get_model_token_limits,
         )
 
-        keys = list(MODEL_TOKEN_LIMITS.keys())
+        keys = list(get_model_token_limits().keys())
         # gpt-4.1-mini must come before gpt-4.1
         if "gpt-4.1-mini" in keys and "gpt-4.1" in keys:
             assert keys.index("gpt-4.1-mini") < keys.index("gpt-4.1")

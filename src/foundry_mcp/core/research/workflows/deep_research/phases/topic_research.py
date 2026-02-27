@@ -463,10 +463,10 @@ def _truncate_researcher_history(
         estimate_token_limit_for_model,
     )
     from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
-        MODEL_TOKEN_LIMITS,
+        get_model_token_limits,
     )
 
-    max_tokens = estimate_token_limit_for_model(model, MODEL_TOKEN_LIMITS)
+    max_tokens = estimate_token_limit_for_model(model, get_model_token_limits())
     if max_tokens is None:
         max_tokens = 128_000  # conservative fallback
 

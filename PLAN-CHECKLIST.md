@@ -64,17 +64,17 @@
 
 ## Phase 4: Module-Level Side Effects & Bounded Growth
 
-- [ ] **4a.** Lazy-load `MODEL_TOKEN_LIMITS`
-  - [ ] `_lifecycle.py:96-130` — replace module-level load with `@lru_cache`
-  - [ ] Update all call sites to use `get_model_token_limits()`
+- [x] **4a.** Lazy-load `MODEL_TOKEN_LIMITS`
+  - [x] `_lifecycle.py:96-130` — replace module-level load with `@lru_cache`
+  - [x] Update all call sites to use `get_model_token_limits()`
 
-- [ ] **4b.** Promote `_FALLBACK_CONTEXT_WINDOW` to public
-  - [ ] `_lifecycle.py:511` — rename to `FALLBACK_CONTEXT_WINDOW`
-  - [ ] `synthesis.py:34` — update import
-  - [ ] Update internal usages in `_lifecycle.py`
+- [x] **4b.** Promote `_FALLBACK_CONTEXT_WINDOW` to public
+  - [x] `_lifecycle.py:511` — rename to `FALLBACK_CONTEXT_WINDOW`
+  - [x] `synthesis.py:34` — update import
+  - [x] Update internal usages in `_lifecycle.py`
 
-- [ ] **4c.** Post-round supervision message truncation
-  - [ ] `supervision.py` — add truncation at end of `_post_round_bookkeeping()` or `_execute_and_merge_directives()`
+- [x] **4c.** Post-round supervision message truncation
+  - [x] `supervision.py` — add truncation at end of `_post_round_bookkeeping()`
 
 ## Phase 5: Test Improvements
 

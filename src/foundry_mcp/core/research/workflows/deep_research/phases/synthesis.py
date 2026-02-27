@@ -34,10 +34,10 @@ from foundry_mcp.core.research.workflows.deep_research.phases._citation_postproc
     postprocess_citations,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
-    MODEL_TOKEN_LIMITS,
-    _FALLBACK_CONTEXT_WINDOW,
+    FALLBACK_CONTEXT_WINDOW,
     execute_llm_call,
     finalize_phase,
+    get_model_token_limits,
 )
 
 logger = logging.getLogger(__name__)
@@ -123,7 +123,7 @@ _MAX_FINDINGS_TRUNCATION_RETRIES: int = 3
 # Each retry reduces the findings char budget by this factor (10% per retry).
 _FINDINGS_TRUNCATION_FACTOR: float = 0.9
 
-# _FALLBACK_CONTEXT_WINDOW imported from _lifecycle.py (canonical source)
+# FALLBACK_CONTEXT_WINDOW imported from _lifecycle.py (canonical source)
 
 # Markers that delineate the start of the findings section in the user prompt.
 _FINDINGS_START_MARKERS: list[str] = [
@@ -720,8 +720,8 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
             ])
             # Join raw notes with separators, truncate to fit context
             context_window = estimate_token_limit_for_model(
-                state.synthesis_model, MODEL_TOKEN_LIMITS,
-            ) or _FALLBACK_CONTEXT_WINDOW
+                state.synthesis_model, get_model_token_limits(),
+            ) or FALLBACK_CONTEXT_WINDOW
             # Reserve space for the rest of the prompt and output
             max_notes_tokens = int(context_window * 0.60)
             raw_notes_text = "\n---\n".join(
@@ -1005,8 +1005,8 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
 
         # Determine context window size for the synthesis model
         context_window = estimate_token_limit_for_model(
-            state.synthesis_model, MODEL_TOKEN_LIMITS,
-        ) or _FALLBACK_CONTEXT_WINDOW
+            state.synthesis_model, get_model_token_limits(),
+        ) or FALLBACK_CONTEXT_WINDOW
 
         # Estimate current prompt size in tokens (4 chars ≈ 1 token heuristic)
         current_tokens = len(prompt) // 4

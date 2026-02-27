@@ -8,6 +8,7 @@ duplicating ~88 lines of lifecycle code.
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import re
@@ -121,13 +122,17 @@ def _load_model_token_limits() -> dict[str, int]:
         return _sort_limits_longest_first(dict(_FALLBACK_MODEL_TOKEN_LIMITS))
 
 
-#: Flat mapping of model name substrings to context window sizes (in tokens).
-#: Loaded from ``foundry_mcp/config/model_token_limits.json`` at import time,
-#: with a hardcoded fallback for resilience.
-#:
-#: Used by ``execute_llm_call()`` for progressive token-limit recovery when
-#: ``ContextWindowError.max_tokens`` is not provided by the provider.
-MODEL_TOKEN_LIMITS: dict[str, int] = _load_model_token_limits()
+@functools.lru_cache(maxsize=1)
+def get_model_token_limits() -> dict[str, int]:
+    """Return the model-name → context-window-size mapping (lazy-loaded).
+
+    Loaded from ``foundry_mcp/config/model_token_limits.json`` on first call,
+    with a hardcoded fallback for resilience.  Cached after the first call.
+
+    Used by ``execute_llm_call()`` for progressive token-limit recovery when
+    ``ContextWindowError.max_tokens`` is not provided by the provider.
+    """
+    return _load_model_token_limits()
 
 
 # ---------------------------------------------------------------------------
@@ -230,7 +235,7 @@ def truncate_supervision_messages(
     Args:
         messages: The supervision message history to potentially truncate.
         model: Model identifier for context-window lookup.
-        token_limits: Token limit registry (defaults to ``MODEL_TOKEN_LIMITS``).
+        token_limits: Token limit registry (defaults to ``get_model_token_limits()``).
         preserve_last_n_thinks: Number of most recent think messages to
             unconditionally preserve (default: 2).
 
@@ -241,10 +246,10 @@ def truncate_supervision_messages(
     if not messages:
         return messages
 
-    limits = token_limits if token_limits is not None else MODEL_TOKEN_LIMITS
+    limits = token_limits if token_limits is not None else get_model_token_limits()
     max_tokens = estimate_token_limit_for_model(model, limits)
     if max_tokens is None:
-        max_tokens = _FALLBACK_CONTEXT_WINDOW
+        max_tokens = FALLBACK_CONTEXT_WINDOW
 
     budget_chars = int(max_tokens * _SUPERVISION_HISTORY_BUDGET_FRACTION * _CHARS_PER_TOKEN)
 
@@ -508,7 +513,7 @@ _TRUNCATION_FACTOR: float = 0.9  # keep 90%, remove 10%
 # provides a concrete limit.  128K tokens matches the smallest common context
 # window among popular models (e.g., GPT-4o-class).  Conservative enough to
 # avoid overflows on smaller models, large enough for real research prompts.
-_FALLBACK_CONTEXT_WINDOW: int = 128_000
+FALLBACK_CONTEXT_WINDOW: int = 128_000
 
 
 def _truncate_for_retry(
@@ -530,7 +535,7 @@ def _truncate_for_retry(
     if max_tokens is None:
         max_tokens = estimate_limit_fn(model, token_limits)
     if max_tokens is None:
-        max_tokens = _FALLBACK_CONTEXT_WINDOW
+        max_tokens = FALLBACK_CONTEXT_WINDOW
 
     reduced_budget = int(max_tokens * (_TRUNCATION_FACTOR ** retry_count))
     return truncate_fn(user_prompt, reduced_budget)
@@ -579,9 +584,9 @@ def _apply_truncation_strategy(
     """
     max_tokens = error_max_tokens
     if max_tokens is None:
-        max_tokens = estimate_token_limit_for_model(model, MODEL_TOKEN_LIMITS)
+        max_tokens = estimate_token_limit_for_model(model, get_model_token_limits())
     if max_tokens is None:
-        max_tokens = _FALLBACK_CONTEXT_WINDOW
+        max_tokens = FALLBACK_CONTEXT_WINDOW
 
     budget = int(max_tokens * (_TRUNCATION_FACTOR ** retry_count))
 
