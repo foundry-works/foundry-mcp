@@ -815,6 +815,5 @@ def build_think_system_prompt() -> str:
     )
 
 
-# Legacy supervision prompts (query-generation model) have been moved to
-# ``supervision_legacy.py``.  Import from there if needed for backward
-# compatibility.
+# Legacy supervision prompts (query-generation model) have been removed.
+# See git history for the original ``supervision_legacy.py`` if needed.

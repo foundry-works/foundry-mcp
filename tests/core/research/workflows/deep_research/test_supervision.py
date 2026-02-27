@@ -37,10 +37,6 @@ from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import 
 from foundry_mcp.core.research.workflows.deep_research.phases.supervision import (
     SupervisionPhaseMixin,
 )
-from foundry_mcp.core.research.workflows.deep_research.phases.supervision_legacy import (
-    LegacySupervisionMixin,
-    _MAX_FOLLOW_UPS_PER_ROUND,
-)
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +69,7 @@ def _make_state(
     )
 
 
-class StubSupervision(SupervisionPhaseMixin, LegacySupervisionMixin):
+class StubSupervision(SupervisionPhaseMixin):
     """Concrete class for testing SupervisionPhaseMixin in isolation."""
 
     def __init__(self, *, delegation_model: bool = False) -> None:
@@ -234,32 +230,8 @@ class TestSupervisionPrompts:
         assert coverage[0]["findings_summary"] is not None
         assert "neural networks" in coverage[0]["findings_summary"]
 
-    def test_supervision_system_prompt_has_json_schema(self):
-        """System prompt contains expected JSON structure keys."""
-        stub = StubSupervision()
-        state = _make_state()
-        prompt = stub._build_supervision_system_prompt(state)
-
-        assert "overall_coverage" in prompt
-        assert "per_query_assessment" in prompt
-        assert "follow_up_queries" in prompt
-        assert "should_continue_gathering" in prompt
-        assert "sufficient|partial|insufficient" in prompt
-
-    def test_supervision_user_prompt_includes_coverage(self):
-        """User prompt includes per-query coverage data and dedup list."""
-        stub = StubSupervision()
-        state = _make_state(num_completed=2, sources_per_query=2)
-        coverage = stub._build_per_query_coverage(state)
-        prompt = stub._build_supervision_user_prompt(state, coverage)
-
-        assert state.original_query in prompt
-        assert "sq-0" in prompt
-        assert "sq-1" in prompt
-        assert "Sources:" in prompt
-        assert "DO NOT duplicate" in prompt
-        # Round info
-        assert "Supervision round:" in prompt
+    # Legacy prompt tests (_build_supervision_system_prompt, _build_supervision_user_prompt)
+    # removed — LegacySupervisionMixin deleted as dead code (see git history).
 
 
 # ===========================================================================
@@ -268,104 +240,11 @@ class TestSupervisionPrompts:
 
 
 class TestSupervisionParsing:
-    """Tests for _parse_supervision_response and heuristic fallback."""
+    """Tests for heuristic coverage assessment.
 
-    def test_parse_valid_supervision_response(self):
-        """Valid JSON is parsed correctly with all fields."""
-        stub = StubSupervision()
-        state = _make_state(num_completed=2)
-
-        response_json = json.dumps(
-            {
-                "overall_coverage": "partial",
-                "per_query_assessment": [
-                    {"sub_query_id": "sq-0", "coverage": "sufficient", "rationale": "Good sources"},
-                    {"sub_query_id": "sq-1", "coverage": "insufficient", "rationale": "Needs more"},
-                ],
-                "follow_up_queries": [
-                    {"query": "What are transformers?", "rationale": "Missing architecture details", "priority": 2},
-                ],
-                "should_continue_gathering": True,
-                "rationale": "Coverage is partial, need transformer details",
-            }
-        )
-
-        result = stub._parse_supervision_response(response_json, state)
-
-        assert result["overall_coverage"] == "partial"
-        assert len(result["per_query_assessment"]) == 2
-        assert len(result["follow_up_queries"]) == 1
-        assert result["follow_up_queries"][0]["query"] == "What are transformers?"
-        assert result["should_continue_gathering"] is True
-        assert "partial" in result["rationale"]
-
-    def test_parse_with_duplicate_queries_deduped(self):
-        """Follow-up queries that match existing sub-queries are stripped."""
-        stub = StubSupervision()
-        state = _make_state(num_completed=2)
-
-        # One follow-up duplicates an existing sub-query (case-insensitive)
-        response_json = json.dumps(
-            {
-                "overall_coverage": "partial",
-                "per_query_assessment": [],
-                "follow_up_queries": [
-                    {"query": "SUB-QUERY 0: ASPECT 0 OF THE TOPIC", "rationale": "dup"},
-                    {"query": "Brand new query about GANs", "rationale": "new"},
-                    {"query": "Brand new query about GANs", "rationale": "within-batch dup"},
-                ],
-                "should_continue_gathering": True,
-                "rationale": "",
-            }
-        )
-
-        result = stub._parse_supervision_response(response_json, state)
-
-        # Only the unique non-duplicate query should remain
-        assert len(result["follow_up_queries"]) == 1
-        assert result["follow_up_queries"][0]["query"] == "Brand new query about GANs"
-
-    def test_parse_invalid_json_returns_fallback(self):
-        """Invalid JSON returns default structure with should_continue_gathering=False."""
-        stub = StubSupervision()
-        state = _make_state()
-
-        result = stub._parse_supervision_response("This is not JSON at all", state)
-
-        assert result["overall_coverage"] == "unknown"
-        assert result["follow_up_queries"] == []
-        assert result["should_continue_gathering"] is False
-
-    def test_parse_empty_content_returns_fallback(self):
-        """Empty content returns default structure."""
-        stub = StubSupervision()
-        state = _make_state()
-
-        result = stub._parse_supervision_response("", state)
-        assert result["overall_coverage"] == "unknown"
-        assert result["should_continue_gathering"] is False
-
-    def test_parse_caps_follow_ups_at_max(self):
-        """Follow-up queries are capped at _MAX_FOLLOW_UPS_PER_ROUND."""
-        stub = StubSupervision()
-        state = _make_state(num_completed=1)
-
-        many_follow_ups = [
-            {"query": f"Follow-up query {i}", "rationale": f"reason {i}", "priority": 2}
-            for i in range(10)
-        ]
-        response_json = json.dumps(
-            {
-                "overall_coverage": "insufficient",
-                "per_query_assessment": [],
-                "follow_up_queries": many_follow_ups,
-                "should_continue_gathering": True,
-                "rationale": "",
-            }
-        )
-
-        result = stub._parse_supervision_response(response_json, state)
-        assert len(result["follow_up_queries"]) == _MAX_FOLLOW_UPS_PER_ROUND
+    Legacy _parse_supervision_response tests removed — LegacySupervisionMixin
+    deleted as dead code (see git history).
+    """
 
     def test_heuristic_fallback(self):
         """Heuristic returns correct coverage assessment."""
@@ -743,52 +622,8 @@ class TestThinkToolPrompts:
         assert "gap" in system.lower()
 
 
-class TestThinkToolInUserPrompt:
-    """Tests for think output integration into supervision user prompt."""
-
-    def test_user_prompt_includes_gap_analysis_when_provided(self):
-        """User prompt includes <gap_analysis> section when think output is given."""
-        stub = StubSupervision()
-        state = _make_state(num_completed=2, sources_per_query=2)
-        coverage = stub._build_per_query_coverage(state)
-
-        think_output = (
-            "## Per-Query Analysis\n"
-            "Sub-query 0 covers neural network basics but lacks historical context.\n"
-            "Sub-query 1 has good coverage of training methods but misses regularization.\n\n"
-            "## Overall Gaps\n"
-            "Missing: historical development, regularization techniques, hardware requirements."
-        )
-
-        prompt = stub._build_supervision_user_prompt(state, coverage, think_output)
-
-        assert "<gap_analysis>" in prompt
-        assert "</gap_analysis>" in prompt
-        assert "historical context" in prompt
-        assert "regularization" in prompt
-        assert "TARGETED follow-up queries" in prompt
-        assert "MUST reference a specific gap" in prompt
-
-    def test_user_prompt_no_gap_section_when_think_absent(self):
-        """User prompt omits gap analysis section when no think output."""
-        stub = StubSupervision()
-        state = _make_state(num_completed=2, sources_per_query=2)
-        coverage = stub._build_per_query_coverage(state)
-
-        prompt = stub._build_supervision_user_prompt(state, coverage, think_output=None)
-
-        assert "<gap_analysis>" not in prompt
-        assert "MUST reference a specific gap" not in prompt
-
-    def test_user_prompt_no_gap_section_when_empty_string(self):
-        """User prompt omits gap analysis section when think output is empty."""
-        stub = StubSupervision()
-        state = _make_state(num_completed=2, sources_per_query=2)
-        coverage = stub._build_per_query_coverage(state)
-
-        prompt = stub._build_supervision_user_prompt(state, coverage, think_output="")
-
-        assert "<gap_analysis>" not in prompt
+# TestThinkToolInUserPrompt removed — tested legacy _build_supervision_user_prompt
+# (LegacySupervisionMixin deleted as dead code; see git history).
 
 
 class TestThinkToolIntegration:

@@ -26,20 +26,20 @@
 
 ## Phase 2: Dead Code Cleanup
 
-- [ ] **2a.** Remove `AnalysisPhaseMixin` from MRO
-  - [ ] `core.py:115` — remove from base classes
-  - [ ] `phases/__init__.py` — mark export as deprecated
+- [x] **2a.** Remove `AnalysisPhaseMixin` from MRO
+  - [x] `core.py:115` — remove from base classes
+  - [x] `phases/__init__.py` — mark export as deprecated
 
-- [ ] **2b.** Remove `RefinementPhaseMixin` from MRO
-  - [ ] `core.py:117` — remove from base classes
-  - [ ] `phases/__init__.py` — mark export as deprecated
+- [x] **2b.** Remove `RefinementPhaseMixin` from MRO
+  - [x] `core.py:117` — remove from base classes
+  - [x] `phases/__init__.py` — mark export as deprecated
 
-- [ ] **2c.** Delete `supervision_legacy.py` (627 LOC)
-  - [ ] Remove file
-  - [ ] Remove any imports/references
+- [x] **2c.** Delete `supervision_legacy.py` (627 LOC)
+  - [x] Remove file
+  - [x] Remove any imports/references
 
-- [ ] **2d.** Clean up `PlanningPhaseMixin` export
-  - [ ] `phases/__init__.py:12,21` — remove from `__all__`
+- [x] **2d.** Clean up `PlanningPhaseMixin` export
+  - [x] `phases/__init__.py:12,21` — remove from `__all__`
 
 ## Phase 3: Type Safety & Config Hardening
 

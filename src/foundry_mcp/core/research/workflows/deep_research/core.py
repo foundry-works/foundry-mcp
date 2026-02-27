@@ -58,9 +58,6 @@ from foundry_mcp.core.research.workflows.deep_research.orchestration import (
 from foundry_mcp.core.research.workflows.deep_research.persistence import (
     PersistenceMixin,
 )
-from foundry_mcp.core.research.workflows.deep_research.phases.analysis import (
-    AnalysisPhaseMixin,
-)
 from foundry_mcp.core.research.workflows.deep_research.phases.brief import (
     BriefPhaseMixin,
 )
@@ -71,9 +68,6 @@ from foundry_mcp.core.research.workflows.deep_research.phases.gathering import (
     GatheringPhaseMixin,
 )
 
-from foundry_mcp.core.research.workflows.deep_research.phases.refinement import (
-    RefinementPhaseMixin,
-)
 from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
     SynthesisPhaseMixin,
 )
@@ -112,9 +106,7 @@ class DeepResearchWorkflow(
     GatheringPhaseMixin,  # DEPRECATED: legacy resume compat only
     TopicResearchMixin,
     SupervisionPhaseMixin,
-    AnalysisPhaseMixin,
     SynthesisPhaseMixin,
-    RefinementPhaseMixin,
     BackgroundTaskMixin,
     SessionManagementMixin,
     ResearchWorkflowBase,
@@ -135,8 +127,10 @@ class DeepResearchWorkflow(
     3. SYNTHESIS - Combine findings into a comprehensive report
 
     Legacy phases (PLANNING, GATHERING) are retained in the class hierarchy
-    for saved-state resume compatibility only. New workflows proceed directly
-    from BRIEF → SUPERVISION → SYNTHESIS.
+    for saved-state resume compatibility only.  Legacy phases (ANALYSIS,
+    REFINEMENT) have been removed from the MRO — their mixin modules are
+    preserved for reference but are no longer in the active class hierarchy.
+    New workflows proceed directly from BRIEF → SUPERVISION → SYNTHESIS.
     """
 
     # Class-level task registry for background task tracking

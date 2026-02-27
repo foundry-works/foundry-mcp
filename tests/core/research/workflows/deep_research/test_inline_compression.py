@@ -39,9 +39,6 @@ from foundry_mcp.core.research.workflows.deep_research.phases.compression import
 from foundry_mcp.core.research.workflows.deep_research.phases.supervision import (
     SupervisionPhaseMixin,
 )
-from foundry_mcp.core.research.workflows.deep_research.phases.supervision_legacy import (
-    LegacySupervisionMixin,
-)
 
 
 # ---------------------------------------------------------------------------
@@ -119,7 +116,7 @@ class StubCompression(CompressionMixin):
             raise asyncio.CancelledError()
 
 
-class StubSupervision(SupervisionPhaseMixin, LegacySupervisionMixin):
+class StubSupervision(SupervisionPhaseMixin):
     """Concrete class for testing SupervisionPhaseMixin in isolation."""
 
     def __init__(self) -> None:
@@ -318,41 +315,8 @@ class TestSupervisionContentAwarePrompts:
         assert len(coverage) == 1
         assert coverage[0]["compressed_findings_excerpt"] is None
 
-    def test_user_prompt_includes_key_findings_when_compressed(self):
-        """User prompt should show 'Key findings' section when compressed findings available."""
-        state = _make_state(num_sub_queries=1, phase=DeepResearchPhase.SUPERVISION)
-        _add_topic_results(state, compressed=True)
-
-        stub = StubSupervision()
-        coverage = stub._build_per_query_coverage(state)
-        prompt = stub._build_supervision_user_prompt(state, coverage)
-
-        assert "**Key findings:**" in prompt
-        assert "Compressed findings for sq-0" in prompt
-
-    def test_user_prompt_falls_back_to_findings_summary_when_uncompressed(self):
-        """User prompt should show 'Findings' when only per_topic_summary available."""
-        state = _make_state(num_sub_queries=1, phase=DeepResearchPhase.SUPERVISION)
-        results = _add_topic_results(state, compressed=False)
-        results[0].per_topic_summary = "Summary of findings for this topic"
-
-        stub = StubSupervision()
-        coverage = stub._build_per_query_coverage(state)
-        prompt = stub._build_supervision_user_prompt(state, coverage)
-
-        assert "**Key findings:**" not in prompt
-        assert "**Findings:** Summary of findings" in prompt
-
-    def test_system_prompt_includes_content_assessment_guidance(self):
-        """System prompt should instruct content-aware assessment."""
-        state = _make_state(phase=DeepResearchPhase.SUPERVISION)
-
-        stub = StubSupervision()
-        system = stub._build_supervision_system_prompt(state)
-
-        assert "SUBSTANTIVELY" in system
-        assert "CONTENT gaps" in system
-        assert "qualitative coverage" in system
+    # Legacy prompt tests (_build_supervision_system_prompt, _build_supervision_user_prompt)
+    # removed — LegacySupervisionMixin deleted as dead code (see git history).
 
     def test_compressed_findings_excerpt_truncated_at_2000_chars(self):
         """Compressed findings should be truncated to ~2000 chars in coverage data."""
