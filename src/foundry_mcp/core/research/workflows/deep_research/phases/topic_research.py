@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from foundry_mcp.config.research import ResearchConfig
     from foundry_mcp.core.research.memory import ResearchMemory
 
+from foundry_mcp.core.errors.provider import ContextWindowError
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
     ExtractContentTool,
@@ -789,7 +790,91 @@ class TopicResearchMixin:
                 )
                 return None
             return llm_result
+        except ContextWindowError as exc:
+            logger.warning(
+                "Topic %r researcher hit context window on turn %d, truncating history and retrying once: %s",
+                sub_query.id,
+                turn + 1,
+                exc,
+            )
+            # Aggressively truncate and retry once
+            truncated = _truncate_researcher_history(message_history, researcher_model)
+            retry_prompt = _build_react_user_prompt(
+                topic=sub_query.query,
+                message_history=truncated,
+                budget_remaining=budget_remaining,
+                budget_total=max_searches,
+            )
+            try:
+                llm_result = await self._execute_provider_async(
+                    prompt=retry_prompt,
+                    provider_id=provider_id,
+                    model=researcher_model,
+                    system_prompt=system_prompt,
+                    timeout=self.config.deep_research_reflection_timeout,
+                    temperature=0.3,
+                    phase="topic_research",
+                    fallback_providers=[],
+                    max_retries=1,
+                    retry_delay=2.0,
+                )
+                if not llm_result.success:
+                    logger.warning(
+                        "Topic %r researcher retry after truncation failed on turn %d: %s",
+                        sub_query.id,
+                        turn + 1,
+                        llm_result.error,
+                    )
+                    return None
+                return llm_result
+            except Exception as retry_exc:
+                logger.warning(
+                    "Topic %r researcher retry after truncation exception on turn %d: %s",
+                    sub_query.id,
+                    turn + 1,
+                    retry_exc,
+                )
+                return None
         except (asyncio.TimeoutError, OSError, ValueError, RuntimeError) as exc:
+            # Check if a generic exception is actually a context-window error
+            # from a provider that doesn't raise ContextWindowError directly.
+            from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+                _is_context_window_error,
+            )
+
+            if _is_context_window_error(exc):
+                logger.warning(
+                    "Topic %r researcher hit provider-specific context window error on turn %d, "
+                    "truncating history and retrying once: %s",
+                    sub_query.id,
+                    turn + 1,
+                    exc,
+                )
+                truncated = _truncate_researcher_history(message_history, researcher_model)
+                retry_prompt = _build_react_user_prompt(
+                    topic=sub_query.query,
+                    message_history=truncated,
+                    budget_remaining=budget_remaining,
+                    budget_total=max_searches,
+                )
+                try:
+                    llm_result = await self._execute_provider_async(
+                        prompt=retry_prompt,
+                        provider_id=provider_id,
+                        model=researcher_model,
+                        system_prompt=system_prompt,
+                        timeout=self.config.deep_research_reflection_timeout,
+                        temperature=0.3,
+                        phase="topic_research",
+                        fallback_providers=[],
+                        max_retries=1,
+                        retry_delay=2.0,
+                    )
+                    if not llm_result.success:
+                        return None
+                    return llm_result
+                except Exception:
+                    return None
             logger.warning(
                 "Topic %r researcher LLM call exception on turn %d: %s",
                 sub_query.id,

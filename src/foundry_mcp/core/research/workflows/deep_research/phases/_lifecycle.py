@@ -275,13 +275,8 @@ def truncate_supervision_messages(
         return messages
 
     # --- Identify protected think messages (last N thinks) ---
-    think_indices: list[int] = [
-        idx for idx, msg in enumerate(messages)
-        if msg.get("type") == "think"
-    ]
-    protected_think_indices: set[int] = set(
-        think_indices[-preserve_last_n_thinks:]
-    ) if think_indices else set()
+    think_indices: list[int] = [idx for idx, msg in enumerate(messages) if msg.get("type") == "think"]
+    protected_think_indices: set[int] = set(think_indices[-preserve_last_n_thinks:]) if think_indices else set()
 
     # --- Partition messages into reasoning and findings buckets ---
     reasoning_indices: list[int] = []
@@ -363,13 +358,9 @@ def truncate_supervision_messages(
     # --- Phase 5: Rebalance — if one bucket is under budget, donate surplus ---
     # If reasoning is still over after phase 3 (due to protected thinks),
     # try to steal from unused findings budget, and vice versa.
-    reasoning_remaining = sum(
-        len(_msg_content(messages[i]))
-        for i in reasoning_indices if i not in reasoning_to_remove
-    )
+    reasoning_remaining = sum(len(_msg_content(messages[i])) for i in reasoning_indices if i not in reasoning_to_remove)
     findings_remaining = sum(
-        len(body_truncated.get(i, _msg_content(messages[i])))
-        for i in findings_indices if i not in findings_to_remove
+        len(body_truncated.get(i, _msg_content(messages[i]))) for i in findings_indices if i not in findings_to_remove
     )
 
     if reasoning_remaining > reasoning_budget and findings_remaining < findings_budget:
@@ -434,7 +425,8 @@ def truncate_supervision_messages(
         int(budget_chars * _REASONING_BUDGET_FRACTION),
         sum(
             len(body_truncated.get(i, _msg_content(messages[i])))
-            for i in findings_indices if i not in findings_to_remove
+            for i in findings_indices
+            if i not in findings_to_remove
         ),
         int(budget_chars * _FINDINGS_BUDGET_FRACTION),
         result_chars,
@@ -553,7 +545,7 @@ def _truncate_for_retry(
     if max_tokens is None:
         max_tokens = FALLBACK_CONTEXT_WINDOW
 
-    reduced_budget = int(max_tokens * (_TRUNCATION_FACTOR ** retry_count))
+    reduced_budget = int(max_tokens * (_TRUNCATION_FACTOR**retry_count))
     return truncate_fn(user_prompt, reduced_budget)
 
 
@@ -604,7 +596,7 @@ def _apply_truncation_strategy(
     if max_tokens is None:
         max_tokens = FALLBACK_CONTEXT_WINDOW
 
-    budget = int(max_tokens * (_TRUNCATION_FACTOR ** retry_count))
+    budget = int(max_tokens * (_TRUNCATION_FACTOR**retry_count))
 
     if retry_count == 1:
         result = structured_truncate_blocks(user_prompt, budget)
@@ -812,9 +804,24 @@ async def execute_llm_call(
                 break  # All retries exhausted
 
             token_limit_retries += 1
+            previous_prompt = current_user_prompt
             current_user_prompt = _apply_truncation_strategy(
-                current_user_prompt, e.max_tokens, model, token_limit_retries,
+                current_user_prompt,
+                e.max_tokens,
+                model,
+                token_limit_retries,
             )
+
+            # If truncation didn't change the prompt, retrying is futile
+            if current_user_prompt == previous_prompt:
+                logger.warning(
+                    "%s phase truncation produced no change (attempt %d/%d), "
+                    "breaking retry loop to avoid identical re-send",
+                    phase_name.capitalize(),
+                    token_limit_retries,
+                    _MAX_TOKEN_LIMIT_RETRIES,
+                )
+                break
 
             strategy = _TRUNCATION_STRATEGY_NAMES.get(token_limit_retries, "unknown")
             logger.warning(
@@ -834,9 +841,24 @@ async def execute_llm_call(
             if _is_context_window_error(e) and attempt < _MAX_TOKEN_LIMIT_RETRIES:
                 last_context_error = e
                 token_limit_retries += 1
+                previous_prompt = current_user_prompt
                 current_user_prompt = _apply_truncation_strategy(
-                    current_user_prompt, None, model, token_limit_retries,
+                    current_user_prompt,
+                    None,
+                    model,
+                    token_limit_retries,
                 )
+
+                # If truncation didn't change the prompt, retrying is futile
+                if current_user_prompt == previous_prompt:
+                    logger.warning(
+                        "%s phase truncation produced no change (attempt %d/%d), "
+                        "breaking retry loop to avoid identical re-send",
+                        phase_name.capitalize(),
+                        token_limit_retries,
+                        _MAX_TOKEN_LIMIT_RETRIES,
+                    )
+                    break
 
                 strategy = _TRUNCATION_STRATEGY_NAMES.get(token_limit_retries, "unknown")
                 logger.warning(
@@ -1103,8 +1125,7 @@ async def execute_structured_llm_call(
 
             # Reinforce JSON instruction for next attempt
             current_user_prompt = (
-                user_prompt
-                + "\n\nIMPORTANT: Your previous response could not be parsed as valid JSON. "
+                user_prompt + "\n\nIMPORTANT: Your previous response could not be parsed as valid JSON. "
                 "You MUST respond with ONLY a valid JSON object, no markdown formatting, "
                 "no extra text before or after the JSON."
             )
@@ -1112,8 +1133,7 @@ async def execute_structured_llm_call(
     # Parse exhausted — return with parsed=None so caller can fall back
     assert last_llm_result is not None
     logger.warning(
-        "%s phase structured output parsing failed after %d retries, "
-        "falling back to unstructured handling",
+        "%s phase structured output parsing failed after %d retries, falling back to unstructured handling",
         phase_name.capitalize(),
         parse_retries,
     )

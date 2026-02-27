@@ -28,12 +28,12 @@ from foundry_mcp.core.research.workflows.deep_research._helpers import (
     truncate_to_token_estimate,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
-    LLMCallResult,
     _CONTEXT_WINDOW_ERROR_CLASSES,
     _CONTEXT_WINDOW_ERROR_PATTERNS,
-    FALLBACK_CONTEXT_WINDOW,
     _MAX_TOKEN_LIMIT_RETRIES,
     _TRUNCATION_FACTOR,
+    FALLBACK_CONTEXT_WINDOW,
+    LLMCallResult,
     _is_context_window_error,
     _truncate_for_retry,
     execute_llm_call,
@@ -427,10 +427,7 @@ class TestProgressiveTokenLimitRecovery:
             timeout=60.0,
         )
 
-        prompts = [
-            call.kwargs["prompt"]
-            for call in mock_workflow._execute_provider_async.call_args_list
-        ]
+        prompts = [call.kwargs["prompt"] for call in mock_workflow._execute_provider_async.call_args_list]
         assert len(prompts) == 3
         # Each retry should have a shorter or equal user prompt
         assert len(prompts[0]) >= len(prompts[1]) >= len(prompts[2])
@@ -519,20 +516,21 @@ class TestProviderSpecificErrorRecovery:
     async def test_openai_bad_request_recovery(self, mock_workflow, sample_state):
         """Should detect and recover from OpenAI-style BadRequestError."""
         # First call: OpenAI-style error (not ContextWindowError)
-        openai_error = Exception(
-            "BadRequestError: This model's maximum context length is 128000 tokens"
-        )
+        openai_error = Exception("BadRequestError: This model's maximum context length is 128000 tokens")
         mock_workflow._execute_provider_async.side_effect = [
             openai_error,
             _make_success_result(),
         ]
 
+        # Prompt must exceed the truncation budget (~460k chars for 128k token
+        # model at 4 chars/token * 0.9 factor) so truncation actually produces
+        # a shorter prompt — otherwise the no-op detection correctly breaks.
         ret = await execute_llm_call(
             workflow=mock_workflow,
             state=sample_state,
             phase_name="analysis",
             system_prompt="sys",
-            user_prompt="X" * 50000,
+            user_prompt="X" * 600000,
             provider_id="p",
             model="gpt-4o",
             temperature=0.3,
@@ -545,9 +543,7 @@ class TestProviderSpecificErrorRecovery:
     @pytest.mark.asyncio
     async def test_anthropic_error_recovery(self, mock_workflow, sample_state):
         """Should detect and recover from Anthropic-style error."""
-        anthropic_error = Exception(
-            "BadRequestError: prompt is too long: 250000 tokens > 200000 maximum"
-        )
+        anthropic_error = Exception("BadRequestError: prompt is too long: 250000 tokens > 200000 maximum")
         mock_workflow._execute_provider_async.side_effect = [
             anthropic_error,
             _make_success_result(),
@@ -558,7 +554,7 @@ class TestProviderSpecificErrorRecovery:
             state=sample_state,
             phase_name="analysis",
             system_prompt="sys",
-            user_prompt="X" * 50000,
+            user_prompt="X" * 600000,
             provider_id="p",
             model="claude-3",
             temperature=0.3,
@@ -585,7 +581,7 @@ class TestProviderSpecificErrorRecovery:
             state=sample_state,
             phase_name="analysis",
             system_prompt="sys",
-            user_prompt="X" * 50000,
+            user_prompt="X" * 600000,
             provider_id="p",
             model="gemini-2",
             temperature=0.3,
@@ -657,9 +653,7 @@ class TestTokenRecoveryDownstreamErrors:
     """Tests for truncation succeeding but subsequent errors occurring."""
 
     @pytest.mark.asyncio
-    async def test_truncation_succeeds_but_llm_returns_failure(
-        self, mock_workflow, sample_state
-    ):
+    async def test_truncation_succeeds_but_llm_returns_failure(self, mock_workflow, sample_state):
         """After truncation fixes the context-window error, the LLM may still
         return success=False (e.g. content filter, timeout, provider error).
         The failure should propagate without further token retries."""
@@ -700,9 +694,7 @@ class TestTokenRecoveryDownstreamErrors:
         assert mock_workflow._execute_provider_async.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_truncation_succeeds_but_llm_times_out(
-        self, mock_workflow, sample_state
-    ):
+    async def test_truncation_succeeds_but_llm_times_out(self, mock_workflow, sample_state):
         """After truncation fixes context-window, the LLM may time out.
         Timeout metadata should be present in the returned result."""
         mock_workflow._execute_provider_async.side_effect = [
@@ -736,9 +728,7 @@ class TestTokenRecoveryDownstreamErrors:
         assert ret.metadata["timeout"] is True
 
     @pytest.mark.asyncio
-    async def test_very_small_truncated_prompt_still_submitted(
-        self, mock_workflow, sample_state
-    ):
+    async def test_very_small_truncated_prompt_still_submitted(self, mock_workflow, sample_state):
         """When progressive truncation produces a very short prompt (near the
         truncation marker), the prompt is still submitted — there is no
         minimum-size guard.  If it fails again, the hard-error path is taken."""
@@ -749,9 +739,7 @@ class TestTokenRecoveryDownstreamErrors:
             max_tokens=10,  # Very small budget → tiny truncated prompt
             provider="test-provider",
         )
-        mock_workflow._execute_provider_async.side_effect = [small_error] * (
-            _MAX_TOKEN_LIMIT_RETRIES + 1
-        )
+        mock_workflow._execute_provider_async.side_effect = [small_error] * (_MAX_TOKEN_LIMIT_RETRIES + 1)
 
         ret = await execute_llm_call(
             workflow=mock_workflow,
@@ -775,17 +763,12 @@ class TestTokenRecoveryDownstreamErrors:
         assert mock_workflow._execute_provider_async.call_count == _MAX_TOKEN_LIMIT_RETRIES + 1
 
         # Each retry prompt should be shorter due to progressive truncation
-        prompts = [
-            call.kwargs["prompt"]
-            for call in mock_workflow._execute_provider_async.call_args_list
-        ]
+        prompts = [call.kwargs["prompt"] for call in mock_workflow._execute_provider_async.call_args_list]
         for i in range(1, len(prompts)):
             assert len(prompts[i]) <= len(prompts[i - 1])
 
     @pytest.mark.asyncio
-    async def test_non_context_error_after_successful_truncation(
-        self, mock_workflow, sample_state
-    ):
+    async def test_non_context_error_after_successful_truncation(self, mock_workflow, sample_state):
         """A non-context-window exception after successful truncation is NOT
         retried — it propagates immediately."""
         mock_workflow._execute_provider_async.side_effect = [
@@ -825,8 +808,8 @@ from foundry_mcp.core.research.workflows.deep_research._helpers import (
     structured_truncate_blocks,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
-    _apply_truncation_strategy,
     _TRUNCATION_STRATEGY_NAMES,
+    _apply_truncation_strategy,
 )
 
 
@@ -1010,7 +993,6 @@ class TestStructuredTruncateBlocks:
         # Findings section should be preserved
         assert "## Findings to Synthesize" in result
 
-
     def test_multi_pass_3x_over_budget(self):
         """Prompt 3x over budget with one large section fits after multi-pass truncation.
 
@@ -1022,9 +1004,7 @@ class TestStructuredTruncateBlocks:
         large_content = "data " * 600  # 3000 chars
         small_content = "info " * 20  # 100 chars
         prompt = (
-            "## Instructions\nDo analysis.\n\n"
-            f"## Large Analysis\n{large_content}\n\n"
-            f"## Small Notes\n{small_content}"
+            f"## Instructions\nDo analysis.\n\n## Large Analysis\n{large_content}\n\n## Small Notes\n{small_content}"
         )
         # Budget is ~1/3 of total prompt size in tokens
         total_chars = len(prompt)
@@ -1035,8 +1015,7 @@ class TestStructuredTruncateBlocks:
         # Result must fit within the token budget (allowing newline overhead)
         max_chars = target_tokens * 4
         assert len(result) <= max_chars + 50, (
-            f"Result ({len(result)} chars) exceeds budget ({max_chars} chars) "
-            f"— multi-pass truncation insufficient"
+            f"Result ({len(result)} chars) exceeds budget ({max_chars} chars) — multi-pass truncation insufficient"
         )
         # Protected section should still be present
         assert "## Instructions" in result
@@ -1167,7 +1146,10 @@ class TestApplyTruncationStrategy:
         # the reduced budget (128K * 0.9^3 ≈ 93K tokens → 373K chars)
         prompt = "X" * 500000
         result = _apply_truncation_strategy(
-            prompt, error_max_tokens=None, model="gpt-4o", retry_count=3,
+            prompt,
+            error_max_tokens=None,
+            model="gpt-4o",
+            retry_count=3,
         )
         assert len(result) < 500000
 
@@ -1175,7 +1157,10 @@ class TestApplyTruncationStrategy:
         """Should use fallback context window when no error tokens or model match."""
         prompt = "X" * 1000000
         result = _apply_truncation_strategy(
-            prompt, error_max_tokens=None, model="unknown-model", retry_count=3,
+            prompt,
+            error_max_tokens=None,
+            model="unknown-model",
+            retry_count=3,
         )
         assert len(result) < 1000000
 
@@ -1190,16 +1175,13 @@ class TestStructuredTruncationIntegration:
     """Integration tests: structured truncation through execute_llm_call — checklist 4.4-4.6."""
 
     @pytest.mark.asyncio
-    async def test_structured_prompt_preserves_high_quality_on_retry(
-        self, mock_workflow, sample_state
-    ):
+    async def test_structured_prompt_preserves_high_quality_on_retry(self, mock_workflow, sample_state):
         """When a structured prompt triggers context window error, retry should
         use structured truncation that preserves high-quality sources (4.4)."""
         structured_prompt = _build_synthesis_style_prompt(
             num_sources=10,
             source_content_len=2000,
-            qualities=["high", "low", "high", "low", "medium",
-                        "high", "low", "medium", "low", "high"],
+            qualities=["high", "low", "high", "low", "medium", "high", "low", "medium", "low", "high"],
         )
 
         mock_workflow._execute_provider_async.side_effect = [
@@ -1221,22 +1203,22 @@ class TestStructuredTruncationIntegration:
 
         assert isinstance(ret, LLMCallResult)
         # The retry prompt should be shorter
-        prompts = [
-            call.kwargs["prompt"]
-            for call in mock_workflow._execute_provider_async.call_args_list
-        ]
+        prompts = [call.kwargs["prompt"] for call in mock_workflow._execute_provider_async.call_args_list]
         assert len(prompts[1]) < len(prompts[0])
         # Structure should be preserved in the truncated prompt
         assert "## Findings to Synthesize" in prompts[1]
 
     @pytest.mark.asyncio
-    async def test_char_fallback_works_after_structured_fails(
-        self, mock_workflow, sample_state
-    ):
+    async def test_char_fallback_works_after_structured_fails(self, mock_workflow, sample_state):
         """Char-based fallback on retry 3 should still produce a usable prompt (4.5)."""
-        err = ContextWindowError("too long", prompt_tokens=50000, max_tokens=1000)
+        # Use a larger max_tokens so that all 3 truncation rounds (structured
+        # blocks, source dropping, char-based) each produce a meaningfully
+        # shorter prompt and the no-op detection doesn't break the loop early.
+        err = ContextWindowError("too long", prompt_tokens=50000, max_tokens=10000)
         mock_workflow._execute_provider_async.side_effect = [
-            err, err, err,
+            err,
+            err,
+            err,
             _make_success_result(),
         ]
 
@@ -1245,7 +1227,7 @@ class TestStructuredTruncationIntegration:
             state=sample_state,
             phase_name="synthesis",
             system_prompt="sys",
-            user_prompt=_build_synthesis_style_prompt(num_sources=10, source_content_len=2000),
+            user_prompt=_build_synthesis_style_prompt(num_sources=20, source_content_len=5000),
             provider_id="p",
             model="m",
             temperature=0.3,
@@ -1256,9 +1238,7 @@ class TestStructuredTruncationIntegration:
         assert mock_workflow._execute_provider_async.call_count == 4
 
     @pytest.mark.asyncio
-    async def test_existing_recovery_behavior_unchanged_for_unstructured(
-        self, mock_workflow, sample_state
-    ):
+    async def test_existing_recovery_behavior_unchanged_for_unstructured(self, mock_workflow, sample_state):
         """Unstructured prompts should still get progressively shorter on each retry (4.6)."""
         original_prompt = "X" * 50000
 
@@ -1281,10 +1261,7 @@ class TestStructuredTruncationIntegration:
         )
 
         assert isinstance(ret, LLMCallResult)
-        prompts = [
-            call.kwargs["prompt"]
-            for call in mock_workflow._execute_provider_async.call_args_list
-        ]
+        prompts = [call.kwargs["prompt"] for call in mock_workflow._execute_provider_async.call_args_list]
         assert len(prompts) == 3
         # Each retry should have a shorter or equal user prompt
         assert len(prompts[0]) >= len(prompts[1]) >= len(prompts[2])

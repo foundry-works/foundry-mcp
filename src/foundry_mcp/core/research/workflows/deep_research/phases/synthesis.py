@@ -250,7 +250,9 @@ class SynthesisPhaseMixin:
     if TYPE_CHECKING:
         from foundry_mcp.core.research.models.deep_research import DeepResearchState as _S
 
-        def _write_audit_event(self, state: _S | None, event_name: str, *, data: dict[str, Any] | None = ..., level: str = ...) -> None: ...
+        def _write_audit_event(
+            self, state: _S | None, event_name: str, *, data: dict[str, Any] | None = ..., level: str = ...
+        ) -> None: ...
         def _check_cancellation(self, state: _S) -> None: ...
 
     async def _execute_synthesis_async(
@@ -306,7 +308,9 @@ class SynthesisPhaseMixin:
 
         # Allocate budget, build prompts, run final-fit validation.
         system_prompt, user_prompt = self._prepare_synthesis_budget_and_prompts(
-            state, provider_id, degraded_mode,
+            state,
+            provider_id,
+            degraded_mode,
         )
 
         # Check for cancellation before making provider call
@@ -314,7 +318,11 @@ class SynthesisPhaseMixin:
 
         # LLM call with findings-specific token-limit recovery.
         llm_result = await self._execute_synthesis_llm_with_retry(
-            state, provider_id, system_prompt, user_prompt, timeout,
+            state,
+            provider_id,
+            system_prompt,
+            user_prompt,
+            timeout,
         )
         if isinstance(llm_result, WorkflowResult):
             return llm_result
@@ -355,10 +363,7 @@ class SynthesisPhaseMixin:
         Returns:
             A tuple of (early_result_or_none, degraded_mode_flag).
         """
-        has_compressed = any(
-            tr.compressed_findings
-            for tr in state.topic_research_results
-        )
+        has_compressed = any(tr.compressed_findings for tr in state.topic_research_results)
         has_raw_notes = bool(state.raw_notes)
         degraded_mode = False
 
@@ -445,7 +450,9 @@ class SynthesisPhaseMixin:
         # Build the synthesis prompt with allocated content
         system_prompt = self._build_synthesis_system_prompt(state)
         user_prompt = self._build_synthesis_user_prompt(
-            state, allocation_result, degraded_mode=degraded_mode,
+            state,
+            allocation_result,
+            degraded_mode=degraded_mode,
         )
 
         # Final-fit validation before provider dispatch
@@ -521,10 +528,7 @@ class SynthesisPhaseMixin:
             )
 
             if isinstance(call_result, WorkflowResult):
-                if (
-                    _is_context_window_exceeded(call_result)
-                    and outer_attempt < _MAX_FINDINGS_TRUNCATION_RETRIES
-                ):
+                if _is_context_window_exceeded(call_result) and outer_attempt < _MAX_FINDINGS_TRUNCATION_RETRIES:
                     # Apply findings-specific truncation (or generic fallback).
                     (
                         current_user_prompt,
@@ -635,9 +639,7 @@ class SynthesisPhaseMixin:
             max_findings_chars,
         )
         total_findings_chars_dropped = (
-            len(user_prompt) - len(truncated_prompt)
-            if truncated_prompt != user_prompt
-            else 0
+            len(user_prompt) - len(truncated_prompt) if truncated_prompt != user_prompt else 0
         )
 
         if truncated_prompt != user_prompt:
@@ -876,30 +878,37 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         # Phase 3b (ODR alignment): Degraded mode — synthesize directly
         # from raw notes when no compressed findings exist.
         if degraded_mode and state.raw_notes:
-            prompt_parts.extend([
-                "## Research Notes (uncompressed)",
-                "",
-                "**Note:** Compressed findings were not available for this session. "
-                "The following are uncompressed research notes from topic researchers. "
-                "Synthesize a comprehensive report from these notes, extracting key "
-                "findings, identifying themes, and noting any gaps.",
-                "",
-            ])
+            prompt_parts.extend(
+                [
+                    "## Research Notes (uncompressed)",
+                    "",
+                    "**Note:** Compressed findings were not available for this session. "
+                    "The following are uncompressed research notes from topic researchers. "
+                    "Synthesize a comprehensive report from these notes, extracting key "
+                    "findings, identifying themes, and noting any gaps.",
+                    "",
+                ]
+            )
             # Join raw notes with separators, truncate to fit context
-            context_window = estimate_token_limit_for_model(
-                state.synthesis_model, get_model_token_limits(),
-            ) or FALLBACK_CONTEXT_WINDOW
+            context_window = (
+                estimate_token_limit_for_model(
+                    state.synthesis_model,
+                    get_model_token_limits(),
+                )
+                or FALLBACK_CONTEXT_WINDOW
+            )
             # Reserve space for the rest of the prompt and output
             max_notes_tokens = int(context_window * 0.60)
-            raw_notes_text = "\n---\n".join(
-                sanitize_external_content(note) for note in state.raw_notes
-            )
+            raw_notes_text = "\n---\n".join(sanitize_external_content(note) for note in state.raw_notes)
             truncated = truncate_at_boundary(raw_notes_text, max_notes_tokens * 4)
             prompt_parts.append(truncated)
             prompt_parts.append("")
 
             return self._build_synthesis_tail(
-                state, prompt_parts, id_to_citation, allocation_result,
+                state,
+                prompt_parts,
+                id_to_citation,
+                allocation_result,
             )
 
         # When a global compressed digest is available, use it as the
@@ -907,16 +916,21 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         # cross-topic findings with consistent citations, contradictions,
         # and gaps — so we can skip the per-finding enumeration below.
         if state.compressed_digest:
-            prompt_parts.extend([
-                "## Unified Research Digest",
-                "",
-                sanitize_external_content(state.compressed_digest),
-                "",
-            ])
+            prompt_parts.extend(
+                [
+                    "## Unified Research Digest",
+                    "",
+                    sanitize_external_content(state.compressed_digest),
+                    "",
+                ]
+            )
             # Still include the source reference and instructions below
             # (skip to source reference section)
             return self._build_synthesis_tail(
-                state, prompt_parts, id_to_citation, allocation_result,
+                state,
+                prompt_parts,
+                id_to_citation,
+                allocation_result,
             )
 
         # ---------------------------------------------------------------
@@ -926,15 +940,14 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         # are no analysis findings but per-topic compressed_findings exist.
         # Build the synthesis prompt from those directly.
         # ---------------------------------------------------------------
-        compressed_topics = [
-            tr for tr in state.topic_research_results
-            if tr.compressed_findings
-        ]
+        compressed_topics = [tr for tr in state.topic_research_results if tr.compressed_findings]
         if not state.findings and compressed_topics:
-            prompt_parts.extend([
-                "## Research Findings by Topic",
-                "",
-            ])
+            prompt_parts.extend(
+                [
+                    "## Research Findings by Topic",
+                    "",
+                ]
+            )
             for tr in compressed_topics:
                 # Resolve sub-query text for section header
                 sq = state.get_sub_query(tr.sub_query_id)
@@ -948,16 +961,21 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
             self._append_contradictions_and_gaps(state, prompt_parts, id_to_citation)
 
             return self._build_synthesis_tail(
-                state, prompt_parts, id_to_citation, allocation_result,
+                state,
+                prompt_parts,
+                id_to_citation,
+                allocation_result,
             )
 
         # ---------------------------------------------------------------
         # Standard path: build from analysis findings.
         # ---------------------------------------------------------------
-        prompt_parts.extend([
-            "## Findings to Synthesize",
-            "",
-        ])
+        prompt_parts.extend(
+            [
+                "## Findings to Synthesize",
+                "",
+            ]
+        )
 
         # Group findings by category if available
         categorized: dict[str, list] = {}
@@ -984,7 +1002,10 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         self._append_contradictions_and_gaps(state, prompt_parts, id_to_citation)
 
         return self._build_synthesis_tail(
-            state, prompt_parts, id_to_citation, allocation_result,
+            state,
+            prompt_parts,
+            id_to_citation,
+            allocation_result,
         )
 
     def _append_contradictions_and_gaps(
@@ -1014,7 +1035,9 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                 prompt_parts.append(f"- [{severity_label}] {sanitize_external_content(contradiction.description)}")
                 prompt_parts.append(f"  Conflicting findings: {', '.join(contradiction.finding_ids)}")
                 if contradiction.resolution:
-                    prompt_parts.append(f"  Suggested resolution: {sanitize_external_content(contradiction.resolution)}")
+                    prompt_parts.append(
+                        f"  Suggested resolution: {sanitize_external_content(contradiction.resolution)}"
+                    )
                 if contradiction.preferred_source_id:
                     cn = id_to_citation.get(contradiction.preferred_source_id)
                     if cn is not None:
@@ -1173,17 +1196,27 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         # Determine context window size for the synthesis model, reduced by
         # the configured safety margin so the final prompt stays within the
         # safe token budget (mirrors the margin applied elsewhere).
-        raw_context_window = estimate_token_limit_for_model(
-            state.synthesis_model, get_model_token_limits(),
-        ) or FALLBACK_CONTEXT_WINDOW
+        raw_context_window = (
+            estimate_token_limit_for_model(
+                state.synthesis_model,
+                get_model_token_limits(),
+            )
+            or FALLBACK_CONTEXT_WINDOW
+        )
         safety_margin = getattr(self.config, "token_safety_margin", 0.15)
         context_window = int(raw_context_window * (1.0 - safety_margin))
 
         # Estimate current prompt size in tokens (4 chars ≈ 1 token heuristic)
         current_tokens = len(prompt) // 4
 
-        # Available headroom = effective_context - current_tokens - output_reserved
-        headroom_tokens = context_window - current_tokens - SYNTHESIS_OUTPUT_RESERVED
+        # Estimate the system prompt token count so we don't over-allocate
+        # headroom. The system prompt occupies context-window space alongside
+        # the user prompt but was previously ignored in this calculation.
+        system_prompt = self._build_synthesis_system_prompt(state)
+        system_prompt_tokens = len(system_prompt) // 4
+
+        # Available headroom = effective_context - system_prompt - current_tokens - output_reserved
+        headroom_tokens = context_window - system_prompt_tokens - current_tokens - SYNTHESIS_OUTPUT_RESERVED
         headroom_fraction = headroom_tokens / context_window
 
         if headroom_fraction < _SUPPLEMENTARY_HEADROOM_THRESHOLD:
@@ -1201,9 +1234,7 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         )
 
         # Build the raw notes text (sanitize web-sourced content)
-        raw_notes_text = "\n---\n".join(
-            sanitize_external_content(note) for note in state.raw_notes
-        )
+        raw_notes_text = "\n---\n".join(sanitize_external_content(note) for note in state.raw_notes)
         supplementary = truncate_at_boundary(
             raw_notes_text,
             max_supplementary_tokens * 4,  # tokens → chars

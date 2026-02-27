@@ -138,7 +138,7 @@ def _build_message_history_prompt(
         else:
             if not kept:
                 # Single very large message — hard-truncate from end
-                kept.append(formatted[-max_content_length:])
+                kept.append(formatted[:max_content_length])
             break
     kept.reverse()
     history_block = "\n\n".join(kept)

@@ -266,8 +266,7 @@ class BackgroundTaskMixin:
         with self._tasks_lock:
             self._tasks.pop(research_id, None)
 
-    @classmethod
-    def cleanup_stale_tasks(cls, max_age_seconds: float = 3600) -> int:
+    def cleanup_stale_tasks(self, max_age_seconds: float = 3600) -> int:
         """Remove old completed tasks from the registry.
 
         This can be called periodically to clean up memory from completed tasks
@@ -283,13 +282,13 @@ class BackgroundTaskMixin:
 
         now = time.time()
         removed = 0
-        with cls._tasks_lock:
+        with self._tasks_lock:
             stale_ids = [
                 task_id
-                for task_id, task in cls._tasks.items()
+                for task_id, task in self._tasks.items()
                 if task.is_done and task.completed_at and (now - task.completed_at) > max_age_seconds
             ]
             for task_id in stale_ids:
-                del cls._tasks[task_id]
+                del self._tasks[task_id]
                 removed += 1
         return removed
