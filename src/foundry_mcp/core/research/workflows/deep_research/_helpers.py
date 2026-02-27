@@ -806,7 +806,7 @@ _BLOCKED_NETWORKS: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = [
 ]
 
 
-def validate_extract_url(url: str) -> bool:
+def validate_extract_url(url: str, *, resolve_dns: bool = False) -> bool:
     """Validate a URL is safe for server-side extraction (SSRF protection).
 
     Rejects:
@@ -817,8 +817,19 @@ def validate_extract_url(url: str) -> bool:
     - Link-local addresses (169.254.x)
     - IPv6 unique-local and link-local ranges
 
+    **TOCTOU note**: Without ``resolve_dns=True`` this function only validates
+    URL syntax and blocks obvious IP-literal attacks.  DNS rebinding attacks
+    (a hostname that resolves to a private IP) are NOT blocked.  When the
+    fetch layer (e.g. Tavily API) operates in its own network context the
+    risk is limited, but for URLs sourced from untrusted input (LLM output)
+    callers should pass ``resolve_dns=True`` for an additional
+    ``socket.getaddrinfo`` check.  Even with DNS resolution there is an
+    inherent TOCTOU gap — the IP may change between validation and fetch.
+
     Args:
         url: URL string to validate
+        resolve_dns: When True, resolve the hostname via ``socket.getaddrinfo``
+            and reject if any resolved address falls within ``_BLOCKED_NETWORKS``.
 
     Returns:
         True if the URL is safe for extraction, False otherwise
@@ -850,9 +861,20 @@ def validate_extract_url(url: str) -> bool:
             if addr in network:
                 return False
     except ValueError:
-        # Not an IP literal — hostname is fine (DNS resolution happens
-        # server-side at fetch time; we block the obvious cases here)
-        pass
+        # Not an IP literal — optionally resolve DNS to catch rebinding
+        if resolve_dns:
+            try:
+                import socket
+
+                infos = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
+                for (*_, sockaddr) in infos:
+                    resolved_ip = ipaddress.ip_address(sockaddr[0])
+                    for network in _BLOCKED_NETWORKS:
+                        if resolved_ip in network:
+                            return False
+            except (socket.gaierror, OSError, ValueError):
+                # DNS resolution failed — treat as unsafe
+                return False
 
     return True
 

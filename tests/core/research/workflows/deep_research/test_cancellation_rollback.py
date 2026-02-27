@@ -56,7 +56,8 @@ class TestCancellationRollbackMetadata:
     @pytest.mark.asyncio
     async def test_rollback_sets_metadata_on_incomplete_iteration(self):
         """When cancelled during in-progress iteration with prior checkpoint,
-        rollback_note='partial_iteration_data_retained' is set."""
+        rollback_note='partial_iteration_data_retained' is set and
+        CancelledError is re-raised to honour Python's cancellation contract."""
         stub = StubWorkflowExecution()
         state = DeepResearchState(
             original_query="test query",
@@ -72,14 +73,14 @@ class TestCancellationRollbackMetadata:
 
         stub._execute_supervision_async = raise_cancelled
 
-        result = await stub._execute_workflow_async(
-            state=state,
-            provider_id=None,
-            timeout_per_operation=60.0,
-            max_concurrent=3,
-        )
+        with pytest.raises(asyncio.CancelledError):
+            await stub._execute_workflow_async(
+                state=state,
+                provider_id=None,
+                timeout_per_operation=60.0,
+                max_concurrent=3,
+            )
 
-        assert result.success is False
         assert state.metadata.get("rollback_note") == "partial_iteration_data_retained"
         assert state.metadata.get("discarded_iteration") == 2
         assert state.iteration == 1
@@ -87,7 +88,7 @@ class TestCancellationRollbackMetadata:
     @pytest.mark.asyncio
     async def test_rollback_sets_metadata_on_first_iteration_incomplete(self):
         """When first iteration is incomplete at cancellation,
-        rollback_note is still set."""
+        rollback_note is still set and CancelledError propagates."""
         stub = StubWorkflowExecution()
         state = DeepResearchState(
             original_query="test query",
@@ -102,14 +103,14 @@ class TestCancellationRollbackMetadata:
 
         stub._execute_supervision_async = raise_cancelled
 
-        result = await stub._execute_workflow_async(
-            state=state,
-            provider_id=None,
-            timeout_per_operation=60.0,
-            max_concurrent=3,
-        )
+        with pytest.raises(asyncio.CancelledError):
+            await stub._execute_workflow_async(
+                state=state,
+                provider_id=None,
+                timeout_per_operation=60.0,
+                max_concurrent=3,
+            )
 
-        assert result.success is False
         assert state.metadata.get("rollback_note") == "partial_iteration_data_retained"
         assert state.metadata.get("discarded_iteration") == 0
 
@@ -129,12 +130,12 @@ class TestCancellationRollbackMetadata:
 
         stub._execute_brief_async = raise_cancelled
 
-        result = await stub._execute_workflow_async(
-            state=state,
-            provider_id=None,
-            timeout_per_operation=60.0,
-            max_concurrent=3,
-        )
+        with pytest.raises(asyncio.CancelledError):
+            await stub._execute_workflow_async(
+                state=state,
+                provider_id=None,
+                timeout_per_operation=60.0,
+                max_concurrent=3,
+            )
 
-        assert result.success is False
         assert "rollback_note" not in state.metadata

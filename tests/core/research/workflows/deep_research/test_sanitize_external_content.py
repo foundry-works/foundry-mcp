@@ -1248,3 +1248,99 @@ class TestReflectionDecisionSSRF:
             ],
         })
         assert resp.urls_to_extract == ["https://example.com/good"]
+
+
+class TestValidateExtractUrlDnsRebinding:
+    """Phase 1d: DNS rebinding detection when resolve_dns=True."""
+
+    def test_resolve_dns_blocks_private_ip_resolution(self):
+        """Hostname resolving to a private IP is rejected with resolve_dns=True."""
+        from unittest.mock import patch
+
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+
+        # Mock socket.getaddrinfo to return a private IP (simulating DNS rebinding)
+        fake_info = [
+            (2, 1, 6, "", ("10.0.0.1", 0)),  # AF_INET, SOCK_STREAM, IPPROTO_TCP
+        ]
+        with patch("socket.getaddrinfo", return_value=fake_info):
+            assert validate_extract_url("https://evil.com/steal", resolve_dns=True) is False
+
+    def test_resolve_dns_blocks_metadata_ip(self):
+        """Hostname resolving to cloud metadata IP is rejected."""
+        from unittest.mock import patch
+
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+
+        fake_info = [
+            (2, 1, 6, "", ("169.254.169.254", 0)),
+        ]
+        with patch("socket.getaddrinfo", return_value=fake_info):
+            assert validate_extract_url("https://metadata.evil.com/", resolve_dns=True) is False
+
+    def test_resolve_dns_blocks_loopback_resolution(self):
+        """Hostname resolving to 127.0.0.1 is rejected."""
+        from unittest.mock import patch
+
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+
+        fake_info = [
+            (2, 1, 6, "", ("127.0.0.1", 0)),
+        ]
+        with patch("socket.getaddrinfo", return_value=fake_info):
+            assert validate_extract_url("https://loopback.evil.com/", resolve_dns=True) is False
+
+    def test_resolve_dns_allows_public_ip(self):
+        """Hostname resolving to a public IP passes with resolve_dns=True."""
+        from unittest.mock import patch
+
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+
+        fake_info = [
+            (2, 1, 6, "", ("93.184.216.34", 0)),  # example.com's IP
+        ]
+        with patch("socket.getaddrinfo", return_value=fake_info):
+            assert validate_extract_url("https://example.com/page", resolve_dns=True) is True
+
+    def test_resolve_dns_false_allows_any_hostname(self):
+        """Without resolve_dns, non-IP-literal hostnames always pass."""
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+
+        # Even a suspicious hostname passes without DNS resolution
+        assert validate_extract_url("https://evil.com/steal", resolve_dns=False) is True
+
+    def test_resolve_dns_gaierror_rejects(self):
+        """DNS resolution failure (gaierror) rejects the URL as unsafe."""
+        import socket
+        from unittest.mock import patch
+
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+
+        with patch("socket.getaddrinfo", side_effect=socket.gaierror("Name resolution failed")):
+            assert validate_extract_url("https://nonexistent.invalid/", resolve_dns=True) is False
+
+    def test_resolve_dns_blocks_ipv6_private(self):
+        """Hostname resolving to IPv6 unique-local address is rejected."""
+        from unittest.mock import patch
+
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+
+        fake_info = [
+            (10, 1, 6, "", ("fd00::1", 0, 0, 0)),  # AF_INET6, unique-local
+        ]
+        with patch("socket.getaddrinfo", return_value=fake_info):
+            assert validate_extract_url("https://ipv6-evil.com/", resolve_dns=True) is False
+
+    def test_resolve_dns_mixed_ips_any_private_rejects(self):
+        """If any resolved address is private, the URL is rejected."""
+        from unittest.mock import patch
+
+        from foundry_mcp.core.research.workflows.deep_research._helpers import validate_extract_url
+
+        # One public, one private — should still reject
+        fake_info = [
+            (2, 1, 6, "", ("93.184.216.34", 0)),  # public
+            (2, 1, 6, "", ("192.168.1.1", 0)),     # private
+        ]
+        with patch("socket.getaddrinfo", return_value=fake_info):
+            assert validate_extract_url("https://dual.evil.com/", resolve_dns=True) is False

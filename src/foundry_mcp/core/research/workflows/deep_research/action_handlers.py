@@ -567,21 +567,22 @@ class ActionHandlersMixin:
             timeout=eval_timeout,
         )
 
-        # Run evaluation — dispatch onto the existing event loop when one is
-        # running (MCP context) instead of spawning a separate loop in a
-        # thread, which breaks cancellation and structured concurrency.
+        # Run evaluation synchronously.  Uses the same two-way dispatch as
+        # _run_sync: if an event loop is already running (e.g. MCP async
+        # context), offload to a ThreadPoolExecutor that calls asyncio.run()
+        # in a fresh thread.  This avoids the deadlock that
+        # run_coroutine_threadsafe + future.result() causes when the caller
+        # is on the event loop thread.
         try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
+            asyncio.get_running_loop()
+            # Already in async context — run in a thread with a new loop
+            import concurrent.futures
 
-        if loop is not None:
-            # Called from within an async context — schedule onto the
-            # running loop and block until done (safe because we're in a
-            # worker thread, not the event loop thread).
-            future = asyncio.run_coroutine_threadsafe(coro, loop)
-            result = future.result(timeout=eval_timeout + 30)
-        else:
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, coro)
+                result = future.result(timeout=eval_timeout + 30)
+        except RuntimeError:
+            # No running loop — safe to call asyncio.run() directly
             result = asyncio.run(coro)
 
         # If evaluate_report returned a WorkflowResult (error), pass through

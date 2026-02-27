@@ -256,7 +256,11 @@ class ReflectionDecision(BaseModel):
     @field_validator("urls_to_extract", mode="before")
     @classmethod
     def _coerce_urls(cls, v: Any) -> list[str]:
-        """Accept null/None as empty list, filter to valid HTTP URLs with SSRF protection."""
+        """Accept null/None as empty list, filter to valid HTTP URLs with SSRF protection.
+
+        Uses ``resolve_dns=True`` because these URLs originate from LLM output
+        and will be used for server-side fetch — DNS rebinding must be blocked.
+        """
         from foundry_mcp.core.research.workflows.deep_research._helpers import (
             validate_extract_url,
         )
@@ -268,7 +272,8 @@ class ReflectionDecision(BaseModel):
         return [
             str(u).strip()
             for u in v
-            if isinstance(u, str) and validate_extract_url(u.strip())
+            if isinstance(u, str)
+            and validate_extract_url(u.strip(), resolve_dns=True)
         ][:5]  # hard cap for safety
 
     @model_validator(mode="after")
@@ -714,8 +719,9 @@ class DeepResearchPhase(str, Enum):
     2. SUPERVISION - Supervisor-owned decomposition (round 0) and gap-fill (rounds 1+)
     3. SYNTHESIS - Combine findings into a comprehensive report
 
-    GATHERING is retained only for legacy saved-state resume compatibility.
-    New workflows proceed directly from BRIEF → SUPERVISION → SYNTHESIS.
+    PLANNING and GATHERING are retained only for legacy saved-state resume
+    compatibility.  New workflows proceed directly from
+    BRIEF → SUPERVISION → SYNTHESIS.
 
     The ordering of these enum values is significant - it defines the
     progression through advance_phase() method.
@@ -723,6 +729,7 @@ class DeepResearchPhase(str, Enum):
 
     CLARIFICATION = "clarification"
     BRIEF = "brief"
+    PLANNING = "planning"  # DEPRECATED: legacy-resume-only; retained for deserialization
     GATHERING = "gathering"  # DEPRECATED: legacy-resume-only; new workflows skip to SUPERVISION
     SUPERVISION = "supervision"
     SYNTHESIS = "synthesis"
@@ -1188,15 +1195,19 @@ class DeepResearchState(BaseModel):
     # =========================================================================
 
     # Phases that advance_phase() skips over automatically.
-    # GATHERING is deprecated — new workflows proceed BRIEF → SUPERVISION directly.
-    # Retained in the enum only for legacy saved-state resume compatibility.
-    _SKIP_PHASES: ClassVar[set[DeepResearchPhase]] = {DeepResearchPhase.GATHERING}
+    # PLANNING and GATHERING are deprecated — new workflows proceed
+    # BRIEF → SUPERVISION directly.  Retained in the enum only for legacy
+    # saved-state resume compatibility.
+    _SKIP_PHASES: ClassVar[set[DeepResearchPhase]] = {
+        DeepResearchPhase.PLANNING,
+        DeepResearchPhase.GATHERING,
+    }
 
     def advance_phase(self) -> DeepResearchPhase:
         """Advance to the next research phase, skipping deprecated phases.
 
         Phases advance in order: CLARIFICATION -> BRIEF -> SUPERVISION -> SYNTHESIS.
-        GATHERING is automatically skipped (deprecated, legacy-resume-only).
+        PLANNING and GATHERING are automatically skipped (deprecated, legacy-resume-only).
         Does nothing if already at SYNTHESIS. The phase order is derived
         from the DeepResearchPhase enum definition order.
 

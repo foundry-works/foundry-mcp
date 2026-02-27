@@ -66,17 +66,18 @@ class TestAdvancePhaseConsecutiveSkip:
         assert state.phase == DeepResearchPhase.SUPERVISION
 
     def test_consecutive_deprecated_phases_all_skipped(self) -> None:
-        """If two consecutive phases are deprecated, both are skipped.
+        """If multiple consecutive phases are deprecated, all are skipped.
 
         We temporarily add SUPERVISION to _SKIP_PHASES to simulate
-        consecutive deprecated phases (GATHERING + SUPERVISION).
+        consecutive deprecated phases (PLANNING + GATHERING + SUPERVISION).
         BRIEF should advance directly to SYNTHESIS.
         """
         state = _make_state(phase=DeepResearchPhase.BRIEF)
         original_skip = DeepResearchState._SKIP_PHASES
         try:
-            # Simulate two consecutive deprecated phases
+            # Simulate three consecutive deprecated phases
             DeepResearchState._SKIP_PHASES = {
+                DeepResearchPhase.PLANNING,
                 DeepResearchPhase.GATHERING,
                 DeepResearchPhase.SUPERVISION,
             }

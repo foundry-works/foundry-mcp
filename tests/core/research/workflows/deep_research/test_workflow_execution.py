@@ -268,7 +268,8 @@ class TestCancellationBetweenPhases:
 
     @pytest.mark.asyncio
     async def test_cancellation_during_supervision_rolls_back(self):
-        """Cancellation during SUPERVISION with prior checkpoint triggers rollback."""
+        """Cancellation during SUPERVISION with prior checkpoint triggers rollback
+        and CancelledError propagates to honour Python's cancellation contract."""
         stub = StubWorkflow()
 
         async def raise_cancelled(**kw: Any) -> WorkflowResult:
@@ -280,11 +281,11 @@ class TestCancellationBetweenPhases:
         state.metadata["iteration_in_progress"] = True
         state.metadata["last_completed_iteration"] = 1
 
-        result = await stub._execute_workflow_async(
-            state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
-        )
+        with pytest.raises(asyncio.CancelledError):
+            await stub._execute_workflow_async(
+                state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
+            )
 
-        assert result.success is False
         assert state.metadata.get("rollback_note") == "partial_iteration_data_retained"
         assert state.metadata.get("discarded_iteration") == 2
         assert state.iteration == 1
@@ -295,7 +296,8 @@ class TestCancellationBetweenPhases:
 
     @pytest.mark.asyncio
     async def test_cancellation_after_brief_before_supervision(self):
-        """Cancellation triggered between BRIEF and SUPERVISION via _check_cancellation."""
+        """Cancellation triggered between BRIEF and SUPERVISION via _check_cancellation.
+        CancelledError propagates to caller after state cleanup."""
         stub = StubWorkflow()
 
         # Register a background task that's cancelled
@@ -310,16 +312,17 @@ class TestCancellationBetweenPhases:
 
         stub._execute_brief_async = brief_then_cancel
 
-        result = await stub._execute_workflow_async(
-            state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
-        )
+        with pytest.raises(asyncio.CancelledError):
+            await stub._execute_workflow_async(
+                state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
+            )
 
-        assert result.success is False
-        assert "cancelled" in (result.error or "").lower() or state.metadata.get("cancelled")
+        assert state.metadata.get("cancelled") is True
 
     @pytest.mark.asyncio
     async def test_cancellation_first_iteration_marks_for_discard(self):
-        """First iteration cancellation sets rollback_note without safe checkpoint."""
+        """First iteration cancellation sets rollback_note without safe checkpoint.
+        CancelledError propagates after cleanup."""
         stub = StubWorkflow()
 
         async def raise_cancelled(**kw: Any) -> WorkflowResult:
@@ -331,11 +334,11 @@ class TestCancellationBetweenPhases:
         state.metadata["iteration_in_progress"] = True
         # No last_completed_iteration — first iteration
 
-        result = await stub._execute_workflow_async(
-            state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
-        )
+        with pytest.raises(asyncio.CancelledError):
+            await stub._execute_workflow_async(
+                state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
+            )
 
-        assert result.success is False
         assert state.metadata.get("rollback_note") == "partial_iteration_data_retained"
         assert state.metadata.get("discarded_iteration") == 1
 
@@ -448,3 +451,75 @@ class TestCompletionMetadata:
         # Workflow complete audit event
         audit_events = [e[0] for e in stub._audit_events]
         assert "workflow_complete" in audit_events
+
+
+class TestLegacyPlanningResume:
+    """Phase 1c: Legacy resume from PLANNING advances to SUPERVISION without crash."""
+
+    @pytest.mark.asyncio
+    async def test_planning_phase_advances_to_supervision(self):
+        """Saved state at PLANNING skips to SUPERVISION without AttributeError."""
+        stub = StubWorkflow()
+        phases_executed: list[str] = []
+
+        async def track(name: str) -> WorkflowResult:
+            phases_executed.append(name)
+            return _ok_result()
+
+        stub._execute_supervision_async = lambda **kw: track("supervision")
+        stub._execute_synthesis_async = lambda **kw: track("synthesis")
+
+        state = make_test_state(phase=DeepResearchPhase.PLANNING)
+
+        result = await stub._execute_workflow_async(
+            state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
+        )
+
+        assert result.success is True
+        # PLANNING is skipped, goes to SUPERVISION then SYNTHESIS
+        assert phases_executed == ["supervision", "synthesis"]
+        # Verify the legacy_phase_resume audit event was written
+        audit_events = [e[0] for e in stub._audit_events]
+        assert "legacy_phase_resume" in audit_events
+
+    @pytest.mark.asyncio
+    async def test_planning_phase_enum_deserializes(self):
+        """DeepResearchPhase.PLANNING exists for legacy state deserialization."""
+        assert DeepResearchPhase.PLANNING.value == "planning"
+        # Verify it can be constructed from string
+        assert DeepResearchPhase("planning") == DeepResearchPhase.PLANNING
+
+
+class TestCancelledErrorPropagation:
+    """Phase 1b: CancelledError re-raises after state cleanup."""
+
+    @pytest.mark.asyncio
+    async def test_cancelled_error_propagates_to_caller(self):
+        """asyncio.Task.cancel() on a running workflow results in CancelledError
+        being raised to the caller, with state properly cleaned up."""
+        stub = StubWorkflow()
+
+        async def slow_supervision(**kw: Any) -> WorkflowResult:
+            await asyncio.sleep(10)  # Will be cancelled
+            return _ok_result()
+
+        stub._execute_supervision_async = slow_supervision
+        state = make_test_state(phase=DeepResearchPhase.SUPERVISION)
+        state.metadata["iteration_in_progress"] = True
+
+        task = asyncio.create_task(
+            stub._execute_workflow_async(
+                state=state, provider_id=None, timeout_per_operation=60.0, max_concurrent=3,
+            )
+        )
+
+        # Let the task start, then cancel it
+        await asyncio.sleep(0.01)
+        task.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        # State cleanup still happened
+        assert state.metadata.get("cancelled") is True
+        assert stub.memory.save_deep_research.called

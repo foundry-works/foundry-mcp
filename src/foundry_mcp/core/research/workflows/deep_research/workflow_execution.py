@@ -209,6 +209,24 @@ class WorkflowExecutionMixin:
             # PLANNING and GATHERING are legacy-resume-only phases — new workflows
             # never enter them.  The supervisor handles both decomposition (round 0)
             # and gap-driven follow-up (rounds 1+).
+            if state.phase == DeepResearchPhase.PLANNING:
+                # Legacy saved states may resume at PLANNING; skip to SUPERVISION.
+                logger.warning(
+                    "PLANNING phase running from legacy saved state (research %s) "
+                    "— advancing to SUPERVISION",
+                    state.id,
+                )
+                self._write_audit_event(
+                    state,
+                    "legacy_phase_resume",
+                    data={
+                        "phase": "planning",
+                        "deprecated_phase": True,
+                    },
+                    level="warning",
+                )
+                state.advance_phase()  # PLANNING → skips GATHERING → SUPERVISION
+
             if state.phase == DeepResearchPhase.GATHERING:
                 # Legacy saved states may resume at GATHERING; run it once
                 # then advance to SUPERVISION.
@@ -467,22 +485,14 @@ class WorkflowExecutionMixin:
                 },
                 level="warning",
             )
-            # Return failure result instead of re-raising CancelledError.
-            # This prevents the outer background_tasks.py handler from
-            # overwriting the careful iteration rollback and partial-result
-            # discard that was performed above.
-            return WorkflowResult(
-                success=False,
-                content="",
-                error="Research cancelled",
-                metadata={
-                    "research_id": state.id,
-                    "cancelled": True,
-                    "phase": state.phase.value,
-                    "iteration": state.iteration,
-                    "discarded_iteration": state.metadata.get("discarded_iteration"),
-                },
-            )
+            # Re-raise CancelledError to honour Python's cancellation
+            # contract.  Callers using asyncio.wait_for() or Task.cancel()
+            # need to see the exception propagate.  The outer handler in
+            # background_tasks.py already guards on ``state.completed_at is
+            # None`` so it won't overwrite the careful iteration rollback
+            # and partial-result discard performed above (mark_cancelled
+            # sets completed_at).
+            raise
         except Exception as exc:
             tb_str = traceback.format_exc()
             logger.exception(

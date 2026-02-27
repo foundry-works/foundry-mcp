@@ -2,27 +2,27 @@
 
 ## Phase 1: Critical & High-Priority Fixes
 
-- [ ] **1a.** Fix `_evaluate_research` deadlock risk (CRITICAL)
-  - [ ] Refactor async dispatch to use `_run_sync` pattern (ThreadPoolExecutor)
-  - [ ] `action_handlers.py:573-585` — replace `run_coroutine_threadsafe` + `future.result()`
-  - [ ] Add test: call `_evaluate_research` from async context without deadlock
+- [x] **1a.** Fix `_evaluate_research` deadlock risk (CRITICAL)
+  - [x] Refactor async dispatch to use `_run_sync` pattern (ThreadPoolExecutor)
+  - [x] `action_handlers.py:573-585` — replace `run_coroutine_threadsafe` + `future.result()`
+  - [x] Add test: call `_evaluate_research` from async context without deadlock
 
-- [ ] **1b.** Restore `CancelledError` propagation (HIGH)
-  - [ ] `workflow_execution.py:379-485` — re-raise `CancelledError` after state cleanup
-  - [ ] Verify `background_tasks.py` guard handles re-raised exception
-  - [ ] Add test: `Task.cancel()` propagates `CancelledError` to caller
+- [x] **1b.** Restore `CancelledError` propagation (HIGH)
+  - [x] `workflow_execution.py:379-485` — re-raise `CancelledError` after state cleanup
+  - [x] Verify `background_tasks.py` guard handles re-raised exception
+  - [x] Add test: `Task.cancel()` propagates `CancelledError` to caller
 
-- [ ] **1c.** Fix legacy resume crash for PLANNING phase (HIGH)
-  - [ ] `workflow_execution.py` — add explicit PLANNING→skip-to-SUPERVISION handling
-  - [ ] `phases/__init__.py` — clean up deprecated export
-  - [ ] Verify `DeepResearchPhase.PLANNING` enum value still exists for deserialization
-  - [ ] Add test: saved state at PLANNING phase resumes without `AttributeError`
+- [x] **1c.** Fix legacy resume crash for PLANNING phase (HIGH)
+  - [x] `workflow_execution.py` — add explicit PLANNING→skip-to-SUPERVISION handling
+  - [x] `phases/__init__.py` — clean up deprecated export
+  - [x] Verify `DeepResearchPhase.PLANNING` enum value still exists for deserialization
+  - [x] Add test: saved state at PLANNING phase resumes without `AttributeError`
 
-- [ ] **1d.** Harden SSRF validation (HIGH)
-  - [ ] `_helpers.py:809-857` — add `resolve_dns` parameter to `validate_extract_url()`
-  - [ ] Document TOCTOU gap in docstring
-  - [ ] `deep_research.py:232-248` — call with `resolve_dns=True` in URL coercion validator
-  - [ ] Add test: DNS rebinding detection
+- [x] **1d.** Harden SSRF validation (HIGH)
+  - [x] `_helpers.py:809-857` — add `resolve_dns` parameter to `validate_extract_url()`
+  - [x] Document TOCTOU gap in docstring
+  - [x] `deep_research.py:232-248` — call with `resolve_dns=True` in URL coercion validator
+  - [x] Add test: DNS rebinding detection
 
 ## Phase 2: Dead Code Cleanup
 

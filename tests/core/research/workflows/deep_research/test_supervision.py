@@ -2048,11 +2048,12 @@ class TestUnifiedSupervisorOrchestration:
 
         assert state.phase == DeepResearchPhase.SUPERVISION
 
-    def test_planning_phase_not_in_enum(self):
-        """PLANNING phase does not exist in DeepResearchPhase — no legacy resume possible."""
+    def test_planning_phase_deprecated_in_enum(self):
+        """PLANNING phase exists in DeepResearchPhase for legacy deserialization but is skipped."""
         phase_values = [p.value for p in DeepResearchPhase]
-        assert "planning" not in phase_values
-        assert "PLANNING" not in [p.name for p in DeepResearchPhase]
+        assert "planning" in phase_values
+        # PLANNING is in _SKIP_PHASES so advance_phase() skips over it
+        assert DeepResearchPhase.PLANNING in DeepResearchState._SKIP_PHASES
 
     # ------------------------------------------------------------------
     # 1.3 / 1.4: GATHERING is legacy-resume-only with deprecation logging
