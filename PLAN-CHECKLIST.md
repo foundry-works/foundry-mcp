@@ -40,15 +40,15 @@
 
 ## Phase 4: Configuration Validation & Consistency
 
-- [ ] **4a.** Validate phase-specific timeouts and thresholds (MAJOR)
-  - [ ] `research.py` `_validate_deep_research_bounds()` — add lower-bound checks for all timeout fields
-  - [ ] Validate `content_dedup_threshold` in [0, 1] range
-  - [ ] Validate `compression_max_content_length` > 0
-  - [ ] Add test: negative timeouts clamped to defaults with warnings
+- [x] **4a.** Validate phase-specific timeouts and thresholds (MAJOR)
+  - [x] `research.py` `_validate_deep_research_bounds()` — add lower-bound checks for all timeout fields
+  - [x] Validate `content_dedup_threshold` in [0, 1] range
+  - [x] Validate `compression_max_content_length` > 0
+  - [x] Add test: negative timeouts clamped to defaults with warnings
 
-- [ ] **4b.** Fix `structured_truncate_blocks` single-pass insufficiency (MAJOR)
-  - [ ] `_token_budget.py:177` — wrap in multi-pass loop (max 3 passes)
-  - [ ] Add test: prompt 3x over budget with one large section → fits after truncation
+- [x] **4b.** Fix `structured_truncate_blocks` single-pass insufficiency (MAJOR)
+  - [x] `_token_budget.py:177` — wrap in multi-pass loop (max 3 passes)
+  - [x] Add test: prompt 3x over budget with one large section → fits after truncation
 
 ## Phase 5: Test Quality & Dead Code Cleanup
 

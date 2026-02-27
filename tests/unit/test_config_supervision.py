@@ -242,6 +242,142 @@ class TestDeepResearchBoundsValidation:
 
 
 # ---------------------------------------------------------------------------
+# 4A — Phase-specific timeout, threshold, and content length validation
+# ---------------------------------------------------------------------------
+
+
+class TestPhaseSpecificTimeoutValidation:
+    """Tests for phase-specific timeout and threshold validation in _validate_deep_research_bounds()."""
+
+    @pytest.mark.parametrize(
+        "field_name,default_val",
+        [
+            ("deep_research_planning_timeout", 360.0),
+            ("deep_research_synthesis_timeout", 600.0),
+            ("deep_research_supervision_wall_clock_timeout", 1800.0),
+            ("deep_research_reflection_timeout", 60.0),
+            ("deep_research_evaluation_timeout", 360.0),
+            ("deep_research_digest_timeout", 120.0),
+            ("deep_research_summarization_timeout", 60),
+            ("deep_research_retry_delay", 5.0),
+        ],
+    )
+    def test_negative_timeout_reset_to_default(self, field_name: str, default_val, caplog):
+        """Negative timeout values are reset to defaults with a warning."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="foundry_mcp.config.research"):
+            config = ResearchConfig(**{field_name: -10})
+
+        assert getattr(config, field_name) == default_val
+        assert any(f"{field_name}=-10" in rec.message for rec in caplog.records)
+
+    @pytest.mark.parametrize(
+        "field_name,default_val",
+        [
+            ("deep_research_planning_timeout", 360.0),
+            ("deep_research_synthesis_timeout", 600.0),
+            ("deep_research_supervision_wall_clock_timeout", 1800.0),
+            ("deep_research_reflection_timeout", 60.0),
+            ("deep_research_evaluation_timeout", 360.0),
+            ("deep_research_digest_timeout", 120.0),
+            ("deep_research_summarization_timeout", 60),
+            ("deep_research_retry_delay", 5.0),
+        ],
+    )
+    def test_zero_timeout_reset_to_default(self, field_name: str, default_val, caplog):
+        """Zero timeout values are reset to defaults with a warning."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="foundry_mcp.config.research"):
+            config = ResearchConfig(**{field_name: 0})
+
+        assert getattr(config, field_name) == default_val
+        assert any("invalid (must be > 0)" in rec.message for rec in caplog.records)
+
+    @pytest.mark.parametrize(
+        "field_name",
+        [
+            "deep_research_planning_timeout",
+            "deep_research_synthesis_timeout",
+            "deep_research_supervision_wall_clock_timeout",
+            "deep_research_reflection_timeout",
+            "deep_research_evaluation_timeout",
+            "deep_research_digest_timeout",
+            "deep_research_summarization_timeout",
+            "deep_research_retry_delay",
+        ],
+    )
+    def test_positive_timeout_accepted(self, field_name: str, caplog):
+        """Positive timeout values are accepted without warning."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="foundry_mcp.config.research"):
+            config = ResearchConfig(**{field_name: 42.0})
+
+        assert getattr(config, field_name) == 42.0
+        timeout_warnings = [r for r in caplog.records if field_name in r.message]
+        assert len(timeout_warnings) == 0
+
+    # --- content_dedup_threshold ---
+
+    def test_content_dedup_threshold_above_one_reset(self, caplog):
+        """content_dedup_threshold > 1.0 is reset to 0.8."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="foundry_mcp.config.research"):
+            config = ResearchConfig(deep_research_content_dedup_threshold=1.5)
+
+        assert config.deep_research_content_dedup_threshold == 0.8
+        assert any("content_dedup_threshold" in rec.message for rec in caplog.records)
+
+    def test_content_dedup_threshold_negative_reset(self, caplog):
+        """content_dedup_threshold < 0.0 is reset to 0.8."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="foundry_mcp.config.research"):
+            config = ResearchConfig(deep_research_content_dedup_threshold=-0.1)
+
+        assert config.deep_research_content_dedup_threshold == 0.8
+        assert any("content_dedup_threshold" in rec.message for rec in caplog.records)
+
+    def test_content_dedup_threshold_valid_boundaries(self):
+        """content_dedup_threshold at 0.0 and 1.0 boundaries accepted."""
+        config_zero = ResearchConfig(deep_research_content_dedup_threshold=0.0)
+        assert config_zero.deep_research_content_dedup_threshold == 0.0
+
+        config_one = ResearchConfig(deep_research_content_dedup_threshold=1.0)
+        assert config_one.deep_research_content_dedup_threshold == 1.0
+
+    # --- compression_max_content_length ---
+
+    def test_compression_max_content_length_zero_reset(self, caplog):
+        """compression_max_content_length == 0 is reset to 50000."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="foundry_mcp.config.research"):
+            config = ResearchConfig(deep_research_compression_max_content_length=0)
+
+        assert config.deep_research_compression_max_content_length == 50000
+        assert any("compression_max_content_length" in rec.message for rec in caplog.records)
+
+    def test_compression_max_content_length_negative_reset(self, caplog):
+        """compression_max_content_length < 0 is reset to 50000."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="foundry_mcp.config.research"):
+            config = ResearchConfig(deep_research_compression_max_content_length=-100)
+
+        assert config.deep_research_compression_max_content_length == 50000
+        assert any("compression_max_content_length" in rec.message for rec in caplog.records)
+
+    def test_compression_max_content_length_positive_accepted(self):
+        """Positive compression_max_content_length is accepted."""
+        config = ResearchConfig(deep_research_compression_max_content_length=75000)
+        assert config.deep_research_compression_max_content_length == 75000
+
+
+# ---------------------------------------------------------------------------
 # 2B / 5B.3 — Deprecated field warnings
 # ---------------------------------------------------------------------------
 

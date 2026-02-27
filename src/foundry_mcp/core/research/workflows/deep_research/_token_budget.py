@@ -174,22 +174,42 @@ def structured_truncate_blocks(prompt: str, max_tokens: int) -> str:
     if not truncatable:
         return truncate_at_boundary(prompt, max_chars)
 
-    # Sort by content length descending — truncate largest sections first
-    truncatable.sort(key=lambda x: x[1], reverse=True)
-
-    # Iteratively truncate until within budget
-    excess = len(prompt) - max_chars
-    for idx, orig_len in truncatable:
+    # Multi-pass truncation: each pass cuts up to 50% of each section,
+    # so a single pass is insufficient when a section is >2x over budget.
+    # Up to 3 passes brings even very large prompts within budget.
+    for _pass in range(3):
+        total = sum(len(h) + len(c) for h, c in sections)
+        excess = total - max_chars
         if excess <= 0:
             break
-        header, content = sections[idx]
-        # Truncate this section's content by up to 50%
-        cut = min(excess, orig_len // 2)
-        target_len = max(100, orig_len - cut)
-        truncated_content = truncate_at_boundary(content, target_len)
-        saved = orig_len - len(truncated_content)
-        sections[idx] = (header, truncated_content)
-        excess -= saved
+
+        # Re-identify truncatable sections with current lengths
+        truncatable = []
+        for i, (header, content) in enumerate(sections):
+            header_lower = header.lower()
+            is_protected = any(
+                kw in header_lower for kw in _PROTECTED_SECTION_KEYWORDS
+            )
+            if not is_protected and len(content) > 100:
+                truncatable.append((i, len(content)))
+
+        if not truncatable:
+            break
+
+        # Sort by content length descending — truncate largest first
+        truncatable.sort(key=lambda x: x[1], reverse=True)
+
+        for idx, cur_len in truncatable:
+            if excess <= 0:
+                break
+            header, content = sections[idx]
+            # Truncate this section's content by up to 50%
+            cut = min(excess, cur_len // 2)
+            target_len = max(100, cur_len - cut)
+            truncated_content = truncate_at_boundary(content, target_len)
+            saved = cur_len - len(truncated_content)
+            sections[idx] = (header, truncated_content)
+            excess -= saved
 
     # Reassemble
     parts: list[str] = []

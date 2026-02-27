@@ -1011,6 +1011,38 @@ class TestStructuredTruncateBlocks:
         assert "## Findings to Synthesize" in result
 
 
+    def test_multi_pass_3x_over_budget(self):
+        """Prompt 3x over budget with one large section fits after multi-pass truncation.
+
+        A single pass can only cut 50% of a section, so a prompt >2x over
+        budget requires multiple passes.  This validates the Phase 4b fix.
+        """
+        # Build a prompt where the large section is ~3x the target budget.
+        # Target: ~1000 chars (250 tokens * 4 chars/token)
+        large_content = "data " * 600  # 3000 chars
+        small_content = "info " * 20  # 100 chars
+        prompt = (
+            "## Instructions\nDo analysis.\n\n"
+            f"## Large Analysis\n{large_content}\n\n"
+            f"## Small Notes\n{small_content}"
+        )
+        # Budget is ~1/3 of total prompt size in tokens
+        total_chars = len(prompt)
+        target_tokens = total_chars // (4 * 3)  # ~1/3 of prompt in tokens
+
+        result = structured_truncate_blocks(prompt, max_tokens=target_tokens)
+
+        # Result must fit within the token budget (allowing newline overhead)
+        max_chars = target_tokens * 4
+        assert len(result) <= max_chars + 50, (
+            f"Result ({len(result)} chars) exceeds budget ({max_chars} chars) "
+            f"— multi-pass truncation insufficient"
+        )
+        # Protected section should still be present
+        assert "## Instructions" in result
+        assert "Do analysis." in result
+
+
 class TestStructuredDropSources:
     """Tests for structured_drop_sources() — checklist 4.2."""
 

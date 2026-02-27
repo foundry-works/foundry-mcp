@@ -690,6 +690,47 @@ class ResearchConfig:
                 f"{self.default_timeout!r}. Must be >= 1."
             )
 
+        # --- phase-specific timeouts (must be positive) ---
+        timeout_fields = [
+            "deep_research_planning_timeout",
+            "deep_research_synthesis_timeout",
+            "deep_research_supervision_wall_clock_timeout",
+            "deep_research_reflection_timeout",
+            "deep_research_evaluation_timeout",
+            "deep_research_digest_timeout",
+            "deep_research_summarization_timeout",
+            "deep_research_retry_delay",
+        ]
+        for field_name in timeout_fields:
+            val = getattr(self, field_name)
+            if val is not None and val <= 0:
+                default_val = ResearchConfig.__dataclass_fields__[field_name].default
+                setattr(self, field_name, default_val)
+                logger.warning(
+                    "%s=%s invalid (must be > 0), reset to default %s",
+                    field_name,
+                    val,
+                    default_val,
+                )
+
+        # --- content_dedup_threshold (must be in [0.0, 1.0]) ---
+        if not (0.0 <= self.deep_research_content_dedup_threshold <= 1.0):
+            logger.warning(
+                "deep_research_content_dedup_threshold=%s out of [0, 1] range, "
+                "reset to 0.8",
+                self.deep_research_content_dedup_threshold,
+            )
+            self.deep_research_content_dedup_threshold = 0.8
+
+        # --- compression_max_content_length (must be positive) ---
+        if self.deep_research_compression_max_content_length <= 0:
+            logger.warning(
+                "deep_research_compression_max_content_length=%s must be > 0, "
+                "reset to 50000",
+                self.deep_research_compression_max_content_length,
+            )
+            self.deep_research_compression_max_content_length = 50000
+
         # --- token_safety_margin (fraction 0.0-1.0) ---
         if not (0.0 <= self.token_safety_margin <= 1.0):
             raise ValueError(
