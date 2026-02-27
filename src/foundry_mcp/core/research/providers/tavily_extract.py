@@ -114,6 +114,13 @@ def _is_private_ip(ip_str: str) -> bool:
     """
     try:
         ip = ipaddress.ip_address(ip_str)
+        # Check IPv4-mapped IPv6 addresses (e.g. ::ffff:169.254.169.254)
+        # to prevent SSRF bypass of IPv4 blocked networks via IPv6 encoding.
+        mapped = getattr(ip, "ipv4_mapped", None)
+        if mapped is not None:
+            for network in PRIVATE_IP_RANGES:
+                if mapped in network:
+                    return True
         for network in PRIVATE_IP_RANGES:
             if ip in network:
                 return True

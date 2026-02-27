@@ -452,6 +452,8 @@ class WebSearchTool(BaseModel):
         description="Maximum number of results to return per query",
     )
 
+    _MAX_QUERIES: ClassVar[int] = 10
+
     @model_validator(mode="after")
     def _normalize_queries(self) -> "WebSearchTool":
         """Normalize single query and batch queries into ``self.queries``."""
@@ -463,6 +465,14 @@ class WebSearchTool(BaseModel):
             self.queries = [self.query]
         elif not self.queries:
             raise ValueError("Either 'query' or 'queries' must be provided")
+        # Cap the number of queries to prevent unbounded search API dispatch.
+        if len(self.queries) > self._MAX_QUERIES:
+            logger.warning(
+                "WebSearchTool received %d queries; truncating to %d.",
+                len(self.queries),
+                self._MAX_QUERIES,
+            )
+            self.queries = self.queries[: self._MAX_QUERIES]
         # Ensure query reflects first entry for backward compat
         self.query = self.queries[0]
         return self
@@ -483,10 +493,30 @@ class ExtractContentTool(BaseModel):
     @field_validator("urls", mode="before")
     @classmethod
     def _cap_urls(cls, v: Any) -> list[str]:
-        """Cap at 2 URLs per extraction call."""
+        """Cap at 2 URLs per extraction call with SSRF validation.
+
+        Uses ``resolve_dns=False`` to avoid blocking DNS lookups inside a
+        synchronous Pydantic validator.  IP-literal SSRF attacks are caught
+        here; DNS-rebinding attacks are caught downstream by the async
+        extraction layer (``validate_extract_url_async``).
+        """
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            validate_extract_url,
+        )
+
         if not isinstance(v, list):
             return []
-        return [str(u).strip() for u in v if isinstance(u, str) and u.strip().startswith("http")][:2]
+        safe: list[str] = []
+        for u in v:
+            if not isinstance(u, str):
+                continue
+            stripped = u.strip()
+            try:
+                if validate_extract_url(stripped, resolve_dns=False):
+                    safe.append(stripped)
+            except Exception:
+                continue
+        return safe[:2]
 
 
 class ThinkTool(BaseModel):

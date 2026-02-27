@@ -6,9 +6,9 @@
 - [x] 1.3 Validate compression output before clearing `message_history`
 
 ## Phase 2 — Security Fixes
-- [ ] 2.1 Block IPv4-mapped IPv6 SSRF bypass in `_injection_protection.py` and `tavily.py`
-- [ ] 2.2 Add SSRF validation to `ExtractContentTool._cap_urls`
-- [ ] 2.3 Cap `WebSearchTool.queries` list length (max 10)
+- [x] 2.1 Block IPv4-mapped IPv6 SSRF bypass in `_injection_protection.py` and `tavily_extract.py`
+- [x] 2.2 Add SSRF validation to `ExtractContentTool._cap_urls`
+- [x] 2.3 Cap `WebSearchTool.queries` list length (max 10)
 
 ## Phase 3 — Major Correctness Fixes
 - [ ] 3.1 Fix `cleanup_stale_tasks` classmethod → instance method

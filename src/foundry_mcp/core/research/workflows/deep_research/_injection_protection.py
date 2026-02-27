@@ -101,6 +101,13 @@ def validate_extract_url(url: str, *, resolve_dns: bool = False) -> bool:
     # Try to parse as IP address and check against blocked networks
     try:
         addr = ipaddress.ip_address(hostname)
+        # Check IPv4-mapped IPv6 addresses (e.g. ::ffff:169.254.169.254)
+        # to prevent SSRF bypass of IPv4 blocked networks via IPv6 encoding.
+        mapped = getattr(addr, "ipv4_mapped", None)
+        if mapped is not None:
+            for network in _BLOCKED_NETWORKS:
+                if mapped in network:
+                    return False
         for network in _BLOCKED_NETWORKS:
             if addr in network:
                 return False
@@ -113,6 +120,11 @@ def validate_extract_url(url: str, *, resolve_dns: bool = False) -> bool:
                 infos = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
                 for *_, sockaddr in infos:
                     resolved_ip = ipaddress.ip_address(sockaddr[0])
+                    resolved_mapped = getattr(resolved_ip, "ipv4_mapped", None)
+                    if resolved_mapped is not None:
+                        for network in _BLOCKED_NETWORKS:
+                            if resolved_mapped in network:
+                                return False
                     for network in _BLOCKED_NETWORKS:
                         if resolved_ip in network:
                             return False
