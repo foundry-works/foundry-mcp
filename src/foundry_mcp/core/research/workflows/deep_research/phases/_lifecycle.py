@@ -706,6 +706,7 @@ async def execute_llm_call(
     timeout: float,
     error_metadata: Optional[dict[str, Any]] = None,
     role: Optional[str] = None,
+    skip_token_tracking: bool = False,
 ) -> LLMCallResult | WorkflowResult:
     """Execute an LLM call with full lifecycle instrumentation.
 
@@ -742,6 +743,10 @@ async def execute_llm_call(
             "reflection", "summarization", "compression", "clarification").
             When set, resolves provider/model from config if not explicitly
             provided.
+        skip_token_tracking: When True, skip adding tokens to
+            ``state.total_tokens_used``.  Used by the compression path where
+            the caller tracks tokens under a lock to avoid double-counting
+            in parallel contexts.
 
     Returns:
         LLMCallResult on success (caller uses .result for the WorkflowResult),
@@ -949,8 +954,8 @@ async def execute_llm_call(
             logger.error("%s phase LLM call failed: %s", phase_name.capitalize(), result.error)
         return result
 
-    # Token tracking
-    if result.tokens_used:
+    # Token tracking (skipped when the caller tracks under its own lock)
+    if result.tokens_used and not skip_token_tracking:
         state.total_tokens_used += result.tokens_used
 
     # Phase metrics (include token_limit_retries if any occurred)

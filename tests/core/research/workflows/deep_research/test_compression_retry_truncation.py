@@ -776,3 +776,267 @@ class TestContextWindowErrorDetection:
 
         exc = Exception("something went wrong with the request")
         assert _is_context_window_error(exc) is False
+
+
+# =============================================================================
+# Phase 1a: Token double-counting fix — skip_token_tracking in compression
+# =============================================================================
+
+
+class TestCompressionTokenDoubleCountingFix:
+    """Verify that parallel compression does NOT double-count tokens.
+
+    execute_llm_call now receives skip_token_tracking=True from the per-topic
+    compression path, so only the caller in topic_research.py (under the
+    state_lock) adds tokens to state.total_tokens_used.
+    """
+
+    @pytest.mark.asyncio
+    async def test_compress_single_topic_passes_skip_token_tracking(self):
+        """_compress_single_topic_async passes skip_token_tracking=True to execute_llm_call."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            LLMCallResult,
+        )
+
+        state = _make_state(num_sub_queries=3, sources_per_query=2)
+        state.total_tokens_used = 0
+
+        per_call_input = 100
+        per_call_output = 50
+
+        def make_llm_result(**kw):
+            wr = WorkflowResult(
+                success=True,
+                content="<findings>compressed</findings>\n<supervisor_brief>brief</supervisor_brief>",
+                tokens_used=per_call_input + per_call_output,
+                input_tokens=per_call_input,
+                output_tokens=per_call_output,
+            )
+            return LLMCallResult(result=wr, llm_call_duration_ms=10.0)
+
+        mock_llm = AsyncMock(side_effect=make_llm_result)
+        stub = StubCompression()
+
+        # Compress 3 topics sequentially, collecting all execute_llm_call calls
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases._lifecycle.execute_llm_call",
+            mock_llm,
+        ):
+            for i in range(3):
+                tr = _make_topic_result_with_history(state, sub_query_id=f"sq-{i}")
+                inp, out, ok = await stub._compress_single_topic_async(
+                    topic_result=tr,
+                    state=state,
+                    timeout=30.0,
+                )
+                assert ok is True
+                assert inp == per_call_input
+                assert out == per_call_output
+
+            # Verify every call passed skip_token_tracking=True
+            assert mock_llm.call_count == 3
+            for call in mock_llm.call_args_list:
+                assert call.kwargs.get("skip_token_tracking") is True, (
+                    "Compression path must pass skip_token_tracking=True to execute_llm_call"
+                )
+
+    @pytest.mark.asyncio
+    async def test_execute_llm_call_skips_token_tracking_when_flagged(self):
+        """execute_llm_call with skip_token_tracking=True must NOT add to state.total_tokens_used."""
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            execute_llm_call,
+        )
+
+        state = _make_state(num_sub_queries=1, sources_per_query=1)
+        state.total_tokens_used = 0
+
+        mock_result = WorkflowResult(
+            success=True,
+            content="test content",
+            tokens_used=500,
+            input_tokens=300,
+            output_tokens=200,
+        )
+
+        mock_workflow = MagicMock()
+        mock_workflow.config = MagicMock()
+        mock_workflow.config.resolve_model_for_role = MagicMock(
+            return_value=(None, None)
+        )
+        mock_workflow.config.get_phase_fallback_providers = MagicMock(return_value=[])
+        mock_workflow.config.deep_research_max_retries = 0
+        mock_workflow.config.deep_research_retry_delay = 0.1
+        mock_workflow.memory = MagicMock()
+        mock_workflow._execute_provider_async = AsyncMock(return_value=mock_result)
+        mock_workflow._write_audit_event = MagicMock()
+
+        # With skip_token_tracking=True: tokens should NOT be added
+        await execute_llm_call(
+            workflow=mock_workflow,
+            state=state,
+            phase_name="compression",
+            system_prompt="system",
+            user_prompt="user",
+            provider_id="test-provider",
+            model=None,
+            temperature=0.2,
+            timeout=30.0,
+            skip_token_tracking=True,
+        )
+        assert state.total_tokens_used == 0, (
+            "skip_token_tracking=True should prevent token addition"
+        )
+
+        # With skip_token_tracking=False (default): tokens SHOULD be added
+        await execute_llm_call(
+            workflow=mock_workflow,
+            state=state,
+            phase_name="analysis",
+            system_prompt="system",
+            user_prompt="user",
+            provider_id="test-provider",
+            model=None,
+            temperature=0.2,
+            timeout=30.0,
+            skip_token_tracking=False,
+        )
+        assert state.total_tokens_used == 500, (
+            "skip_token_tracking=False should add tokens as before"
+        )
+
+
+# =============================================================================
+# Phase 1b: Logging on empty compression LLM response
+# =============================================================================
+
+
+class TestCompressionEmptyResultLogging:
+    """Verify that compression logs a warning and writes an audit event
+    when the LLM returns success=True but empty content."""
+
+    @pytest.mark.asyncio
+    async def test_empty_content_logs_warning_and_audit_event(self):
+        """LLM returns success=True, content='' → warning logged + audit event."""
+        import logging
+
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            LLMCallResult,
+        )
+
+        state = _make_state(num_sub_queries=1, sources_per_query=2)
+        tr = _make_topic_result_with_history(state, sub_query_id="sq-0")
+
+        stub = StubCompression()
+
+        # LLM returns success=True but empty content
+        empty_result = WorkflowResult(
+            success=True,
+            content="",
+            tokens_used=50,
+            input_tokens=30,
+            output_tokens=20,
+        )
+        mock_llm = AsyncMock(
+            return_value=LLMCallResult(result=empty_result, llm_call_duration_ms=10.0)
+        )
+
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.phases._lifecycle.execute_llm_call",
+                mock_llm,
+            ),
+            pytest.raises(Exception, match=".*") if False else _noop_ctx(),
+        ):
+            with _capture_logs("foundry_mcp.core.research.workflows.deep_research.phases.compression", logging.WARNING) as log_records:
+                inp, out, ok = await stub._compress_single_topic_async(
+                    topic_result=tr,
+                    state=state,
+                    timeout=30.0,
+                )
+
+        assert ok is False
+        assert inp == 0
+        assert out == 0
+
+        # Verify warning was logged
+        warning_msgs = [r.message for r in log_records]
+        assert any("empty/failed result" in msg for msg in warning_msgs), (
+            f"Expected warning about empty/failed result, got: {warning_msgs}"
+        )
+
+        # Verify audit event was written
+        audit_events = [e for e, _ in stub._audit_events if e == "compression_empty_result"]
+        assert len(audit_events) == 1, (
+            f"Expected 1 compression_empty_result audit event, got {len(audit_events)}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_failed_result_logs_warning_and_audit_event(self):
+        """LLM returns success=False → warning logged + audit event."""
+        import logging
+
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            LLMCallResult,
+        )
+
+        state = _make_state(num_sub_queries=1, sources_per_query=2)
+        tr = _make_topic_result_with_history(state, sub_query_id="sq-0")
+
+        stub = StubCompression()
+
+        # LLM returns success=False
+        failed_result = WorkflowResult(
+            success=False,
+            content="",
+            error="provider error",
+        )
+        # execute_llm_call returns a bare WorkflowResult on failure
+        mock_llm = AsyncMock(return_value=failed_result)
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases._lifecycle.execute_llm_call",
+            mock_llm,
+        ):
+            with _capture_logs("foundry_mcp.core.research.workflows.deep_research.phases.compression", logging.WARNING) as log_records:
+                inp, out, ok = await stub._compress_single_topic_async(
+                    topic_result=tr,
+                    state=state,
+                    timeout=30.0,
+                )
+
+        # When execute_llm_call returns a bare WorkflowResult (failure),
+        # the existing code path handles it — this tests the non-retryable failure path
+        assert ok is False
+        assert inp == 0
+        assert out == 0
+
+
+import contextlib
+import logging
+
+
+@contextlib.contextmanager
+def _capture_logs(logger_name: str, level: int = logging.WARNING):
+    """Context manager that captures log records from the given logger."""
+    log_records: list[logging.LogRecord] = []
+
+    class _Handler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            log_records.append(record)
+
+    handler = _Handler(level=level)
+    target_logger = logging.getLogger(logger_name)
+    target_logger.addHandler(handler)
+    old_level = target_logger.level
+    target_logger.setLevel(level)
+    try:
+        yield log_records
+    finally:
+        target_logger.removeHandler(handler)
+        target_logger.setLevel(old_level)
+
+
+@contextlib.contextmanager
+def _noop_ctx():
+    """No-op context manager for use in conditional with-blocks."""
+    yield

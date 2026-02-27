@@ -611,6 +611,7 @@ class CompressionMixin:
                 temperature=0.2,
                 timeout=timeout,
                 role="compression",
+                skip_token_tracking=True,
             )
 
             if isinstance(call_result, WorkflowResult):
@@ -716,6 +717,23 @@ class CompressionMixin:
                         },
                     )
                 return (result.input_tokens or 0, result.output_tokens or 0, True)
+
+            # LLM returned but content is empty or success=False — silent data loss
+            logger.warning(
+                "Compression produced empty/failed result for topic %r (research %s)",
+                topic_result.sub_query_id,
+                state.id,
+            )
+            self._write_audit_event(
+                state,
+                "compression_empty_result",
+                data={
+                    "topic": topic_result.sub_query_id,
+                    "success": result.success if result else False,
+                    "had_content": bool(result.content) if result else False,
+                },
+                level="warning",
+            )
             return (0, 0, False)
 
         # Should not reach here, but safety fallback
