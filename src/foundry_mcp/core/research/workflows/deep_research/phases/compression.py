@@ -145,31 +145,20 @@ def _build_structured_metadata_prompt(
     iteration_lines: list[str] = []
 
     iteration_lines.append(
-        f'  1. Query: "{sanitize_external_content(query_text)}" '
-        f"-> {topic_result.sources_found} sources found"
+        f'  1. Query: "{sanitize_external_content(query_text)}" -> {topic_result.sources_found} sources found'
     )
     if topic_result.reflection_notes:
-        iteration_lines.append(
-            f"     Reflection: {sanitize_external_content(topic_result.reflection_notes[0])}"
-        )
+        iteration_lines.append(f"     Reflection: {sanitize_external_content(topic_result.reflection_notes[0])}")
 
     for i, refined_q in enumerate(topic_result.refined_queries):
         iter_num = i + 2
-        reflection = (
-            topic_result.reflection_notes[i + 1]
-            if i + 1 < len(topic_result.reflection_notes)
-            else ""
-        )
+        reflection = topic_result.reflection_notes[i + 1] if i + 1 < len(topic_result.reflection_notes) else ""
         iteration_lines.append(f'  {iter_num}. Query: "{sanitize_external_content(refined_q)}"')
         if reflection:
-            iteration_lines.append(
-                f"     Reflection: {sanitize_external_content(reflection)}"
-            )
+            iteration_lines.append(f"     Reflection: {sanitize_external_content(reflection)}")
 
     if topic_result.early_completion and topic_result.completion_rationale:
-        iteration_lines.append(
-            f"  Completion: {sanitize_external_content(topic_result.completion_rationale)}"
-        )
+        iteration_lines.append(f"  Completion: {sanitize_external_content(topic_result.completion_rationale)}")
 
     iterations_block = "\n".join(iteration_lines)
 
@@ -193,9 +182,7 @@ def _build_structured_metadata_prompt(
         entry_text = "\n".join(entry_lines)
         if cumulative_chars + len(entry_text) > _GLOBAL_PROMPT_BUDGET_CHARS:
             omitted = len(topic_sources) - sources_included
-            source_lines.append(
-                f"[... {omitted} additional source(s) omitted for context limits]"
-            )
+            source_lines.append(f"[... {omitted} additional source(s) omitted for context limits]")
             break
         cumulative_chars += len(entry_text)
         source_lines.extend(entry_lines)
@@ -386,7 +373,7 @@ def _split_supervisor_brief(content: str) -> tuple[str, str | None]:
     compressed = content[:idx].rstrip()
     if not compressed:
         return content, None
-    brief = content[idx + len(_SUPERVISOR_BRIEF_MARKER):].strip()
+    brief = content[idx + len(_SUPERVISOR_BRIEF_MARKER) :].strip()
     # Cap at 1500 chars to stay within the supervisor's context budget
     if len(brief) > 1500:
         brief = brief[:1500]
@@ -411,7 +398,14 @@ class CompressionMixin:
     # Stubs for Pyright — canonical signatures live in _protocols.py
     if TYPE_CHECKING:
 
-        def _write_audit_event(self, state: DeepResearchState | None, event_name: str, *, data: dict[str, Any] | None = ..., level: str = ...) -> None: ...
+        def _write_audit_event(
+            self,
+            state: DeepResearchState | None,
+            event_name: str,
+            *,
+            data: dict[str, Any] | None = ...,
+            level: str = ...,
+        ) -> None: ...
         def _check_cancellation(self, state: DeepResearchState) -> None: ...
         async def _execute_provider_async(self, **kwargs: Any) -> Any: ...
 
@@ -454,9 +448,7 @@ class CompressionMixin:
         self._check_cancellation(state)
 
         # Collect sources belonging to this topic
-        topic_sources = [
-            s for s in state.sources if s.id in topic_result.source_ids
-        ]
+        topic_sources = [s for s in state.sources if s.id in topic_result.source_ids]
         if not topic_sources:
             return (0, 0, True)
 
@@ -470,9 +462,7 @@ class CompressionMixin:
         compression_model: str | None = role_model
 
         # Source content char limit — configurable, defaults to 50,000
-        max_content_length: int = getattr(
-            self.config, "deep_research_compression_max_content_length", 50_000
-        )
+        max_content_length: int = getattr(self.config, "deep_research_compression_max_content_length", 50_000)
 
         # ---------------------------------------------------------
         # System prompt — aligned with open_deep_research's
@@ -568,9 +558,7 @@ class CompressionMixin:
                 max_content_length=max_content_length,
             )
             # Record original message count for truncation metadata
-            topic_result.compression_original_message_count = len(
-                topic_result.message_history
-            )
+            topic_result.compression_original_message_count = len(topic_result.message_history)
         else:
             # Fallback: build from structured metadata (backward compat)
             user_prompt = _build_structured_metadata_prompt(
@@ -616,10 +604,7 @@ class CompressionMixin:
 
             if isinstance(call_result, WorkflowResult):
                 # Check if this is a context-window error we can retry
-                if (
-                    _is_context_window_exceeded(call_result)
-                    and outer_attempt < MAX_PHASE_TOKEN_RETRIES
-                ):
+                if _is_context_window_exceeded(call_result) and outer_attempt < MAX_PHASE_TOKEN_RETRIES:
                     outer_retries += 1
 
                     if has_message_history:
@@ -627,17 +612,12 @@ class CompressionMixin:
                         # oldest complete message pairs, preserving
                         # the most recent thinks, search results,
                         # and research_complete summary.
-                        truncated_history, _ = (
-                            truncate_message_history_for_retry(
-                                topic_result.message_history,
-                                outer_retries,
-                                MAX_PHASE_TOKEN_RETRIES,
-                            )
+                        truncated_history, _ = truncate_message_history_for_retry(
+                            topic_result.message_history,
+                            outer_retries,
+                            MAX_PHASE_TOKEN_RETRIES,
                         )
-                        total_messages_dropped = (
-                            len(topic_result.message_history)
-                            - len(truncated_history)
-                        )
+                        total_messages_dropped = len(topic_result.message_history) - len(truncated_history)
                         current_user_prompt = _build_message_history_prompt(
                             query_text=query_text,
                             message_history=truncated_history,
@@ -659,11 +639,12 @@ class CompressionMixin:
                         # Fallback: percentage-based prompt truncation
                         # for structured metadata path
                         current_user_prompt = truncate_prompt_for_retry(
-                            user_prompt, outer_retries, MAX_PHASE_TOKEN_RETRIES,
+                            user_prompt,
+                            outer_retries,
+                            MAX_PHASE_TOKEN_RETRIES,
                         )
                         logger.warning(
-                            "Compression outer retry %d/%d for topic %s: "
-                            "pre-truncating user prompt by %d%%",
+                            "Compression outer retry %d/%d for topic %s: pre-truncating user prompt by %d%%",
                             outer_retries,
                             MAX_PHASE_TOKEN_RETRIES,
                             topic_result.sub_query_id,
@@ -783,8 +764,7 @@ class CompressionMixin:
             topics_failed, total_compression_tokens).
         """
         results_to_compress = [
-            tr for tr in state.topic_research_results
-            if tr.source_ids and tr.compressed_findings is None
+            tr for tr in state.topic_research_results if tr.source_ids and tr.compressed_findings is None
         ]
 
         if not results_to_compress:
@@ -833,6 +813,9 @@ class CompressionMixin:
                 total_input_tokens += inp
                 total_output_tokens += out
                 if success:
+                    # compressed_findings now captures essential content —
+                    # free message_history to bound state memory growth.
+                    results_to_compress[i].message_history.clear()
                     topics_compressed += 1
                 else:
                     topics_failed += 1
@@ -930,7 +913,11 @@ class CompressionMixin:
                 # Last resort: list the source titles for this topic
                 topic_sources = [s for s in state.sources if s.id in tr.source_ids]
                 if topic_sources:
-                    source_lines = [f"  - [{s.citation_number}] {sanitize_external_content(s.title)}" for s in topic_sources if s.citation_number]
+                    source_lines = [
+                        f"  - [{s.citation_number}] {sanitize_external_content(s.title)}"
+                        for s in topic_sources
+                        if s.citation_number
+                    ]
                     content = "Sources found:\n" + "\n".join(source_lines)
                 else:
                     continue
@@ -949,29 +936,23 @@ class CompressionMixin:
             id_to_citation = state.source_id_to_citation()
             finding_lines: list[str] = []
             for f in state.findings:
-                citation_refs = [
-                    f"[{id_to_citation[sid]}]"
-                    for sid in f.source_ids
-                    if sid in id_to_citation
-                ]
+                citation_refs = [f"[{id_to_citation[sid]}]" for sid in f.source_ids if sid in id_to_citation]
                 refs_str = ", ".join(citation_refs) if citation_refs else "no sources"
                 category = f.category or "General"
                 finding_lines.append(f"- [{category}] {sanitize_external_content(f.content)} (Sources: {refs_str})")
-            findings_section = (
-                "\n\n## Analysis Findings\n" + "\n".join(finding_lines)
-            )
+            findings_section = "\n\n## Analysis Findings\n" + "\n".join(finding_lines)
 
         # Build contradictions section
         contradictions_section = ""
         if state.contradictions:
             contra_lines: list[str] = []
             for c in state.contradictions:
-                contra_lines.append(f"- [{sanitize_external_content(c.severity).upper()}] {sanitize_external_content(c.description)}")
+                contra_lines.append(
+                    f"- [{sanitize_external_content(c.severity).upper()}] {sanitize_external_content(c.description)}"
+                )
                 if c.resolution:
                     contra_lines.append(f"  Resolution: {sanitize_external_content(c.resolution)}")
-            contradictions_section = (
-                "\n\n## Detected Contradictions\n" + "\n".join(contra_lines)
-            )
+            contradictions_section = "\n\n## Detected Contradictions\n" + "\n".join(contra_lines)
 
         # Build gaps section
         gaps_section = ""
@@ -987,8 +968,7 @@ class CompressionMixin:
         for s in state.sources:
             if s.citation_number is not None:
                 source_ref_lines.append(
-                    f"[{s.citation_number}] {sanitize_external_content(s.title)}"
-                    + (f" - {s.url}" if s.url else "")
+                    f"[{s.citation_number}] {sanitize_external_content(s.title)}" + (f" - {s.url}" if s.url else "")
                 )
         source_reference = "\n\n## Source Reference\n" + "\n".join(source_ref_lines)
 
@@ -1056,9 +1036,7 @@ class CompressionMixin:
         )
 
         # Resolve provider/model via role hierarchy
-        role_provider, role_model = safe_resolve_model_for_role(
-            self.config, "global_compression"
-        )
+        role_provider, role_model = safe_resolve_model_for_role(self.config, "global_compression")
         resolved_provider = provider_id or role_provider or self.config.default_provider
         resolved_model = role_model
 

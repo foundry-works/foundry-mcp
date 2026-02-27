@@ -23,6 +23,7 @@ from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research.infrastructure import (
     _active_research_sessions,
     _active_sessions_lock,
+    register_active_session,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,7 +46,14 @@ class BackgroundTaskMixin:
     # Stubs for Pyright — canonical signatures live in phases/_protocols.py
     if TYPE_CHECKING:
 
-        def _write_audit_event(self, state: DeepResearchState | None, event_name: str, *, data: dict[str, Any] | None = ..., level: str = ...) -> None: ...
+        def _write_audit_event(
+            self,
+            state: DeepResearchState | None,
+            event_name: str,
+            *,
+            data: dict[str, Any] | None = ...,
+            level: str = ...,
+        ) -> None: ...
         def _record_workflow_error(self, *args: Any, **kwargs: Any) -> None: ...
         def _flush_state(self, state: DeepResearchState) -> None: ...
         async def _execute_workflow_async(self, *args: Any, **kwargs: Any) -> Any: ...
@@ -66,6 +74,9 @@ class BackgroundTaskMixin:
         This approach works correctly from sync MCP tool handlers where
         there is no running event loop.
         """
+        # Prevent accumulation of BackgroundTask objects from crashed threads
+        self.cleanup_stale_tasks()
+
         # Create BackgroundTask tracking structure first
         bg_task = BackgroundTask(
             research_id=state.id,
@@ -76,9 +87,8 @@ class BackgroundTaskMixin:
         # Also register with global task registry for watchdog monitoring
         task_registry.register(bg_task)
 
-        # Register session for crash handler visibility (under lock)
-        with _active_sessions_lock:
-            _active_research_sessions[state.id] = state
+        # Register session for crash handler visibility (with bounded capacity)
+        register_active_session(state.id, state)
 
         # Reference to self for use in thread
         workflow = self

@@ -26,9 +26,14 @@ from foundry_mcp.core.research.models.sources import (
     SubQuery,
 )
 
-
 # Single source of truth for the default supervision rounds cap.
 DEFAULT_MAX_SUPERVISION_ROUNDS: int = 6
+
+# Bounded state growth caps — prevent unbounded memory accumulation in
+# long-running research sessions (see PLAN.md Phase 2).
+MAX_SOURCES: int = 500
+MAX_TOPIC_RESEARCH_RESULTS: int = 50
+MAX_SUPERVISION_MESSAGES: int = 100
 
 
 class TopicResearchResult(BaseModel):
@@ -212,8 +217,7 @@ class DelegationResponse(BaseModel):
         """If not research_complete and no directives, force research_complete=True."""
         if not self.research_complete and not self.directives:
             logger.warning(
-                "DelegationResponse has research_complete=False with empty directives; "
-                "forcing research_complete=True"
+                "DelegationResponse has research_complete=False with empty directives; forcing research_complete=True"
             )
             self.research_complete = True
         return self
@@ -269,12 +273,9 @@ class ReflectionDecision(BaseModel):
             return []
         if not isinstance(v, list):
             return []
-        return [
-            str(u).strip()
-            for u in v
-            if isinstance(u, str)
-            and validate_extract_url(u.strip(), resolve_dns=True)
-        ][:5]  # hard cap for safety
+        return [str(u).strip() for u in v if isinstance(u, str) and validate_extract_url(u.strip(), resolve_dns=True)][
+            :5
+        ]  # hard cap for safety
 
     @model_validator(mode="after")
     def _fix_contradictory_flags(self) -> "ReflectionDecision":
@@ -1049,6 +1050,7 @@ class DeepResearchState(BaseModel):
         )
         self.sources.append(source)
         self.total_sources_examined += 1
+        self._evict_oldest_source_content()
         self.updated_at = datetime.now(timezone.utc)
         return source
 
@@ -1068,8 +1070,46 @@ class DeepResearchState(BaseModel):
         self.next_citation_number += 1
         self.sources.append(source)
         self.total_sources_examined += 1
+        self._evict_oldest_source_content()
         self.updated_at = datetime.now(timezone.utc)
         return source
+
+    def _evict_oldest_source_content(self) -> None:
+        """Evict content from oldest sources when the cap is exceeded.
+
+        Keeps URL, title, citation_number, and metadata intact but clears the
+        heavy ``content``, ``raw_content``, and ``snippet`` fields to bound
+        memory growth.  Only fires when ``len(self.sources) > MAX_SOURCES``.
+        """
+        if len(self.sources) <= MAX_SOURCES:
+            return
+        overshoot = len(self.sources) - MAX_SOURCES
+        for src in self.sources[:overshoot]:
+            src.content = None
+            src.raw_content = None
+            src.snippet = None
+
+    def add_supervision_message(self, message: dict[str, Any]) -> None:
+        """Append a supervision message, enforcing the entry-count cap.
+
+        When ``MAX_SUPERVISION_MESSAGES`` is exceeded, the oldest entries are
+        dropped to keep serialized size bounded.
+        """
+        self.supervision_messages.append(message)
+        if len(self.supervision_messages) > MAX_SUPERVISION_MESSAGES:
+            overshoot = len(self.supervision_messages) - MAX_SUPERVISION_MESSAGES
+            self.supervision_messages = self.supervision_messages[overshoot:]
+
+    def add_topic_research_result(self, result: "TopicResearchResult") -> None:
+        """Append a topic research result, enforcing the cap.
+
+        When ``MAX_TOPIC_RESEARCH_RESULTS`` is exceeded, the oldest results
+        are dropped to bound memory growth.
+        """
+        self.topic_research_results.append(result)
+        if len(self.topic_research_results) > MAX_TOPIC_RESEARCH_RESULTS:
+            overshoot = len(self.topic_research_results) - MAX_TOPIC_RESEARCH_RESULTS
+            self.topic_research_results = self.topic_research_results[overshoot:]
 
     def add_finding(
         self,
@@ -1162,8 +1202,8 @@ class DeepResearchState(BaseModel):
             Dict keyed by role name, each containing::
 
                 {
-                    "provider": str | None,   # last-seen provider for this role
-                    "model": str | None,       # last-seen model for this role
+                    "provider": str | None,  # last-seen provider for this role
+                    "model": str | None,  # last-seen model for this role
                     "input_tokens": int,
                     "output_tokens": int,
                     "calls": int,

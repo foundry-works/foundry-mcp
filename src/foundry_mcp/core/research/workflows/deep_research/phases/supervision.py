@@ -25,8 +25,8 @@ if TYPE_CHECKING:
 from urllib.parse import urlparse
 
 from foundry_mcp.core.research.models.deep_research import (
-    DelegationResponse,
     DeepResearchState,
+    DelegationResponse,
     ResearchDirective,
     TopicResearchResult,
     parse_delegation_response,
@@ -40,7 +40,6 @@ from foundry_mcp.core.research.workflows.deep_research._json_parsing import (
     extract_json,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
-    StructuredLLMCallResult,
     execute_llm_call,
     execute_structured_llm_call,
     finalize_phase,
@@ -127,7 +126,14 @@ class SupervisionPhaseMixin:
     # Stubs for Pyright — canonical signatures live in _protocols.py
     if TYPE_CHECKING:
 
-        def _write_audit_event(self, state: DeepResearchState | None, event_name: str, *, data: dict[str, Any] | None = ..., level: str = ...) -> None: ...
+        def _write_audit_event(
+            self,
+            state: DeepResearchState | None,
+            event_name: str,
+            *,
+            data: dict[str, Any] | None = ...,
+            level: str = ...,
+        ) -> None: ...
         def _check_cancellation(self, state: DeepResearchState) -> None: ...
         async def _execute_topic_research_async(self, *args: Any, **kwargs: Any) -> Any: ...
         def _get_search_provider(self, provider_name: str) -> Any: ...
@@ -163,7 +169,9 @@ class SupervisionPhaseMixin:
             WorkflowResult with supervision round metadata
         """
         return await self._execute_supervision_delegation_async(
-            state, provider_id, timeout,
+            state,
+            provider_id,
+            timeout,
         )
 
     # ==================================================================
@@ -200,7 +208,9 @@ class SupervisionPhaseMixin:
         total_new_sources = 0
         wall_clock_start = time.monotonic()
         wall_clock_limit: float = getattr(
-            self.config, "deep_research_supervision_wall_clock_timeout", 1800.0,
+            self.config,
+            "deep_research_supervision_wall_clock_timeout",
+            1800.0,
         )
 
         while state.supervision_round < state.max_supervision_rounds:
@@ -218,7 +228,8 @@ class SupervisionPhaseMixin:
             )
 
             coverage_data, coverage_delta = self._prepare_round_coverage(
-                state, min_sources,
+                state,
+                min_sources,
             )
 
             # Heuristic early-exit (round > 0)
@@ -243,10 +254,12 @@ class SupervisionPhaseMixin:
                 break
 
             # Think + Delegate
-            think_output, directives, research_complete = (
-                await self._run_think_delegate_step(
-                    state, coverage_data, coverage_delta, provider_id, timeout,
-                )
+            think_output, directives, research_complete = await self._run_think_delegate_step(
+                state,
+                coverage_data,
+                coverage_delta,
+                provider_id,
+                timeout,
             )
 
             if research_complete:
@@ -276,22 +289,31 @@ class SupervisionPhaseMixin:
                 break
 
             # Execute directives and merge results
-            directive_results, round_new_sources, inline_stats = (
-                await self._execute_and_merge_directives(state, directives, timeout)
+            directive_results, round_new_sources, inline_stats = await self._execute_and_merge_directives(
+                state, directives, timeout
             )
             total_new_sources += round_new_sources
             total_directives_executed += len(directive_results)
 
             # Post-round bookkeeping: think-after-results, history, save
             should_stop = await self._post_round_bookkeeping(
-                state, directives, directive_results, think_output,
-                round_new_sources, inline_stats, min_sources, timeout,
+                state,
+                directives,
+                directive_results,
+                think_output,
+                round_new_sources,
+                inline_stats,
+                min_sources,
+                timeout,
             )
             if should_stop:
                 break
 
         return self._build_delegation_result(
-            state, total_directives_executed, total_new_sources, phase_start_time,
+            state,
+            total_directives_executed,
+            total_new_sources,
+            phase_start_time,
         )
 
     def _prepare_round_coverage(
@@ -310,7 +332,9 @@ class SupervisionPhaseMixin:
         coverage_delta: Optional[str] = None
         if state.supervision_round > 0:
             coverage_delta = self._compute_coverage_delta(
-                state, coverage_data, min_sources=min_sources,
+                state,
+                coverage_data,
+                min_sources=min_sources,
             )
         self._store_coverage_snapshot(state, coverage_data, suffix="pre")
         return coverage_data, coverage_delta
@@ -431,8 +455,7 @@ class SupervisionPhaseMixin:
         if elapsed < wall_clock_limit:
             return False
         logger.warning(
-            "Supervision phase wall-clock timeout: %.0fs elapsed >= %.0fs limit. "
-            "Exiting after %d rounds.",
+            "Supervision phase wall-clock timeout: %.0fs elapsed >= %.0fs limit. Exiting after %d rounds.",
             elapsed,
             wall_clock_limit,
             state.supervision_round,
@@ -492,58 +515,78 @@ class SupervisionPhaseMixin:
             Tuple of (think_output, directives, research_complete)
         """
         use_single_call = getattr(
-            self.config, "deep_research_supervision_single_call", False,
+            self.config,
+            "deep_research_supervision_single_call",
+            False,
         )
         is_first_round = self._is_first_round_decomposition(state)
 
         if use_single_call and not is_first_round:
             # Single-call path: think+delegate merged into one LLM call
             (
-                think_output, directives, research_complete, delegation_content,
+                think_output,
+                directives,
+                research_complete,
+                delegation_content,
             ) = await self._supervision_combined_think_delegate_step(
-                state, coverage_data, provider_id, timeout,
+                state,
+                coverage_data,
+                provider_id,
+                timeout,
             )
             if think_output:
-                state.supervision_messages.append({
-                    "role": "assistant",
-                    "type": "think",
-                    "round": state.supervision_round,
-                    "content": think_output,
-                })
+                state.add_supervision_message(
+                    {
+                        "role": "assistant",
+                        "type": "think",
+                        "round": state.supervision_round,
+                        "content": think_output,
+                    }
+                )
             if delegation_content:
-                state.supervision_messages.append({
-                    "role": "assistant",
-                    "type": "delegation",
-                    "round": state.supervision_round,
-                    "content": delegation_content,
-                })
+                state.add_supervision_message(
+                    {
+                        "role": "assistant",
+                        "type": "delegation",
+                        "round": state.supervision_round,
+                        "content": delegation_content,
+                    }
+                )
         else:
             # Two-call path: separate think then delegate
             think_output = await self._supervision_think_step(
-                state, coverage_data, timeout,
+                state,
+                coverage_data,
+                timeout,
                 coverage_delta=coverage_delta,
             )
             if think_output:
-                state.supervision_messages.append({
-                    "role": "assistant",
-                    "type": "think",
-                    "round": state.supervision_round,
-                    "content": think_output,
-                })
+                state.add_supervision_message(
+                    {
+                        "role": "assistant",
+                        "type": "think",
+                        "round": state.supervision_round,
+                        "content": think_output,
+                    }
+                )
 
             self._check_cancellation(state)
-            directives, research_complete, delegation_content = (
-                await self._supervision_delegate_step(
-                    state, coverage_data, think_output, provider_id, timeout,
-                )
+            directives, research_complete, delegation_content = await self._supervision_delegate_step(
+                state,
+                coverage_data,
+                think_output,
+                provider_id,
+                timeout,
             )
             if delegation_content:
-                state.supervision_messages.append({
-                    "role": "assistant",
-                    "type": "delegation",
-                    "round": state.supervision_round,
-                    "content": delegation_content,
-                })
+                state.add_supervision_message(
+                    {
+                        "role": "assistant",
+                        "type": "delegation",
+                        "round": state.supervision_round,
+                        "content": delegation_content,
+                    }
+                )
 
         return think_output, directives, research_complete
 
@@ -567,14 +610,18 @@ class SupervisionPhaseMixin:
 
         self._check_cancellation(state)
         directive_results = await self._execute_directives_async(
-            state, directives, timeout,
+            state,
+            directives,
+            timeout,
         )
 
         round_new_sources = sum(r.sources_found for r in directive_results)
 
         # Inline compression of directive results
         inline_stats = await self._compress_directive_results_inline(
-            state, directive_results, timeout,
+            state,
+            directive_results,
+            timeout,
         )
 
         # Accumulate findings as tool-result messages
@@ -582,16 +629,19 @@ class SupervisionPhaseMixin:
             content = result.compressed_findings
             if not content and result.source_ids:
                 content = self._build_directive_fallback_summary(
-                    result, state,
+                    result,
+                    state,
                 )
             if content:
-                state.supervision_messages.append({
-                    "role": "tool_result",
-                    "type": "research_findings",
-                    "round": state.supervision_round,
-                    "directive_id": result.sub_query_id,
-                    "content": content,
-                })
+                state.add_supervision_message(
+                    {
+                        "role": "tool_result",
+                        "type": "research_findings",
+                        "round": state.supervision_round,
+                        "directive_id": result.sub_query_id,
+                        "content": content,
+                    }
+                )
 
         # Aggregate raw notes
         for result in directive_results:
@@ -606,13 +656,15 @@ class SupervisionPhaseMixin:
             if result.raw_notes or result.source_ids:
                 inventory = self._build_evidence_inventory(result, state)
                 if inventory:
-                    state.supervision_messages.append({
-                        "role": "tool_result",
-                        "type": "evidence_inventory",
-                        "round": state.supervision_round,
-                        "directive_id": result.sub_query_id,
-                        "content": inventory,
-                    })
+                    state.add_supervision_message(
+                        {
+                            "role": "tool_result",
+                            "type": "evidence_inventory",
+                            "round": state.supervision_round,
+                            "directive_id": result.sub_query_id,
+                            "content": inventory,
+                        }
+                    )
 
         return directive_results, round_new_sources, inline_stats
 
@@ -635,8 +687,7 @@ class SupervisionPhaseMixin:
             notes_trimmed += drop_count
         if notes_trimmed > 0:
             logger.warning(
-                "Trimmed %d oldest raw_notes entries (count cap=%d, char cap=%d). "
-                "%d entries remain (%d chars).",
+                "Trimmed %d oldest raw_notes entries (count cap=%d, char cap=%d). %d entries remain (%d chars).",
                 notes_trimmed,
                 _MAX_RAW_NOTES,
                 _MAX_RAW_NOTES_CHARS,
@@ -675,35 +726,43 @@ class SupervisionPhaseMixin:
         if directive_results:
             post_coverage_data = self._build_per_query_coverage(state)
             post_delta = self._compute_coverage_delta(
-                state, post_coverage_data, min_sources=min_sources,
+                state,
+                post_coverage_data,
+                min_sources=min_sources,
             )
             self._store_coverage_snapshot(state, post_coverage_data, suffix="post")
             post_think_output = await self._supervision_think_step(
-                state, post_coverage_data, timeout,
+                state,
+                post_coverage_data,
+                timeout,
                 coverage_delta=post_delta,
             )
             if post_think_output:
-                state.supervision_messages.append({
-                    "role": "assistant",
-                    "type": "think",
-                    "round": state.supervision_round,
-                    "content": post_think_output,
-                })
+                state.add_supervision_message(
+                    {
+                        "role": "assistant",
+                        "type": "think",
+                        "round": state.supervision_round,
+                        "content": post_think_output,
+                    }
+                )
 
         # Record history and advance round
         history = state.metadata.setdefault("supervision_history", [])
-        history.append({
-            "round": state.supervision_round,
-            "method": "delegation",
-            "should_continue_gathering": round_new_sources > 0,
-            "directives_generated": len(directives),
-            "directives_executed": len(directive_results),
-            "new_sources": round_new_sources,
-            "think_output": (think_output or "")[:_MAX_THINK_OUTPUT_STORED_CHARS],
-            "post_execution_think": (post_think_output or "")[:_MAX_THINK_OUTPUT_STORED_CHARS],
-            "directive_topics": [d.research_topic[:100] for d in directives],
-            "inline_compression": inline_stats,
-        })
+        history.append(
+            {
+                "round": state.supervision_round,
+                "method": "delegation",
+                "should_continue_gathering": round_new_sources > 0,
+                "directives_generated": len(directives),
+                "directives_executed": len(directive_results),
+                "new_sources": round_new_sources,
+                "think_output": (think_output or "")[:_MAX_THINK_OUTPUT_STORED_CHARS],
+                "post_execution_think": (post_think_output or "")[:_MAX_THINK_OUTPUT_STORED_CHARS],
+                "directive_topics": [d.research_topic[:100] for d in directives],
+                "inline_compression": inline_stats,
+            }
+        )
         _trim_supervision_history(state)
 
         # Truncate supervision messages *before* persisting state so that
@@ -784,7 +843,9 @@ class SupervisionPhaseMixin:
             think_system = self._build_first_round_think_system_prompt()
         else:
             think_prompt = self._build_think_prompt(
-                state, coverage_data, coverage_delta=coverage_delta,
+                state,
+                coverage_data,
+                coverage_delta=coverage_delta,
             )
             think_system = self._build_think_system_prompt()
 
@@ -847,12 +908,17 @@ class SupervisionPhaseMixin:
         # generate → critique → revise for higher-quality directives.
         if is_first_round:
             return await self._first_round_decompose_critique_revise(
-                state, think_output, provider_id, timeout,
+                state,
+                think_output,
+                provider_id,
+                timeout,
             )
 
         system_prompt = self._build_delegation_system_prompt()
         user_prompt = self._build_delegation_user_prompt(
-            state, coverage_data, think_output,
+            state,
+            coverage_data,
+            think_output,
         )
 
         # Use structured output parsing with automatic retry on parse failure
@@ -888,7 +954,8 @@ class SupervisionPhaseMixin:
                 "Structured delegation parse failed, falling back to legacy parser",
             )
             directives, research_complete = self._parse_delegation_response(
-                call_result.result.content, state,
+                call_result.result.content,
+                state,
             )
 
         self._write_audit_event(
@@ -939,7 +1006,8 @@ class SupervisionPhaseMixin:
         """
         system_prompt = self._build_combined_think_delegate_system_prompt()
         user_prompt = self._build_combined_think_delegate_user_prompt(
-            state, coverage_data,
+            state,
+            coverage_data,
         )
 
         call_result = await execute_structured_llm_call(
@@ -976,7 +1044,8 @@ class SupervisionPhaseMixin:
             )
             think_output = self._extract_gap_analysis_section(raw_content)
             directives, research_complete = self._parse_delegation_response(
-                raw_content, state,
+                raw_content,
+                state,
             )
 
         self._write_audit_event(
@@ -1069,10 +1138,14 @@ class SupervisionPhaseMixin:
             List of TopicResearchResult from directive execution
         """
         max_concurrent = getattr(
-            self.config, "deep_research_max_concurrent_research_units", 5,
+            self.config,
+            "deep_research_max_concurrent_research_units",
+            5,
         )
         topic_max_searches = getattr(
-            self.config, "deep_research_topic_max_tool_calls", 10,
+            self.config,
+            "deep_research_topic_max_tool_calls",
+            10,
         )
         max_sources_per_provider = max(2, state.max_sources_per_query // max(1, len(directives)))
 
@@ -1184,7 +1257,7 @@ class SupervisionPhaseMixin:
 
         # Merge results into state
         for result in results:
-            state.topic_research_results.append(result)
+            state.add_topic_research_result(result)
 
         self.memory.save_deep_research(state)
 
@@ -1239,15 +1312,10 @@ class SupervisionPhaseMixin:
         Returns:
             Dict with inline compression statistics.
         """
-        results_to_compress = [
-            r for r in directive_results
-            if r.source_ids and r.compressed_findings is None
-        ]
+        results_to_compress = [r for r in directive_results if r.source_ids and r.compressed_findings is None]
 
         if not results_to_compress:
-            already_compressed = sum(
-                1 for r in directive_results if r.compressed_findings is not None
-            )
+            already_compressed = sum(1 for r in directive_results if r.compressed_findings is not None)
             return {
                 "compressed": 0,
                 "failed": 0,
@@ -1256,7 +1324,9 @@ class SupervisionPhaseMixin:
 
         # Per-result compression timeout — same as batch compression timeout
         compression_timeout: float = getattr(
-            self.config, "deep_research_compression_timeout", 120.0,
+            self.config,
+            "deep_research_compression_timeout",
+            120.0,
         )
 
         compressed_count = 0
@@ -1273,6 +1343,10 @@ class SupervisionPhaseMixin:
                     state=state,
                     timeout=compression_timeout,
                 )
+                if success:
+                    # compressed_findings now captures essential content —
+                    # free message_history to bound state memory growth.
+                    topic_result.message_history.clear()
                 return success
             except asyncio.TimeoutError:
                 logger.warning(
@@ -1356,9 +1430,7 @@ class SupervisionPhaseMixin:
             return summary
 
         # Build from source content
-        topic_sources = [
-            s for s in state.sources if s.id in topic_result.source_ids
-        ]
+        topic_sources = [s for s in state.sources if s.id in topic_result.source_ids]
         if not topic_sources:
             return None
 
@@ -1417,10 +1489,7 @@ class SupervisionPhaseMixin:
 
         # Gather source metadata
         source_map = {s.id: s for s in state.sources}
-        topic_sources = [
-            source_map[sid] for sid in topic_result.source_ids
-            if sid in source_map
-        ]
+        topic_sources = [source_map[sid] for sid in topic_result.source_ids if sid in source_map]
 
         if not topic_sources and not topic_result.raw_notes:
             return None
@@ -1453,7 +1522,7 @@ class SupervisionPhaseMixin:
                 except Exception:
                     pass
             title = sanitize_external_content((src.title or "Untitled"))[:60]
-            entry = f"- [{idx}] \"{title}\""
+            entry = f'- [{idx}] "{title}"'
             if domain:
                 entry += f" ({domain})"
             if len(entry) + 1 > remaining:
@@ -1469,7 +1538,7 @@ class SupervisionPhaseMixin:
             max_brief = remaining - len(label) - 1
             if max_brief > 20:
                 if len(brief) > max_brief:
-                    brief = brief[:max_brief - 3] + "..."
+                    brief = brief[: max_brief - 3] + "..."
                 findings_line = f"{label}{brief}"
                 parts.append(findings_line)
                 remaining -= len(findings_line) + 1
@@ -1477,10 +1546,7 @@ class SupervisionPhaseMixin:
         # Data point estimate from raw notes (count paragraphs as proxy)
         if topic_result.raw_notes and remaining > 30:
             # Count non-empty lines as a rough data-point proxy
-            lines = [
-                ln for ln in topic_result.raw_notes.split("\n")
-                if ln.strip()
-            ]
+            lines = [ln for ln in topic_result.raw_notes.split("\n") if ln.strip()]
             data_points = min(len(lines), 999)
             dp_line = f"Key data points: ~{data_points} extracted"
             if len(dp_line) + 1 <= remaining:
@@ -1489,7 +1555,7 @@ class SupervisionPhaseMixin:
 
         result = "\n".join(parts)
         if len(result) > max_chars:
-            result = result[:max_chars - 3] + "..."
+            result = result[: max_chars - 3] + "..."
         return result
 
     # ------------------------------------------------------------------
@@ -1534,7 +1600,9 @@ class SupervisionPhaseMixin:
             Capped and validated directive list
         """
         max_units = getattr(
-            self.config, "deep_research_max_concurrent_research_units", 5,
+            self.config,
+            "deep_research_max_concurrent_research_units",
+            5,
         )
         cap = min(max_units, _MAX_DIRECTIVES_PER_ROUND)
 
@@ -1582,7 +1650,9 @@ class SupervisionPhaseMixin:
 
         # Parse directives
         max_units = getattr(
-            self.config, "deep_research_max_concurrent_research_units", 5,
+            self.config,
+            "deep_research_max_concurrent_research_units",
+            5,
         )
         cap = min(max_units, _MAX_DIRECTIVES_PER_ROUND)
 
@@ -1604,13 +1674,15 @@ class SupervisionPhaseMixin:
             except (ValueError, TypeError):
                 priority = 2
 
-            directives.append(ResearchDirective(
-                research_topic=topic,
-                perspective=d.get("perspective", ""),
-                evidence_needed=d.get("evidence_needed", ""),
-                priority=priority,
-                supervision_round=state.supervision_round,
-            ))
+            directives.append(
+                ResearchDirective(
+                    research_topic=topic,
+                    perspective=d.get("perspective", ""),
+                    evidence_needed=d.get("evidence_needed", ""),
+                    priority=priority,
+                    supervision_round=state.supervision_round,
+                )
+            )
 
         return directives, False
 
@@ -1670,10 +1742,11 @@ class SupervisionPhaseMixin:
         effective_provider = provider_id or state.supervision_provider
 
         # --- Call 1: Generate initial directives ---
-        initial_directives, research_complete, gen_content, should_skip = (
-            await self._run_first_round_generate(
-                state, think_output, effective_provider, timeout,
-            )
+        initial_directives, research_complete, gen_content, should_skip = await self._run_first_round_generate(
+            state,
+            think_output,
+            effective_provider,
+            timeout,
         )
         if should_skip:
             return initial_directives, research_complete, gen_content
@@ -1693,10 +1766,12 @@ class SupervisionPhaseMixin:
             indent=2,
         )
 
-        critique_text, needs_revision, should_return_initial = (
-            await self._run_first_round_critique(
-                state, initial_count, directives_json, effective_provider, timeout,
-            )
+        critique_text, needs_revision, should_return_initial = await self._run_first_round_critique(
+            state,
+            initial_count,
+            directives_json,
+            effective_provider,
+            timeout,
         )
         if should_return_initial:
             return initial_directives, research_complete, gen_content
@@ -1718,8 +1793,14 @@ class SupervisionPhaseMixin:
             return initial_directives, research_complete, gen_content
 
         return await self._run_first_round_revise(
-            state, initial_directives, initial_count, directives_json,
-            critique_text, research_complete, effective_provider, timeout,
+            state,
+            initial_directives,
+            initial_count,
+            directives_json,
+            critique_text,
+            research_complete,
+            effective_provider,
+            timeout,
             gen_content=gen_content,
         )
 
@@ -1750,7 +1831,8 @@ class SupervisionPhaseMixin:
             phase_name="supervision_delegate_generate",
             system_prompt=self._build_first_round_delegation_system_prompt(),
             user_prompt=self._build_first_round_delegation_user_prompt(
-                state, think_output,
+                state,
+                think_output,
             ),
             provider_id=effective_provider,
             model=state.supervision_model,
@@ -1762,7 +1844,8 @@ class SupervisionPhaseMixin:
 
         if isinstance(gen_result, WorkflowResult):
             logger.warning(
-                "First-round generate call failed: %s", gen_result.error,
+                "First-round generate call failed: %s",
+                gen_result.error,
             )
             return [], False, None, True
 
@@ -1770,7 +1853,8 @@ class SupervisionPhaseMixin:
         if gen_result.parsed is not None:
             gen_delegation: DelegationResponse = gen_result.parsed
             initial_directives = self._apply_directive_caps(
-                gen_delegation.directives, state,
+                gen_delegation.directives,
+                state,
             )
             research_complete = gen_delegation.research_complete
         else:
@@ -1778,7 +1862,8 @@ class SupervisionPhaseMixin:
                 "First-round generate parse failed, falling back to legacy parser",
             )
             initial_directives, research_complete = self._parse_delegation_response(
-                gen_result.result.content, state,
+                gen_result.result.content,
+                state,
             )
 
         initial_count = len(initial_directives)
@@ -1792,9 +1877,7 @@ class SupervisionPhaseMixin:
                 "tokens_used": gen_result.result.tokens_used,
                 "directive_count": initial_count,
                 "research_complete": research_complete,
-                "directive_topics": [
-                    d.research_topic[:100] for d in initial_directives
-                ],
+                "directive_topics": [d.research_topic[:100] for d in initial_directives],
             },
         )
 
@@ -1809,10 +1892,7 @@ class SupervisionPhaseMixin:
                     "initial_directive_count": initial_count,
                     "final_directive_count": initial_count,
                     "critique_triggered_revision": False,
-                    "skip_reason": (
-                        "research_complete" if research_complete
-                        else "no_directives"
-                    ),
+                    "skip_reason": ("research_complete" if research_complete else "no_directives"),
                 },
             )
 
@@ -1848,13 +1928,16 @@ class SupervisionPhaseMixin:
             phase_name="supervision_delegate_critique",
             system_prompt=self._build_critique_system_prompt(),
             user_prompt=self._build_critique_user_prompt(
-                state, directives_json,
+                state,
+                directives_json,
             ),
             provider_id=effective_provider,
             model=state.supervision_model,
             temperature=0.2,
             timeout=getattr(
-                self.config, "deep_research_reflection_timeout", 60.0,
+                self.config,
+                "deep_research_reflection_timeout",
+                60.0,
             ),
             role="reflection",
         )
@@ -1932,7 +2015,9 @@ class SupervisionPhaseMixin:
             phase_name="supervision_delegate_revise",
             system_prompt=self._build_revision_system_prompt(),
             user_prompt=self._build_revision_user_prompt(
-                state, directives_json, critique_text,
+                state,
+                directives_json,
+                critique_text,
             ),
             provider_id=effective_provider,
             model=state.supervision_model,
@@ -1963,7 +2048,8 @@ class SupervisionPhaseMixin:
         if revise_result.parsed is not None:
             rev_delegation: DelegationResponse = revise_result.parsed
             final_directives = self._apply_directive_caps(
-                rev_delegation.directives, state,
+                rev_delegation.directives,
+                state,
             )
             research_complete = rev_delegation.research_complete
         else:
@@ -1971,7 +2057,8 @@ class SupervisionPhaseMixin:
                 "Revision parse failed, falling back to legacy parser",
             )
             final_directives, research_complete = self._parse_delegation_response(
-                revise_result.result.content, state,
+                revise_result.result.content,
+                state,
             )
 
         final_count = len(final_directives)
@@ -1984,9 +2071,7 @@ class SupervisionPhaseMixin:
                 "model_used": revise_result.result.model_used,
                 "tokens_used": revise_result.result.tokens_used,
                 "directive_count": final_count,
-                "directive_topics": [
-                    d.research_topic[:100] for d in final_directives
-                ],
+                "directive_topics": [d.research_topic[:100] for d in final_directives],
             },
         )
 

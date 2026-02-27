@@ -104,21 +104,15 @@ def _format_source_block(
                 flags=re.DOTALL,
             ).strip()
             # Also strip the <summary> tags for cleaner presentation
-            summary_text = re.sub(
-                r"</?summary>", "", summary_text
-            ).strip()
+            summary_text = re.sub(r"</?summary>", "", summary_text).strip()
             lines.append(f"\nSUMMARY:\n{summary_text}")
             safe_excerpts = [sanitize_external_content(e) for e in excerpts]
             excerpt_lines = "\n".join(f'- "{e}"' for e in safe_excerpts)
             lines.append(f"\nKEY EXCERPTS:\n{excerpt_lines}")
         else:
             # No separate excerpts — show the full summarized content
-            summary_text = re.sub(
-                r"</?summary>", "", summary_text
-            ).strip()
-            summary_text = re.sub(
-                r"</?key_excerpts>", "", summary_text
-            ).strip()
+            summary_text = re.sub(r"</?summary>", "", summary_text).strip()
+            summary_text = re.sub(r"</?key_excerpts>", "", summary_text).strip()
             lines.append(f"\nSUMMARY:\n{summary_text}")
     elif safe_snippet:
         lines.append(f"\nSNIPPET:\n{safe_snippet}")
@@ -161,14 +155,11 @@ def _format_search_results_batch(
     domain_count = len(domains)
 
     # Build batch header
-    header = (
-        f"Found {sources_count} new source(s) from {domain_count} domain(s).\n"
-        f"{novelty_header}"
-    )
+    header = f"Found {sources_count} new source(s) from {domain_count} domain(s).\n{novelty_header}"
 
     # Build per-source blocks
     blocks: list[str] = [header]
-    for idx, (src, ntag) in enumerate(zip(sources, novelty_tags), 1):
+    for idx, (src, ntag) in enumerate(zip(sources, novelty_tags, strict=False), 1):
         blocks.append(_format_source_block(idx, src, ntag))
 
     return "\n\n".join(blocks)
@@ -289,11 +280,7 @@ async def _dedup_and_add_source(
 
         # Snapshot existing sources for content-similarity check
         # outside the lock to avoid O(n^2) contention.
-        if (
-            content_dedup_enabled
-            and source.content
-            and len(source.content) > 100
-        ):
+        if content_dedup_enabled and source.content and len(source.content) > 100:
             sources_snapshot = list(state.sources)
         else:
             sources_snapshot = None
@@ -402,18 +389,16 @@ def _build_react_user_prompt(
             role = msg.get("role", "unknown")
             content = msg.get("content", "")
             if role == "assistant":
-                parts.append(f"\n<turn number=\"{i + 1}\" role=\"assistant\">\n{content}\n</turn>")
+                parts.append(f'\n<turn number="{i + 1}" role="assistant">\n{content}\n</turn>')
             elif role == "tool":
                 tool_name = msg.get("tool", "unknown")
                 # Tool results contain web-sourced content — sanitize before
                 # interpolating into the researcher prompt.
                 safe_content = sanitize_external_content(content)
-                parts.append(f"\n<turn number=\"{i + 1}\" role=\"tool\" tool=\"{tool_name}\">\n{safe_content}\n</turn>")
+                parts.append(f'\n<turn number="{i + 1}" role="tool" tool="{tool_name}">\n{safe_content}\n</turn>')
         parts.append("\n</conversation_history>")
 
-    parts.append(
-        f"\n<budget>You have {budget_remaining} of {budget_total} tool calls remaining.</budget>"
-    )
+    parts.append(f"\n<budget>You have {budget_remaining} of {budget_total} tool calls remaining.</budget>")
     parts.append(
         "\nRespond with your next action as a JSON object containing tool_calls. "
         "Return ONLY valid JSON, no additional text."
@@ -492,8 +477,7 @@ def _truncate_researcher_history(
     if len(result) < len(message_history):
         dropped = len(message_history) - len(result)
         logger.info(
-            "Truncated researcher history: dropped %d oldest turns (%d -> %d), "
-            "budget=%d chars, model=%s",
+            "Truncated researcher history: dropped %d oldest turns (%d -> %d), budget=%d chars, model=%s",
             dropped,
             len(message_history),
             len(result),
@@ -530,7 +514,14 @@ class TopicResearchMixin:
     # Stubs for Pyright — canonical signatures live in _protocols.py
     if TYPE_CHECKING:
 
-        def _write_audit_event(self, state: DeepResearchState | None, event_name: str, *, data: dict[str, Any] | None = ..., level: str = ...) -> None: ...
+        def _write_audit_event(
+            self,
+            state: DeepResearchState | None,
+            event_name: str,
+            *,
+            data: dict[str, Any] | None = ...,
+            level: str = ...,
+        ) -> None: ...
         def _check_cancellation(self, state: DeepResearchState) -> None: ...
         def _get_search_provider(self, provider_name: str) -> Any: ...
         def _get_tavily_search_kwargs(self, state: DeepResearchState) -> dict[str, Any]: ...
@@ -572,9 +563,7 @@ class TopicResearchMixin:
         async with state_lock:
             sub_query.status = "executing"
 
-        extract_enabled, extract_max_per_iter, provider_id, researcher_model = (
-            self._resolve_topic_research_config()
-        )
+        extract_enabled, extract_max_per_iter, provider_id, researcher_model = self._resolve_topic_research_config()
 
         message_history: list[dict[str, str]] = []
         max_turns = max_searches * 3  # generous: 3x budget allows think steps
@@ -590,7 +579,9 @@ class TopicResearchMixin:
             if budget_remaining <= 0:
                 logger.info(
                     "Topic %r budget exhausted (%d/%d tool calls used), stopping",
-                    sub_query.id, tool_calls_used, max_searches,
+                    sub_query.id,
+                    tool_calls_used,
+                    max_searches,
                 )
                 break
 
@@ -619,17 +610,22 @@ class TopicResearchMixin:
             response, tokens_delta = await self._parse_with_retry_async(
                 raw_content=raw_content,
                 message_history=message_history,
-                sub_query=sub_query, result=result, turn=turn,
-                provider_id=provider_id, researcher_model=researcher_model,
+                sub_query=sub_query,
+                result=result,
+                turn=turn,
+                provider_id=provider_id,
+                researcher_model=researcher_model,
                 system_prompt=system_prompt,
-                budget_remaining=budget_remaining, max_searches=max_searches,
+                budget_remaining=budget_remaining,
+                max_searches=max_searches,
             )
             local_tokens_used += tokens_delta
 
             if not response.tool_calls:
                 logger.info(
                     "Topic %r researcher returned no tool calls on turn %d, stopping",
-                    sub_query.id, turn + 1,
+                    sub_query.id,
+                    turn + 1,
                 )
                 break
 
@@ -641,9 +637,9 @@ class TopicResearchMixin:
             )
             if needs_reflection:
                 logger.warning(
-                    "Topic %r: researcher skipped reflection after search on turn %d, "
-                    "injecting synthetic think prompt",
-                    sub_query.id, turn + 1,
+                    "Topic %r: researcher skipped reflection after search on turn %d, injecting synthetic think prompt",
+                    sub_query.id,
+                    turn + 1,
                 )
                 reflection_injections += 1
                 self._inject_reflection_prompt(message_history, raw_content)
@@ -655,13 +651,19 @@ class TopicResearchMixin:
             # Record the assistant's response and dispatch tool calls
             message_history.append({"role": "assistant", "content": raw_content})
             loop_should_break, calls_delta, budget_delta = await self._dispatch_tool_calls(
-                response=response, sub_query=sub_query, state=state,
-                result=result, message_history=message_history,
+                response=response,
+                sub_query=sub_query,
+                state=state,
+                result=result,
+                message_history=message_history,
                 available_providers=available_providers,
                 max_sources_per_provider=max_sources_per_provider,
-                timeout=timeout, seen_urls=seen_urls,
-                seen_titles=seen_titles, state_lock=state_lock,
-                semaphore=semaphore, budget_remaining=budget_remaining,
+                timeout=timeout,
+                seen_urls=seen_urls,
+                seen_titles=seen_titles,
+                state_lock=state_lock,
+                semaphore=semaphore,
+                budget_remaining=budget_remaining,
                 extract_enabled=extract_enabled,
                 extract_max_per_iter=extract_max_per_iter,
             )
@@ -676,12 +678,16 @@ class TopicResearchMixin:
                 break
 
         return await self._finalize_topic_result(
-            result=result, sub_query=sub_query, state=state,
-            state_lock=state_lock, local_tokens_used=local_tokens_used,
+            result=result,
+            sub_query=sub_query,
+            state=state,
+            state_lock=state_lock,
+            local_tokens_used=local_tokens_used,
             tool_calls_used=tool_calls_used,
             message_history=message_history,
             reflection_injections=reflection_injections,
-            extract_enabled=extract_enabled, timeout=timeout,
+            extract_enabled=extract_enabled,
+            timeout=timeout,
         )
 
     # ------------------------------------------------------------------
@@ -704,24 +710,14 @@ class TopicResearchMixin:
             safe_resolve_model_for_role,
         )
 
-        extract_enabled = (
-            self.config.deep_research_enable_extract
-            and bool(
-                self.config.tavily_api_key
-                or _os.environ.get("TAVILY_API_KEY")
-            )
+        extract_enabled = self.config.deep_research_enable_extract and bool(
+            self.config.tavily_api_key or _os.environ.get("TAVILY_API_KEY")
         )
-        extract_max_per_iter = getattr(
-            self.config, "deep_research_extract_max_per_iteration", 2
-        )
+        extract_max_per_iter = getattr(self.config, "deep_research_extract_max_per_iteration", 2)
 
-        provider_id, researcher_model = safe_resolve_model_for_role(
-            self.config, "topic_reflection"
-        )
+        provider_id, researcher_model = safe_resolve_model_for_role(self.config, "topic_reflection")
         if provider_id is None:
-            provider_id = resolve_phase_provider(
-                self.config, "topic_reflection", "reflection"
-            )
+            provider_id = resolve_phase_provider(self.config, "topic_reflection", "reflection")
 
         return extract_enabled, extract_max_per_iter, provider_id, researcher_model
 
@@ -760,9 +756,7 @@ class TopicResearchMixin:
             budget_remaining=budget_remaining,
             extract_enabled=extract_enabled,
         )
-        truncated_history = _truncate_researcher_history(
-            message_history, researcher_model
-        )
+        truncated_history = _truncate_researcher_history(message_history, researcher_model)
         user_prompt = _build_react_user_prompt(
             topic=sub_query.query,
             message_history=truncated_history,
@@ -786,14 +780,18 @@ class TopicResearchMixin:
             if not llm_result.success:
                 logger.warning(
                     "Topic %r researcher LLM call failed on turn %d: %s",
-                    sub_query.id, turn + 1, llm_result.error,
+                    sub_query.id,
+                    turn + 1,
+                    llm_result.error,
                 )
                 return None
             return llm_result
         except (asyncio.TimeoutError, OSError, ValueError, RuntimeError) as exc:
             logger.warning(
                 "Topic %r researcher LLM call exception on turn %d: %s",
-                sub_query.id, turn + 1, exc,
+                sub_query.id,
+                turn + 1,
+                exc,
             )
             return None
 
@@ -813,16 +811,18 @@ class TopicResearchMixin:
             raw_content: The assistant's raw response to record.
         """
         message_history.append({"role": "assistant", "content": raw_content})
-        message_history.append({
-            "role": "tool",
-            "tool": "system",
-            "content": (
-                "REFLECTION REQUIRED: You must call `think` to reflect on your "
-                "previous search results before issuing another search. Assess "
-                "what you found, identify gaps, and plan your next step. "
-                "Respond with ONLY a `think` tool call."
-            ),
-        })
+        message_history.append(
+            {
+                "role": "tool",
+                "tool": "system",
+                "content": (
+                    "REFLECTION REQUIRED: You must call `think` to reflect on your "
+                    "previous search results before issuing another search. Assess "
+                    "what you found, identify gaps, and plan your next step. "
+                    "Respond with ONLY a `think` tool call."
+                ),
+            }
+        )
 
     async def _parse_with_retry_async(
         self,
@@ -875,16 +875,18 @@ class TopicResearchMixin:
             )
             # Append the failed response + clarification to history
             message_history.append({"role": "assistant", "content": raw_content})
-            message_history.append({
-                "role": "tool",
-                "tool": "system",
-                "content": (
-                    "Your previous response was not valid JSON. Please respond "
-                    "with ONLY a JSON object in the exact format:\n"
-                    '{"tool_calls": [{"tool": "tool_name", "arguments": {...}}]}\n'
-                    "Do not include any text outside the JSON object."
-                ),
-            })
+            message_history.append(
+                {
+                    "role": "tool",
+                    "tool": "system",
+                    "content": (
+                        "Your previous response was not valid JSON. Please respond "
+                        "with ONLY a JSON object in the exact format:\n"
+                        '{"tool_calls": [{"tool": "tool_name", "arguments": {...}}]}\n'
+                        "Do not include any text outside the JSON object."
+                    ),
+                }
+            )
             retry_user_prompt = _build_react_user_prompt(
                 topic=sub_query.query,
                 message_history=_truncate_researcher_history(message_history, researcher_model),
@@ -935,13 +937,8 @@ class TopicResearchMixin:
         Returns:
             Tuple of (needs_reflection, current_has_search).
         """
-        current_has_search = any(
-            tc.tool in ("web_search", "extract_content")
-            for tc in response.tool_calls
-        )
-        current_has_think = any(
-            tc.tool == "think" for tc in response.tool_calls
-        )
+        current_has_search = any(tc.tool in ("web_search", "extract_content") for tc in response.tool_calls)
+        current_has_think = any(tc.tool == "think" for tc in response.tool_calls)
 
         needs_reflection = (
             previous_turn_had_search
@@ -993,19 +990,23 @@ class TopicResearchMixin:
                     sub_query=sub_query,
                     result=result,
                 )
-                message_history.append({
-                    "role": "tool",
-                    "tool": "think",
-                    "content": tool_result_text,
-                })
+                message_history.append(
+                    {
+                        "role": "tool",
+                        "tool": "think",
+                        "content": tool_result_text,
+                    }
+                )
 
             elif tool_call.tool == "web_search":
                 if budget_remaining - budget_delta <= 0:
-                    message_history.append({
-                        "role": "tool",
-                        "tool": "web_search",
-                        "content": "Budget exhausted. No more searches allowed.",
-                    })
+                    message_history.append(
+                        {
+                            "role": "tool",
+                            "tool": "web_search",
+                            "content": "Budget exhausted. No more searches allowed.",
+                        }
+                    )
                     continue
 
                 tool_result_text, queries_charged = await self._handle_web_search_tool(
@@ -1025,27 +1026,33 @@ class TopicResearchMixin:
                 tool_calls_delta += queries_charged
                 budget_delta += queries_charged
                 result.searches_performed += queries_charged
-                message_history.append({
-                    "role": "tool",
-                    "tool": "web_search",
-                    "content": tool_result_text,
-                })
+                message_history.append(
+                    {
+                        "role": "tool",
+                        "tool": "web_search",
+                        "content": tool_result_text,
+                    }
+                )
 
             elif tool_call.tool == "extract_content":
                 if not extract_enabled:
-                    message_history.append({
-                        "role": "tool",
-                        "tool": "extract_content",
-                        "content": "Content extraction is not available.",
-                    })
+                    message_history.append(
+                        {
+                            "role": "tool",
+                            "tool": "extract_content",
+                            "content": "Content extraction is not available.",
+                        }
+                    )
                     continue
 
                 if budget_remaining - budget_delta <= 0:
-                    message_history.append({
-                        "role": "tool",
-                        "tool": "extract_content",
-                        "content": "Budget exhausted. No more extractions allowed.",
-                    })
+                    message_history.append(
+                        {
+                            "role": "tool",
+                            "tool": "extract_content",
+                            "content": "Budget exhausted. No more extractions allowed.",
+                        }
+                    )
                     continue
 
                 tool_result_text = await self._handle_extract_tool(
@@ -1062,21 +1069,25 @@ class TopicResearchMixin:
                 )
                 tool_calls_delta += 1
                 budget_delta += 1
-                message_history.append({
-                    "role": "tool",
-                    "tool": "extract_content",
-                    "content": tool_result_text,
-                })
+                message_history.append(
+                    {
+                        "role": "tool",
+                        "tool": "extract_content",
+                        "content": tool_result_text,
+                    }
+                )
 
             elif tool_call.tool == "research_complete":
                 summary = tool_call.arguments.get("summary", "")
                 result.early_completion = True
                 result.completion_rationale = summary
-                message_history.append({
-                    "role": "tool",
-                    "tool": "research_complete",
-                    "content": "Research complete. Findings recorded.",
-                })
+                message_history.append(
+                    {
+                        "role": "tool",
+                        "tool": "research_complete",
+                        "content": "Research complete. Findings recorded.",
+                    }
+                )
                 return True, tool_calls_delta, budget_delta
 
             else:
@@ -1115,9 +1126,7 @@ class TopicResearchMixin:
         if raw_notes_parts:
             raw_notes_text = "\n".join(raw_notes_parts)
             try:
-                max_raw_notes_len = int(
-                    self.config.deep_research_max_content_length
-                )
+                max_raw_notes_len = int(self.config.deep_research_max_content_length)
             except (TypeError, ValueError):
                 max_raw_notes_len = 50_000
             if len(raw_notes_text) > max_raw_notes_len:
@@ -1148,14 +1157,8 @@ class TopicResearchMixin:
             state_lock: Lock for thread-safe state mutations.
             timeout: Compression timeout.
         """
-        inline_compression_enabled = getattr(
-            self.config, "deep_research_inline_compression", True
-        )
-        if not (
-            inline_compression_enabled
-            and result.sources_found > 0
-            and result.compressed_findings is None
-        ):
+        inline_compression_enabled = getattr(self.config, "deep_research_inline_compression", True)
+        if not (inline_compression_enabled and result.sources_found > 0 and result.compressed_findings is None):
             return
 
         try:
@@ -1165,6 +1168,9 @@ class TopicResearchMixin:
                 timeout=timeout,
             )
             if comp_ok:
+                # compressed_findings now captures the essential content —
+                # free the raw message_history to bound state memory growth.
+                result.message_history.clear()
                 logger.info(
                     "Inline compression for topic %r: %d tokens",
                     sub_query.id,
@@ -1342,41 +1348,30 @@ class TopicResearchMixin:
             safe_resolve_model_for_role,
         )
 
-        min_content_length = int(
-            self.config.deep_research_summarization_min_content_length
-        )
-        per_result_timeout = float(
-            self.config.deep_research_summarization_timeout
-        )
+        min_content_length = int(self.config.deep_research_summarization_min_content_length)
+        per_result_timeout = float(self.config.deep_research_summarization_timeout)
         # Cap per-result timeout for inline summarization (30s default)
         per_result_timeout = min(per_result_timeout, 30.0)
 
         # Filter to sources that need summarization
         candidates = [
-            src for src in sources
-            if not src.metadata.get("summarized")
-            and src.content
-            and len(src.content) > min_content_length
+            src
+            for src in sources
+            if not src.metadata.get("summarized") and src.content and len(src.content) > min_content_length
         ]
         if not candidates:
             return
 
         # Resolve summarization provider/model
-        role_provider, role_model = safe_resolve_model_for_role(
-            self.config, "summarization"
-        )
-        provider_id = role_provider or resolve_phase_provider(
-            self.config, "summarization"
-        )
+        role_provider, role_model = safe_resolve_model_for_role(self.config, "summarization")
+        provider_id = role_provider or resolve_phase_provider(self.config, "summarization")
 
         summarizer = SourceSummarizer(
             provider_id=provider_id,
             model=role_model,
             timeout=per_result_timeout,
             max_concurrent=3,
-            max_content_length=getattr(
-                self.config, "deep_research_max_content_length", 50_000
-            ),
+            max_content_length=getattr(self.config, "deep_research_max_content_length", 50_000),
         )
 
         results = await summarizer.summarize_sources(candidates)
@@ -1396,7 +1391,7 @@ class TopicResearchMixin:
                 src.metadata["excerpts"] = summary_result.key_excerpts
                 src.metadata["summarization_input_tokens"] = summary_result.input_tokens
                 src.metadata["summarization_output_tokens"] = summary_result.output_tokens
-                tokens_used += (summary_result.input_tokens + summary_result.output_tokens)
+                tokens_used += summary_result.input_tokens + summary_result.output_tokens
 
         if tokens_used > 0:
             async with state_lock:
@@ -1462,7 +1457,7 @@ class TopicResearchMixin:
                 queries = [str(raw_query)]
 
         # Cap batch to budget_remaining so researcher can't overspend
-        queries = queries[:max(budget_remaining, 1)]
+        queries = queries[: max(budget_remaining, 1)]
         queries_charged = len(queries)
 
         # Track refined queries
@@ -1509,7 +1504,9 @@ class TopicResearchMixin:
             for i, r in enumerate(per_query_results):
                 if isinstance(r, Exception):
                     logger.warning(
-                        "Batch query %r failed: %s", queries[i], r,
+                        "Batch query %r failed: %s",
+                        queries[i],
+                        r,
                     )
                 elif isinstance(r, int):
                     sources_added += r
@@ -1567,9 +1564,7 @@ class TopicResearchMixin:
         pre_existing_ids = {s.id for s in recent_sources}
         for s in topic_sources:
             if s.id not in pre_existing_ids:
-                pre_existing_sources.append(
-                    (s.content or s.snippet or "", s.title, s.url)
-                )
+                pre_existing_sources.append((s.content or s.snippet or "", s.title, s.url))
 
         novelty_tags: list[NoveltyTag] = []
         for src in recent_sources:
@@ -1668,9 +1663,7 @@ class TopicResearchMixin:
         if extract_added == 0:
             return f"Extraction from {len(urls)} URL(s) yielded no new content."
 
-        result.reflection_notes.append(
-            f"[extract] Fetched {extract_added} source(s) from {len(urls)} URL(s)"
-        )
+        result.reflection_notes.append(f"[extract] Fetched {extract_added} source(s) from {len(urls)} URL(s)")
         confirmation = f"Extracted content from {extract_added} of {len(urls)} URL(s)."
 
         # 1c: Identify only sources added by *this* extraction call.
@@ -1703,9 +1696,7 @@ class TopicResearchMixin:
         )
 
         pre_existing_sources: list[tuple[str, str, str | None]] = [
-            (s.content or s.snippet or "", s.title, s.url)
-            for s in state.sources
-            if s.id in pre_extract_source_ids
+            (s.content or s.snippet or "", s.title, s.url) for s in state.sources if s.id in pre_extract_source_ids
         ]
 
         novelty_tags: list[NoveltyTag] = []
@@ -1722,7 +1713,7 @@ class TopicResearchMixin:
         # Format with novelty annotations (mirroring search result presentation).
         novelty_header = build_novelty_summary(novelty_tags)
         blocks: list[str] = [f"{confirmation}\n{novelty_header}"]
-        for idx, (src, ntag) in enumerate(zip(newly_extracted, novelty_tags), 1):
+        for idx, (src, ntag) in enumerate(zip(newly_extracted, novelty_tags, strict=False), 1):
             blocks.append(_format_source_block(idx, src, ntag))
 
         return "\n\n".join(blocks)
@@ -1799,12 +1790,8 @@ class TopicResearchMixin:
                     )
 
                     # Read dedup config once outside the per-source loop
-                    content_dedup_enabled = getattr(
-                        self.config, "deep_research_enable_content_dedup", True
-                    )
-                    dedup_threshold = getattr(
-                        self.config, "deep_research_content_dedup_threshold", 0.8
-                    )
+                    content_dedup_enabled = getattr(self.config, "deep_research_enable_content_dedup", True)
+                    dedup_threshold = getattr(self.config, "deep_research_content_dedup_threshold", 0.8)
 
                     for source in sources:
                         was_added = await _dedup_and_add_source(
@@ -1891,9 +1878,7 @@ class TopicResearchMixin:
         if not urls:
             return 0
 
-        api_key = self.config.tavily_api_key or os.environ.get(
-            "TAVILY_API_KEY"
-        )
+        api_key = self.config.tavily_api_key or os.environ.get("TAVILY_API_KEY")
         if not api_key:
             logger.debug("Tavily API key not available for topic extract")
             return 0
@@ -1915,12 +1900,8 @@ class TopicResearchMixin:
                 )
 
                 # Read dedup config
-                content_dedup_enabled = getattr(
-                    self.config, "deep_research_enable_content_dedup", True
-                )
-                dedup_threshold = getattr(
-                    self.config, "deep_research_content_dedup_threshold", 0.8
-                )
+                content_dedup_enabled = getattr(self.config, "deep_research_enable_content_dedup", True)
+                dedup_threshold = getattr(self.config, "deep_research_content_dedup_threshold", 0.8)
 
                 for source in extracted_sources:
                     # Tag as extracted source before dedup (metadata preserved)

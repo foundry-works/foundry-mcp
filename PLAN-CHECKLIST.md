@@ -7,12 +7,12 @@
 - [x] 1.4 Deprecate or wire `max_iterations` (emit warning or implement iteration loop)
 
 ## Phase 2 — Critical: Bounded State Growth
-- [ ] 2.1 Cap `state.sources` with content eviction (e.g., 500 sources max)
-- [ ] 2.2 Clear `TopicResearchResult.message_history` after compression succeeds
-- [ ] 2.3 Cap `topic_research_results` list (e.g., 50 max)
-- [ ] 2.4 Call `cleanup_stale_tasks()` at start of `_start_background_task`
-- [ ] 2.5 Cap `supervision_messages` entry count (e.g., 100 max)
-- [ ] 2.6 Bound `_active_research_sessions` dict (max sessions or periodic cleanup)
+- [x] 2.1 Cap `state.sources` with content eviction (e.g., 500 sources max)
+- [x] 2.2 Clear `TopicResearchResult.message_history` after compression succeeds
+- [x] 2.3 Cap `topic_research_results` list (e.g., 50 max)
+- [x] 2.4 Call `cleanup_stale_tasks()` at start of `_start_background_task`
+- [x] 2.5 Cap `supervision_messages` entry count (e.g., 100 max)
+- [x] 2.6 Bound `_active_research_sessions` dict (max sessions or periodic cleanup)
 
 ## Phase 3 — Security: SSRF, Sanitization, Injection
 - [ ] 3.1 Unify SSRF validators — add `0.0.0.0/8`, `ff00::/8`, `.local`/`.internal`/`.localhost` to `_injection_protection.py`

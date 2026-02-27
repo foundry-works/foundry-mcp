@@ -13,8 +13,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
-    from foundry_mcp.config.research import ResearchConfig
-    from foundry_mcp.core.research.memory import ResearchMemory
+    pass
 
 from foundry_mcp.core.observability import audit_log, get_metrics
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
@@ -267,9 +266,7 @@ class GatheringPhaseMixin(CompressionMixin):
         max_concurrent = self.config.deep_research_max_concurrent
         max_content_length = self.config.deep_research_max_content_length
 
-        summarization_timeout = float(
-            self.config.deep_research_summarization_timeout
-        )
+        summarization_timeout = float(self.config.deep_research_summarization_timeout)
         provider._source_summarizer = SourceSummarizer(
             provider_id=summarization_provider,
             model=summarization_model,
@@ -475,7 +472,7 @@ class GatheringPhaseMixin(CompressionMixin):
                     logger.error("Topic agent exception for sub-query %s: %s", pending_queries[i].id, result)
                 else:
                     total_sources_added += result.sources_found
-                    state.topic_research_results.append(result)
+                    state.add_topic_research_result(result)
                     # Aggregate raw notes for session-level access (Phase 1 ODR alignment)
                     if result.raw_notes:
                         state.raw_notes.append(result.raw_notes)
@@ -502,8 +499,7 @@ class GatheringPhaseMixin(CompressionMixin):
         if total_sources_added > 0 and state.topic_research_results:
             # Check if any topics still need compression
             needs_compression = any(
-                tr.source_ids and tr.compressed_findings is None
-                for tr in state.topic_research_results
+                tr.source_ids and tr.compressed_findings is None for tr in state.topic_research_results
             )
             if needs_compression:
                 self._check_cancellation(state)
