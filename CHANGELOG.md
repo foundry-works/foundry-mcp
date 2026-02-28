@@ -5,11 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0b7] - 2026-02-28
+
+### Changed
+
+- **Promote extraction and token deps to core**: `python-docx`, `pdfminer.six`, `pypdf`, and `tiktoken` are now core dependencies instead of optional extras. PDF/DOCX extraction and accurate token counting are integral to deep research workflows and should work out of the box. Removed `[pdf]`, `[docx]`, and `[tokens]` optional dependency groups.
+
 ## [0.17.0b6] - 2026-02-28
 
 ### Added
 
-- **DOCX extraction**: New `DocxExtractor` with security-hardened DOCX-to-markdown conversion. Includes content classifier for binary content detection, SSRF protection, ZIP bomb guards, and graceful degradation when `python-docx` is unavailable. Added as optional dependency group (`pip install foundry-mcp[docx]`).
+- **DOCX extraction**: New `DocxExtractor` with security-hardened DOCX-to-markdown conversion. Includes content classifier for binary content detection, SSRF protection, and ZIP bomb guards. `python-docx` added as a core dependency.
 - **Auto-save research reports**: Completed deep research reports are automatically saved as markdown files. The `deep-research-status` response includes the file path when research is complete.
 - **Per-phase provider/model fields**: Deep research phases can now specify individual `provider` and `model` overrides directly on phase configuration, with tiktoken added as a dependency for accurate token counting.
 

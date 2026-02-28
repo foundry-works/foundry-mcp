@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "foundry-mcp"
-version = "0.17.0b6"
+version = "0.17.0b7"
 description = "MCP server for spec-driven development management"
 readme = "README.md"
 license = "MIT"
@@ -30,6 +30,10 @@ dependencies = [
     "filelock>=3.20.1",
     "python-ulid>=2.0.0",
     "rich>=13.0.0",
+    "python-docx>=1.1.0",
+    "pdfminer.six>=20221105",
+    "pypdf>=5.0.0",
+    "tiktoken>=0.5.0",
 ]
 
 [project.optional-dependencies]
@@ -47,16 +51,6 @@ tracing = [
 metrics = [
     "prometheus-client>=0.17.0",
 ]
-pdf = [
-    "pdfminer.six>=20221105",
-    "pypdf>=5.0.0",
-]
-docx = [
-    "python-docx>=1.1.0",
-]
-tokens = [
-    "tiktoken>=0.5.0",
-]
 observability = [
     "foundry-mcp[tracing,metrics]",
 ]
@@ -64,9 +58,6 @@ dev = [
     "ruff>=0.9.0,<0.10",
     "pyright>=1.1.390",
     "foundry-mcp[test]",
-    "foundry-mcp[pdf]",
-    "foundry-mcp[docx]",
-    "foundry-mcp[tokens]",
 ]
 
 [project.scripts]
