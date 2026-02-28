@@ -86,7 +86,7 @@ class ResearchConfig:
     enabled: bool = True
     ttl_hours: int = 24
     max_messages_per_thread: int = 100
-    default_provider: str = "gemini"
+    default_provider: str = "claude"
     consensus_providers: List[str] = field(default_factory=lambda: ["gemini", "claude"])
     thinkdeep_max_depth: int = 5
     ideate_perspectives: List[str] = field(default_factory=lambda: ["technical", "creative", "practical", "visionary"])
@@ -563,7 +563,7 @@ class ResearchConfig:
             enabled=_parse_bool(data.get("enabled", True)),
             ttl_hours=int(data.get("ttl_hours", 24)),
             max_messages_per_thread=int(data.get("max_messages_per_thread", 100)),
-            default_provider=str(data.get("default_provider", "gemini")),
+            default_provider=str(data.get("default_provider", "claude")),
             consensus_providers=consensus_providers,
             thinkdeep_max_depth=int(data.get("thinkdeep_max_depth", 5)),
             ideate_perspectives=ideate_perspectives,
@@ -1563,14 +1563,12 @@ class ResearchConfig:
     }
 
     #: Cost-tier model defaults for high-volume, low-complexity roles.
-    #: When no explicit model is configured for these roles, the cheap-tier
-    #: model is used instead of the provider's default (which may be expensive).
-    #: This mirrors ODR's pattern of routing summarization to ~10x cheaper models.
-    #: Users can override by setting ``deep_research_{role}_model`` explicitly.
-    _COST_TIER_MODEL_DEFAULTS: ClassVar[Dict[str, str]] = {
-        "summarization": "gemini-2.5-flash",
-        "compression": "gemini-2.5-flash",
-    }
+    #: When tier configuration is active, summarization/compression are routed
+    #: to the ``efficient`` tier automatically (see ``_DEFAULT_TIER_ROLE_ASSIGNMENTS``).
+    #: This dict is intentionally empty — vendor-specific model defaults have been
+    #: removed in favour of the tier system and ``default_provider`` config.
+    #: Users can still override per-role via ``deep_research_{role}_model``.
+    _COST_TIER_MODEL_DEFAULTS: ClassVar[Dict[str, str]] = {}
 
     #: Valid tier names for model tier configuration.
     _VALID_TIERS: ClassVar[frozenset] = frozenset({"frontier", "standard", "efficient"})

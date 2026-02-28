@@ -310,10 +310,10 @@ class TestResolveTierIntegration:
         assert provider == "gemini"
         assert model is None
 
-        # Efficient role (summarization) has no tier → falls through to cost-tier default
+        # Efficient role (summarization) has no tier → falls through to default
         provider, model = config.resolve_model_for_role("summarization")
         assert provider == "gemini"
-        assert model == "gemini-2.5-flash"
+        assert model is None
 
     def test_per_role_provider_with_tier_model(self) -> None:
         """Per-role provider is set but model is not — tier fills in model."""
@@ -395,9 +395,9 @@ class TestTierAwareHelpers:
         assert config.get_summarization_model() == "custom-model"
 
     def test_get_compression_model_no_tiers(self) -> None:
-        """get_compression_model without tiers returns cost-tier default."""
+        """get_compression_model without tiers returns None (no default)."""
         config = _make_config(default_provider="gemini")
-        assert config.get_compression_model() == "gemini-2.5-flash"
+        assert config.get_compression_model() is None
 
 
 # =============================================================================

@@ -450,31 +450,12 @@ class TestDeprecatedFieldWarnings:
 
 
 class TestCostTierModelDefaults:
-    """Tests for _COST_TIER_MODEL_DEFAULTS using full model names."""
+    """Tests for _COST_TIER_MODEL_DEFAULTS — now intentionally empty.
 
-    def test_cost_tier_defaults_match_token_limits(self):
-        """Cost tier model names should match model_token_limits.json entries."""
-        import json
-        from pathlib import Path
+    Hardcoded vendor-specific model defaults have been removed in favour
+    of the tier system and ``default_provider`` config.
+    """
 
-        limits_path = Path(__file__).resolve().parents[2] / "src" / "foundry_mcp" / "config" / "model_token_limits.json"
-        with open(limits_path) as f:
-            token_limits = json.load(f)["limits"]
-
-        for role, model_name in ResearchConfig._COST_TIER_MODEL_DEFAULTS.items():
-            # The model name should appear as a key in model_token_limits.json
-            assert model_name in token_limits, (
-                f"Cost tier default for '{role}' role is '{model_name}', "
-                f"but it's not in model_token_limits.json. "
-                f"Available: {list(token_limits.keys())}"
-            )
-
-    def test_cost_tier_defaults_not_ambiguous_short_names(self):
-        """Cost tier model names should be full names, not short like '2.0-flash'."""
-        for role, model_name in ResearchConfig._COST_TIER_MODEL_DEFAULTS.items():
-            # Full names include the vendor prefix (e.g. "gemini-")
-            assert not model_name[0].isdigit(), (
-                f"Cost tier default for '{role}' role is '{model_name}', "
-                f"which looks like a short name. Use full model names "
-                f"(e.g., 'gemini-2.5-flash') for reliable token limit estimation."
-            )
+    def test_cost_tier_defaults_empty(self):
+        """Cost-tier defaults dict should be empty (no hardcoded vendor models)."""
+        assert ResearchConfig._COST_TIER_MODEL_DEFAULTS == {}

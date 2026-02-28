@@ -52,6 +52,21 @@ from foundry_mcp.config.research import ResearchConfig
 logger = logging.getLogger(__name__)
 
 
+def _deep_merge_dicts(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+    """Deep-merge *override* into *base*, returning a new dict.
+
+    Nested dicts are merged recursively.  All other types (including lists)
+    are replaced wholesale — the higher-priority file wins.
+    """
+    merged: Dict[str, Any] = dict(base)
+    for key, value in override.items():
+        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+            merged[key] = _deep_merge_dicts(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
 class _ServerConfigLoader:
     """Mixin providing config-loading methods for ``ServerConfig``.
 
@@ -85,6 +100,7 @@ class _ServerConfigLoader:
         autonomy_session_defaults: AutonomySessionDefaultsConfig
         autonomy_security: AutonomySecurityConfig
         _startup_warnings: List[str]
+        _pending_toml_sections: Dict[str, Dict[str, Any]]
 
         def _add_startup_warning(self, warning: str) -> None: ...
 
@@ -101,6 +117,7 @@ class _ServerConfigLoader:
         5. Default values
         """
         config = cls()
+        config._pending_toml_sections = {}
 
         # Load TOML config if available
         toml_path = config_file or os.environ.get("FOUNDRY_MCP_CONFIG_FILE")
@@ -133,6 +150,9 @@ class _ServerConfigLoader:
                 if legacy_config.exists():
                     config._load_toml(legacy_config)
                     logger.debug(f"Loaded project config from {legacy_config}")
+
+        # Build config objects from accumulated TOML data (merged across files)
+        config._finalize_layered_configs()
 
         # Override with environment variables
         config._load_env()
@@ -205,47 +225,21 @@ class _ServerConfigLoader:
                 if "commit_cadence" in git_cfg:
                     self.git.commit_cadence = _normalize_commit_cadence(str(git_cfg["commit_cadence"]))
 
-            # Observability settings
-            if "observability" in data:
-                self.observability = ObservabilityConfig.from_toml_dict(data["observability"])
-
-            # Health check settings
-            if "health" in data:
-                self.health = HealthConfig.from_toml_dict(data["health"])
-
-            # Error collection settings
-            if "error_collection" in data:
-                self.error_collection = ErrorCollectionConfig.from_toml_dict(data["error_collection"])
-
-            # Metrics persistence settings
-            if "metrics_persistence" in data:
-                self.metrics_persistence = MetricsPersistenceConfig.from_toml_dict(data["metrics_persistence"])
-
-            # Test runner settings
-            if "test" in data:
-                self.test = TestConfig.from_toml_dict(data["test"])
-
-            # Provider aliases ([providers] section)
-            if "providers" in data:
-                raw_aliases = data["providers"]
-                if isinstance(raw_aliases, dict):
-                    validated: Dict[str, str] = {}
-                    for k, v in raw_aliases.items():
-                        if isinstance(v, str):
-                            validated[k] = v
-                        else:
-                            logger.warning(
-                                "Provider alias %r must be a string, got %s — ignoring",
-                                k,
-                                type(v).__name__,
-                            )
-                    self.provider_aliases = validated
-
-            # Research workflows settings
-            if "research" in data:
-                self.research = ResearchConfig.from_toml_dict(
-                    data["research"], aliases=self.provider_aliases
-                )
+            # ------------------------------------------------------------------
+            # Sections built via from_toml_dict() are accumulated across files
+            # and finalized in _finalize_layered_configs() so that layered
+            # configs merge correctly instead of replacing each other.
+            # ------------------------------------------------------------------
+            _ACCUMULATED_SECTIONS = (
+                "observability", "health", "error_collection",
+                "metrics_persistence", "test", "providers", "research",
+            )
+            for section_name in _ACCUMULATED_SECTIONS:
+                if section_name in data:
+                    existing = self._pending_toml_sections.get(section_name, {})
+                    self._pending_toml_sections[section_name] = _deep_merge_dicts(
+                        existing, data[section_name],
+                    )
 
             # Autonomy posture profile (applies defaults that direct sections can override)
             if "autonomy_posture" in data:
@@ -307,6 +301,49 @@ class _ServerConfigLoader:
 
         except Exception as e:
             logger.error(f"Error loading config file {path}: {e}")
+
+    def _finalize_layered_configs(self) -> None:
+        """Build config objects from accumulated TOML data.
+
+        Called once after all config files have been loaded via ``_load_toml``.
+        Each ``from_toml_dict`` section is deep-merged across files so that
+        higher-priority files override individual keys rather than replacing
+        the entire section.
+        """
+        pending = getattr(self, "_pending_toml_sections", {})
+        if not pending:
+            return
+
+        # Provider aliases (flat dict — used by research config)
+        if "providers" in pending:
+            raw_aliases = pending["providers"]
+            if isinstance(raw_aliases, dict):
+                validated: Dict[str, str] = {}
+                for k, v in raw_aliases.items():
+                    if isinstance(v, str):
+                        validated[k] = v
+                    else:
+                        logger.warning(
+                            "Provider alias %r must be a string, got %s — ignoring",
+                            k,
+                            type(v).__name__,
+                        )
+                self.provider_aliases = validated
+
+        if "observability" in pending:
+            self.observability = ObservabilityConfig.from_toml_dict(pending["observability"])
+        if "health" in pending:
+            self.health = HealthConfig.from_toml_dict(pending["health"])
+        if "error_collection" in pending:
+            self.error_collection = ErrorCollectionConfig.from_toml_dict(pending["error_collection"])
+        if "metrics_persistence" in pending:
+            self.metrics_persistence = MetricsPersistenceConfig.from_toml_dict(pending["metrics_persistence"])
+        if "test" in pending:
+            self.test = TestConfig.from_toml_dict(pending["test"])
+        if "research" in pending:
+            self.research = ResearchConfig.from_toml_dict(
+                pending["research"], aliases=self.provider_aliases
+            )
 
     def _load_env(self) -> None:
         """Load configuration from environment variables."""

@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0b4] - 2026-02-28
+
+### Fixed
+
+- **Layered config merge**: Multiple TOML config files (XDG, home, project) now deep-merge `[research]` and other `from_toml_dict` sections instead of replacing them wholesale. Previously, a higher-priority file with a `[research]` section would discard all settings from lower-priority files.
+- **Removed hardcoded Gemini defaults**: `_COST_TIER_MODEL_DEFAULTS` no longer hardcodes `gemini-2.5-flash` for summarization/compression roles. These roles now follow the standard resolution chain (per-role config > tier > default_provider), respecting user-configured model tiers.
+- **Default provider changed to Claude**: The fallback `default_provider` field default changed from `"gemini"` to `"claude"`.
+
 ## [0.17.0b3] - 2026-02-28
 
 ### Added
