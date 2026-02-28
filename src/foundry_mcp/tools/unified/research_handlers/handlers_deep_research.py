@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any, Optional
 
 from foundry_mcp.core.research.workflows import DeepResearchWorkflow
@@ -17,6 +19,8 @@ from foundry_mcp.core.responses.types import (
 from foundry_mcp.tools.unified.param_schema import Str, validate_payload
 
 from ._helpers import _get_config, _get_memory, _validation_error
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Declarative validation schemas
@@ -157,7 +161,8 @@ def _handle_deep_research_status(
         return err
 
     config = _get_config()
-    workflow = DeepResearchWorkflow(config.research, _get_memory())
+    memory = _get_memory()
+    workflow = DeepResearchWorkflow(config.research, memory)
 
     result = workflow.execute(
         research_id=research_id,
@@ -174,6 +179,11 @@ def _handle_deep_research_status(
 
         if research_status in ("completed", "failed", "cancelled"):
             status_data["next_action"] = "Research finished. Use deep-research-report to retrieve results."
+            # Include report file path if available
+            if "report_output_path" not in status_data and research_id:
+                state = memory.load_deep_research(research_id)
+                if state and state.report_output_path:
+                    status_data["report_output_path"] = state.report_output_path
         else:
             status_data["next_action"] = (
                 "Research is running in the background. Tell the user about current progress, "
@@ -195,6 +205,7 @@ def _handle_deep_research_status(
 def _handle_deep_research_report(
     *,
     research_id: Optional[str] = None,
+    output_path: Optional[str] = None,
     **kwargs: Any,
 ) -> dict:
     """Handle deep-research-report action."""
@@ -204,7 +215,8 @@ def _handle_deep_research_report(
         return err
 
     config = _get_config()
-    workflow = DeepResearchWorkflow(config.research, _get_memory())
+    memory = _get_memory()
+    workflow = DeepResearchWorkflow(config.research, memory)
 
     result = workflow.execute(
         research_id=research_id,
@@ -216,11 +228,40 @@ def _handle_deep_research_report(
         metadata = result.metadata or {}
         warnings = metadata.pop("warnings", None)
 
+        # Determine report file path
+        resolved_path: Optional[str] = None
+
+        if output_path and result.content:
+            # User requested a custom output path — save/override there
+            try:
+                p = Path(output_path)
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(result.content, encoding="utf-8")
+                resolved_path = str(p)
+
+                # Update state so future calls reflect the new path
+                assert research_id is not None
+                state = memory.load_deep_research(research_id)
+                if state:
+                    state.report_output_path = resolved_path
+                    memory.save_deep_research(state)
+            except Exception:
+                logger.warning("Failed to save report to %s", output_path, exc_info=True)
+        else:
+            # Fall back to the auto-saved path from synthesis
+            resolved_path = metadata.pop("report_output_path", None)
+            if not resolved_path and research_id:
+                state = memory.load_deep_research(research_id)
+                if state and state.report_output_path:
+                    resolved_path = state.report_output_path
+
         # Build response data with all fields
-        response_data = {
+        response_data: dict[str, Any] = {
             "report": result.content,
             **metadata,
         }
+        if resolved_path:
+            response_data["output_path"] = resolved_path
 
         return asdict(
             success_response(

@@ -855,6 +855,10 @@ class DeepResearchState(BaseModel):
         default=None,
         description="Final synthesized research report",
     )
+    report_output_path: Optional[str] = Field(
+        default=None,
+        description="Path to saved markdown report file",
+    )
     report_sections: dict[str, str] = Field(
         default_factory=dict,
         description="Named sections of the report for structured access",

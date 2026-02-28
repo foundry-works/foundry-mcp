@@ -46,6 +46,52 @@ from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import 
 
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Auto-save report as markdown file
+# ---------------------------------------------------------------------------
+
+from pathlib import Path
+
+
+def _slugify_query(query: str, max_len: int = 80) -> str:
+    """Convert a research query into a filesystem-safe slug."""
+    slug = query.lower().strip()
+    slug = re.sub(r"[^\w\s-]", "", slug)
+    slug = re.sub(r"[-\s]+", "-", slug).strip("-")
+    return slug[:max_len].rstrip("-")
+
+
+def _save_report_markdown(state: DeepResearchState) -> Optional[str]:
+    """Save the report as a markdown file in the current working directory.
+
+    Returns the output path on success, or None if saving failed.
+    Failure is non-fatal — logs a warning but does not break the workflow.
+    """
+    if not state.report:
+        return None
+
+    try:
+        slug = _slugify_query(state.original_query)
+        if not slug:
+            slug = "deep-research-report"
+
+        output_dir = Path.cwd()
+        output_path = output_dir / f"{slug}.md"
+
+        # Collision handling: append research ID suffix if file exists
+        if output_path.exists():
+            id_suffix = state.id.replace("deepres-", "")[:8]
+            output_path = output_dir / f"{slug}-{id_suffix}.md"
+
+        output_path.write_text(state.report, encoding="utf-8")
+        logger.info("Auto-saved research report to %s", output_path)
+        return str(output_path)
+    except Exception:
+        logger.warning("Failed to auto-save research report", exc_info=True)
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Query-type classification and structure guidance
 # ---------------------------------------------------------------------------
@@ -737,6 +783,11 @@ class SynthesisPhaseMixin:
 
         # Store report in state
         state.report = report
+
+        # Auto-save report as markdown file
+        output_path = _save_report_markdown(state)
+        if output_path:
+            state.report_output_path = output_path
 
         # Save state
         self.memory.save_deep_research(state)
