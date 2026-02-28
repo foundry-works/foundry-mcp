@@ -559,6 +559,26 @@ deep_research_max_retries = 2       # Retry attempts per provider before fallbac
 deep_research_retry_delay = 5.0     # Seconds between retries
 
 # -----------------------------------------------------------------------------
+# Model Tier Configuration (optional)
+# -----------------------------------------------------------------------------
+# Configure all 11 deep-research model roles via 3 named tiers.
+# Per-role overrides (deep_research_{role}_provider/model) still take priority.
+#
+# [research.model_tiers]
+# frontier = "[cli]gemini:pro"        # research, report, evaluation, supervision
+# standard = "[cli]gemini:flash"      # reflection, topic_reflection, clarification, brief, delegation
+# efficient = "[cli]gemini:flash"     # summarization, compression
+#
+# # Optional: reassign a role to a different tier
+# [research.model_tiers.role_assignments]
+# summarization = "standard"          # promote from efficient → standard
+#
+# # Optional: table form for explicit model override
+# # [research.model_tiers.frontier]
+# # provider = "[cli]gemini:pro"
+# # model = "gemini-2.5-pro-preview-0506"
+
+# -----------------------------------------------------------------------------
 # Search Rate Limiting
 # -----------------------------------------------------------------------------
 

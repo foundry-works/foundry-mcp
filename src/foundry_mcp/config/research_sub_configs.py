@@ -16,7 +16,7 @@ routing, and digest settings).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 
 @dataclass(frozen=True)
@@ -101,6 +101,49 @@ class ModelRoleConfig:
     summarization_model: Optional[str] = None
     digest_provider: Optional[str] = None
     digest_providers: List[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ModelTierConfig:
+    """Tier-based model configuration for deep research roles.
+
+    Allows configuring all 11 model roles via 3 named tiers (``frontier``,
+    ``standard``, ``efficient``) instead of setting 20+ individual keys.
+    Per-role overrides (``deep_research_{role}_provider/model``) still take
+    priority over tier-based resolution.
+
+    Attributes:
+        tiers: Mapping of tier name to provider spec string.
+        tier_models: Mapping of tier name to explicit model override.
+        role_assignments: Custom role-to-tier mappings that override defaults.
+        enabled: Whether tier-based resolution is active.
+    """
+
+    tiers: Dict[str, str] = field(default_factory=dict)
+    tier_models: Dict[str, Optional[str]] = field(default_factory=dict)
+    role_assignments: Dict[str, str] = field(default_factory=dict)
+    enabled: bool = False
+
+    def get_tier_for_role(self, role: str, default_assignments: Dict[str, str] | None = None) -> Optional[str]:
+        """Return the tier name assigned to *role*.
+
+        Checks ``role_assignments`` first (user overrides), then falls back
+        to *default_assignments* (typically ``ResearchConfig._DEFAULT_TIER_ROLE_ASSIGNMENTS``).
+        """
+        tier = self.role_assignments.get(role)
+        if tier is not None:
+            return tier
+        if default_assignments is not None:
+            return default_assignments.get(role)
+        return None
+
+    def resolve_tier(self, tier_name: str) -> Optional[str]:
+        """Return the provider spec string for *tier_name*, or ``None``."""
+        return self.tiers.get(tier_name)
+
+    def resolve_tier_model(self, tier_name: str) -> Optional[str]:
+        """Return the explicit model override for *tier_name*, or ``None``."""
+        return self.tier_models.get(tier_name)
 
 
 @dataclass(frozen=True)

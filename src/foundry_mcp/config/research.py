@@ -297,6 +297,9 @@ class ResearchConfig:
     deep_research_digest_provider: Optional[str] = None  # Primary provider for digest
     deep_research_digest_providers: List[str] = field(default_factory=list)  # Fallback providers
 
+    # Model tier configuration (parsed from [research.model_tiers] TOML section)
+    _tier_config: Optional[Dict[str, Any]] = field(default=None, repr=False)
+
     #: Fields removed from ResearchConfig that should produce deprecation
     #: warnings when encountered in user TOML configs.  Maps old field name
     #: to a short migration hint shown in the warning message.
@@ -568,6 +571,8 @@ class ResearchConfig:
             deep_research_archive_retention_days=int(data.get("deep_research_archive_retention_days", 30)),
             deep_research_digest_provider=data.get("deep_research_digest_provider"),
             deep_research_digest_providers=_parse_provider_list("deep_research_digest_providers"),
+            # Model tier configuration
+            _tier_config=data.get("model_tiers"),
         )
         config.tavily_search_depth_configured = "tavily_search_depth" in data
         config.tavily_chunks_per_source_configured = "tavily_chunks_per_source" in data
@@ -576,8 +581,9 @@ class ResearchConfig:
         import dataclasses as _dc
 
         known_keys = {f.name for f in _dc.fields(cls)} | set(cls._DEPRECATED_FIELDS)
-        # Backward-compat aliases that are also accepted
+        # Backward-compat aliases and nested sections that are also accepted
         known_keys.add("deep_research_topic_max_searches")
+        known_keys.add("model_tiers")
         unknown_keys = set(data.keys()) - known_keys
         for key in sorted(unknown_keys):
             logger.warning(
@@ -612,6 +618,7 @@ class ResearchConfig:
         self._validate_status_persistence_config()
         self._validate_audit_verbosity_config()
         self._validate_digest_config()
+        self._validate_model_tiers()
 
     def _validate_deep_research_mode(self) -> None:
         """Validate deep_research_mode is one of the allowed values."""
@@ -1217,18 +1224,14 @@ class ResearchConfig:
     def get_summarization_model(self) -> Optional[str]:
         """Get model override for fetch-time source summarization.
 
-        Returns the summarization-specific model if configured, otherwise
-        the cost-tier default for the summarization role.
+        Delegates to ``resolve_model_for_role("summarization")`` so the
+        result is automatically tier-aware.
 
         Returns:
-            Model name (cost-tier default if no explicit config)
+            Model name (tier/cost-tier default if no explicit config)
         """
-        if self.deep_research_summarization_model:
-            return self.deep_research_summarization_model
-        if self.deep_research_summarization_provider:
-            _, model = _parse_provider_spec(self.deep_research_summarization_provider)
-            return model
-        return self._COST_TIER_MODEL_DEFAULTS.get("summarization")
+        _, model = self.resolve_model_for_role("summarization")
+        return model
 
     def get_compression_provider(self) -> str:
         """Get LLM provider ID for per-topic compression.
@@ -1248,18 +1251,14 @@ class ResearchConfig:
     def get_compression_model(self) -> Optional[str]:
         """Get model override for per-topic compression.
 
-        Returns the compression-specific model if configured, otherwise
-        the cost-tier default for the compression role.
+        Delegates to ``resolve_model_for_role("compression")`` so the
+        result is automatically tier-aware.
 
         Returns:
-            Model name (cost-tier default if no explicit config)
+            Model name (tier/cost-tier default if no explicit config)
         """
-        if self.deep_research_compression_model:
-            return self.deep_research_compression_model
-        if self.deep_research_compression_provider:
-            _, model = _parse_provider_spec(self.deep_research_compression_provider)
-            return model
-        return self._COST_TIER_MODEL_DEFAULTS.get("compression")
+        _, model = self.resolve_model_for_role("compression")
+        return model
 
     # ------------------------------------------------------------------
     # Role-based model resolution (Phase 6: Multi-Model Cost Optimization)
@@ -1275,6 +1274,111 @@ class ResearchConfig:
     _MAX_DEEP_RESEARCH_SOURCES: ClassVar[int] = 100
     _MAX_DEEP_RESEARCH_CONCURRENT: ClassVar[int] = 20
     _MAX_DEFAULT_TIMEOUT: ClassVar[float] = 3600.0
+
+    # ------------------------------------------------------------------
+    # Tier-based model configuration
+    # ------------------------------------------------------------------
+
+    @property
+    def model_tier_config(self) -> "ModelTierConfig":
+        """Parsed tier configuration (lazy, cached)."""
+        # Use object.__getattribute__ to avoid potential descriptor issues
+        try:
+            cached = object.__getattribute__(self, "_cached_tier_config")
+        except AttributeError:
+            cached = None
+        if cached is not None:
+            return cached
+        result = self._build_tier_config(self._tier_config)
+        object.__setattr__(self, "_cached_tier_config", result)
+        return result
+
+    @staticmethod
+    def _build_tier_config(raw: Optional[Dict[str, Any]]) -> "ModelTierConfig":
+        """Parse raw TOML dict into a ``ModelTierConfig``.
+
+        Supports two forms per tier:
+
+        - **String form:** ``frontier = "[cli]gemini:pro"``
+        - **Table form:** ``[research.model_tiers.frontier]`` with ``provider``
+          and optional ``model`` keys.
+
+        The ``role_assignments`` sub-dict maps role names to tier names.
+        """
+        from foundry_mcp.config.research_sub_configs import ModelTierConfig
+
+        if not raw:
+            return ModelTierConfig(enabled=False)
+
+        tiers: Dict[str, str] = {}
+        tier_models: Dict[str, Optional[str]] = {}
+        role_assignments: Dict[str, str] = {}
+
+        for key, value in raw.items():
+            if key == "role_assignments":
+                # Sub-dict of role -> tier_name
+                if isinstance(value, dict):
+                    role_assignments.update(value)
+                continue
+
+            # Tier entry — either a string or a table
+            if isinstance(value, str):
+                # String form: tier_name = "provider_spec"
+                tiers[key] = value
+            elif isinstance(value, dict):
+                # Table form: [research.model_tiers.<tier_name>]
+                provider = value.get("provider")
+                if provider:
+                    tiers[key] = provider
+                model = value.get("model")
+                if model:
+                    tier_models[key] = model
+
+        if not tiers:
+            return ModelTierConfig(enabled=False)
+
+        return ModelTierConfig(
+            tiers=tiers,
+            tier_models=tier_models,
+            role_assignments=role_assignments,
+            enabled=True,
+        )
+
+    def _validate_model_tiers(self) -> None:
+        """Eagerly build tier config to surface parse/validation warnings."""
+        tier_cfg = self.model_tier_config
+        if not tier_cfg.enabled:
+            return
+
+        # Warn on invalid tier names
+        for tier_name in tier_cfg.tiers:
+            if tier_name not in self._VALID_TIERS:
+                logger.warning(
+                    "Unknown model tier %r in [research.model_tiers] — "
+                    "valid tiers: %s",
+                    tier_name,
+                    ", ".join(sorted(self._VALID_TIERS)),
+                )
+
+        # Warn on invalid role names in role_assignments
+        for role_name in tier_cfg.role_assignments:
+            if role_name not in self._VALID_TIER_ROLES:
+                logger.warning(
+                    "Unknown role %r in [research.model_tiers.role_assignments] — "
+                    "valid roles: %s",
+                    role_name,
+                    ", ".join(sorted(self._VALID_TIER_ROLES)),
+                )
+
+        # Warn on role_assignments pointing to undefined tiers
+        for role_name, tier_name in tier_cfg.role_assignments.items():
+            if tier_name not in tier_cfg.tiers:
+                logger.warning(
+                    "Role %r assigned to tier %r which is not configured "
+                    "in [research.model_tiers]",
+                    role_name,
+                    tier_name,
+                )
 
     #: Maps each model role to the config attribute suffixes to check.
     #: For each role, we try ``deep_research_{suffix}_provider`` /
@@ -1304,6 +1408,28 @@ class ResearchConfig:
         "compression": "gemini-2.5-flash",
     }
 
+    #: Valid tier names for model tier configuration.
+    _VALID_TIERS: ClassVar[frozenset] = frozenset({"frontier", "standard", "efficient"})
+
+    #: Valid role names that can be assigned to tiers (all roles in the resolution chain).
+    _VALID_TIER_ROLES: ClassVar[frozenset] = frozenset(_ROLE_RESOLUTION_CHAIN.keys())
+
+    #: Default mapping of roles to tiers when tier configuration is active.
+    #: Users can override individual assignments via ``[research.model_tiers.role_assignments]``.
+    _DEFAULT_TIER_ROLE_ASSIGNMENTS: ClassVar[Dict[str, str]] = {
+        "research": "frontier",
+        "report": "frontier",
+        "evaluation": "frontier",
+        "supervision": "frontier",
+        "reflection": "standard",
+        "topic_reflection": "standard",
+        "clarification": "standard",
+        "brief": "standard",
+        "delegation": "standard",
+        "summarization": "efficient",
+        "compression": "efficient",
+    }
+
     def resolve_model_for_role(self, role: str) -> Tuple[str, Optional[str]]:
         """Resolve ``(provider_id, model)`` for a model role.
 
@@ -1313,19 +1439,21 @@ class ResearchConfig:
            ``deep_research_{role}_model``.
         2. **Phase-level fallback** — the role maps to one or more phase
            suffixes (see ``_ROLE_RESOLUTION_CHAIN``), each checked in order.
-        3. **Cost-tier default** — for high-volume roles (summarization,
+        3. **Tier-based lookup** — when ``[research.model_tiers]`` is
+           configured, the role's assigned tier provides a provider/model.
+        4. **Cost-tier default** — for high-volume roles (summarization,
            compression), a cheap model is used instead of the provider's
            default (see ``_COST_TIER_MODEL_DEFAULTS``).
-        4. **Global default** — ``default_provider``.
+        5. **Global default** — ``default_provider``.
 
         The returned ``model`` may be ``None`` when only the provider is
-        configured and no cost-tier default applies.
+        configured and no cost-tier or tier default applies.
 
         Args:
             role: Model role name (``"research"``, ``"report"``,
                 ``"reflection"``, ``"topic_reflection"``,
                 ``"summarization"``, ``"compression"``,
-                ``"clarification"``).
+                ``"clarification"``, etc.).
 
         Returns:
             ``(provider_id, model)`` tuple.
@@ -1352,6 +1480,20 @@ class ResearchConfig:
             # If both found, stop early
             if resolved_provider is not None and resolved_model is not None:
                 break
+
+        # --- Tier-based lookup (between chain and global default) ---
+        tier_cfg = self.model_tier_config
+        if tier_cfg.enabled and (resolved_provider is None or resolved_model is None):
+            tier_name = tier_cfg.get_tier_for_role(role, self._DEFAULT_TIER_ROLE_ASSIGNMENTS)
+            if tier_name:
+                if resolved_provider is None:
+                    tier_provider = tier_cfg.resolve_tier(tier_name)
+                    if tier_provider:
+                        resolved_provider = tier_provider
+                if resolved_model is None:
+                    tier_model = tier_cfg.resolve_tier_model(tier_name)
+                    if tier_model:
+                        resolved_model = tier_model
 
         # Parse the resolved provider (or fall back to default_provider)
         spec_str = resolved_provider or self.default_provider
