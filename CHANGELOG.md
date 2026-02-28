@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0b5] - 2026-02-28
+
+### Fixed
+
+- **Model-aware prompt length limits**: Max prompt character limits are now derived from the target model's context window via the token-management registry instead of a hardcoded 200k constant. Prevents false rejections on large-context models and sets tighter limits for smaller models.
+- **Context window exceeded detection**: `_is_context_window_exceeded` now also recognizes `prompt_too_long` validation errors, enabling proper compression retry when prompts exceed model limits.
+- **Global compression role config**: Added `global_compression` role to model tier mappings so cross-phase compression can resolve its own model independently from per-topic compression.
+- **Test stabilization**: Fixed race condition in deep research status check test, bypassed DNS resolution in extract content tests for non-existent hostnames, fixed `ResearchConfig` dict unpacking to exclude private attributes, and added missing `token_safety_margin` mock.
+
 ## [0.17.0b4] - 2026-02-28
 
 ### Fixed
