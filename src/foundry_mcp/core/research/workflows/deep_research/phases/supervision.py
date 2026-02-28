@@ -1208,7 +1208,7 @@ class SupervisionPhaseMixin:
         # Spawn parallel topic researchers
         async def run_directive_researcher(sq: SubQuery) -> TopicResearchResult:
             try:
-                return await self._execute_topic_research_async(
+                result = await self._execute_topic_research_async(
                     sub_query=sq,
                     state=state,
                     available_providers=available_providers,
@@ -1220,6 +1220,14 @@ class SupervisionPhaseMixin:
                     state_lock=state_lock,
                     semaphore=semaphore,
                 )
+                # Incremental persistence after each researcher completes
+                # so accumulated sources survive crashes or premature stale detection
+                try:
+                    async with state_lock:
+                        self.memory.save_deep_research(state)
+                except Exception:
+                    logger.debug("Incremental persist failed for %s", sq.id)
+                return result
             except asyncio.CancelledError:
                 raise
             except Exception as exc:

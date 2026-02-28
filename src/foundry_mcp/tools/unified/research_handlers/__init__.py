@@ -222,6 +222,8 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
         limit: int = 50,
         cursor: Optional[str] = None,
         completed_only: bool = False,
+        wait: bool = True,
+        wait_timeout: float = 90,
     ) -> dict:
         """Execute research workflows via the action router.
 
@@ -279,6 +281,8 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
             limit: Maximum items to return
             cursor: Pagination cursor for deep-research-list
             completed_only: Filter to completed sessions only (deep-research-list)
+            wait: Block until state changes (long-poll) for deep-research-status
+            wait_timeout: Max seconds to wait (clamped to 90) for deep-research-status
 
         Returns:
             Response envelope with action results

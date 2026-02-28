@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0b2] - 2026-02-27
+
+### Added
+
+- **Long-poll status endpoint**: `deep-research-status` now supports `wait=true` and `wait_timeout` parameters for efficient polling. Blocks until workflow state changes or timeout elapses, eliminating wasteful repeated status checks. Returns `changed` flag in metadata.
+- **Duplicate task prevention**: Starting a deep research session that already has a running background task now returns a conflict error instead of silently spawning a duplicate.
+- **Incremental persistence**: Topic researchers now flush state to disk after each researcher completes, so accumulated sources survive crashes or premature stale detection.
+- **State-change signaling on BackgroundTask**: `notify_state_change()` / `wait_for_change()` primitives using `threading.Condition` for cross-thread long-poll coordination.
+
+### Fixed
+
+- **Liveness touch on iteration boundary**: Workflow execution now calls `bg_task.touch()` at each iteration to prevent false stale detection during long-running phases.
+- **Completed task cleanup**: Completed/failed background tasks are cleaned up from registries before starting a new session with the same ID.
+
 ## [0.17.0b1] - 2026-02-27
 
 ### Added

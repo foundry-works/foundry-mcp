@@ -413,3 +413,63 @@ class TestBackgroundTaskTimeoutMetadata:
         assert task.status == TaskStatus.COMPLETED
         assert task.timed_out_at is None
         assert task.timeout_elapsed_seconds is None
+
+
+class TestBackgroundTaskStateChangeSignaling:
+    """Tests for state-change signaling (long-poll support)."""
+
+    def test_state_version_increments(self):
+        """notify_state_change() bumps the state version monotonically."""
+        task = BackgroundTask(research_id="test-1")
+        assert task.state_version == 0
+
+        task.notify_state_change()
+        assert task.state_version == 1
+
+        task.notify_state_change()
+        assert task.state_version == 2
+
+    def test_wait_for_change_returns_on_notify(self):
+        """wait_for_change() unblocks when notified from another thread."""
+        task = BackgroundTask(research_id="test-1")
+        result_version = None
+
+        def waiter():
+            nonlocal result_version
+            result_version = task.wait_for_change(known_version=0, timeout=5.0)
+
+        t = threading.Thread(target=waiter, daemon=True)
+        t.start()
+
+        # Give waiter time to enter wait
+        time.sleep(0.05)
+
+        # Signal from main thread
+        task.notify_state_change()
+        t.join(timeout=2.0)
+
+        assert result_version == 1
+        assert not t.is_alive()
+
+    def test_wait_for_change_returns_on_timeout(self):
+        """wait_for_change() returns known_version after timeout with no notify."""
+        task = BackgroundTask(research_id="test-1")
+
+        start = time.monotonic()
+        result = task.wait_for_change(known_version=0, timeout=0.1)
+        elapsed = time.monotonic() - start
+
+        assert result == 0  # No change — timed out
+        assert elapsed >= 0.09  # Waited approximately the timeout
+
+    def test_wait_for_change_immediate_if_version_differs(self):
+        """wait_for_change() returns immediately if version already changed."""
+        task = BackgroundTask(research_id="test-1")
+        task.notify_state_change()  # version = 1
+
+        start = time.monotonic()
+        result = task.wait_for_change(known_version=0, timeout=5.0)
+        elapsed = time.monotonic() - start
+
+        assert result == 1
+        assert elapsed < 0.1  # Should be near-instant

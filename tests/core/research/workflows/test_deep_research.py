@@ -3016,3 +3016,175 @@ class TestSynthesisRetryTruncation:
         # Actual length should be close to findings_len (within marker overhead)
         assert abs(actual_len - findings_len) < 5
         assert int(actual_len * 0.7) == expected or abs(int(actual_len * 0.7) - expected) < 5
+
+
+# =============================================================================
+# Long-Poll Status Integration Tests
+# =============================================================================
+
+
+class TestStatusLongPoll:
+    """Integration tests for long-poll wait behavior in _get_status().
+
+    These tests exercise the full path: BackgroundTask signaling →
+    _get_status() wait logic → metadata output.
+    """
+
+    @pytest.fixture
+    def workflow_with_bg_task(self, mock_config, mock_memory):
+        """Create a workflow with a registered BackgroundTask and in-memory state."""
+        import threading
+
+        from foundry_mcp.core import task_registry
+        from foundry_mcp.core.background_task import BackgroundTask
+        from foundry_mcp.core.research.workflows.deep_research.core import DeepResearchWorkflow
+        from foundry_mcp.core.research.workflows.deep_research.infrastructure import (
+            _active_research_sessions,
+            _active_sessions_lock,
+        )
+
+        state = DeepResearchState(
+            id="longpoll-test-1",
+            original_query="Test long-poll",
+            phase=DeepResearchPhase.SUPERVISION,
+            iteration=1,
+            max_iterations=3,
+        )
+
+        # Create a long-running thread so is_done stays False
+        stop_event = threading.Event()
+
+        def worker():
+            stop_event.wait()
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+        bg_task = BackgroundTask(research_id=state.id, thread=thread)
+
+        workflow = DeepResearchWorkflow(config=mock_config, memory=mock_memory)
+
+        # Register in both class-level and global registries
+        with workflow._tasks_lock:
+            workflow._tasks[state.id] = bg_task
+        task_registry.register(bg_task)
+
+        # Put state in the active sessions dict (simulates running workflow)
+        with _active_sessions_lock:
+            _active_research_sessions[state.id] = state
+
+        yield {
+            "workflow": workflow,
+            "bg_task": bg_task,
+            "state": state,
+            "stop_event": stop_event,
+        }
+
+        # Cleanup
+        stop_event.set()
+        thread.join(timeout=2.0)
+        with workflow._tasks_lock:
+            workflow._tasks.pop(state.id, None)
+        task_registry.remove(state.id)
+        with _active_sessions_lock:
+            _active_research_sessions.pop(state.id, None)
+
+    def test_status_wait_blocks_until_flush(self, workflow_with_bg_task):
+        """Long-poll status blocks until notify_state_change() is called.
+
+        Verifies: wait=True blocks the caller, notify wakes it,
+        and metadata contains changed=True.
+        """
+        import threading
+        import time
+
+        ctx = workflow_with_bg_task
+        workflow = ctx["workflow"]
+        bg_task = ctx["bg_task"]
+        state = ctx["state"]
+
+        result_holder = {}
+
+        def status_caller():
+            r = workflow._get_status(
+                research_id=state.id,
+                wait=True,
+                wait_timeout=5.0,
+            )
+            result_holder["result"] = r
+            result_holder["returned_at"] = time.monotonic()
+
+        started_at = time.monotonic()
+        t = threading.Thread(target=status_caller, daemon=True)
+        t.start()
+
+        # Give the status caller time to enter the wait
+        time.sleep(0.1)
+
+        # Signal state change (simulates _flush_state → notify_state_change)
+        bg_task.notify_state_change()
+
+        t.join(timeout=3.0)
+        assert not t.is_alive(), "Status caller should have returned"
+
+        result = result_holder["result"]
+        assert result.success is True
+        assert result.metadata["changed"] is True
+        assert result.metadata["research_id"] == state.id
+        assert result.metadata["phase"] == "supervision"
+        # Should have returned quickly after notify, not waited full timeout
+        elapsed = result_holder["returned_at"] - started_at
+        assert elapsed < 3.0, f"Expected quick return after notify, got {elapsed:.2f}s"
+
+    def test_status_wait_timeout_returns_unchanged(self, workflow_with_bg_task):
+        """Long-poll status returns changed=False when timeout elapses.
+
+        Verifies: wait=True with no notify returns after timeout with
+        changed=False in metadata.
+        """
+        import time
+
+        ctx = workflow_with_bg_task
+        workflow = ctx["workflow"]
+        state = ctx["state"]
+
+        start = time.monotonic()
+        result = workflow._get_status(
+            research_id=state.id,
+            wait=True,
+            wait_timeout=1.0,  # Short timeout
+        )
+        elapsed = time.monotonic() - start
+
+        assert result.success is True
+        assert result.metadata["changed"] is False
+        assert result.metadata["research_id"] == state.id
+        # Should have waited approximately the timeout
+        assert elapsed >= 0.9, f"Expected ~1s wait, got {elapsed:.2f}s"
+        assert elapsed < 3.0, f"Should not overshoot timeout, got {elapsed:.2f}s"
+
+    def test_status_wait_false_is_instant(self, workflow_with_bg_task):
+        """Default wait=False returns immediately without changed metadata.
+
+        Verifies: backward compatibility — no blocking, no changed flag.
+        """
+        import time
+
+        ctx = workflow_with_bg_task
+        workflow = ctx["workflow"]
+        state = ctx["state"]
+
+        start = time.monotonic()
+        result = workflow._get_status(
+            research_id=state.id,
+            wait=False,
+        )
+        elapsed = time.monotonic() - start
+
+        assert result.success is True
+        assert result.metadata["research_id"] == state.id
+        assert result.metadata["task_status"] == "running"
+        # No changed flag when wait=False
+        assert "changed" not in result.metadata
+        # Should return near-instantly
+        assert elapsed < 0.5, f"Expected instant return, got {elapsed:.2f}s"

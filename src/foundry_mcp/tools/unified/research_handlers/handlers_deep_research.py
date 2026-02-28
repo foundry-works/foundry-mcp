@@ -146,6 +146,8 @@ def _handle_deep_research(
 def _handle_deep_research_status(
     *,
     research_id: Optional[str] = None,
+    wait: bool = True,
+    wait_timeout: float = 90.0,
     **kwargs: Any,
 ) -> dict:
     """Handle deep-research-status action."""
@@ -160,6 +162,8 @@ def _handle_deep_research_status(
     result = workflow.execute(
         research_id=research_id,
         action="status",
+        wait=wait,
+        wait_timeout=wait_timeout,
     )
 
     if result.success:
@@ -172,7 +176,8 @@ def _handle_deep_research_status(
             status_data["next_action"] = "Research finished. Use deep-research-report to retrieve results."
         else:
             status_data["next_action"] = (
-                "Research is running in the background. Tell the user about current progress, then check again shortly."
+                "Research is running in the background. Tell the user about current progress, "
+                "then call deep-research-status with wait=true to block until new progress is available."
             )
 
         return asdict(success_response(data=status_data))

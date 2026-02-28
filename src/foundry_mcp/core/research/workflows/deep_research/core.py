@@ -236,7 +236,11 @@ class DeepResearchWorkflow(
                     task_timeout=task_timeout,
                 )
             elif action == "status":
-                return self._get_status(research_id=research_id)
+                return self._get_status(
+                    research_id=research_id,
+                    wait=kwargs.get("wait", True),
+                    wait_timeout=kwargs.get("wait_timeout", 90.0),
+                )
             elif action == "report":
                 return self._get_report(research_id=research_id)
             elif action == "cancel":

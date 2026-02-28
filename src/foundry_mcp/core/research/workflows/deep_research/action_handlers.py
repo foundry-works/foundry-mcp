@@ -241,6 +241,28 @@ class ActionHandlersMixin:
                 },
             )
 
+        # Check for already-running background task to prevent duplicate execution
+        existing_bg_task = self.get_background_task(research_id)
+        if existing_bg_task and not existing_bg_task.is_done:
+            return WorkflowResult(
+                success=False,
+                content="",
+                error=(
+                    f"Research session '{research_id}' already has a running background task. "
+                    "Use action='deep-research-status' to check progress, or cancel it first."
+                ),
+                metadata={
+                    "research_id": research_id,
+                    "conflict": True,
+                    "task_status": existing_bg_task.status.value,
+                    "elapsed_ms": existing_bg_task.elapsed_ms,
+                },
+            )
+        # Clean up completed/failed bg_task before potentially starting fresh
+        if existing_bg_task:
+            self._cleanup_completed_task(research_id)
+            task_registry.remove(research_id)
+
         # Run in background if requested
         if background:
             return self._start_background_task(
@@ -260,8 +282,19 @@ class ActionHandlersMixin:
             task_timeout=task_timeout,
         )
 
-    def _get_status(self, research_id: Optional[str]) -> WorkflowResult:
-        """Get the current status of a research session."""
+    def _get_status(
+        self,
+        research_id: Optional[str],
+        wait: bool = True,
+        wait_timeout: float = 90.0,
+    ) -> WorkflowResult:
+        """Get the current status of a research session.
+
+        Args:
+            research_id: ID of the research session
+            wait: If True, block until state changes (long-poll)
+            wait_timeout: Max seconds to wait (clamped to [1, 90])
+        """
         if not research_id:
             return WorkflowResult(
                 success=False,
@@ -273,6 +306,17 @@ class ActionHandlersMixin:
         bg_task = self.get_background_task(research_id)
         if bg_task:
             is_active = not bg_task.is_done
+
+            # Long-poll: block until state changes or timeout
+            changed: Optional[bool] = None
+            if wait and is_active:
+                effective_timeout = max(1.0, min(wait_timeout, 90.0))
+                known_version = bg_task.state_version
+                new_version = bg_task.wait_for_change(known_version, effective_timeout)
+                changed = new_version != known_version
+                # Re-check after wait — task may have completed
+                is_active = not bg_task.is_done
+
             # Prefer in-memory state for active tasks to avoid clobbering workflow saves.
             if is_active:
                 with _active_sessions_lock:
@@ -340,6 +384,10 @@ class ActionHandlersMixin:
                 content = "\n".join(status_lines)
             else:
                 content = f"Task status: {bg_task.status.value}"
+            # Add long-poll changed flag when wait was used
+            if changed is not None:
+                metadata["changed"] = changed
+
             # Cleanup registries for completed tasks to prevent leaks.
             if not is_active:
                 try:

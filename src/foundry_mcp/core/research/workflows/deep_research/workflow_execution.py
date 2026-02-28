@@ -92,6 +92,8 @@ class WorkflowExecutionMixin:
         with self._tasks_lock:
             bg_task = self._tasks.get(state.id)
 
+        if bg_task:
+            bg_task.touch()  # Record liveness for stale detection
         if bg_task and bg_task.is_cancelled:
             logger.info(
                 "Cancellation detected for research %s at phase %s, iteration %d",

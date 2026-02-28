@@ -205,8 +205,16 @@ class PersistenceMixin:
         - Token usage/cache data is persisted
         - Final status is captured
         - Completion timestamp is saved
+        - Waiting long-poll status handlers are woken
 
         Args:
             state: State to persist
         """
         self._persist_state(state)
+
+        # Signal waiting status handlers that state has changed
+        from foundry_mcp.core import task_registry
+
+        bg_task = task_registry.get(state.id)
+        if bg_task:
+            bg_task.notify_state_change()

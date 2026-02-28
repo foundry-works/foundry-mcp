@@ -98,6 +98,10 @@ class BackgroundTask:
         # Event for signaling cancellation to asyncio-based execution
         self._async_cancel_event = asyncio.Event()
 
+        # Condition + version for long-poll state-change signaling
+        self._state_condition = threading.Condition()
+        self._state_version: int = 0
+
     @property
     def elapsed_ms(self) -> float:
         """Get elapsed time in milliseconds.
@@ -146,6 +150,40 @@ class BackgroundTask:
         they are still making progress and should not be marked as stale.
         """
         self.last_activity = time.time()
+
+    def notify_state_change(self) -> None:
+        """Signal that workflow state has changed.
+
+        Called from _flush_state() in the research daemon thread.
+        Wakes any waiting status handler.
+        """
+        with self._state_condition:
+            self._state_version += 1
+            self._state_condition.notify_all()
+
+    def wait_for_change(self, known_version: int, timeout: float) -> int:
+        """Block until state version changes or timeout elapses.
+
+        Args:
+            known_version: The version the caller last observed.
+            timeout: Max seconds to wait.
+
+        Returns:
+            The current state version (may equal known_version on timeout).
+        """
+        with self._state_condition:
+            deadline = time.monotonic() + timeout
+            while self._state_version == known_version:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                self._state_condition.wait(timeout=remaining)
+            return self._state_version
+
+    @property
+    def state_version(self) -> int:
+        """Current state version (monotonic counter)."""
+        return self._state_version
 
     @property
     def is_cancelled(self) -> bool:
