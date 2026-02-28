@@ -1,244 +1,330 @@
-# Plan: foundry-mcp.toml Full Overhaul
+# PLAN: DOCX Extraction Support for Deep Research
 
 ## Problem
 
-The sample config (`samples/foundry-mcp.toml`) has accumulated significant drift:
+When deep research encounters a `.docx` URL (e.g., from Tavily search/extract), the raw
+binary ZIP content flows unfiltered into the summarization pipeline. The LLM receives
+garbled bytes and returns an error like:
 
-- **12 deprecated fields** still shown as active
-- **2 wrong default values** misleading users
-- **1 orphaned section** (`[implement]`) never parsed
-- **1 phantom field** (`notes_dir`) that doesn't exist
-- **23+ fields** undocumented (supervision, delegation, compression, evaluation, etc.)
-- **65 environment variable overrides** undocumented
-- **Model tier system** poorly explained
-- **960 lines** — too long for a "sample" config; mixes quick-start guidance with exhaustive reference material
+> Unable to process content. The provided input appears to be binary or compressed data
+> from a Microsoft Word document (.docx file format).
 
-## Solution: Three-File Split
+There is no detection, extraction, or graceful fallback for Office document formats.
 
-| File | Purpose | Audience |
-|------|---------|----------|
-| `samples/foundry-mcp.toml` | **Quick-start.** Minimal, opinionated, good defaults. ~150 lines. | New users, copy-paste setup |
-| `samples/foundry-mcp-reference.toml` | **Full reference.** Every field commented out with annotations. Copy sections as needed. | Power users tuning knobs |
-| `dev_docs/guides/config-reference.md` | **Searchable docs.** Tables of every field, default, env var, and description. | Lookup & search |
+## Goal
+
+Add `.docx` text extraction that mirrors the existing PDF extractor architecture, with
+binary content detection as a safety net for all unrecognized binary formats.
+
+## Architecture
+
+### Existing Content Flow (where .docx breaks)
+
+```
+Tavily Search → raw_content (binary .docx bytes as string)
+       ↓
+SourceSummarizer.summarize_source(content)  ← garbled content sent to LLM
+       ↓
+LLM returns error / garbage summary
+       ↓
+Stored as source.content — pollutes downstream synthesis
+```
+
+### Proposed Content Flow
+
+```
+Tavily Search → raw_content
+       ↓
+content_classifier.classify(content, url)   ← NEW: detect binary/docx
+       ↓
+  ├── TEXT/HTML → pass through (existing path)
+  ├── PDF       → PDFExtractor (existing)
+  ├── DOCX      → DocxExtractor.extract(bytes) ← NEW
+  └── BINARY    → skip with warning            ← NEW graceful fallback
+       ↓
+SourceSummarizer.summarize_source(extracted_text)
+```
+
+### Key Design Decisions
+
+1. **Separate `docx_extractor.py`** — mirrors `pdf_extractor.py` structure (same SSRF
+   guards, result dataclass, async API, optional metrics). Keeps modules focused.
+
+2. **`content_classifier.py`** — lightweight module that detects content type via
+   magic bytes + URL extension + Content-Type header. Returns an enum
+   (`TEXT | HTML | PDF | DOCX | BINARY_UNKNOWN`). Centralizes detection so both
+   extractors and the summarizer can use it.
+
+3. **Integration at SourceSummarizer level** — the binary guard goes into
+   `SourceSummarizer.summarize_source()` (in `providers/shared.py`) since that's
+   the last chokepoint before content hits the LLM. Also integrate in
+   `TavilySearchProvider._apply_source_summarization` for the Tavily search path.
+
+4. **`python-docx` as optional dependency** — follows the `pdf = [...]` pattern.
+   Graceful degradation when not installed (log warning, skip extraction).
 
 ---
 
-## Phase 1: Minimal Quick-Start Sample
+## Phases
 
-**Impact: High | Effort: Medium | File: `samples/foundry-mcp.toml`**
+### Phase 1: Content Classifier (`content_classifier.py`)
 
-Rewrite the sample as a short, opinionated config that works out of the box. Only show fields a user would actually want to change. No deprecated fields, no phantom sections, no commented-out walls of text.
+**Files:**
+- `src/foundry_mcp/core/research/content_classifier.py` (NEW)
+- `tests/core/research/test_content_classifier.py` (NEW)
 
-### Structure
+**Details:**
+
+Create a `ContentType` enum and `classify_content()` function:
+
+```python
+class ContentType(Enum):
+    TEXT = "text"
+    HTML = "html"
+    PDF = "pdf"
+    DOCX = "docx"
+    BINARY_UNKNOWN = "binary_unknown"
+
+def classify_content(
+    content: str | bytes,
+    *,
+    url: str | None = None,
+    content_type_header: str | None = None,
+) -> ContentType:
+    """Classify content type using magic bytes, URL extension, and Content-Type header."""
+```
+
+Detection strategy (ordered by confidence):
+1. **Magic bytes** (highest confidence):
+   - `%PDF-` → PDF
+   - `PK\x03\x04` (ZIP header) → probe for `word/document.xml` entry → DOCX
+   - `PK\x03\x04` without `word/` → BINARY_UNKNOWN (generic ZIP)
+2. **Content-Type header** (if provided):
+   - `application/vnd.openxmlformats-officedocument.wordprocessingml.document` → DOCX
+   - `application/pdf` → PDF
+3. **URL extension** (fallback):
+   - `.docx` → DOCX, `.pdf` → PDF
+4. **Binary heuristic** — if content is `bytes` or contains high ratio of
+   non-printable chars → BINARY_UNKNOWN
+5. **Default** — check for HTML tags → HTML, else TEXT
+
+Also provide `is_binary_content(content: str) -> bool` as a fast check for the
+summarizer guard — detects non-printable byte sequences commonly seen when binary
+data is decoded as a string.
+
+**Tests:** Magic bytes detection, URL extension fallback, Content-Type header parsing,
+binary heuristic, edge cases (empty content, mixed signals).
+
+---
+
+### Phase 2: DOCX Extractor (`docx_extractor.py`)
+
+**Files:**
+- `src/foundry_mcp/core/research/docx_extractor.py` (NEW)
+- `tests/core/research/test_docx_extractor.py` (NEW)
+- `pyproject.toml` (MODIFY — add `docx` optional dependency group)
+- `src/foundry_mcp/core/errors/research.py` (MODIFY — add DOCX error classes)
+
+**Details:**
+
+Mirror `PDFExtractor` architecture:
+
+```python
+@dataclass
+class DocxExtractionResult:
+    text: str
+    warnings: list[str]
+    paragraph_count: int
+    table_count: int
+    # No page_offsets — DOCX doesn't have fixed pages
+
+    @property
+    def success(self) -> bool: ...
+    @property
+    def has_warnings(self) -> bool: ...
+
+class DocxExtractor:
+    def __init__(
+        self,
+        max_size: int = DEFAULT_MAX_DOCX_SIZE,  # 10 MB
+        fetch_timeout: float = DEFAULT_FETCH_TIMEOUT,  # 30s
+    ): ...
+
+    async def extract(
+        self,
+        source: bytes | io.BytesIO,
+        *,
+        validate_magic: bool = True,
+    ) -> DocxExtractionResult: ...
+
+    async def extract_from_url(self, url: str) -> DocxExtractionResult: ...
+```
+
+Implementation notes:
+- Uses `python-docx` (lazy import, same pattern as `pdfminer.six`) for extraction
+- Extracts paragraph text + table cell text (tables concatenated row-by-row)
+- SSRF protection: reuse `validate_url_for_ssrf()` from `pdf_extractor.py`
+  (consider extracting to shared `_url_security.py` if duplication is excessive,
+  or just import from `pdf_extractor`)
+- Magic byte validation: `PK\x03\x04` header + probe for `word/document.xml`
+  entry via `zipfile`
+- Content-Type validation: accept
+  `application/vnd.openxmlformats-officedocument.wordprocessingml.document`
+  and `application/octet-stream`
+- Runs CPU-bound `python-docx` operations in thread pool (`asyncio.to_thread`)
+- Optional Prometheus metrics (same pattern as PDF extractor)
+
+**Error classes** (add to `core/errors/research.py`):
+
+```python
+class DocxSecurityError(Exception):
+    """Base exception for DOCX security violations."""
+
+class InvalidDocxError(DocxSecurityError):
+    """Raised when DOCX validation fails (magic bytes, content-type)."""
+
+class DocxSizeError(DocxSecurityError):
+    """Raised when DOCX exceeds size limits."""
+```
+
+**Dependency** (add to `pyproject.toml`):
 
 ```toml
-# foundry-mcp.toml — Quick-start configuration
-#
-# Place in your project root. For all available options, see:
-#   samples/foundry-mcp-reference.toml  (copy-pasteable TOML)
-#   dev_docs/guides/config-reference.md (searchable reference)
-#
-# Config priority: env vars > project config > user config > defaults
-# User config locations: ~/.foundry-mcp.toml or ~/.config/foundry-mcp/config.toml
-
-[workspace]
-specs_dir = "./specs"
-
-[logging]
-level = "INFO"
-
-[tools]
-disabled_tools = ["error", "health"]
-
-[git]
-enabled = false
-commit_cadence = "phase"
-
-# --- Provider Aliases (optional) ---
-# Define short names for provider specs, used everywhere below.
-# [providers]
-# pro  = "[cli]gemini:pro"
-# fast = "[cli]gemini:flash"
-# opus = "[cli]claude:opus"
-
-[research]
-enabled = true
-default_provider = "[cli]gemini:pro"
-consensus_providers = [
-    "[cli]gemini:pro",
-    "[cli]codex:gpt-5.2-codex",
-    "[cli]claude:opus",
+docx = [
+    "python-docx>=1.1.0",
 ]
-deep_research_mode = "technical"
-
-[consultation]
-priority = [
-    "[cli]codex:gpt-5.2-codex",
-    "[cli]gemini:pro",
-    "[cli]claude:opus",
-]
-
-[test]
-default_runner = "pytest"
 ```
 
-### What gets removed from the sample
-
-- All deprecated fields (12 fields)
-- Wrong default values (fixed in reference)
-- `[implement]` section (orphaned)
-- `notes_dir` (phantom)
-- All 70+ deep_research_* commented-out fields
-- All search provider config details (tavily, perplexity, semantic_scholar)
-- All observability/health/error_collection/metrics_persistence details
-- All autonomy config details
-- All token management details
-- Digest, compression, summarization, evaluation details
-- Model tier configuration
-- Fallback chains / timeout presets
-
-### What stays
-
-- Workspace basics
-- Logging level
-- Tool disabling
-- Git basics
-- Provider aliases (commented example)
-- Research: enabled, default_provider, consensus_providers, mode
-- Consultation: priority list
-- Test runner
-- Pointer to reference files
+**Tests:** Valid .docx extraction, magic byte validation, SSRF protection (reuse
+PDF test patterns), size limits, table extraction, empty document, corrupted file
+handling.
 
 ---
 
-## Phase 2: Comprehensive Reference TOML
+### Phase 3: Integration — Binary Guard + Extraction Wiring
 
-**Impact: High | Effort: Large | File: `samples/foundry-mcp-reference.toml`**
+**Files:**
+- `src/foundry_mcp/core/research/providers/shared.py` (MODIFY)
+- `src/foundry_mcp/core/research/providers/tavily.py` (MODIFY)
+- `src/foundry_mcp/core/research/providers/tavily_extract.py` (MODIFY)
+- `src/foundry_mcp/core/research/document_digest/digestor.py` (MODIFY)
+- `tests/core/research/test_binary_content_guard.py` (NEW)
 
-Every field in every config section, commented out, annotated with defaults and types. Organized by section with clear headers. Users copy what they need.
+**Details:**
 
-### Organization
+#### 3a. Binary content guard in SourceSummarizer
 
-Sections in order:
+In `providers/shared.py`, add a guard at the top of `summarize_source()`:
 
-1. **Header** — file purpose, config priority, pointers
-2. **`[providers]`** — alias definitions
-3. **`[workspace]`** — specs_dir, research_dir
-4. **`[logging]`** — level, structured
-5. **`[tools]`** — disabled_tools
-6. **`[feature_flags]`** — autonomy_sessions, autonomy_fidelity_gates
-7. **`[git]`** — all git workflow fields
-8. **`[workflow]`** — mode, auto_validate, batch_size, context_threshold
-9. **`[autonomy_posture]`** — profile
-10. **`[autonomy_security]`** — role, lock bypass, gate waiver, rate limits
-11. **`[autonomy_session_defaults]`** — gate_policy, stop_on_phase, max_tasks, etc.
-12. **`[consultation]`** — priority, timeout, retries, per-workflow overrides
-13. **`[research]`** — core fields, then sub-sections:
-    - Core (enabled, provider, timeout, ttl)
-    - Sub-table syntax guide
-    - Timeout presets (`[research.timeouts]`)
-    - Fallback chains (`[research.fallback_chains]`, `[research.phase_fallbacks]`)
-    - Deep research: core workflow settings
-    - Deep research: supervision & delegation
-    - Deep research: query phases (clarification, brief, planning critique)
-    - Deep research: gathering (topic agents, extraction, dedup)
-    - Deep research: content processing (summarization, compression, digestion)
-    - Deep research: synthesis & evaluation
-    - Deep research: per-phase timeouts & providers
-    - Model tiers (`[research.model_tiers]`)
-    - Per-role model overrides (advanced)
-    - Search provider config (`[research.tavily]`, `[research.perplexity]`, `[research.semantic_scholar]`)
-    - Token management
-    - Content archive
-    - Rate limiting
-    - Operational tuning
-14. **`[observability]`** — OTel, Prometheus
-15. **`[health]`** — probes, thresholds
-16. **`[error_collection]`** — storage, retention
-17. **`[metrics_persistence]`** — storage, retention, bucketing
-18. **`[test]`** — runner config
-
-### Accuracy rules
-
-- Every field must exist in the corresponding config dataclass
-- Every default value must match the code default
-- No deprecated field names appear (even commented)
-- Deprecated features are noted with "Removed:" comments pointing to replacements
-- Env var override noted inline where applicable
-
----
-
-## Phase 3: Markdown Config Reference
-
-**Impact: Medium | Effort: Medium | File: `dev_docs/guides/config-reference.md`**
-
-Searchable documentation with tables for every config section.
-
-### Structure
-
-```markdown
-# Configuration Reference
-
-## Config File Locations
-## Environment Variables
-## Section: [providers]
-## Section: [workspace]
-...
-## Section: [research]
-### Core Fields
-### Deep Research Fields
-### Tavily Fields
-...
+```python
+async def summarize_source(self, content: str) -> SourceSummarizationResult:
+    # Binary content guard — prevent sending garbled bytes to LLM
+    from foundry_mcp.core.research.content_classifier import is_binary_content
+    if is_binary_content(content):
+        logger.warning("Skipping summarization: binary content detected")
+        return SourceSummarizationResult(
+            executive_summary="[Content skipped: binary/non-text document detected]",
+            key_excerpts=[],
+            input_tokens=0,
+            output_tokens=0,
+        )
+    # ... existing code
 ```
 
-### Table format per section
+#### 3b. Content type detection + extraction in Tavily search path
 
-| Field | Type | Default | Env Var | Description |
-|-------|------|---------|---------|-------------|
-| `enabled` | bool | `true` | — | Master switch for research tools |
-| `default_provider` | str | `"gemini"` | — | Default LLM provider spec |
-| ... | ... | ... | ... | ... |
+In `providers/tavily.py`, in `_apply_source_summarization()`, before summarizing:
 
-### Content
+```python
+# Detect binary/docx content and extract text before summarization
+from foundry_mcp.core.research.content_classifier import classify_content, ContentType
 
-- **Config priority** explanation with examples
-- **Environment variable reference** — all 65+ vars with mappings
-- **Provider spec format** — explanation of `[cli]provider:model` syntax
-- **Sub-table syntax** — flat vs nested, priority rules
-- **Timeout presets** — preset names and multipliers table
-- **Fallback chains** — how chains and phase assignments work
-- **Model tiers** — the 11-role, 4-level precedence chain explained
-- **Deprecated fields** — table of all 12 deprecated fields with migration paths
+for source in sources:
+    if source.content:
+        content_type = classify_content(source.content, url=source.url)
+        if content_type == ContentType.DOCX:
+            extracted = await self._extract_docx_content(source.content)
+            if extracted:
+                source.content = extracted
+        elif content_type == ContentType.BINARY_UNKNOWN:
+            logger.warning("Binary content detected for %s, skipping", source.url)
+            source.content = None  # Will be skipped by summarizer
+```
+
+#### 3c. Content type detection in Tavily Extract path
+
+In `providers/tavily_extract.py`, add similar detection after content retrieval.
+
+#### 3d. DocumentDigestor awareness
+
+Add `docx_extractor: DocxExtractor` to `DocumentDigestor.__init__` alongside
+`pdf_extractor`, following the same pattern. This enables the digest pipeline
+to handle .docx URLs passed directly.
+
+**Tests:** Binary guard triggers for garbled content, DOCX content gets extracted
+before summarization, unknown binary formats are skipped gracefully, normal
+text/HTML content passes through unchanged.
 
 ---
 
-## Phase 4: Validation Tests
+### Phase 4: Deep Research Workflow Wiring
 
-**Impact: Low (safety net) | Effort: Small | File: `tests/unit/test_sample_toml.py`**
+**Files:**
+- `src/foundry_mcp/core/research/workflows/deep_research/__init__.py` (MODIFY)
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/analysis.py` (MODIFY)
 
-### Tests
+**Details:**
 
-1. **Sample parses**: `samples/foundry-mcp.toml` is valid TOML
-2. **Reference parses**: `samples/foundry-mcp-reference.toml` is valid TOML
-3. **Sample fields known**: Every uncommented key in `[research]` is a known ResearchConfig field
-4. **Reference fields known**: Every commented field in `[research]` section is a known field
-5. **No deprecated fields**: Neither file contains deprecated field names (uncommented)
-6. **Sample loads**: `ResearchConfig.from_toml_dict()` accepts the sample's `[research]` section without warnings
+- Re-export `DocxExtractor` from the deep research `__init__.py` (same pattern as
+  `PDFExtractor` re-export)
+- Add `DocxExtractor` re-export in `phases/analysis.py` for test patch targets
+- The main integration happens in Phase 3 at the provider level, so this phase is
+  primarily about ensuring re-exports and test patch targets are correct
 
 ---
 
-## Implementation Order
+### Phase 5: Testing & Verification
 
-1. **Phase 2** first — write the reference TOML (most work, establishes ground truth)
-2. **Phase 1** second — strip the sample down to minimal (easy once reference exists)
-3. **Phase 3** third — generate markdown from the reference TOML fields
-4. **Phase 4** last — add validation tests
+**Files:**
+- All test files from prior phases
+- Integration test verifying end-to-end: `.docx` URL → extracted text → summarization
 
-## Files Changed
+**Verification steps:**
+1. `pytest tests/core/research/test_content_classifier.py` — classifier tests pass
+2. `pytest tests/core/research/test_docx_extractor.py` — extractor tests pass
+3. `pytest tests/core/research/test_binary_content_guard.py` — guard tests pass
+4. `pytest tests/core/research/` — no regressions in existing PDF/research tests
+5. `ruff check src/foundry_mcp/core/research/` — no lint issues
+6. `pyright src/foundry_mcp/core/research/` — no type errors
 
-| File | Action |
-|------|--------|
-| `samples/foundry-mcp.toml` | Rewrite (minimal quick-start) |
-| `samples/foundry-mcp-reference.toml` | New (comprehensive reference) |
-| `dev_docs/guides/config-reference.md` | New (searchable docs) |
-| `tests/unit/test_sample_toml.py` | New (validation tests) |
+---
+
+## Dependency Graph
+
+```
+Phase 1 (content_classifier)
+    ↓                         Phase 2 (docx_extractor) — can run in parallel
+    ↓                              ↓
+Phase 3 (integration) ←── depends on both Phase 1 and Phase 2
+    ↓
+Phase 4 (workflow wiring) ←── depends on Phase 3
+    ↓
+Phase 5 (verification) ←── depends on all
+```
+
+## Risk Assessment
+
+| Risk | Likelihood | Mitigation |
+|------|-----------|------------|
+| `python-docx` not installed | Medium | Optional dep with lazy import + graceful skip |
+| Binary detection false positives | Low | Conservative heuristic (high non-printable threshold) |
+| Large .docx files causing OOM | Low | Size limit (10 MB default, same as PDF) |
+| Malicious .docx (zip bombs) | Low | Size limit + `python-docx` doesn't decompress aggressively |
+| SSRF via .docx URLs | Low | Reuse existing `validate_url_for_ssrf()` |
+
+## Out of Scope
+
+- `.doc` (legacy binary Word format) — would need `olefile` or similar, rare in web sources
+- `.pptx` / `.xlsx` — could follow same pattern later but not needed now
+- OCR for scanned documents — separate concern
+- Page boundary tracking for DOCX — DOCX is flow-layout, no fixed pages

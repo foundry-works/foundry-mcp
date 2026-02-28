@@ -1,182 +1,181 @@
-# foundry-mcp.toml Full Overhaul — Checklist
+# DOCX Extraction Support — Checklist
 
-## Phase 2: Comprehensive Reference TOML (`samples/foundry-mcp-reference.toml`)
+## Phase 1: Content Classifier
 
-### Header & aliases
-- [x] Write file header with purpose, config priority, pointers
-- [x] `[providers]` section with example aliases (commented)
+### `src/foundry_mcp/core/research/content_classifier.py` (NEW)
 
-### Infrastructure sections
-- [x] `[workspace]` — specs_dir, research_dir (no phantom notes_dir)
-- [x] `[logging]` — level, structured
-- [x] `[tools]` — disabled_tools with full tool list
-- [x] ~~`[feature_flags]`~~ — orphaned, never parsed; omitted intentionally
+- [ ] Create `ContentType` enum (`TEXT`, `HTML`, `PDF`, `DOCX`, `BINARY_UNKNOWN`)
+- [ ] Implement `classify_content(content, *, url=None, content_type_header=None)` function
+- [ ] Magic bytes detection: `%PDF-` → PDF
+- [ ] Magic bytes detection: `PK\x03\x04` + `word/document.xml` probe → DOCX
+- [ ] Magic bytes detection: `PK\x03\x04` without `word/` → BINARY_UNKNOWN
+- [ ] Content-Type header parsing (DOCX MIME type, PDF MIME type)
+- [ ] URL extension fallback (`.docx`, `.pdf`)
+- [ ] Binary heuristic (non-printable character ratio for string content)
+- [ ] HTML detection (presence of common HTML tags)
+- [ ] Default to TEXT for clean string content
+- [ ] Implement `is_binary_content(content: str) -> bool` fast check
+- [ ] Handle edge cases: empty content, None, very short content
+- [ ] Add module docstring with usage examples
 
-### Git & workflow
-- [x] `[git]` — all 6 fields
-- [x] ~~`[workflow]`~~ — orphaned, never parsed; omitted intentionally
-- [x] NO `[implement]` section (orphaned, never parsed)
+### `tests/core/research/test_content_classifier.py` (NEW)
 
-### Autonomy
-- [x] `[autonomy_posture]` — profile
-- [x] `[autonomy_security]` — role, lock bypass, gate waiver, rate limits
-- [x] `[autonomy_session_defaults]` — all 6 fields
-
-### Consultation
-- [x] `[consultation]` section with boundary explanation comment
-- [x] priority, timeout, retries, fallback, cache_ttl
-- [x] `[consultation.overrides]` example
-- [x] `[consultation.workflows.*]` examples
-
-### Research: core
-- [x] enabled, default_provider, consensus_providers, default_timeout
-- [x] ttl_hours, max_messages_per_thread, thinkdeep_max_depth, ideate_perspectives
-- [x] Sub-table syntax guide comment
-- [x] Timeout presets (`[research.timeouts]`) with multiplier table
-- [x] Fallback chains (`[research.fallback_chains]`, `[research.phase_fallbacks]`) with alias example
-
-### Research: deep research — core workflow
-- [x] max_iterations, max_sub_queries, max_sources (default=5), follow_links
-- [x] timeout (default=2400.0), max_concurrent, mode, audit_artifacts
-- [x] providers list (search providers)
-
-### Research: deep research — supervision & delegation
-- [x] enable_supervision, max_supervision_rounds
-- [x] supervision_min_sources_per_query, coverage_confidence_threshold
-- [x] supervision_wall_clock_timeout, supervision_provider/model
-- [x] max_concurrent_research_units, delegation_provider/model_name
-
-### Research: deep research — query phases
-- [x] allow_clarification, clarification_provider/model
-- [x] brief_provider/model
-- [x] enable_planning_critique
-
-### Research: deep research — gathering
-- [x] topic_max_tool_calls (note backward-compat alias topic_max_searches)
-- [x] enable_extract, extract_max_per_iteration
-- [x] enable_content_dedup, content_dedup_threshold
-
-### Research: deep research — content processing
-- [x] Summarization: provider/model, timeout, max_content_length, min_content_length
-- [x] Compression: inline_compression, provider/model, max_content_length
-- [x] Digestion: all 11 digest_* fields
-- [x] Archive: archive_content, archive_retention_days
-
-### Research: deep research — synthesis & evaluation
-- [x] evaluation_provider/model/timeout
-- [x] reflection_timeout, reflection_provider/model
-
-### Research: deep research — per-phase config
-- [x] Per-phase timeouts: planning_timeout, synthesis_timeout (only 2 phases now)
-- [x] Per-phase providers: planning_provider, synthesis_provider
-- [x] Per-phase fallback lists: planning_providers, synthesis_providers
-- [x] Retry settings: max_retries, retry_delay
-- [x] NO deprecated analysis/refinement phase fields
-
-### Research: model tiers
-- [x] Precedence chain documentation (5 levels)
-- [x] Default role → tier mapping (11 roles)
-- [x] `[research.model_tiers]` with tier examples
-- [x] `[research.model_tiers.role_assignments]` example
-- [x] Per-role overrides section with cross-reference to tiers
-
-### Research: search providers
-- [x] `[research.tavily]` / flat tavily_* fields (no deprecated extract fields)
-- [x] `[research.perplexity]` / flat perplexity_* fields
-- [x] `[research.semantic_scholar]` / flat semantic_scholar_* fields
-- [x] Google config: google_api_key, google_cse_id
-- [x] API key env var references
-- [x] `[research.per_provider_rate_limits]`
-
-### Research: token management & archive
-- [x] token_management_enabled, token_safety_margin, runtime_overhead
-- [x] model_context_overrides example
-- [x] Summarization: provider, providers, timeout, cache_enabled
-- [x] Content dropping: allow_content_dropping
-- [x] Content archive: enabled, ttl_hours, research_archive_dir
-
-### Research: operational tuning
-- [x] search_rate_limit, max_concurrent_searches
-- [x] deep_research_stale_task_seconds
-- [x] status_persistence_throttle_seconds
-- [x] audit_verbosity
-
-### Observability & monitoring
-- [x] `[observability]` — all OTel + Prometheus fields
-- [x] `[health]` — all probe + threshold fields
-- [x] `[error_collection]` — all fields
-- [x] `[metrics_persistence]` — all fields
-
-### Test runner
-- [x] `[test]` — default_runner, custom runner example
-
-### Accuracy verification
-- [x] No deprecated field names appear (even commented)
-- [x] All defaults match code
-- [x] `python -c "import tomllib; tomllib.load(open('samples/foundry-mcp-reference.toml', 'rb'))"` ✓
+- [ ] Test magic bytes: valid PDF header → PDF
+- [ ] Test magic bytes: valid DOCX (PK + word/document.xml) → DOCX
+- [ ] Test magic bytes: generic ZIP (PK without word/) → BINARY_UNKNOWN
+- [ ] Test Content-Type header: DOCX MIME type → DOCX
+- [ ] Test Content-Type header: PDF MIME type → PDF
+- [ ] Test URL extension: `.docx` → DOCX
+- [ ] Test URL extension: `.pdf` → PDF
+- [ ] Test URL extension with query params: `.docx?v=1` → DOCX
+- [ ] Test binary heuristic: high non-printable ratio → BINARY_UNKNOWN
+- [ ] Test HTML detection: content with `<html>` tags → HTML
+- [ ] Test plain text → TEXT
+- [ ] Test `is_binary_content()`: garbled string → True
+- [ ] Test `is_binary_content()`: normal text → False
+- [ ] Test empty/None content edge cases
+- [ ] Test conflicting signals (e.g., .docx URL but text content) — magic bytes wins
 
 ---
 
-## Phase 1: Minimal Quick-Start Sample (`samples/foundry-mcp.toml`)
+## Phase 2: DOCX Extractor
 
-- [x] Rewrite as ~51-line minimal config
-- [x] Include pointer to reference files in header
-- [x] `[workspace]` — specs_dir only
-- [x] `[logging]` — level only
-- [x] `[tools]` — disabled_tools
-- [x] `[git]` — enabled, commit_cadence
-- [x] `[providers]` — commented alias example
-- [x] `[research]` — enabled, default_provider, consensus_providers, mode
-- [x] `[consultation]` — priority only
-- [x] `[test]` — default_runner
-- [x] NO deprecated fields, NO phantom fields, NO orphaned sections
-- [x] `python -c "import tomllib; tomllib.load(open('samples/foundry-mcp.toml', 'rb'))"` ✓
+### `pyproject.toml` (MODIFY)
+
+- [ ] Add `docx = ["python-docx>=1.1.0"]` to `[project.optional-dependencies]`
+- [ ] Add `"foundry-mcp[docx]"` to the `dev` extras (alongside `pdf`)
+
+### `src/foundry_mcp/core/errors/research.py` (MODIFY)
+
+- [ ] Add `DocxSecurityError(Exception)` base class
+- [ ] Add `InvalidDocxError(DocxSecurityError)` for magic bytes / content-type failures
+- [ ] Add `DocxSizeError(DocxSecurityError)` for size limit violations
+- [ ] Add section header comment `# DOCX Extraction Errors` (following PDF pattern)
+
+### `src/foundry_mcp/core/research/docx_extractor.py` (NEW)
+
+- [ ] Module docstring mirroring `pdf_extractor.py` style
+- [ ] Lazy import for `python-docx` (same pattern as `pdfminer.six`)
+- [ ] Constants: `DOCX_MAGIC_BYTES`, `VALID_DOCX_CONTENT_TYPES`, `DEFAULT_MAX_DOCX_SIZE`, `DEFAULT_FETCH_TIMEOUT`
+- [ ] Import error classes from `core.errors.research`
+- [ ] Import SSRF validation: `validate_url_for_ssrf` from `pdf_extractor`
+- [ ] `DocxExtractionResult` dataclass:
+  - [ ] `text: str`
+  - [ ] `warnings: list[str]`
+  - [ ] `paragraph_count: int`
+  - [ ] `table_count: int`
+  - [ ] `success` property
+  - [ ] `has_warnings` property
+- [ ] `validate_docx_magic_bytes(data: bytes)` function
+- [ ] `validate_docx_content_type(content_type: str | None)` function
+- [ ] `DocxExtractor` class:
+  - [ ] `__init__(max_size, fetch_timeout)` with defaults
+  - [ ] `async extract(source: bytes | BytesIO, *, validate_magic=True)` method
+  - [ ] Run `python-docx` parsing in `asyncio.to_thread` (CPU-bound)
+  - [ ] Extract paragraph text
+  - [ ] Extract table cell text (row-by-row concatenation)
+  - [ ] Handle warnings (empty paragraphs, extraction issues)
+  - [ ] `async extract_from_url(url: str)` method
+  - [ ] SSRF validation before fetch
+  - [ ] Content-Type validation from HTTP response
+  - [ ] Size limit enforcement during streaming
+  - [ ] Redirect handling (max 5, re-validate after each)
+  - [ ] User-Agent header: `foundry-mcp/1.0 DocxExtractor`
+- [ ] Optional Prometheus metrics (lazy init, same pattern as PDF)
+- [ ] Logging via `logging.getLogger(__name__)`
+
+### `tests/core/research/test_docx_extractor.py` (NEW)
+
+- [ ] Fixture: `simple_docx_bytes()` — create minimal .docx with python-docx
+- [ ] Fixture: `docx_with_tables_bytes()` — .docx with table content
+- [ ] Test: extract valid .docx → text extracted, paragraph_count > 0
+- [ ] Test: extract .docx with tables → table text included
+- [ ] Test: magic byte validation — invalid header raises `InvalidDocxError`
+- [ ] Test: magic byte validation — too short data raises `InvalidDocxError`
+- [ ] Test: size limit — oversized data raises `DocxSizeError`
+- [ ] Test: SSRF protection — localhost URL raises `SSRFError`
+- [ ] Test: SSRF protection — private IP raises `SSRFError`
+- [ ] Test: content-type validation — wrong type raises `InvalidDocxError`
+- [ ] Test: empty document → success with empty text, warnings
+- [ ] Test: corrupted .docx → appropriate error handling
+- [ ] Test: `python-docx` not installed → graceful degradation
+- [ ] Test: extract runs in thread pool (CPU-bound work off event loop)
 
 ---
 
-## Phase 3: Markdown Config Reference (`dev_docs/guides/config-reference.md`)
+## Phase 3: Integration
 
-### Structure
-- [x] Config file locations & priority
-- [x] Provider spec format explanation
-- [x] Sub-table syntax (flat vs nested, priority rules)
+### `src/foundry_mcp/core/research/providers/shared.py` (MODIFY)
 
-### Section tables
-- [x] `[providers]` table
-- [x] `[workspace]` table
-- [x] `[logging]` table
-- [x] `[tools]` table
-- [x] ~~`[feature_flags]` table~~ — orphaned, documented in Deprecated section
-- [x] `[git]` table
-- [x] ~~`[workflow]` table~~ — orphaned, documented in Deprecated section
-- [x] `[autonomy_posture]` table
-- [x] `[autonomy_security]` table
-- [x] `[autonomy_session_defaults]` table
-- [x] `[consultation]` table
-- [x] `[research]` core table
-- [x] `[research]` deep research table (grouped by feature)
-- [x] `[research]` search provider tables
-- [x] `[observability]` table
-- [x] `[health]` table
-- [x] `[error_collection]` table
-- [x] `[metrics_persistence]` table
-- [x] `[test]` table
+- [ ] Add binary content guard at top of `SourceSummarizer.summarize_source()`
+- [ ] Import `is_binary_content` from `content_classifier`
+- [ ] Return skip result with `[Content skipped: binary/non-text document detected]`
+- [ ] Log warning when binary content is detected
 
-### Special topics
-- [x] Environment variable reference (all 65+ vars)
-- [x] Timeout presets table
-- [x] Fallback chains explanation
-- [x] Model tier precedence chain
-- [x] Deprecated fields migration table (all 12)
+### `src/foundry_mcp/core/research/providers/tavily.py` (MODIFY)
+
+- [ ] Add content type detection in `_apply_source_summarization()`
+- [ ] Import `classify_content`, `ContentType` from `content_classifier`
+- [ ] For DOCX content: extract text via `DocxExtractor` before summarization
+- [ ] For BINARY_UNKNOWN: set `source.content = None` with warning log
+- [ ] Add `_extract_docx_content()` helper method on `TavilySearchProvider`
+- [ ] Handle `python-docx` not installed gracefully (skip extraction, log warning)
+
+### `src/foundry_mcp/core/research/providers/tavily_extract.py` (MODIFY)
+
+- [ ] Add content type detection after URL content retrieval
+- [ ] For DOCX content: extract text before returning `ResearchSource`
+- [ ] For BINARY_UNKNOWN: skip source with warning
+
+### `src/foundry_mcp/core/research/document_digest/digestor.py` (MODIFY)
+
+- [ ] Add `docx_extractor: DocxExtractor` parameter to `__init__`
+- [ ] Store as `self.docx_extractor`
+- [ ] Update `create()` factory method if it exists
+- [ ] Update docstrings to mention DOCX support
+- [ ] Import `DocxExtractor` from `docx_extractor`
+
+### `tests/core/research/test_binary_content_guard.py` (NEW)
+
+- [ ] Test: binary content in `summarize_source()` → skip result returned
+- [ ] Test: normal text content → passes through to summarization
+- [ ] Test: DOCX content in Tavily search path → extracted before summarization
+- [ ] Test: BINARY_UNKNOWN in Tavily search path → source.content set to None
+- [ ] Test: HTML content → passes through unchanged
+- [ ] Test: `python-docx` not installed → binary content skipped gracefully
 
 ---
 
-## Phase 4: Validation Tests (`tests/unit/test_sample_toml.py`)
+## Phase 4: Workflow Wiring
 
-- [x] Test: sample TOML parses as valid TOML
-- [x] Test: reference TOML parses as valid TOML
-- [x] Test: uncommented sample [research] fields are known to ResearchConfig
-- [x] Test: no deprecated field names appear uncommented in either file
-- [x] Test: ResearchConfig.from_toml_dict() accepts sample [research] without warnings
-- [x] `pytest tests/unit/test_sample_toml.py -v` — 10/10 passed ✓
-- [x] `pytest tests/ -x` — 1960 passed, 1 pre-existing failure (unrelated), 0 new regressions ✓
+### `src/foundry_mcp/core/research/workflows/deep_research/__init__.py` (MODIFY)
+
+- [ ] Add `DocxExtractor` to imports from `phases/analysis.py`
+- [ ] Add `DocxExtractor` to `__all__` or re-export block
+
+### `src/foundry_mcp/core/research/workflows/deep_research/phases/analysis.py` (MODIFY)
+
+- [ ] Add `from foundry_mcp.core.research.docx_extractor import DocxExtractor  # noqa: F401`
+- [ ] Comment: `# re-export for test patch targets` (matching PDF pattern)
+
+---
+
+## Phase 5: Verification
+
+### Automated checks
+
+- [ ] `pytest tests/core/research/test_content_classifier.py -v` — all pass
+- [ ] `pytest tests/core/research/test_docx_extractor.py -v` — all pass
+- [ ] `pytest tests/core/research/test_binary_content_guard.py -v` — all pass
+- [ ] `pytest tests/core/research/ -v` — no regressions
+- [ ] `ruff check src/foundry_mcp/core/research/` — clean
+- [ ] `pyright src/foundry_mcp/core/research/` — clean (or no new errors)
+
+### Manual verification
+
+- [ ] `pip install python-docx` succeeds
+- [ ] Confirm `python-docx` lazy import works when not installed
+- [ ] Confirm `python-docx` lazy import works when installed
+- [ ] Review: no existing tests broken by new imports or signatures
+- [ ] Review: error classes follow existing naming conventions in `research.py`
+- [ ] Review: SSRF protection reuse doesn't introduce circular imports
