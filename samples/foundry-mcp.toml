@@ -32,19 +32,30 @@ commit_cadence = "phase"
 
 [research]
 enabled = true
-default_provider = "[cli]gemini:pro"
+default_provider = "[cli]claude:sonnet"
 consensus_providers = [
     "[cli]gemini:pro",
     "[cli]codex:gpt-5.2-codex",
-    "[cli]claude:opus",
+    "[cli]claude:sonnet",
 ]
 deep_research_mode = "technical"
+deep_research_providers = ["tavily"]
+
+# Model tiers — configure all 11 deep-research roles via 3 named tiers.
+# Per-role overrides (deep_research_{role}_provider) still win.
+#   frontier  : research, report, evaluation, supervision
+#   standard  : reflection, topic_reflection, clarification, brief, delegation
+#   efficient : summarization, compression
+[research.model_tiers]
+frontier  = "[cli]claude:sonnet"
+standard  = "[cli]claude:sonnet"
+efficient = "[cli]claude:haiku"
 
 [consultation]
 priority = [
     "[cli]codex:gpt-5.2-codex",
     "[cli]gemini:pro",
-    "[cli]claude:opus",
+    "[cli]claude:sonnet",
 ]
 
 [test]
