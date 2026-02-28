@@ -43,6 +43,29 @@ class PDFSizeError(PDFSecurityError):
 
 
 # =============================================================================
+# DOCX Extraction Errors
+# =============================================================================
+
+
+class DocxSecurityError(Exception):
+    """Base exception for DOCX security violations."""
+
+    pass
+
+
+class InvalidDocxError(DocxSecurityError):
+    """Raised when DOCX validation fails (magic bytes, content-type)."""
+
+    pass
+
+
+class DocxSizeError(DocxSecurityError):
+    """Raised when DOCX exceeds size limits."""
+
+    pass
+
+
+# =============================================================================
 # Summarization Errors
 # =============================================================================
 
