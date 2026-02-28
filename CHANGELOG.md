@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0b3] - 2026-02-28
+
+### Added
+
+- **Tier-based model configuration**: Configure all 11 deep-research model roles via 3 named tiers (`frontier`, `standard`, `efficient`) in `[research.model_tiers]` instead of 20+ individual keys. Per-role overrides still take priority.
+- **Provider aliases**: `[providers]` section defines short names (e.g. `pro = "[cli]gemini:pro"`) expanded at parse time across all provider string/list fields and model tiers.
+- **Config sub-tables**: `[research.deep_research]`, `[research.tavily]`, `[research.perplexity]`, `[research.semantic_scholar]` as alternatives to flat prefixed keys (flat keys take priority for backward compatibility).
+- **Timeout presets**: `[research.timeouts]` supports named preset multipliers (`fast`, `default`, `relaxed`, `patient`) with individual timeout overrides.
+- **Fallback chains**: `[research.fallback_chains]` and `[research.phase_fallbacks]` for reusable named provider lists assignable to deep research phases.
+
+### Changed
+
+- **Config docs overhaul**: Split config documentation into minimal quick-start sample (`samples/foundry-mcp.toml`) and full reference (`samples/foundry-mcp-reference.toml`) with searchable config-reference guide.
+
 ## [0.17.0b2] - 2026-02-27
 
 ### Added
