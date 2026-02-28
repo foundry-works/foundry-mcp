@@ -40,6 +40,7 @@ from foundry_mcp.core.research.workflows.deep_research.orchestration import (  #
 # and are re-exported from phases.analysis for backward compatibility.
 from foundry_mcp.core.research.workflows.deep_research.phases.analysis import (  # noqa: F401
     ContentSummarizer,
+    DocxExtractor,
     DocumentDigestor,
     PDFExtractor,
 )

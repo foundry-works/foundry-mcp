@@ -150,13 +150,13 @@
 
 ### `src/foundry_mcp/core/research/workflows/deep_research/__init__.py` (MODIFY)
 
-- [ ] Add `DocxExtractor` to imports from `phases/analysis.py`
-- [ ] Add `DocxExtractor` to `__all__` or re-export block
+- [x] Add `DocxExtractor` to imports from `phases/analysis.py`
+- [x] Add `DocxExtractor` to `__all__` or re-export block
 
 ### `src/foundry_mcp/core/research/workflows/deep_research/phases/analysis.py` (MODIFY)
 
-- [ ] Add `from foundry_mcp.core.research.docx_extractor import DocxExtractor  # noqa: F401`
-- [ ] Comment: `# re-export for test patch targets` (matching PDF pattern)
+- [x] Add `from foundry_mcp.core.research.docx_extractor import DocxExtractor  # noqa: F401`
+- [x] Comment: `# re-export for test patch targets` (matching PDF pattern)
 
 ---
 
