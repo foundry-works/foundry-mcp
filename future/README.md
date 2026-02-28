@@ -14,11 +14,13 @@ These plans respond to that thesis by making foundry-mcp's deep research excelle
 |------|-------|----------|----------|-------------|
 | [PLAN-0: Prerequisites](PLAN-0-PREREQUISITES.md) | Remaining supervision refactoring, state model architecture | ~200-400 | ~200-300 | None |
 | [PLAN-1: Foundations](PLAN-1-FOUNDATIONS.md) | Profiles, provenance, academic output | ~1000-1350 | ~450-580 | PLAN-0 |
-| [PLAN-2: Academic Tools](PLAN-2-ACADEMIC-TOOLS.md) | Providers, citation tools, strategic primitives | ~960-1350 | ~600-800 | PLAN-0, PLAN-1.1 |
+| [PLAN-2: Academic Tools](PLAN-2-ACADEMIC-TOOLS.md) | OpenAlex, Crossref, citation tools, strategic primitives | ~580-850 | ~370-500 | PLAN-0, PLAN-1.1 |
 | [PLAN-3: Research Intelligence](PLAN-3-RESEARCH-INTELLIGENCE.md) | Ranking, landscape, export | ~660-940 | ~350-460 | PLAN-0 (soft: PLAN-1, PLAN-2) |
-| [PLAN-4: Deep Analysis](PLAN-4-DEEP-ANALYSIS.md) | PDF, citation networks, methodology, MCP bridge | ~1250-1650 | ~420-580 | PLAN-0, PLAN-1, PLAN-2.1 |
+| [PLAN-4: Deep Analysis](PLAN-4-DEEP-ANALYSIS.md) | PDF, citation networks, methodology | ~650-900 | ~240-360 | PLAN-0, PLAN-1, PLAN-2.1 |
 
-**Total**: ~4,070-5,690 LOC implementation + ~2,020-2,720 LOC tests
+**Total**: ~3,090-4,440 LOC implementation + ~1,610-2,200 LOC tests
+
+> **Revised Feb 2026**: Scope reduced ~25% after tool evaluation. Unpaywall, OpenCitations, and CORE providers removed (redundant with OpenAlex). MCP Bridge reframed as external documentation. See [revision notes](#revisions-from-feb-2026-tool-evaluation).
 
 ## Key Design Decisions
 
@@ -35,7 +37,10 @@ Every research session produces a machine-readable audit trail: which providers 
 Deep research produces both a markdown report AND structured JSON output (source catalog, findings, gaps, contradictions, landscape metadata, BibTeX/RIS exports). This makes foundry-mcp an orchestration layer — downstream tools (Zotero MCP, visualization tools, reference managers) can consume the structured data.
 
 ### Provider tiers
-New academic providers are split into **Tier 1** (OpenAlex — highest value, free, broad index, sole hard dependency for downstream features) and **Tier 2** (Unpaywall, Crossref, OpenCitations — optional enrichment). This reduces the "all 4 APIs must work" risk and establishes a minimum viable academic pipeline.
+New academic providers are split into **Tier 1** (OpenAlex — highest value, broad index, sole hard dependency for downstream features) and **Tier 2** (Crossref — optional metadata enrichment). Unpaywall, OpenCitations, and CORE were evaluated and removed: Unpaywall is redundant (OpenAlex uses the same OA engine since the Walden merger), OpenCitations is redundant (OpenAlex handles citation traversal at 100 req/s vs OpenCitations' 3 req/s), and CORE's rate limits (5 req/10s) make it impractical when OpenAlex provides OA PDF URLs for the same content.
+
+### External MCP ecosystem over built-in bridges
+Rather than building bespoke MCP bridge wrappers for remote academic servers (Scite, Consensus, PubMed), these are documented as external MCP servers users configure directly. Scite MCP (launched Feb 26, 2026) requires a paid subscription (~16 EUR/mo). Consensus MCP offers a free tier (3 results/query). PubMed has production-grade community MCP servers (fully free). This avoids coupling the pipeline to paid services while preserving composability.
 
 ### Relaxed dependency chains
 PLAN-3 (Research Intelligence) works with whatever metadata is available from existing providers. It doesn't hard-require profiles or OpenAlex — it produces richer output when they're present but functions with just Semantic Scholar metadata. This decouples it from the PLAN-1/PLAN-2 critical path.
@@ -64,40 +69,38 @@ PLAN-1.4  APA Citation Formatting ───────────────�
 PLAN-1.5  Academic Brief Enrichment ─────────────────────────┘ (needs 1.1)
 
 PLAN-2.1  OpenAlex Provider (Tier 1) ──────────────────────────────────┐
-PLAN-2.8  Per-Provider Rate Limiting ──────────────────────────────────┤ (parallel)
+PLAN-2.2  Crossref Provider (Tier 2, metadata enrichment) ────────────┤ (parallel)
+PLAN-2.6  Per-Provider Rate Limiting ──────────────────────────────────┤ (parallel)
                                                                         │
-PLAN-2.5  Citation Graph Tools ────────────────────────────────────────┤ (needs 2.1)
-PLAN-2.6  Strategic Research Primitives ────────────────────────────────┤ (needs 2.5)
-PLAN-2.7  Adaptive Provider Selection ─────────────────────────────────┘ (needs 2.1)
-
-PLAN-2.2-4  Tier 2 Providers (Unpaywall, Crossref, OpenCitations)
-            (optional, can be added at any point after 2.8)
+PLAN-2.3  Citation Graph Tools ────────────────────────────────────────┤ (needs 2.1)
+PLAN-2.4  Strategic Research Primitives ────────────────────────────────┤ (needs 2.3)
+PLAN-2.5  Adaptive Provider Selection ─────────────────────────────────┘ (needs 2.1)
 
 PLAN-3.1-5  All items (influence ranking, landscape, gaps, tables, export)
             (largely independent, can start after PLAN-0)
             (enhanced by PLAN-1 + PLAN-2 when available)
 
 PLAN-4.1    PDF Analysis (extend existing extractor — can start after PLAN-0)
-PLAN-4.2    Citation Network (user-triggered — needs PLAN-2.1)
+PLAN-4.2    Citation Network (user-triggered — needs PLAN-2.1, uses OpenAlex)
 PLAN-4.3    Methodology Assessment (experimental — independent)
-PLAN-4.4    MCP Bridge (CONTINGENT — blocked until server validation)
-PLAN-4.5    CORE Provider (independent)
 ```
 
 ### Parallelism opportunities
 
 After PLAN-0 completes, significant parallel work is possible:
 - **PLAN-3 item 1** (influence ranking) can start immediately — `supervision_coverage.py` already exists as a standalone module
-- **PLAN-1 items 1/2/6** + **PLAN-3 items 2-5** + **PLAN-4 items 1/3/5** can all proceed concurrently after PLAN-0
-- **PLAN-2 Tier 1** (OpenAlex) is the critical path item — unlocks items 5-7 and PLAN-4.2
+- **PLAN-1 items 1/2/6** + **PLAN-3 items 2-5** + **PLAN-4 items 1/3** can all proceed concurrently after PLAN-0
+- **PLAN-2 Tier 1** (OpenAlex) is the critical path item — unlocks citation graph tools and PLAN-4.2
 
 ## What's NOT in these plans
 
 - **Cost visibility / budgeting**: Not included. Pressuring agents with token awareness degrades quality. The existing token budget management handles context window fitting.
 - **Replacing specialized tools**: These plans complement tools like Undermind and Elicit, not replace them. The goal is composability, not completeness.
-- **ERIC, DBLP, or domain-specific databases**: Beyond the current scope. The adaptive provider selection framework (PLAN-2.7) makes adding these later straightforward.
+- **ERIC, DBLP, or domain-specific databases**: Beyond the current scope. The adaptive provider selection framework (PLAN-2.5) makes adding these later straightforward.
 - **Interactive steering**: Real-time researcher control of the pipeline mid-execution. Worth exploring but architecturally complex — deferred.
 - **Numeric rigor scores**: Removed from PLAN-4.3. LLM-derived numeric scores from abstracts are unreliable and invite misuse. Qualitative methodology metadata is provided instead.
+- **Built-in MCP bridge wrappers**: Scite, Consensus, and PubMed MCP servers exist but are documented as external user-configured servers rather than embedded in the pipeline. This avoids coupling to paid services (Scite) and keeps the dependency surface minimal.
+- **Unpaywall / OpenCitations / CORE providers**: Evaluated and removed — see [Feb 2026 tool evaluation](#revisions-from-feb-2026-tool-evaluation).
 
 ## Revisions from review
 
@@ -116,6 +119,22 @@ After PLAN-0 completes, significant parallel work is possible:
 | MCP bridge contingent | Speculative server URLs must be validated before building bridge infrastructure |
 | Testing LOC budgeted | Each plan includes testing estimates (~30-40% of implementation LOC) |
 
+## Revisions from Feb 2026 tool evaluation
+
+| Change | Rationale |
+|--------|-----------|
+| Unpaywall provider removed | Redundant — OpenAlex uses same OA engine since Walden merger (late 2025). `open_access.oa_url` provides identical data. |
+| OpenCitations provider removed | Redundant — OpenAlex handles citation traversal at 100 req/s (vs OpenCitations' 3 req/s). Self-citation metadata is niche. |
+| CORE provider removed | Low throughput (5 req/10s), largely redundant with OpenAlex OA coverage and PDF URLs. |
+| OpenAlex auth model updated | API key now required (free, Feb 13 2026). Polite pool discontinued. Usage-based pricing: $1/day free budget covers ~1,000 searches. |
+| OpenAlex field changes noted | Walden rewrite removed/renamed fields: `concepts` → `topics`, `grants` → `awards`, several fields dropped. Defensive parsing required. |
+| MCP Bridge reframed | Scite MCP (paid, ~16 EUR/mo), Consensus MCP (free limited), PubMed MCP (free) exist — documented as external user-configured servers, not built-in wrappers. |
+| Citation network simplified | Uses OpenAlex exclusively (not OpenCitations). 100 req/s makes interactive graph building practical. |
+| Crossref rate limits updated | Dec 2025 restructure: simple requests (DOI lookups) get higher limits, complex (filtered) get lower. Favorable for our use case. |
+| PLAN-2 scope reduced ~40% | 4 providers → 2 providers. ~380-500 LOC removed from implementation, ~160-220 LOC from tests. |
+| PLAN-4 scope reduced ~48% | MCP Bridge and CORE removed. ~450-600 LOC removed from implementation, ~160-220 LOC from tests. |
+| External MCP ecosystem documented | PubMed (cyanheads), Consensus, Scite, Docling, AI2 Asta S2 MCP, OpenAlex community MCPs — documented as composable external servers. |
+
 ## New strategic items
 
 These plans reorganize features from earlier planning along architectural boundaries (prerequisites → foundations → tools → intelligence → analysis) rather than effort tiers, and add several new strategic items:
@@ -127,7 +146,7 @@ These plans reorganize features from earlier planning along architectural bounda
 | Research Profiles | Replaces monolithic `research_mode` with composable, named profiles |
 | Provenance Audit Trail | Addresses reproducibility gap — the sharpest criticism of the MCP approach |
 | Structured Output Mode | Enables composability — foundry-mcp as orchestration layer, not terminal output |
-| Provider Tiers | Reduces operational risk — only OpenAlex is a hard dependency |
+| Provider Tiers | Reduces operational risk — OpenAlex (Tier 1) + Crossref (Tier 2) only |
 | Strategic Research Primitives | Improves researcher quality with BROADEN/DEEPEN/VALIDATE/SATURATE strategies |
 | Adaptive Provider Selection | Brief-driven pipeline configuration — no hardcoded provider chains |
-| MCP Bridge Pattern | Generic remote MCP integration — contingent on server validation |
+| External MCP Ecosystem | Document Scite, Consensus, PubMed, Docling, Asta MCP servers as composable externals |

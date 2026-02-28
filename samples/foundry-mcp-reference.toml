@@ -658,7 +658,7 @@
 # The following fields have been removed. If you have them in your config,
 # remove them and use the replacements listed below.
 #
-# [implement] section — orphaned, never parsed. Use [autonomy_posture] instead.
+# [implement] section — removed from get-config. Use [autonomy_posture] instead.
 # [workflow] section — orphaned, never parsed. Use [autonomy_session_defaults].
 # [feature_flags] section — orphaned, never parsed.
 #

@@ -1,12 +1,14 @@
 # PLAN-2: Academic Tools & Provider Expansion
 
-> **Goal**: Expand the research pipeline's academic capabilities with citation graph tools, new academic providers (OpenAlex, Unpaywall, Crossref, OpenCitations), adaptive provider selection from the brief phase, and strategic research primitives that improve how topic researchers navigate the literature.
+> **Goal**: Expand the research pipeline's academic capabilities with OpenAlex as the primary new academic provider, Crossref for metadata enrichment, citation graph tools, adaptive provider selection from the brief phase, and strategic research primitives that improve how topic researchers navigate the literature.
 >
-> **Estimated scope**: ~960-1350 LOC implementation + ~600-800 LOC tests (including mock fixtures) across 12-16 files
+> **Estimated scope**: ~580-850 LOC implementation + ~370-500 LOC tests (including mock fixtures) across 8-12 files
 >
 > **Dependencies**: PLAN-0 (supervision refactoring), PLAN-1 item 1 (Research Profiles) for profile-driven provider selection
 >
-> **Provider tiers**: Providers are split into **Tier 1** (OpenAlex — highest value, free, broad index) and **Tier 2** (Unpaywall, Crossref, OpenCitations — optional enrichment). Tier 1 is implemented first and is the only hard dependency for items 5-7. Tier 2 providers enhance but are not required.
+> **Provider tiers**: Providers are split into **Tier 1** (OpenAlex — highest value, broad index, 477M works) and **Tier 2** (Crossref — authoritative DOI metadata enrichment). Unpaywall, OpenCitations, and CORE were evaluated and removed — see rationale below.
+>
+> **Revised Feb 2026**: Scope reduced ~40% after tool evaluation. Three providers removed as redundant with OpenAlex. OpenAlex API model updated for post-Walden changes (API key auth, usage-based pricing, field renames).
 
 ---
 
@@ -16,6 +18,7 @@
 2. **The brief drives the pipeline.** Instead of hardcoded provider chains per mode, the brief phase output selects which providers and tools to activate. The brief already analyzes the query — now it also configures the machinery.
 3. **Researchers have strategy, not just tools.** Adding `citation_search` and `related_papers` as raw tools isn't enough. The topic researcher needs strategic primitives that tell it *when* to broaden, deepen, or validate — not just *how*.
 4. **Rate limiting is per-provider.** With multiple academic APIs in play, each with different limits, the resilience layer must manage them independently.
+5. **Prefer free, open APIs.** Only integrate providers with sufficient free tiers. Paid services (Scite, etc.) are documented as external MCP servers, not embedded dependencies.
 
 ---
 
@@ -25,12 +28,15 @@
 
 OpenAlex is the single most impactful provider addition. It covers discovery, citations, full-text PDF links, and metadata enrichment in one API. Its index (450M+ works) is the broadest available, it's completely free (CC0), and its API is designed for programmatic consumption. **This is the only provider that items 5-7 depend on.** Tier 2 providers enhance results but are not blocking.
 
-### API Details
+### API Details (Updated Feb 2026 — post-Walden rewrite)
 
 - **Base URL**: `https://api.openalex.org`
-- **Auth**: Free. Polite pool (faster responses) with email parameter.
-- **Rate limit**: 100K requests/day (polite pool), 10 RPS sustained
+- **Auth**: **API key required** since Feb 13, 2026 (free to create at openalex.org, ~30 seconds)
+- **Rate limit**: 100 req/s hard cap. **Usage-based pricing**: single entity lookups free, list queries $0.0001/req, search queries $0.001/req. Every key gets **$1/day free budget** (~10,000 list queries or ~1,000 searches/day).
 - **License**: CC0 (completely open)
+- **Index size**: 477M works (largest open scholarly index)
+- **Breaking changes from Walden rewrite (Nov 2025)**: `concepts` deprecated → use `topics`; `grants` renamed → `awards`; `type_crossref`, `has_fulltext`, `fulltext_origin`, `datasets`, `versions` removed; polite pool (email param) discontinued
+- **Note**: Abstracts still served as `abstract_inverted_index` — must reconstruct plaintext (~5 lines of Python)
 
 ### Implementation
 
@@ -68,7 +74,7 @@ class OpenAlexProvider(SearchProvider):
         - type: "article" | "book" | "dataset" | ...
         - open_access.is_oa: bool
         - cited_by_count: ">100" (comparative filters)
-        - concepts.id: OpenAlex concept ID
+        - topics.id: OpenAlex topic ID (NOTE: concepts.id is deprecated)
         - authorships.institutions.id: institution filter
         """
 
@@ -126,20 +132,21 @@ class OpenAlexProvider(SearchProvider):
 | `cited_by_count` | `citation_count` | |
 | `publication_year` | `year` | |
 | `primary_location.source.display_name` | `venue` | Journal/conference |
-| `topics[0].display_name` | `primary_topic` | |
-| `open_access.oa_url` | `pdf_url` | If available |
+| `topics[0].display_name` | `primary_topic` | Concepts deprecated — use topics |
+| `open_access.oa_url` | `pdf_url` | If available (powered by Unpaywall engine) |
 | `type` | `publication_type` | article, book, etc. |
-| `grants[].funder.display_name` | `funders` | Comma-separated |
+| `awards[].funder.display_name` | `funders` | Comma-separated (renamed from `grants` in Walden) |
 | `authorships[].institutions[].display_name` | `institutions` | Unique, comma-separated |
 | `abstract_inverted_index` | (source.snippet) | Reconstruct from inverted index |
 
 **Resilience config**:
 ```python
 ERROR_CLASSIFIERS = {
-    429: ErrorType.RATE_LIMIT,
+    429: ErrorType.RATE_LIMIT,  # Budget exhausted or RPS exceeded
     503: ErrorType.UNAVAILABLE,
 }
-# Rate limit: 10 RPS (polite pool)
+# Rate limit: 100 req/s hard cap; budget-based throttling ($1/day free)
+# API key passed via ?api_key= param or x-api-key header
 ```
 
 ### Testing
@@ -155,79 +162,30 @@ ERROR_CLASSIFIERS = {
 
 ---
 
-## 2. Unpaywall Provider (Tier 2 — Optional Enrichment)
+## ~~2. Unpaywall Provider~~ — REMOVED
 
-### Why Second
-
-Single-endpoint, zero-complexity addition that directly unlocks PDF access for PLAN-4's full-text analysis. One DOI in, best open-access PDF URL out. **Optional**: OpenAlex also provides `open_access.oa_url` for many papers, so Unpaywall is a complementary fallback for broader OA coverage.
-
-### API Details
-
-- **Endpoint**: `GET https://api.unpaywall.org/v2/{DOI}?email={email}`
-- **Auth**: Free, requires email address
-- **Rate limit**: 100K/day
-- **Returns**: Best OA location with PDF URL, all OA locations, license info
-
-### Implementation
-
-**File: `src/foundry_mcp/core/research/providers/unpaywall.py`** (NEW)
-
-```python
-class UnpaywallProvider:
-    """Unpaywall API provider for resolving DOIs to open-access PDF URLs.
-
-    Not a SearchProvider — this is an enrichment provider used by the
-    pipeline to locate full-text PDFs for sources with DOIs.
-    """
-
-    BASE_URL = "https://api.unpaywall.org/v2"
-
-    async def resolve_pdf(self, doi: str) -> Optional[str]:
-        """Resolve a DOI to the best available open-access PDF URL.
-
-        Returns None if no OA copy is found.
-        """
-
-    async def get_oa_status(self, doi: str) -> dict:
-        """Get full OA status including all locations, license, and OA color.
-
-        Returns: {
-            is_oa: bool,
-            best_oa_location: {url, url_for_pdf, license, version},
-            oa_locations: [...],
-            oa_status: "gold" | "green" | "hybrid" | "bronze" | "closed"
-        }
-        """
-
-    async def enrich_source(self, source: ResearchSource) -> ResearchSource:
-        """Enrich a ResearchSource with OA PDF URL if available.
-
-        Reads DOI from source.metadata, resolves via Unpaywall,
-        stores pdf_url and oa_status in metadata.
-        """
-```
-
-### Testing
-
-- Unit test: `resolve_pdf()` with known OA DOI → PDF URL
-- Unit test: `resolve_pdf()` with closed-access DOI → None
-- Unit test: `enrich_source()` adds `pdf_url` to source metadata
-- Unit test: graceful handling of invalid DOIs
+> **Status: Removed (Feb 2026 tool evaluation)**
+>
+> **Rationale**: Since the Walden rewrite (Nov 2025), Unpaywall and OpenAlex share the same codebase. OpenAlex's `open_access.is_oa`, `open_access.oa_status`, and `open_access.oa_url` fields ARE Unpaywall data. Building a separate Unpaywall provider adds ~100-150 LOC of implementation for data already available from the OpenAlex provider (Item 1).
+>
+> If a lightweight DOI→PDF-URL lookup is needed without the full OpenAlex work object, it can be added as a utility function on the OpenAlex provider rather than a separate provider class.
 
 ---
 
-## 3. Crossref Provider (Tier 2 — Optional Enrichment)
+## 2. Crossref Provider (Tier 2 — Metadata Enrichment)
 
-### Why Third
+### Why
 
-Authoritative metadata enrichment. When Semantic Scholar or OpenAlex metadata is incomplete (missing volume, issue, pages for APA formatting), Crossref is the definitive fallback. This directly supports PLAN-1's APA citation formatting. **Optional**: OpenAlex provides sufficient metadata for most APA formatting; Crossref fills gaps for edge cases.
+Authoritative metadata enrichment. When Semantic Scholar or OpenAlex metadata is incomplete (missing volume, issue, pages for APA formatting), Crossref is the definitive fallback. This directly supports PLAN-1's APA citation formatting. OpenAlex provides sufficient metadata for most APA formatting; Crossref fills gaps for edge cases.
 
-### API Details
+### API Details (Updated Dec 2025 rate limit restructure)
 
 - **Base URL**: `https://api.crossref.org`
-- **Key endpoint**: `GET /works/{doi}`
-- **Auth**: Free (polite pool with `mailto:` header for 50 RPS)
+- **Key endpoint**: `GET /works/{doi}` — "simple" request (higher rate limit under new structure)
+- **Auth**: Free (polite pool still available with `mailto:` in User-Agent header)
+- **Rate limits (Dec 2025 change)**: Differentiated by request type. "Simple" requests (single DOI lookups — our primary use case) get higher limits. "Complex" requests (filtered list queries) get lower limits. Exact limits communicated via response headers.
 - **Returns**: Title, authors, journal, volume, issue, pages, publisher, license, funder, references, type
+- **Coverage**: ~180M records. Completeness varies by publisher — volume/issue/pages are publisher-deposited, not mandated.
 
 ### Implementation
 
@@ -266,64 +224,15 @@ class CrossrefProvider:
 
 ---
 
-## 4. OpenCitations Provider (Tier 2 — Optional Enrichment)
+## ~~4. OpenCitations Provider~~ — REMOVED
 
-### Why Fourth
-
-Complete open citation graph with 2B+ DOI-to-DOI links. Unlike Semantic Scholar (citation counts and limited lists), OpenCitations provides the full wiring with metadata about each citation link (date, self-citation flags). This enriches PLAN-4's citation network feature. **Optional**: OpenAlex's `cites` filter provides citation traversal; OpenCitations adds self-citation metadata and more complete graph edges.
-
-### API Details
-
-- **Base URL**: `https://opencitations.net/index/api/v2`
-- **Key endpoints**:
-  - `GET /citations/{doi}` — papers citing a given DOI
-  - `GET /references/{doi}` — papers cited by a given DOI
-- **Auth**: Free, no key required
-- **Rate limit**: No documented limit
-- **License**: CC0
-- **Returns per citation**: citing DOI, cited DOI, creation date, timespan, journal self-citation flag, author self-citation flag
-
-### Implementation
-
-**File: `src/foundry_mcp/core/research/providers/opencitations.py`** (NEW)
-
-```python
-class OpenCitationsProvider:
-    """OpenCitations COCI provider for DOI-to-DOI citation graph traversal.
-
-    Provides complete citation graph with metadata about each citation link.
-    Not a SearchProvider — this is a graph traversal provider.
-    """
-
-    BASE_URL = "https://opencitations.net/index/api/v2"
-
-    async def get_citations(self, doi: str) -> list[dict]:
-        """Get all papers citing a given DOI.
-
-        Returns: [{citing_doi, cited_doi, creation_date, timespan,
-                   journal_self_citation, author_self_citation}]
-        """
-
-    async def get_references(self, doi: str) -> list[dict]:
-        """Get all papers referenced by a given DOI.
-
-        Returns: same structure as get_citations()
-        """
-
-    async def get_citation_count(self, doi: str) -> int:
-        """Get total citation count for a DOI (len of get_citations)."""
-```
-
-### Testing
-
-- Unit test: `get_citations()` with mocked response
-- Unit test: `get_references()` with mocked response
-- Unit test: self-citation flag parsing
-- Unit test: graceful handling of DOIs with no citations
+> **Status: Removed (Feb 2026 tool evaluation)**
+>
+> **Rationale**: OpenAlex handles citation traversal at 100 req/s via its `cites` filter and `referenced_works` field. OpenCitations is limited to 180 req/min (3 req/s) — 33x slower. The unique value of OpenCitations (self-citation flags, citation-level metadata) is niche and not required for the core citation network feature (PLAN-4 Item 2). Coverage substantially overlaps since both draw from Crossref as a primary source.
 
 ---
 
-## 5. Citation Graph & Related Papers Tools for Topic Researchers
+## 3. Citation Graph & Related Papers Tools for Topic Researchers
 
 ### Problem
 
@@ -438,7 +347,7 @@ Add `_handle_citation_search_tool()` and `_handle_related_papers_tool()` followi
 
 ---
 
-## 6. Strategic Research Primitives
+## 4. Strategic Research Primitives
 
 ### Problem
 
@@ -501,7 +410,7 @@ When the topic researcher's `think` tool output contains strategy keywords (BROA
 
 ---
 
-## 7. Adaptive Provider Selection
+## 5. Adaptive Provider Selection
 
 ### Problem
 
@@ -566,16 +475,14 @@ Available search providers for this session: {', '.join(state.active_providers)}
 
 ---
 
-## 8. Per-Provider Rate Limiting
+## 6. Per-Provider Rate Limiting
 
 ### Problem
 
-With multiple academic APIs in play, each with vastly different rate limits:
-- Semantic Scholar: 1 RPS (without key), 10 RPS (with key)
-- OpenAlex: 10 RPS (polite pool)
-- Unpaywall: ~2 RPS (100K/day)
-- OpenCitations: no documented limit
-- Crossref: 50 RPS (polite pool)
+With multiple academic APIs in play, each with different rate limits:
+- Semantic Scholar: 1 RPS (with key — all new keys get 1 RPS)
+- OpenAlex: 100 req/s hard cap (budget-based: $1/day free)
+- Crossref: Variable (simple DOI lookups get higher limits, complex queries lower — Dec 2025 restructure)
 
 The existing resilience layer (`providers/resilience/`) supports per-provider rate limiting but needs configuration for the new providers.
 
@@ -590,38 +497,18 @@ The existing `PROVIDER_CONFIGS` dict maps provider names to `ProviderResilienceC
 ```python
 # Add to PROVIDER_CONFIGS dict:
 "openalex": ProviderResilienceConfig(
-    requests_per_second=10.0,   # 10 RPS (polite pool)
-    burst_limit=5,
+    requests_per_second=50.0,   # 100 req/s hard cap; conservative at 50
+    burst_limit=10,
     max_retries=3,
     base_delay=1.0,
-    max_delay=60.0,
-    jitter=0.5,
-    circuit_failure_threshold=5,
-    circuit_recovery_timeout=30.0,
-),
-"unpaywall": ProviderResilienceConfig(
-    requests_per_second=2.0,    # Conservative (100K/day)
-    burst_limit=2,
-    max_retries=3,
-    base_delay=1.5,
     max_delay=60.0,
     jitter=0.5,
     circuit_failure_threshold=5,
     circuit_recovery_timeout=30.0,
 ),
 "crossref": ProviderResilienceConfig(
-    requests_per_second=10.0,   # 50 RPS polite pool, conservative default
+    requests_per_second=10.0,   # Conservative; simple requests get higher limits
     burst_limit=5,
-    max_retries=3,
-    base_delay=1.0,
-    max_delay=60.0,
-    jitter=0.5,
-    circuit_failure_threshold=5,
-    circuit_recovery_timeout=30.0,
-),
-"opencitations": ProviderResilienceConfig(
-    requests_per_second=5.0,    # Conservative (no documented limit)
-    burst_limit=3,
     max_retries=3,
     base_delay=1.0,
     max_delay=60.0,
@@ -639,18 +526,11 @@ These are the defaults used by `get_provider_config()`. Per-provider overrides c
 
 ```python
 # OpenAlex
-openalex_email: Optional[str] = None     # For polite pool (faster responses)
-openalex_enabled: bool = True             # On by default (free, no key needed)
-
-# Unpaywall
-unpaywall_email: Optional[str] = None     # Required (their only auth)
-unpaywall_enabled: bool = True            # On by default when email present
-
-# OpenCitations
-opencitations_enabled: bool = True        # Free, no key needed
+openalex_api_key: Optional[str] = None    # Required since Feb 2026 (free to create)
+openalex_enabled: bool = True             # On by default
 
 # Crossref
-crossref_email: Optional[str] = None      # For polite pool
+crossref_email: Optional[str] = None      # For polite pool (mailto in User-Agent)
 crossref_enabled: bool = True             # Free, on by default
 ```
 
@@ -666,35 +546,31 @@ crossref_enabled: bool = True             # Free, on by default
 
 | Item | Impl LOC | Test LOC | Test Focus |
 |------|----------|----------|------------|
-| 1. OpenAlex (Tier 1) | ~250-350 | ~150-200 | Mock API responses, metadata mapping, abstract reconstruction, rate limiting |
-| 2. Unpaywall (Tier 2) | ~100-150 | ~60-80 | Mock responses, DOI resolution, enrichment |
-| 3. Crossref (Tier 2) | ~100-150 | ~50-70 | Mock responses, field extraction, enrichment |
-| 4. OpenCitations (Tier 2) | ~80-120 | ~40-60 | Mock responses, self-citation parsing |
-| 5. Citation Graph Tools | ~200-250 | ~100-130 | Tool dispatch, dedup, provider fallback |
-| 6. Strategic Primitives | ~80-100 | ~30-40 | Prompt inclusion, profile gating |
-| 7. Adaptive Selection | ~100-150 | ~60-80 | Hint extraction, provider augmentation |
-| 8. Rate Limiting | ~50-80 | ~30-40 | Config loading, override behavior |
-| **Shared fixtures** | — | ~80-100 | Mock HTTP responses for all 4 APIs |
-| **Total** | **~960-1350** | **~600-800** | |
+| 1. OpenAlex (Tier 1) | ~250-350 | ~150-200 | Mock API responses, metadata mapping, abstract reconstruction, API key auth |
+| 2. Crossref (Tier 2) | ~100-150 | ~50-70 | Mock responses, field extraction, enrichment |
+| 3. Citation Graph Tools | ~200-250 | ~100-130 | Tool dispatch, dedup, provider fallback |
+| 4. Strategic Primitives | ~80-100 | ~30-40 | Prompt inclusion, profile gating |
+| 5. Adaptive Selection | ~100-150 | ~60-80 | Hint extraction, provider augmentation |
+| 6. Rate Limiting | ~30-50 | ~20-30 | Config loading, override behavior |
+| **Shared fixtures** | — | ~40-50 | Mock HTTP responses for OpenAlex + Crossref |
+| **Total** | **~760-1050** | **~450-600** | |
 
-**Note**: Each new provider requires dedicated mock fixtures (~20-25 LOC each) simulating successful responses, empty results, rate limit errors, and unavailability. These are shared across provider tests and integration tests.
+**Note**: Each new provider requires dedicated mock fixtures (~20-25 LOC each) simulating successful responses, empty results, rate limit errors, and unavailability.
 
 ## File Impact Summary
 
 | File | Type | Items |
 |------|------|-------|
 | `providers/openalex.py` | **New** (Tier 1) | 1 |
-| `providers/unpaywall.py` | **New** (Tier 2) | 2 |
-| `providers/crossref.py` | **New** (Tier 2) | 3 |
-| `providers/opencitations.py` | **New** (Tier 2) | 4 |
-| `providers/semantic_scholar.py` | Modify | 5 (citation search, recommendations, paper lookup) |
-| `models/deep_research.py` | Modify | 5 (CitationSearchTool, RelatedPapersTool) |
-| `phases/topic_research.py` | Modify | 5 (tool injection, dispatch), 6 (strategic primitives) |
-| `phases/brief.py` | Modify | 7 (provider hint extraction) |
-| `phases/supervision.py` | Modify | 7 (active providers in delegation orchestration) |
-| `phases/supervision_prompts.py` | Modify | 7 (active providers in delegation prompts) |
-| `providers/resilience/config.py` | Modify | 8 (rate limits for new providers) |
-| `config/research.py` | Modify | 8 (new provider config fields) |
+| `providers/crossref.py` | **New** (Tier 2) | 2 |
+| `providers/semantic_scholar.py` | Modify | 3 (citation search, recommendations, paper lookup) |
+| `models/deep_research.py` | Modify | 3 (CitationSearchTool, RelatedPapersTool) |
+| `phases/topic_research.py` | Modify | 3 (tool injection, dispatch), 4 (strategic primitives) |
+| `phases/brief.py` | Modify | 5 (provider hint extraction) |
+| `phases/supervision.py` | Modify | 5 (active providers in delegation orchestration) |
+| `phases/supervision_prompts.py` | Modify | 5 (active providers in delegation prompts) |
+| `providers/resilience/config.py` | Modify | 6 (rate limits for new providers) |
+| `config/research.py` | Modify | 6 (new provider config fields) |
 
 ## Dependency Graph
 
@@ -703,19 +579,17 @@ Tier 1 (required):
 [1. OpenAlex Provider]──────────────────────────────────────┐
                                                              │
 Tier 2 (optional enrichment, can be deferred):               │
-[2. Unpaywall Provider]─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─┤
-[3. Crossref Provider]─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤
-[4. OpenCitations Provider]─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤
+[2. Crossref Provider]─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤
                                                              │
-[5. Citation Graph Tools] (needs Semantic Scholar + OpenAlex)┤
+[3. Citation Graph Tools] (needs Semantic Scholar + OpenAlex)┤
                                                              │
-[6. Strategic Research Primitives] (needs item 5 tools)      │
+[4. Strategic Research Primitives] (needs item 3 tools)      │
                                                              │
-[7. Adaptive Provider Selection] (needs item 1; enhanced by 2-4)
+[5. Adaptive Provider Selection] (needs item 1)              │
                                                              │
-[8. Per-Provider Rate Limiting] (parallel with all above)────┘
+[6. Per-Provider Rate Limiting] (parallel with all above)────┘
 ```
 
-**Tier 1 critical path**: Item 1 (OpenAlex) → Items 5, 7 → Item 6. This is the minimum viable academic pipeline.
+**Critical path**: Item 1 (OpenAlex) → Items 3, 5 → Item 4. This is the minimum viable academic pipeline.
 
-**Tier 2 providers** (items 2-4) can be added independently at any point after item 8 (rate limiting config). They enhance results but don't block core functionality. Item 7 (adaptive selection) works with just OpenAlex; Tier 2 providers expand the hint vocabulary.
+**Crossref** (item 2) can be added independently at any point after item 6 (rate limiting config). It enhances APA metadata completeness but doesn't block core functionality.

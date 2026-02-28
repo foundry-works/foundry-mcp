@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0b8] - 2026-02-28
+
+### Changed
+
+- **`get-config` autonomy support**: Replaced the legacy `implement` config section with `autonomy`, exposing posture, security, and session-defaults from `ServerConfig` dataclasses instead of raw TOML keys. Old `[implement]` sections in TOML are silently ignored for backward compatibility.
+
+### Added
+
+- **Autonomy config tests**: 11 new tests for `get-config` autonomy section covering defaults, overrides, key extraction, backward compatibility, and multi-section requests.
+
+### Docs
+
+- **Revised future plans**: Condensed `PLAN-2-ACADEMIC-TOOLS.md` and `PLAN-4-DEEP-ANALYSIS.md` against actual codebase state, updated `future/README.md` roadmap.
+
 ## [0.17.0b7] - 2026-02-28
 
 ### Changed

@@ -1,20 +1,23 @@
 # PLAN-4: Deep Analysis — Full-Text, Citation Networks & Quality Assessment
 
-> **Goal**: Capabilities that make deep research competitive with dedicated academic tools like Elicit, Research Rabbit, and Undermind — full-text PDF analysis, citation network graph construction, methodology quality assessment, and integration with remote academic MCP servers (Scite, Consensus, PubMed).
+> **Goal**: Capabilities that make deep research competitive with dedicated academic tools like Elicit, Research Rabbit, and Undermind — full-text PDF analysis, citation network graph construction, and methodology quality assessment.
 >
-> **Estimated scope**: ~1500-2200 LOC implementation + ~600-800 LOC tests (reduced from original ~2000-3000 after scope revisions)
+> **Estimated scope**: ~650-900 LOC implementation + ~240-360 LOC tests (reduced from original ~1500-2200 after Feb 2026 tool evaluation)
 >
 > **Dependencies**: PLAN-0 (prerequisites), PLAN-1 items 1 and 6 (profiles, structured output), PLAN-2 item 1 (OpenAlex)
 >
-> **Risk**: Higher implementation complexity, API rate limiting, PDF parsing reliability, LLM accuracy for methodology extraction
+> **Risk**: PDF parsing reliability, LLM accuracy for methodology extraction
 >
 > **All features in this plan are opt-in** (disabled by default in profiles) to avoid impacting existing behavior.
 >
 > **Scope revisions from review**:
 > - Item 1 (PDF): **Extends existing `pdf_extractor.py`** instead of creating a duplicate module. No new `pymupdf` dependency.
-> - Item 2 (Citation Network): **Deferred to explicit user-triggered tool** — not an automatic pipeline step. Reduces API call volume.
+> - Item 2 (Citation Network): **Deferred to explicit user-triggered tool** — not an automatic pipeline step. Uses OpenAlex exclusively (not OpenCitations).
 > - Item 3 (Methodology): **Demoted to experimental/opt-in** with strong caveats about reliability.
-> - Item 4 (MCP Bridge): **Contingent on server availability** — infrastructure only built after validating at least one target server exists.
+>
+> **Removed in Feb 2026 tool evaluation**:
+> - Item 4 (MCP Bridge): Reframed as external documentation. Scite MCP (paid), Consensus MCP (free limited), and PubMed MCP (free) all exist — users configure these directly rather than through built-in bridge wrappers.
+> - Item 5 (CORE Provider): Removed. Low throughput (5 req/10s), largely redundant with OpenAlex OA coverage.
 
 ---
 
@@ -185,8 +188,8 @@ User completes deep research session (produces report + sources)
 User explicitly requests: research action=deep-research-network research_id=<id>
     ↓
 For each academic source in state.sources with a paper ID:
-    - Fetch references (papers it cites) via OpenAlex (10 RPS)
-    - Fetch citations (papers that cite it) via OpenAlex / OpenCitations
+    - Fetch references (papers it cites) via OpenAlex (100 req/s)
+    - Fetch citations (papers that cite it) via OpenAlex
     ↓
 Build citation adjacency graph:
     - Nodes: papers (discovered + referenced)
@@ -222,7 +225,6 @@ class CitationEdge(BaseModel):
     """A directed citation relationship between two papers."""
     citing_paper_id: str
     cited_paper_id: str
-    is_self_citation: bool = False  # From OpenCitations metadata
 
 class CitationNetwork(BaseModel):
     """Citation network built from discovered sources."""
@@ -253,9 +255,8 @@ def citation_network(self) -> Optional[CitationNetwork]:
 class CitationNetworkBuilder:
     """Build citation network from discovered sources.
 
-    Uses OpenAlex (preferred, higher rate limit) or Semantic Scholar
+    Uses OpenAlex (primary, 100 req/s) or Semantic Scholar (fallback, 1 RPS)
     to fetch references and citations for each discovered academic source.
-    Uses OpenCitations for self-citation metadata when available.
     """
 
     async def build_network(
@@ -353,10 +354,11 @@ Wire up `"deep-research-network"` action in the research action router.
 
 | Risk | Mitigation |
 |------|-----------|
-| API rate limiting | Use OpenAlex (10 RPS) as primary; Semantic Scholar as fallback. Parallelize within limits. |
+| API rate limiting | Use OpenAlex (100 req/s) as primary; Semantic Scholar (1 RPS) as fallback. Parallelize within limits. |
 | Graph explosion | Cap `max_references_per_paper` and `max_citations_per_paper` (default 20 each) |
 | Missing paper IDs | Only build for sources with paper_id or DOI in metadata |
-| Execution time | User-triggered, so latency is expected. 15 sources × 2 calls ÷ 10 RPS = ~3s with OpenAlex. Progress tracking via action response. |
+| Execution time | User-triggered, so latency is expected. 15 sources × 2 calls at 100 req/s = <1s with OpenAlex. Progress tracking via action response. |
+| OpenAlex budget | 30 API calls cost ~$0.003 (list queries) — negligible against $1/day free budget |
 | Cost visibility | Action response includes API call count and elapsed time |
 
 ### Testing
@@ -557,236 +559,33 @@ create a separate "methodology scores" section.
 
 ---
 
-## 4. Remote MCP Server Bridge (Contingent — Requires Validation)
+## ~~4. Remote MCP Server Bridge~~ — REMOVED (Reframed as External Documentation)
 
-> **Status: Contingent.** This item should NOT be implemented until at least one target MCP server URL has been validated as accessible and functional. The URLs listed below (`scite.ai/mcp`, `consensus.app/mcp`, `pubmed.mcp.claude.com/mcp`) are **speculative** — they may not exist or may require authentication not documented here.
+> **Status: Removed from implementation scope (Feb 2026 tool evaluation)**
 >
-> **Pre-implementation gate**: Before writing any bridge code, validate:
-> 1. At least one target server responds to MCP `tools/list` requests
-> 2. The response format matches standard MCP protocol
-> 3. Authentication requirements are understood and documented
+> **Rationale**: All three target MCP servers now exist and have been validated:
+> - **Scite.ai MCP** (scite.ai/mcp) — launched Feb 26, 2026. Official, OAuth 2.0 auth. **Requires paid Scite Premium subscription (~16 EUR/mo).** Not viable as a default built-in dependency.
+> - **Consensus MCP** (consensus.app/home/mcp/) — production-ready, official. Free tier with 3 results/query. Worth recommending but not embedding.
+> - **PubMed MCP** — multiple community implementations exist. Best: cyanheads/pubmed-mcp-server (TypeScript, production-grade, dual transport). Fully free with NCBI API key.
 >
-> If no target servers are validated, defer this item entirely.
-
-### Problem
-
-Remote academic MCP servers (Scite.ai, Consensus, PubMed) offer unique capabilities — citation sentiment, cross-study agreement, biomedical full-text — but integrating each one as a bespoke provider doesn't scale. A generic MCP-to-provider bridge lets the pipeline call any MCP server uniformly.
-
-### Design
-
-The bridge is a provider adapter that:
-1. Connects to a remote MCP server URL
-2. Discovers available tools via MCP protocol
-3. Exposes them as methods callable from the deep research pipeline
-4. Handles serialization, timeouts, and error mapping
-
-This is a foundational pattern — once the bridge exists, adding new MCP servers is configuration, not code.
-
-### Changes
-
-**File: `src/foundry_mcp/core/research/providers/mcp_bridge.py`** (NEW)
-
-#### 4a. Generic MCP bridge
-
-```python
-class MCPBridgeProvider:
-    """Bridge between deep research pipeline and remote MCP servers.
-
-    Connects to any MCP server URL, discovers tools, and exposes them
-    as async methods. Handles MCP protocol details (SSE transport,
-    tool discovery, argument serialization, response parsing).
-    """
-
-    def __init__(
-        self,
-        server_url: str,
-        server_name: str,
-        timeout: float = 30.0,
-    ):
-        """Initialize bridge with MCP server URL."""
-
-    async def connect(self) -> None:
-        """Connect to MCP server and discover available tools."""
-
-    async def call_tool(
-        self,
-        tool_name: str,
-        arguments: dict,
-        timeout: Optional[float] = None,
-    ) -> dict:
-        """Call a tool on the remote MCP server.
-
-        Returns parsed tool response as dict.
-        Raises MCPBridgeError on timeout, connection failure, or tool error.
-        """
-
-    async def list_tools(self) -> list[dict]:
-        """List available tools on the remote server."""
-
-    async def disconnect(self) -> None:
-        """Disconnect from MCP server."""
-```
-
-#### 4b. Scite.ai integration via bridge
-
-```python
-class SciteBridgeProvider:
-    """Scite.ai integration via MCP bridge.
-
-    Provides citation sentiment analysis — for each paper, how it has been
-    cited: supporting, contrasting, or mentioning. Unique capability
-    not available from any other provider.
-    """
-
-    def __init__(self, bridge: MCPBridgeProvider):
-        self.bridge = bridge
-
-    async def get_citation_sentiment(
-        self,
-        doi: str,
-        max_results: int = 10,
-    ) -> dict:
-        """Get citation sentiment for a paper.
-
-        Returns: {
-            supporting: int,
-            contrasting: int,
-            mentioning: int,
-            total: int,
-            citations: [{text, sentiment, citing_doi}]
-        }
-        """
-
-    async def enrich_source(self, source: ResearchSource) -> ResearchSource:
-        """Enrich source metadata with Scite citation sentiment."""
-```
-
-#### 4c. Consensus integration via bridge
-
-```python
-class ConsensusBridgeProvider:
-    """Consensus integration via MCP bridge.
-
-    Provides cross-study agreement analysis on yes/no research questions.
-    Most useful for specific sub-questions during the supervision phase.
-    """
-
-    async def query(self, question: str) -> dict:
-        """Query Consensus for cross-study agreement.
-
-        Returns: {
-            agreement: str,  # e.g., "87% yes (23 studies)"
-            papers: [{title, authors, year, doi, finding}]
-        }
-        """
-```
-
-#### 4d. PubMed integration note
-
-PubMed's remote MCP server (`https://pubmed.mcp.claude.com/mcp`) is recommended as a parallel MCP server in the user's Claude Code config rather than embedded in the deep research pipeline. For users who want PubMed results in deep research reports, the MCP bridge can connect to it:
-
-```python
-# In config:
-pubmed_mcp_url: str = "https://pubmed.mcp.claude.com/mcp"
-pubmed_mcp_enabled: bool = False  # Opt-in, biomedical only
-```
-
-### Integration Points
-
-**Post-gathering enrichment (Scite)**: After topic researchers gather sources, batch-query Scite for citation sentiment on all academic sources with DOIs. Store in `source.metadata`:
-```python
-metadata["scite_supporting"] = 12
-metadata["scite_contrasting"] = 3
-metadata["scite_mentioning"] = 45
-```
-
-**Supervision phase (Consensus)**: When the supervisor generates directives that can be phrased as yes/no questions, optionally route to Consensus for agreement analysis. Store in `state` metadata for synthesis injection.
-
-### Configuration
-
-```python
-# In ResearchConfig:
-scite_mcp_url: str = "https://api.scite.ai/mcp"
-scite_mcp_enabled: bool = False
-
-consensus_mcp_url: str = "https://mcp.consensus.app/mcp"
-consensus_mcp_enabled: bool = False
-
-pubmed_mcp_url: str = "https://pubmed.mcp.claude.com/mcp"
-pubmed_mcp_enabled: bool = False
-```
-
-### Testing
-
-- Unit test: MCPBridgeProvider connects to mock MCP server
-- Unit test: tool discovery returns tool list
-- Unit test: tool call with valid arguments returns response
-- Unit test: timeout handling for slow MCP servers
-- Unit test: SciteBridgeProvider parses sentiment response
-- Unit test: ConsensusBridgeProvider parses agreement response
-- Integration test: Scite enrichment adds sentiment to source metadata
+> **Decision**: Rather than building bespoke bridge wrappers (SciteBridgeProvider, ConsensusBridgeProvider), document these as **external MCP servers users configure directly** in their Claude Code / MCP client settings. This avoids:
+> 1. Coupling to a paid service (Scite) as a default dependency
+> 2. Maintaining wrapper code for rapidly evolving external APIs
+> 3. Adding ~300-400 LOC of bridge infrastructure with limited value over direct MCP configuration
+>
+> **Action**: Add a "Recommended External MCP Servers" section to the deep research documentation with configuration examples for each server.
+>
+> **Also notable**: AI2's Asta project provides an official "Scientific Corpus Tool" — an MCP extension of the Semantic Scholar API with sparse + dense full-text semantic search across OA papers. This is another strong external MCP recommendation.
 
 ---
 
-## 5. CORE Open Access Provider
+## ~~5. CORE Open Access Provider~~ — REMOVED
 
-### Why
-
-Full-text fallback for papers not available via Unpaywall or PubMed Central. CORE aggregates 37M+ full-text articles from institutional repositories worldwide — particularly strong for grey literature and institutional outputs that Semantic Scholar/OpenAlex may index as metadata-only.
-
-### API Details
-
-- **Base URL**: `https://api.core.ac.uk/v3`
-- **Key endpoints**:
-  - `GET /search/works?q=<query>` — full-text search across paper bodies
-  - `GET /works/{id}` — single work with full text
-- **Auth**: Free (registration for better rate limits)
-- **Rate limit**: 5 req/10s (free), higher with registration
-- **Returns**: Full text content, metadata, repository info
-
-### Implementation
-
-**File: `src/foundry_mcp/core/research/providers/core_oa.py`** (NEW)
-
-```python
-class COREProvider(SearchProvider):
-    """CORE API provider for open-access full-text search.
-
-    Searches across 37M+ full-text articles from institutional and subject
-    repositories. Particularly valuable for grey literature and institutional
-    publications not indexed by Semantic Scholar or OpenAlex.
-    """
-
-    BASE_URL = "https://api.core.ac.uk/v3"
-
-    def get_provider_name(self) -> str:
-        return "core"
-
-    async def search(
-        self,
-        query: str,
-        max_results: int = 10,
-        **kwargs: Any,
-    ) -> list[ResearchSource]:
-        """Full-text search across open-access papers."""
-
-    async def get_full_text(self, core_id: str) -> Optional[str]:
-        """Retrieve full text for a specific work."""
-```
-
-### Configuration
-
-```python
-core_api_key: Optional[str] = None   # Optional, for higher rate limits
-core_enabled: bool = False           # Opt-in (rate-limited without key)
-```
-
-### Testing
-
-- Unit test: search with mocked response
-- Unit test: full text retrieval
-- Unit test: rate limiting respected (5 req/10s)
-- Unit test: graceful handling when CORE is unavailable
+> **Status: Removed (Feb 2026 tool evaluation)**
+>
+> **Rationale**: CORE has grown to 46M hosted full texts (323M linked), but its rate limit of **5 req/10s** makes it impractical for interactive pipeline use. OpenAlex now provides OA PDF URLs (via its integrated Unpaywall engine) for a comparable set of papers at 100 req/s. The unique value of CORE (grey literature, institutional repository content) is real but niche, and doesn't justify another API dependency with severe rate constraints.
+>
+> **Alternative for users who need CORE**: Multiple community-built CORE MCP servers exist and can be configured as external MCP servers.
 
 ---
 
@@ -794,8 +593,7 @@ core_enabled: bool = False           # Opt-in (rate-limited without key)
 
 ### New Dependencies
 
-- **No new dependencies for item 1** (PDF). Uses existing `pypdf` + `pdfminer.six`.
-- `mcp` — MCP client library for bridge (item 4) — check if already a dependency. **Only needed if item 4 passes validation gate.**
+- **No new dependencies.** Item 1 (PDF) uses existing `pypdf` + `pdfminer.six`. Items 4 (MCP Bridge) and 5 (CORE) have been removed.
 
 ### Configuration Surface
 
@@ -811,16 +609,6 @@ deep_research_citation_network_max_cites_per_paper: int = 20
 # Methodology assessment (experimental)
 deep_research_methodology_assessment_provider: Optional[str] = None  # Lightweight model
 deep_research_methodology_assessment_timeout: float = 60.0
-
-# Remote MCP servers (contingent — only configure after validation)
-# scite_mcp_url: str = "https://api.scite.ai/mcp"      # VALIDATE FIRST
-# scite_mcp_enabled: bool = False
-# consensus_mcp_url: str = "https://mcp.consensus.app/mcp"  # VALIDATE FIRST
-# consensus_mcp_enabled: bool = False
-
-# CORE
-core_api_key: Optional[str] = None
-core_enabled: bool = False
 ```
 
 ### Performance Impact
@@ -828,23 +616,17 @@ core_enabled: bool = False
 | Feature | API Calls | LLM Calls | Added Latency | Trigger |
 |---------|-----------|-----------|---------------|---------|
 | PDF extraction | 1 download per PDF | 0 (text extraction only) | 5-15s per paper | Automatic (profile-gated) |
-| Citation network | 2 calls per source (OpenAlex) | 0 (graph analysis) | 5-20s total | **User-triggered** |
+| Citation network | 2 calls per source (OpenAlex, 100 req/s) | 0 (graph analysis) | <1s for 15 sources | **User-triggered** |
 | Methodology assessment | 0 | 1 per academic source (batched) | 15-30s total | Automatic (experimental, profile-gated) |
-| MCP bridge | 1 call per operation | 0 | 3-10s per call | **Contingent on validation** |
-| CORE search | 1 per search query | 0 | 1-3s per query | Automatic (profile-gated) |
 
 ### Testing Budget
 
 | Item | Impl LOC | Test LOC | Test Focus |
 |------|----------|----------|------------|
 | 1. PDF Analysis (extend) | ~150-200 | ~80-120 | Section detection, prioritization, routing |
-| 2. Citation Network | ~400-500 | ~100-140 | Graph building, role classification, action handler |
-| 3. Methodology (experimental) | ~250-350 | ~80-100 | LLM extraction parsing, synthesis injection |
-| 4. MCP Bridge (contingent) | ~300-400 | ~100-140 | Connection, tool discovery, error handling |
-| 5. CORE Provider | ~150-200 | ~60-80 | Search, full text, rate limiting |
-| **Total** | **~1250-1650** | **~420-580** | |
-
-Note: Item 4 LOC estimate is contingent — if no MCP servers validate, this is 0 LOC.
+| 2. Citation Network | ~300-400 | ~80-120 | Graph building, role classification, action handler |
+| 3. Methodology (experimental) | ~200-300 | ~80-120 | LLM extraction parsing, synthesis injection |
+| **Total** | **~650-900** | **~240-360** | |
 
 ### File Impact Summary
 
@@ -858,9 +640,7 @@ Note: Item 4 LOC estimate is contingent — if no MCP servers validate, this is 
 | `models/sources.py` | Modify | 3 (StudyDesign, MethodologyAssessment) |
 | `phases/methodology_assessment.py` | **New** | 3 |
 | `phases/synthesis.py` | Modify | 3 (assessment injection into prompt) |
-| `handlers_deep_research.py` | Modify | 2 (network action), 5 (export if needed) |
-| `providers/mcp_bridge.py` | **New** (contingent) | 4 |
-| `providers/core_oa.py` | **New** | 5 |
+| `handlers_deep_research.py` | Modify | 2 (network action) |
 | `config/research.py` | Modify | All (new config fields) |
 
 ### Dependency Graph (Revised)
@@ -872,17 +652,11 @@ Note: Item 4 LOC estimate is contingent — if no MCP servers validate, this is 
                                                               │
 [2. Citation Network] (USER-TRIGGERED)──────────────────────┤
     Depends on: PLAN-2 item 1 (OpenAlex)                     │
-    Enhanced by: PLAN-2 item 4 (OpenCitations)               │
+    Uses OpenAlex exclusively (100 req/s)                    │
                                                               │
-[3. Methodology Assessment] (EXPERIMENTAL)──────────────────┤
-    Independent. Better with item 1 for full-text.           │
-    No numeric scoring — qualitative metadata only.          │
-                                                              │
-[4. MCP Bridge] (CONTINGENT — requires server validation)───┤
-    Blocked until validation gate passes.                     │
-                                                              │
-[5. CORE Provider]──────────────────────────────────────────┘
-    Independent.
+[3. Methodology Assessment] (EXPERIMENTAL)──────────────────┘
+    Independent. Better with item 1 for full-text.
+    No numeric scoring — qualitative metadata only.
 ```
 
-Items 1, 3, and 5 can proceed independently. Item 2 is user-triggered (not automatic). Item 4 is gated on validation.
+All three items can proceed independently. Item 2 is user-triggered (not automatic).

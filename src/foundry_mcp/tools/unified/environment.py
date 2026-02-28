@@ -1042,16 +1042,16 @@ def _handle_setup(
 
 def _handle_get_config(
     *,
-    config: ServerConfig,  # noqa: ARG001 - config object available but we read TOML directly
+    config: ServerConfig,
     sections: Optional[List[str]] = None,
     key: Optional[str] = None,
     path: Optional[str] = None,
     **_: Any,
 ) -> dict:
-    """Read configuration sections from foundry-mcp.toml.
+    """Read configuration sections.
 
-    Returns the requested sections from the TOML config file.
-    Supported sections: implement, git.
+    Returns the requested sections from config.
+    Supported sections: autonomy, git.
 
     Config file lookup order (first found wins):
     1. Explicit path parameter (if provided)
@@ -1075,7 +1075,7 @@ def _handle_get_config(
         return blocked
 
     # Validate sections parameter
-    supported_sections = {"implement", "git"}
+    supported_sections = {"autonomy", "git"}
     if sections is not None:
         if not isinstance(sections, list):
             return _validation_error(
@@ -1191,39 +1191,45 @@ def _handle_get_config(
         # Build result with only supported sections
         result: Dict[str, Any] = {}
 
-        if "implement" in requested and "implement" in data:
-            impl_data = data["implement"]
-            result["implement"] = {
-                "delegate": impl_data.get("delegate", False),
-                "parallel": impl_data.get("parallel", False),
+        if "autonomy" in requested:
+            result["autonomy"] = {
+                "posture": {
+                    "profile": config.autonomy_posture.profile,
+                },
+                "security": {
+                    "role": config.autonomy_security.role,
+                    "allow_lock_bypass": config.autonomy_security.allow_lock_bypass,
+                    "allow_gate_waiver": config.autonomy_security.allow_gate_waiver,
+                    "enforce_required_phase_gates": config.autonomy_security.enforce_required_phase_gates,
+                },
+                "session_defaults": {
+                    "gate_policy": config.autonomy_session_defaults.gate_policy,
+                    "stop_on_phase_completion": config.autonomy_session_defaults.stop_on_phase_completion,
+                    "auto_retry_fidelity_gate": config.autonomy_session_defaults.auto_retry_fidelity_gate,
+                    "max_tasks_per_session": config.autonomy_session_defaults.max_tasks_per_session,
+                    "max_consecutive_errors": config.autonomy_session_defaults.max_consecutive_errors,
+                    "max_fidelity_review_cycles_per_phase": config.autonomy_session_defaults.max_fidelity_review_cycles_per_phase,
+                },
             }
 
-        if "git" in requested and "git" in data:
-            git_data = data["git"]
-            result["git"] = {
-                "enabled": git_data.get("enabled", True),
-                "auto_commit": git_data.get("auto_commit", False),
-                "auto_push": git_data.get("auto_push", False),
-                "auto_pr": git_data.get("auto_pr", False),
-                "commit_cadence": git_data.get("commit_cadence", "task"),
-            }
-
-        # If sections were requested but not found, include them as empty/defaults
-        for section in requested:
-            if section not in result:
-                if section == "implement":
-                    result["implement"] = {
-                        "delegate": False,
-                        "parallel": False,
-                    }
-                elif section == "git":
-                    result["git"] = {
-                        "enabled": True,
-                        "auto_commit": False,
-                        "auto_push": False,
-                        "auto_pr": False,
-                        "commit_cadence": "task",
-                    }
+        if "git" in requested:
+            if "git" in data:
+                git_data = data["git"]
+                result["git"] = {
+                    "enabled": git_data.get("enabled", True),
+                    "auto_commit": git_data.get("auto_commit", False),
+                    "auto_push": git_data.get("auto_push", False),
+                    "auto_pr": git_data.get("auto_pr", False),
+                    "commit_cadence": git_data.get("commit_cadence", "task"),
+                }
+            else:
+                result["git"] = {
+                    "enabled": True,
+                    "auto_commit": False,
+                    "auto_push": False,
+                    "auto_pr": False,
+                    "commit_cadence": "task",
+                }
 
         # If a specific key was requested, extract just that value
         if key is not None:
