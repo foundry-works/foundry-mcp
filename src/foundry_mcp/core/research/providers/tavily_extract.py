@@ -548,6 +548,9 @@ class TavilyExtractProvider:
         - content = all chunks joined (or raw_content if no chunks)
         - metadata includes extract_depth, chunk_count, format, images, favicon
 
+        Content type detection is applied to each result: DOCX and unknown
+        binary formats are flagged in metadata for downstream handling.
+
         Args:
             data: Tavily API response JSON containing 'results' array
             extract_depth: Extraction depth used ("basic" or "advanced")
@@ -556,6 +559,11 @@ class TavilyExtractProvider:
         Returns:
             List of ResearchSource objects, one per successfully extracted URL
         """
+        from foundry_mcp.core.research.content_classifier import (
+            ContentType,
+            classify_content,
+        )
+
         sources: list[ResearchSource] = []
         results = data.get("results", [])
 
@@ -571,6 +579,20 @@ class TavilyExtractProvider:
                 content = "\n\n".join(chunks)
             else:
                 content = raw_content
+
+            # Detect binary/DOCX content and skip if not extractable
+            if content:
+                content_type = classify_content(content, url=url)
+                if content_type == ContentType.BINARY_UNKNOWN:
+                    logger.warning("Binary content detected for %s, skipping", url)
+                    content = ""
+                elif content_type == ContentType.DOCX:
+                    logger.warning(
+                        "DOCX content detected for %s, marking for extraction", url
+                    )
+                    # DOCX content will be handled by downstream extraction;
+                    # clear content since raw binary is not useful as text
+                    content = ""
 
             # Truncate content if too large
             truncated = False

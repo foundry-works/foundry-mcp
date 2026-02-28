@@ -12,6 +12,7 @@ import time
 from typing import Optional
 
 from foundry_mcp.core.observability import get_metrics
+from foundry_mcp.core.research.docx_extractor import DocxExtractor
 from foundry_mcp.core.research.models.sources import SourceQuality
 from foundry_mcp.core.research.pdf_extractor import PDFExtractor
 from foundry_mcp.core.research.summarization import (
@@ -44,8 +45,9 @@ class DocumentDigestor(
 
     The DocumentDigestor compresses source content into DigestPayload objects
     containing summaries, key points, and evidence snippets with citation
-    locators. It uses the ContentSummarizer for text compression and
-    PDFExtractor for handling PDF documents.
+    locators. It uses the ContentSummarizer for text compression,
+    PDFExtractor for handling PDF documents, and DocxExtractor for
+    handling DOCX documents.
 
     The digestion process:
     1. Check eligibility (content length, type)
@@ -58,16 +60,19 @@ class DocumentDigestor(
     Attributes:
         summarizer: ContentSummarizer instance for text summarization.
         pdf_extractor: PDFExtractor instance for PDF text extraction.
+        docx_extractor: DocxExtractor instance for DOCX text extraction.
         config: DigestConfig with generation parameters.
 
     Example:
         summarizer = ContentSummarizer(summarization_provider="claude")
         pdf_extractor = PDFExtractor()
+        docx_extractor = DocxExtractor()
         config = DigestConfig(min_content_length=1000)
 
         digestor = DocumentDigestor(
             summarizer=summarizer,
             pdf_extractor=pdf_extractor,
+            docx_extractor=docx_extractor,
             config=config,
         )
 
@@ -86,6 +91,7 @@ class DocumentDigestor(
         self,
         summarizer: ContentSummarizer,
         pdf_extractor: PDFExtractor,
+        docx_extractor: Optional[DocxExtractor] = None,
         config: Optional[DigestConfig] = None,
         cache: Optional[DigestCache] = None,
     ) -> None:
@@ -96,6 +102,9 @@ class DocumentDigestor(
                 and key points from content.
             pdf_extractor: PDFExtractor instance for extracting text from
                 PDF documents with page boundary tracking.
+            docx_extractor: Optional DocxExtractor instance for extracting
+                text from DOCX documents. If not provided, a default
+                instance is created.
             config: Optional DigestConfig for customizing digest generation.
                 If not provided, uses default configuration.
             cache: Optional DigestCache for caching digest results.
@@ -103,6 +112,7 @@ class DocumentDigestor(
         """
         self.summarizer = summarizer
         self.pdf_extractor = pdf_extractor
+        self.docx_extractor = docx_extractor or DocxExtractor()
         self.config = config or DigestConfig()
 
         # Initialize cache based on config

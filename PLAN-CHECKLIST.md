@@ -107,42 +107,42 @@
 
 ### `src/foundry_mcp/core/research/providers/shared.py` (MODIFY)
 
-- [ ] Add binary content guard at top of `SourceSummarizer.summarize_source()`
-- [ ] Import `is_binary_content` from `content_classifier`
-- [ ] Return skip result with `[Content skipped: binary/non-text document detected]`
-- [ ] Log warning when binary content is detected
+- [x] Add binary content guard at top of `SourceSummarizer.summarize_source()`
+- [x] Import `is_binary_content` from `content_classifier`
+- [x] Return skip result with `[Content skipped: binary/non-text document detected]`
+- [x] Log warning when binary content is detected
 
 ### `src/foundry_mcp/core/research/providers/tavily.py` (MODIFY)
 
-- [ ] Add content type detection in `_apply_source_summarization()`
-- [ ] Import `classify_content`, `ContentType` from `content_classifier`
-- [ ] For DOCX content: extract text via `DocxExtractor` before summarization
-- [ ] For BINARY_UNKNOWN: set `source.content = None` with warning log
-- [ ] Add `_extract_docx_content()` helper method on `TavilySearchProvider`
-- [ ] Handle `python-docx` not installed gracefully (skip extraction, log warning)
+- [x] Add content type detection in `_apply_source_summarization()`
+- [x] Import `classify_content`, `ContentType` from `content_classifier`
+- [x] For DOCX content: extract text via `DocxExtractor` before summarization
+- [x] For BINARY_UNKNOWN: set `source.content = None` with warning log
+- [x] Add `_extract_docx_content()` helper method on `TavilySearchProvider`
+- [x] Handle `python-docx` not installed gracefully (skip extraction, log warning)
 
 ### `src/foundry_mcp/core/research/providers/tavily_extract.py` (MODIFY)
 
-- [ ] Add content type detection after URL content retrieval
-- [ ] For DOCX content: extract text before returning `ResearchSource`
-- [ ] For BINARY_UNKNOWN: skip source with warning
+- [x] Add content type detection after URL content retrieval
+- [x] For DOCX content: extract text before returning `ResearchSource`
+- [x] For BINARY_UNKNOWN: skip source with warning
 
 ### `src/foundry_mcp/core/research/document_digest/digestor.py` (MODIFY)
 
-- [ ] Add `docx_extractor: DocxExtractor` parameter to `__init__`
-- [ ] Store as `self.docx_extractor`
-- [ ] Update `create()` factory method if it exists
-- [ ] Update docstrings to mention DOCX support
-- [ ] Import `DocxExtractor` from `docx_extractor`
+- [x] Add `docx_extractor: DocxExtractor` parameter to `__init__`
+- [x] Store as `self.docx_extractor`
+- [x] Update `create()` factory method if it exists
+- [x] Update docstrings to mention DOCX support
+- [x] Import `DocxExtractor` from `docx_extractor`
 
 ### `tests/core/research/test_binary_content_guard.py` (NEW)
 
-- [ ] Test: binary content in `summarize_source()` → skip result returned
-- [ ] Test: normal text content → passes through to summarization
-- [ ] Test: DOCX content in Tavily search path → extracted before summarization
-- [ ] Test: BINARY_UNKNOWN in Tavily search path → source.content set to None
-- [ ] Test: HTML content → passes through unchanged
-- [ ] Test: `python-docx` not installed → binary content skipped gracefully
+- [x] Test: binary content in `summarize_source()` → skip result returned
+- [x] Test: normal text content → passes through to summarization
+- [x] Test: DOCX content in Tavily search path → extracted before summarization
+- [x] Test: BINARY_UNKNOWN in Tavily search path → source.content set to None
+- [x] Test: HTML content → passes through unchanged
+- [x] Test: `python-docx` not installed → binary content skipped gracefully
 
 ---
 

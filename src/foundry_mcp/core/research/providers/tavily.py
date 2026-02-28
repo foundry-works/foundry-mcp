@@ -470,6 +470,37 @@ class TavilySearchProvider(SearchProvider):
 
         return sources
 
+    async def _extract_docx_content(self, content: str) -> str | None:
+        """Attempt to extract text from DOCX content.
+
+        Uses DocxExtractor to parse DOCX binary data that was received as
+        a string. Returns extracted text on success, None on failure.
+
+        Args:
+            content: Raw DOCX content (binary data as string).
+
+        Returns:
+            Extracted text, or None if extraction fails.
+        """
+        try:
+            from foundry_mcp.core.research.docx_extractor import DocxExtractor
+
+            extractor = DocxExtractor()
+            raw_bytes = content.encode("latin-1")
+            result = await extractor.extract(raw_bytes)
+            if result.success:
+                logger.info("Extracted %d chars from DOCX content", len(result.text))
+                return result.text
+            logger.warning("DOCX extraction returned no text")
+            return None
+        except RuntimeError:
+            # python-docx not installed
+            logger.warning("python-docx not installed, skipping DOCX extraction")
+            return None
+        except Exception as e:
+            logger.warning("DOCX extraction failed: %s", e)
+            return None
+
     async def _apply_source_summarization(
         self,
         sources: list[ResearchSource],
@@ -480,6 +511,9 @@ class TavilySearchProvider(SearchProvider):
         Stores original content in ``raw_content``, replaces ``content``
         with the formatted summary, and stores excerpts in metadata.
 
+        Before summarization, detects binary/DOCX content and either extracts
+        text (DOCX) or skips the source (unknown binary formats).
+
         On failure for any individual source, the original content is kept.
 
         Args:
@@ -488,7 +522,26 @@ class TavilySearchProvider(SearchProvider):
         Returns:
             The same list of sources with summarized content where successful.
         """
+        from foundry_mcp.core.research.content_classifier import (
+            ContentType,
+            classify_content,
+        )
         from foundry_mcp.core.research.providers.shared import SourceSummarizer
+
+        # Detect binary/DOCX content and extract text before summarization
+        for source in sources:
+            if source.content:
+                content_type = classify_content(source.content, url=source.url)
+                if content_type == ContentType.DOCX:
+                    extracted = await self._extract_docx_content(source.content)
+                    if extracted:
+                        source.content = extracted
+                    else:
+                        logger.warning("DOCX extraction failed for %s, skipping", source.url)
+                        source.content = None
+                elif content_type == ContentType.BINARY_UNKNOWN:
+                    logger.warning("Binary content detected for %s, skipping", source.url)
+                    source.content = None
 
         summarizer: SourceSummarizer = self._source_summarizer
         results = await summarizer.summarize_sources(sources)

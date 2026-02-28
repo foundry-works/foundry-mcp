@@ -770,6 +770,18 @@ class SourceSummarizer:
         Raises:
             Exception: Propagated from provider on failure (caller should catch).
         """
+        # Binary content guard — prevent sending garbled bytes to LLM
+        from foundry_mcp.core.research.content_classifier import is_binary_content
+
+        if is_binary_content(content):
+            logger.warning("Skipping summarization: binary content detected")
+            return SourceSummarizationResult(
+                executive_summary="[Content skipped: binary/non-text document detected]",
+                key_excerpts=[],
+                input_tokens=0,
+                output_tokens=0,
+            )
+
         from foundry_mcp.core.providers import (
             ProviderHooks,
             ProviderRequest,
