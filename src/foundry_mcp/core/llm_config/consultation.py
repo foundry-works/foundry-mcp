@@ -11,6 +11,8 @@ try:
 except ImportError:
     import tomli as tomllib  # Python < 3.11 fallback
 
+from foundry_mcp.config.parsing import _expand_alias, _expand_alias_list
+
 from ._paths import _default_config_search_paths
 from .provider_spec import ProviderSpec
 
@@ -228,30 +230,41 @@ class ConsultationConfig:
             raise ValueError("Invalid workflow configurations:\n" + "\n".join(workflow_errors))
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ConsultationConfig":
+    def from_dict(
+        cls,
+        data: Dict[str, Any],
+        *,
+        aliases: Optional[Dict[str, str]] = None,
+    ) -> "ConsultationConfig":
         """Create ConsultationConfig from a dictionary (typically the [consultation] section).
 
         Args:
             data: Dictionary with consultation configuration values
+            aliases: Optional provider alias map from ``[providers]`` section.
 
         Returns:
             ConsultationConfig instance
         """
         config = cls()
+        _a = aliases or {}
 
         # Parse priority list
         if "priority" in data:
             priority = data["priority"]
             if isinstance(priority, list):
-                config.priority = [str(p) for p in priority]
+                expanded = [str(p) for p in priority]
+                config.priority = _expand_alias_list(expanded, _a) if _a else expanded
             else:
                 logger.warning(f"Invalid priority format (expected list): {type(priority)}")
 
-        # Parse overrides
+        # Parse overrides (expand alias keys)
         if "overrides" in data:
             overrides = data["overrides"]
             if isinstance(overrides, dict):
-                config.overrides = {str(k): dict(v) for k, v in overrides.items()}
+                if _a:
+                    config.overrides = {_expand_alias(str(k), _a): dict(v) for k, v in overrides.items()}
+                else:
+                    config.overrides = {str(k): dict(v) for k, v in overrides.items()}
             else:
                 logger.warning(f"Invalid overrides format (expected dict): {type(overrides)}")
 
@@ -306,7 +319,13 @@ class ConsultationConfig:
         with open(path, "rb") as f:
             data = tomllib.load(f)
 
-        return cls.from_dict(data.get("consultation", {}))
+        # Load provider aliases from the same TOML (if present)
+        raw_aliases = data.get("providers", {})
+        aliases: Dict[str, str] = {
+            k: v for k, v in raw_aliases.items() if isinstance(v, str)
+        } if isinstance(raw_aliases, dict) else {}
+
+        return cls.from_dict(data.get("consultation", {}), aliases=aliases)
 
     @classmethod
     def from_env(cls) -> "ConsultationConfig":

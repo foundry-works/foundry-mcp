@@ -71,6 +71,20 @@ def _parse_provider_spec(spec: str) -> Tuple[str, Optional[str]]:
         raise
 
 
+def _expand_alias(value: str, aliases: dict[str, str]) -> str:
+    """Expand a provider alias if it matches exactly.
+
+    If *value* is a key in *aliases*, return the mapped string.
+    Otherwise return *value* unchanged.  No recursive expansion.
+    """
+    return aliases.get(value, value)
+
+
+def _expand_alias_list(values: list[str], aliases: dict[str, str]) -> list[str]:
+    """Expand provider aliases in a list of specs."""
+    return [_expand_alias(v, aliases) for v in values]
+
+
 def _parse_bool(value: Any) -> bool:
     if isinstance(value, bool):
         return value

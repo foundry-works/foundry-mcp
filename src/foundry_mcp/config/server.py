@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as get_package_version
 from pathlib import Path
-from typing import List, Optional, TypeVar
+from typing import Dict, List, Optional, TypeVar
 
 from foundry_mcp.config.autonomy import (
     AutonomyPostureConfig,
@@ -89,6 +89,9 @@ class ServerConfig(_ServerConfigLoader):
     autonomy_security: AutonomySecurityConfig = field(default_factory=AutonomySecurityConfig)
     autonomy_posture: AutonomyPostureConfig = field(default_factory=AutonomyPostureConfig)
     autonomy_session_defaults: AutonomySessionDefaultsConfig = field(default_factory=AutonomySessionDefaultsConfig)
+
+    # Provider aliases ([providers] section — expanded at parse time)
+    provider_aliases: Dict[str, str] = field(default_factory=dict)
 
     # Tool registration control
     disabled_tools: List[str] = field(default_factory=list)

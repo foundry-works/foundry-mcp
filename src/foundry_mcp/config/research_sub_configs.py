@@ -147,6 +147,35 @@ class ModelTierConfig:
 
 
 @dataclass(frozen=True)
+class FallbackChainConfig:
+    """Named fallback provider chains for deep research phases.
+
+    Allows defining reusable provider lists (chains) and assigning them
+    to deep-research phases.  Explicit per-phase provider lists
+    (``deep_research_{phase}_providers``) still take priority.
+
+    Example TOML::
+
+        [research.fallback_chains]
+        strong = ["pro", "codex", "opus"]
+        fast   = ["fast", "sonnet", "codex"]
+
+        [research.phase_fallbacks]
+        planning  = "fast"
+        synthesis = "strong"
+
+    Attributes:
+        chains: Mapping of chain name to ordered list of provider specs.
+        phase_assignments: Mapping of phase name to chain name.
+        enabled: Whether fallback chain resolution is active.
+    """
+
+    chains: Dict[str, List[str]] = field(default_factory=dict)
+    phase_assignments: Dict[str, str] = field(default_factory=dict)
+    enabled: bool = False
+
+
+@dataclass(frozen=True)
 class DeepResearchSettings:
     """Deep research workflow configuration.
 

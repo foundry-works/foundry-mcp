@@ -73,6 +73,7 @@ class _ServerConfigLoader:
         server_name: str
         server_version: str
         disabled_tools: List[str]
+        provider_aliases: Dict[str, str]
         git: Any
         observability: ObservabilityConfig
         health: HealthConfig
@@ -224,9 +225,27 @@ class _ServerConfigLoader:
             if "test" in data:
                 self.test = TestConfig.from_toml_dict(data["test"])
 
+            # Provider aliases ([providers] section)
+            if "providers" in data:
+                raw_aliases = data["providers"]
+                if isinstance(raw_aliases, dict):
+                    validated: Dict[str, str] = {}
+                    for k, v in raw_aliases.items():
+                        if isinstance(v, str):
+                            validated[k] = v
+                        else:
+                            logger.warning(
+                                "Provider alias %r must be a string, got %s — ignoring",
+                                k,
+                                type(v).__name__,
+                            )
+                    self.provider_aliases = validated
+
             # Research workflows settings
             if "research" in data:
-                self.research = ResearchConfig.from_toml_dict(data["research"])
+                self.research = ResearchConfig.from_toml_dict(
+                    data["research"], aliases=self.provider_aliases
+                )
 
             # Autonomy posture profile (applies defaults that direct sections can override)
             if "autonomy_posture" in data:

@@ -19,6 +19,34 @@
 # 5. Built-in defaults
 
 # =============================================================================
+# Provider Aliases
+# =============================================================================
+#
+# Define short aliases for provider specs. Aliases are expanded at config
+# parse time — runtime code is untouched. Any string field or list of
+# strings that matches an alias key will be expanded.
+#
+# [providers]
+# pro    = "[cli]gemini:pro"
+# fast   = "[cli]gemini:flash"
+# opus   = "[cli]claude:opus"
+# codex  = "[cli]codex:gpt-5.2-codex"
+# sonnet = "[cli]claude:sonnet"
+#
+# Then use aliases anywhere a provider spec is expected:
+#
+#   [research]
+#   default_provider = "pro"                       # → "[cli]gemini:pro"
+#   consensus_providers = ["pro", "codex", "opus"] # → expanded list
+#
+#   [consultation]
+#   priority = ["codex", "pro", "opus"]            # → expanded list
+#
+#   [research.model_tiers]
+#   frontier = "pro"                               # → "[cli]gemini:pro"
+#   efficient = "fast"                             # → "[cli]gemini:flash"
+
+# =============================================================================
 # Workspace Configuration
 # =============================================================================
 
@@ -393,8 +421,53 @@ thinkdeep_max_depth = 5
 ideate_perspectives = ["technical", "creative", "practical", "visionary"]
 
 # -----------------------------------------------------------------------------
+# Timeout Presets
+# -----------------------------------------------------------------------------
+# A single preset knob scales all *_timeout default values. Individual
+# overrides (either flat keys or keys inside [research.timeouts]) still win.
+#
+# Presets:
+#   fast    = 0.5x  (fast local models, low-latency APIs)
+#   default = 1.0x  (no change — baseline)
+#   relaxed = 1.5x  (CLI providers with variable latency)
+#   patient = 3.0x  (slow/overloaded providers, complex queries)
+#
+# [research.timeouts]
+# preset = "relaxed"
+# # Individual overrides (full field names):
+# # deep_research_synthesis_timeout = 900.0
+
+# -----------------------------------------------------------------------------
+# Fallback Provider Chains
+# -----------------------------------------------------------------------------
+# Named provider chains reduce duplication across per-phase fallback lists.
+# Chain values are expanded through [providers] aliases (if defined).
+#
+# [research.fallback_chains]
+# strong = ["pro", "codex", "opus"]        # uses aliases from [providers]
+# fast   = ["fast", "sonnet", "codex"]
+#
+# [research.phase_fallbacks]
+# planning  = "fast"       # uses the "fast" chain
+# synthesis = "strong"     # uses the "strong" chain
+#
+# Explicit per-phase lists (deep_research_planning_providers = [...])
+# still take priority over chain assignments.
+
+# -----------------------------------------------------------------------------
 # Deep Research Settings
 # -----------------------------------------------------------------------------
+#
+# These can also be specified under a nested [research.deep_research] table
+# without the "deep_research_" prefix:
+#
+#   [research.deep_research]
+#   max_iterations = 3
+#   max_sub_queries = 5
+#   timeout = 600.0
+#   planning_timeout = 600.0
+#
+# Flat keys (deep_research_max_iterations = 3) take priority over nested keys.
 
 # Maximum refinement iterations
 deep_research_max_iterations = 3
@@ -673,6 +746,16 @@ semantic_scholar = 20
 # Tavily Search Provider Configuration
 # -----------------------------------------------------------------------------
 # Tavily is optimized for AI applications. Get API key at https://tavily.com/
+#
+# These can also be specified under a nested [research.tavily] table
+# without the "tavily_" prefix:
+#
+#   [research.tavily]
+#   search_depth = "basic"
+#   topic = "general"
+#   include_images = false
+#
+# Flat keys (tavily_search_depth = "basic") take priority over nested keys.
 
 # Search depth: affects result quality and API credit cost
 # - "basic"      : Standard search (default, 1x credits)
@@ -781,6 +864,15 @@ deep_research_archive_retention_days = 30
 # -----------------------------------------------------------------------------
 # Perplexity provides AI-powered search with citations.
 # Get API key at https://www.perplexity.ai/settings/api
+#
+# These can also be specified under a nested [research.perplexity] table
+# without the "perplexity_" prefix:
+#
+#   [research.perplexity]
+#   search_context_size = "medium"
+#   max_tokens = 50000
+#
+# Flat keys (perplexity_search_context_size = "medium") take priority.
 
 # Search context size: affects result depth and API cost
 # - "low"    : Minimal context, fastest responses
@@ -826,6 +918,15 @@ perplexity_max_tokens_per_page = 2048
 # -----------------------------------------------------------------------------
 # Semantic Scholar provides academic paper search with TLDR summaries.
 # API key is optional but recommended for higher rate limits.
+#
+# These can also be specified under a nested [research.semantic_scholar] table
+# without the "semantic_scholar_" prefix:
+#
+#   [research.semantic_scholar]
+#   sort_by = "citationCount"
+#   sort_order = "desc"
+#
+# Flat keys (semantic_scholar_sort_by = "citationCount") take priority.
 
 # Filter by publication types (list of types)
 # Valid types: Review, JournalArticle, Conference, CaseReport, ClinicalTrial,

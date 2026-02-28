@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Tuple
 
-from foundry_mcp.config.parsing import _parse_bool, _parse_provider_spec
+from foundry_mcp.config.parsing import _expand_alias, _expand_alias_list, _parse_bool, _parse_provider_spec
 
 if TYPE_CHECKING:
     from foundry_mcp.core.llm_config.provider_spec import ProviderSpec
@@ -342,12 +342,44 @@ class ResearchConfig:
         "deep_research_digest_policy": ("Digest policy has been removed; digestion is now handled automatically."),
     }
 
+    @staticmethod
+    def _flatten_sub_table(data: Dict[str, Any], prefix: str) -> None:
+        """Flatten a TOML sub-table into the parent dict with a prefix.
+
+        Mutates *data* in place.  Flat keys already in *data* take priority.
+        Sub-table dicts are skipped to avoid collisions with dedicated parsers
+        (e.g. ``model_tiers`` inside ``[research.deep_research]``).
+
+        Example::
+
+            # [research.deep_research]
+            # max_iterations = 3
+            # => data["deep_research_max_iterations"] = 3
+        """
+        sub = data.pop(prefix, None)
+        if not isinstance(sub, dict):
+            return
+        for key, value in sub.items():
+            if isinstance(value, dict):
+                continue  # skip nested sub-tables
+            flat_key = f"{prefix}_{key}"
+            if flat_key not in data:
+                data[flat_key] = value
+
     @classmethod
-    def from_toml_dict(cls, data: Dict[str, Any]) -> "ResearchConfig":
+    def from_toml_dict(
+        cls,
+        data: Dict[str, Any],
+        *,
+        aliases: Optional[Dict[str, str]] = None,
+    ) -> "ResearchConfig":
         """Create config from TOML dict (typically [research] section).
 
         Args:
             data: Dict from TOML parsing
+            aliases: Optional provider alias map from ``[providers]`` section.
+                When supplied, alias keys appearing in provider string/list
+                fields are expanded to their mapped values.
 
         Returns:
             ResearchConfig instance
@@ -360,6 +392,133 @@ class ResearchConfig:
                     DeprecationWarning,
                     stacklevel=2,
                 )
+
+        # Flatten TOML sub-tables into prefixed flat keys.
+        # e.g. [research.deep_research] max_iterations=3  →  deep_research_max_iterations=3
+        # Flat keys in data take priority; dict sub-values are skipped.
+        cls._flatten_sub_table(data, "deep_research")
+        cls._flatten_sub_table(data, "tavily")
+        cls._flatten_sub_table(data, "perplexity")
+        cls._flatten_sub_table(data, "semantic_scholar")
+
+        # Expand provider aliases from the [providers] TOML section.
+        # Every string field ending in _provider and every list field ending
+        # in _providers is checked; model_tiers tier values are also expanded.
+        _a = aliases or {}
+        if _a:
+            # Expand aliases in all provider string and list fields.
+            # Keys like default_provider, deep_research_planning_provider, etc.
+            # are all caught by the suffix match.
+            for key, val in list(data.items()):
+                if (key == "default_provider" or key.endswith("_provider")) and isinstance(val, str):
+                    data[key] = _expand_alias(val, _a)
+                elif (key == "consensus_providers" or key.endswith("_providers")) and isinstance(val, list):
+                    data[key] = _expand_alias_list(val, _a)
+            # Expand inside model_tiers tier values (string form)
+            tiers = data.get("model_tiers")
+            if isinstance(tiers, dict):
+                for tier_key, tier_val in tiers.items():
+                    if isinstance(tier_val, str):
+                        tiers[tier_key] = _expand_alias(tier_val, _a)
+                    elif isinstance(tier_val, dict) and "provider" in tier_val:
+                        tier_val["provider"] = _expand_alias(tier_val["provider"], _a)
+
+        # ── Timeout presets ──────────────────────────────────────────────
+        # [research.timeouts] sub-table with optional ``preset`` key and
+        # individual timeout overrides.  The preset applies a multiplier to
+        # every *_timeout default that was not explicitly set in *data*.
+        _TIMEOUT_DEFAULTS: Dict[str, float] = {
+            "default_timeout": 360.0,
+            "deep_research_timeout": 2400.0,
+            "deep_research_planning_timeout": 360.0,
+            "deep_research_synthesis_timeout": 600.0,
+            "deep_research_reflection_timeout": 60.0,
+            "deep_research_evaluation_timeout": 360.0,
+            "deep_research_supervision_wall_clock_timeout": 1800.0,
+            "deep_research_summarization_timeout": 60.0,
+            "deep_research_digest_timeout": 120.0,
+            "summarization_timeout": 60.0,
+        }
+        _TIMEOUT_PRESETS: Dict[str, float] = {
+            "fast": 0.5,
+            "default": 1.0,
+            "relaxed": 1.5,
+            "patient": 3.0,
+        }
+        timeouts_raw = data.pop("timeouts", None)
+        if isinstance(timeouts_raw, dict):
+            preset_name = str(timeouts_raw.get("preset", "default"))
+            timeout_multiplier = _TIMEOUT_PRESETS.get(preset_name)
+            if timeout_multiplier is None:
+                logger.warning(
+                    "Unknown timeout preset %r — using 'default' (1.0x). "
+                    "Valid presets: %s",
+                    preset_name,
+                    ", ".join(sorted(_TIMEOUT_PRESETS)),
+                )
+                timeout_multiplier = 1.0
+            # Individual overrides from [research.timeouts] take priority
+            for key, value in timeouts_raw.items():
+                if key != "preset" and key.endswith("_timeout"):
+                    data[key] = float(value)
+            # Apply multiplier to defaults for keys NOT explicitly set
+            if timeout_multiplier != 1.0:
+                for key, base_value in _TIMEOUT_DEFAULTS.items():
+                    if key not in data:
+                        data[key] = base_value * timeout_multiplier
+
+        # ── Fallback provider chains ────────────────────────────────────
+        # [research.fallback_chains] defines named provider lists.
+        # [research.phase_fallbacks] maps phase names to chain names.
+        # Explicit per-phase lists (deep_research_{phase}_providers) win.
+        _PHASE_TO_FIELD: Dict[str, str] = {
+            "planning": "deep_research_planning_providers",
+            "synthesis": "deep_research_synthesis_providers",
+        }
+        fallback_chains_raw = data.pop("fallback_chains", None)
+        phase_fallbacks_raw = data.pop("phase_fallbacks", None)
+
+        if isinstance(fallback_chains_raw, dict):
+            # Build validated chain map, expanding aliases
+            chains: Dict[str, list] = {}
+            for chain_name, providers in fallback_chains_raw.items():
+                if isinstance(providers, list):
+                    chains[chain_name] = _expand_alias_list(providers, _a) if _a else list(providers)
+                else:
+                    logger.warning(
+                        "Fallback chain %r must be a list of providers — ignoring",
+                        chain_name,
+                    )
+
+            if isinstance(phase_fallbacks_raw, dict):
+                for phase_name, chain_name in phase_fallbacks_raw.items():
+                    if phase_name not in _PHASE_TO_FIELD:
+                        logger.warning(
+                            "Unknown phase %r in [research.phase_fallbacks] — "
+                            "valid phases: %s",
+                            phase_name,
+                            ", ".join(sorted(_PHASE_TO_FIELD)),
+                        )
+                        continue
+                    if chain_name not in chains:
+                        logger.warning(
+                            "Unknown chain %r for phase %r in "
+                            "[research.phase_fallbacks] — defined chains: %s",
+                            chain_name,
+                            phase_name,
+                            ", ".join(sorted(chains)) or "(none)",
+                        )
+                        continue
+                    field_name = _PHASE_TO_FIELD[phase_name]
+                    # Only populate if no explicit per-phase list was provided
+                    if field_name not in data:
+                        data[field_name] = chains[chain_name]
+        elif phase_fallbacks_raw is not None:
+            # phase_fallbacks without fallback_chains — warn
+            logger.warning(
+                "[research.phase_fallbacks] requires [research.fallback_chains] "
+                "to be defined — ignoring",
+            )
 
         # Parse consensus_providers - handle both string and list
         consensus_providers = data.get("consensus_providers", ["gemini", "claude"])
@@ -581,9 +740,14 @@ class ResearchConfig:
         import dataclasses as _dc
 
         known_keys = {f.name for f in _dc.fields(cls)} | set(cls._DEPRECATED_FIELDS)
-        # Backward-compat aliases and nested sections that are also accepted
+        # Backward-compat aliases, nested sections, and sub-table names
         known_keys.add("deep_research_topic_max_searches")
         known_keys.add("model_tiers")
+        # Sub-table names consumed by _flatten_sub_table (may remain if
+        # they contained only dict sub-values that were skipped)
+        known_keys.update(("deep_research", "tavily", "perplexity", "semantic_scholar"))
+        known_keys.add("timeouts")
+        known_keys.update(("fallback_chains", "phase_fallbacks"))
         unknown_keys = set(data.keys()) - known_keys
         for key in sorted(unknown_keys):
             logger.warning(
