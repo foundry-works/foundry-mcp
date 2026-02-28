@@ -78,6 +78,7 @@ class StubSynthesis(SynthesisPhaseMixin):
 
     def __init__(self) -> None:
         self.config = MagicMock()
+        self.config.token_safety_margin = 0.15
         self.memory = MagicMock()
 
 

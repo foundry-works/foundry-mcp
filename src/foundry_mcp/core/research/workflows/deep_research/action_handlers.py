@@ -21,7 +21,7 @@ from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
 )
 from foundry_mcp.core.research.models.sources import ResearchMode
-from foundry_mcp.core.research.workflows.base import MAX_PROMPT_LENGTH, WorkflowResult
+from foundry_mcp.core.research.workflows.base import MAX_PROMPT_LENGTH, WorkflowResult, _max_prompt_chars_for_model
 from foundry_mcp.core.research.workflows.deep_research._constants import (
     MAX_CONCURRENT_PROVIDERS,
     MAX_ITERATIONS,
@@ -99,13 +99,17 @@ class ActionHandlersMixin:
                 error="Query is required to start research",
             )
 
-        # Input bounds validation
+        # Input bounds validation — derive limit from target model's context window
+        max_chars = _max_prompt_chars_for_model(
+            provider_id or getattr(self.config, "default_provider", None),
+            None,  # model not yet resolved at this point
+        )
         violations: list[str] = []
-        if len(query) > MAX_PROMPT_LENGTH:
-            violations.append(f"query length {len(query)} exceeds maximum {MAX_PROMPT_LENGTH} characters")
-        if system_prompt and len(system_prompt) > MAX_PROMPT_LENGTH:
+        if len(query) > max_chars:
+            violations.append(f"query length {len(query)} exceeds maximum {max_chars} characters")
+        if system_prompt and len(system_prompt) > max_chars:
             violations.append(
-                f"system_prompt length {len(system_prompt)} exceeds maximum {MAX_PROMPT_LENGTH} characters"
+                f"system_prompt length {len(system_prompt)} exceeds maximum {max_chars} characters"
             )
         if max_iterations > MAX_ITERATIONS:
             violations.append(f"max_iterations {max_iterations} exceeds maximum {MAX_ITERATIONS}")

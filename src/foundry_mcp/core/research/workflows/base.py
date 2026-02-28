@@ -14,6 +14,7 @@ from typing import Any, List, Optional
 from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.errors.provider import ContextWindowError, ProviderTimeoutError
 from foundry_mcp.core.llm_config.provider_spec import ProviderSpec
+from foundry_mcp.core.research.token_management import get_effective_context, get_model_limits
 from foundry_mcp.core.providers import (
     ProviderContext,
     ProviderHooks,
@@ -29,9 +30,36 @@ from foundry_mcp.core.research.memory import ResearchMemory
 
 logger = logging.getLogger(__name__)
 
-# Input bounds validation constant
-# ~200k chars ≈ 50k tokens at ~4 chars/token, well within 200k-token model limits
-MAX_PROMPT_LENGTH = 200_000  # Maximum prompt length in characters
+# Fallback max prompt length (chars) when model context window is unknown.
+# ~600k chars ≈ 150k tokens at ~4 chars/token.  When the target model is
+# known, _max_prompt_chars_for_model() derives a tighter limit from the
+# model's actual context window in the token-management registry.
+MAX_PROMPT_LENGTH = 600_000
+
+
+# Approximate chars-per-token ratio for converting token budgets to char limits.
+_CHARS_PER_TOKEN = 4
+# Fraction of the model's effective context to use as the char-limit ceiling.
+# Leaves headroom for system prompt + output tokens.
+_CONTEXT_USAGE_FRACTION = 0.75
+
+
+def _max_prompt_chars_for_model(
+    provider_id: str | None,
+    model: str | None,
+) -> int:
+    """Derive a max prompt character limit from the model's context window.
+
+    Returns ``MAX_PROMPT_LENGTH`` when provider/model are unknown.
+    """
+    if not provider_id:
+        return MAX_PROMPT_LENGTH
+    try:
+        limits = get_model_limits(provider_id, model)
+        effective_tokens = get_effective_context(limits)
+        return int(effective_tokens * _CHARS_PER_TOKEN * _CONTEXT_USAGE_FRACTION)
+    except Exception:
+        return MAX_PROMPT_LENGTH
 
 
 def _estimate_prompt_tokens(prompt: str, system_prompt: str | None = None) -> int:
@@ -327,12 +355,18 @@ class ResearchWorkflowBase(ABC):
         """
         effective_timeout = timeout or self.config.default_timeout
 
-        # Input bounds validation: reject oversized prompts early
-        if len(prompt) > MAX_PROMPT_LENGTH:
+        # Input bounds validation: reject oversized prompts early.
+        # Derive char limit from the target model's context window when
+        # provider/model are known; fall back to the module constant.
+        effective_max = _max_prompt_chars_for_model(
+            provider_id or getattr(self.config, "default_provider", None),
+            model,
+        )
+        if len(prompt) > effective_max:
             return WorkflowResult(
                 success=False,
                 content="",
-                error=(f"Prompt length {len(prompt)} exceeds maximum {MAX_PROMPT_LENGTH} characters"),
+                error=(f"Prompt length {len(prompt)} exceeds maximum {effective_max} characters"),
                 metadata={"phase": phase, "validation_error": "prompt_too_long"},
             )
 

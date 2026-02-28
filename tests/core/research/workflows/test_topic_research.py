@@ -2820,17 +2820,23 @@ class TestExtractContentVisibility:
             tool="extract_content",
             arguments={"urls": ["https://quantum.example.com/overview"]},
         )
-        result_text = await mixin._handle_extract_tool(
-            tool_call=tool_call,
-            sub_query=sub_query,
-            state=state,
-            result=TopicResearchResult(sub_query_id=sub_query.id),
-            seen_urls=set(),
-            seen_titles={},
-            state_lock=asyncio.Lock(),
-            semaphore=asyncio.Semaphore(3),
-            timeout=30.0,
-        )
+        # Bypass DNS resolution for test domains (validate_extract_url does
+        # resolve_dns=True which fails on non-existent hostnames).
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research._injection_protection.validate_extract_url",
+            return_value=True,
+        ):
+            result_text = await mixin._handle_extract_tool(
+                tool_call=tool_call,
+                sub_query=sub_query,
+                state=state,
+                result=TopicResearchResult(sub_query_id=sub_query.id),
+                seen_urls=set(),
+                seen_titles={},
+                state_lock=asyncio.Lock(),
+                semaphore=asyncio.Semaphore(3),
+                timeout=30.0,
+            )
 
         assert "NOVELTY: [NEW]" in result_text
         assert extracted.metadata.get("novelty_tag") == "new"

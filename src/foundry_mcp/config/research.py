@@ -1556,6 +1556,7 @@ class ResearchConfig:
         "topic_reflection": ["topic_reflection", "reflection"],
         "summarization": ["summarization"],
         "compression": ["compression"],
+        "global_compression": ["global_compression", "compression"],
         "clarification": ["clarification", "research"],
         "evaluation": ["evaluation", "research"],
         "brief": ["brief", "research"],
@@ -1590,6 +1591,7 @@ class ResearchConfig:
         "delegation": "standard",
         "summarization": "efficient",
         "compression": "efficient",
+        "global_compression": "efficient",
     }
 
     def resolve_model_for_role(self, role: str) -> Tuple[str, Optional[str]]:

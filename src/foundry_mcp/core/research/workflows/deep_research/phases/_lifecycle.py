@@ -683,7 +683,11 @@ def _is_context_window_exceeded(result: Any) -> bool:
     """
     if not hasattr(result, "metadata") or not result.metadata:
         return False
-    return result.metadata.get("error_type") == "context_window_exceeded"
+    md = result.metadata
+    return (
+        md.get("error_type") == "context_window_exceeded"
+        or md.get("validation_error") == "prompt_too_long"
+    )
 
 
 async def execute_llm_call(

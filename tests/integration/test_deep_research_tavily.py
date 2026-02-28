@@ -90,7 +90,7 @@ class TestResearchModeSmartDefaults:
 
     def test_general_mode_uses_basic_search_depth(self, base_config):
         """General research mode should use basic search depth by default."""
-        config = ResearchConfig(**{**base_config.__dict__, "deep_research_mode": "general"})
+        config = ResearchConfig(**{**{k: v for k, v in base_config.__dict__.items() if not k.startswith("_")}, "deep_research_mode": "general"})
         assert config.deep_research_mode == "general"
         assert config.tavily_search_depth == "basic"
 
@@ -132,7 +132,7 @@ class TestConfigOverrideBehavior:
 
     def test_config_search_depth_propagates_to_workflow(self, base_config, mock_memory, mock_tavily_search_response):
         """Search depth from config should propagate to Tavily search calls."""
-        config = ResearchConfig(**{**base_config.__dict__, "tavily_search_depth": "advanced"})
+        config = ResearchConfig(**{**{k: v for k, v in base_config.__dict__.items() if not k.startswith("_")}, "tavily_search_depth": "advanced"})
 
         workflow = DeepResearchWorkflow(config=config, memory=mock_memory)
 
@@ -141,7 +141,7 @@ class TestConfigOverrideBehavior:
 
     def test_config_topic_propagates_to_workflow(self, base_config, mock_memory):
         """Topic from config should propagate to Tavily search calls."""
-        config = ResearchConfig(**{**base_config.__dict__, "tavily_topic": "news", "tavily_news_days": 30})
+        config = ResearchConfig(**{**{k: v for k, v in base_config.__dict__.items() if not k.startswith("_")}, "tavily_topic": "news", "tavily_news_days": 30})
 
         workflow = DeepResearchWorkflow(config=config, memory=mock_memory)
 
@@ -150,7 +150,7 @@ class TestConfigOverrideBehavior:
 
     def test_config_country_propagates_to_workflow(self, base_config, mock_memory):
         """Country from config should propagate to Tavily search calls."""
-        config = ResearchConfig(**{**base_config.__dict__, "tavily_country": "US"})
+        config = ResearchConfig(**{**{k: v for k, v in base_config.__dict__.items() if not k.startswith("_")}, "tavily_country": "US"})
 
         workflow = DeepResearchWorkflow(config=config, memory=mock_memory)
 
@@ -170,7 +170,7 @@ class TestTavilySearchParameterPropagation:
         """_get_tavily_search_kwargs should include all configured parameters."""
         config = ResearchConfig(
             **{
-                **base_config.__dict__,
+                **{k: v for k, v in base_config.__dict__.items() if not k.startswith("_")},
                 "tavily_search_depth": "advanced",
                 "tavily_topic": "news",
                 "tavily_news_days": 7,
@@ -205,7 +205,7 @@ class TestTavilySearchParameterPropagation:
         """_get_tavily_search_kwargs should omit None values."""
         config = ResearchConfig(
             **{
-                **base_config.__dict__,
+                **{k: v for k, v in base_config.__dict__.items() if not k.startswith("_")},
                 "tavily_search_depth": "basic",
                 "tavily_topic": "general",
                 # tavily_news_days is None by default
@@ -275,7 +275,7 @@ class TestExtractFollowupIntegration:
         """Extract follow-up should be enabled when config flag is True."""
         config = ResearchConfig(
             **{
-                **base_config.__dict__,
+                **{k: v for k, v in base_config.__dict__.items() if not k.startswith("_")},
                 "deep_research_enable_extract": True,
             }
         )
@@ -289,7 +289,7 @@ class TestExtractFollowupIntegration:
         """Extract max URLs per iteration should be configurable."""
         config = ResearchConfig(
             **{
-                **base_config.__dict__,
+                **{k: v for k, v in base_config.__dict__.items() if not k.startswith("_")},
                 "deep_research_enable_extract": True,
                 "deep_research_extract_max_per_iteration": 10,
             }
@@ -304,7 +304,7 @@ class TestExtractFollowupIntegration:
         """_execute_extract_followup_async method should exist on workflow."""
         config = ResearchConfig(
             **{
-                **base_config.__dict__,
+                **{k: v for k, v in base_config.__dict__.items() if not k.startswith("_")},
                 "deep_research_enable_extract": True,
             }
         )
@@ -336,7 +336,7 @@ class TestWorkflowStateIntegration:
 
     def test_state_tracks_follow_links(self, base_config, mock_memory):
         """State should track follow_links setting."""
-        config = ResearchConfig(**{**base_config.__dict__, "deep_research_follow_links": True})
+        config = ResearchConfig(**{**{k: v for k, v in base_config.__dict__.items() if not k.startswith("_")}, "deep_research_follow_links": True})
 
         state = DeepResearchState(
             original_query="test query",
@@ -349,7 +349,7 @@ class TestWorkflowStateIntegration:
         """State should be initializable from config settings."""
         config = ResearchConfig(
             **{
-                **base_config.__dict__,
+                **{k: v for k, v in base_config.__dict__.items() if not k.startswith("_")},
                 "deep_research_max_iterations": 5,
                 "deep_research_max_sub_queries": 10,
                 "deep_research_max_sources": 15,

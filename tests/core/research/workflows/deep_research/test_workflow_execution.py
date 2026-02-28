@@ -48,6 +48,9 @@ class _BackgroundTask:
     def __init__(self, *, is_cancelled: bool = False) -> None:
         self.is_cancelled = is_cancelled
 
+    def touch(self) -> None:
+        """Record liveness (no-op in tests)."""
+
 
 class StubWorkflow(WorkflowExecutionMixin):
     """Concrete class for testing WorkflowExecutionMixin in isolation.

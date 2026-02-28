@@ -755,8 +755,13 @@ class TestDeepResearchWorkflow:
         workflow = DeepResearchWorkflow(mock_config, mock_memory)
         state = DeepResearchState(original_query="Status check test")
 
+        import threading
+        status_checked = threading.Event()
+
         async def slow_execute(*args, **kwargs):
-            await asyncio.sleep(0.2)
+            # Block until the status check has been performed
+            while not status_checked.is_set():
+                await asyncio.sleep(0.01)
             return WorkflowResult(success=True, content="done")
 
         with patch.object(workflow, "_execute_workflow_async", side_effect=slow_execute):
@@ -772,7 +777,8 @@ class TestDeepResearchWorkflow:
             # Check status while running - this should NOT crash
             # (Previously crashed with "'NoneType' object has no attribute 'done'")
             before_save_calls = mock_memory.save_deep_research.call_count
-            status_result = workflow.execute(action="status", research_id=state.id)
+            status_result = workflow.execute(action="status", research_id=state.id, wait=False)
+            status_checked.set()  # Unblock the background task
 
             assert status_result.success is True
             assert status_result.metadata["research_id"] == state.id

@@ -12,6 +12,7 @@ import pytest
 from foundry_mcp.core.research.workflows.base import (
     MAX_PROMPT_LENGTH,
     WorkflowResult,
+    _max_prompt_chars_for_model,
 )
 from foundry_mcp.core.research.workflows.deep_research._constants import (
     MAX_CONCURRENT_PROVIDERS,
@@ -56,13 +57,16 @@ class TestPromptLengthValidation:
     """Tests for MAX_PROMPT_LENGTH enforcement in _execute_provider_async."""
 
     def test_prompt_at_limit_accepted(self, mock_config, mock_memory):
-        """Prompt exactly at MAX_PROMPT_LENGTH should not be rejected."""
+        """Prompt exactly at the model-derived limit should not be rejected."""
         from foundry_mcp.core.research.workflows.deep_research import (
             DeepResearchWorkflow,
         )
 
         workflow = DeepResearchWorkflow(mock_config, mock_memory)
-        prompt = "x" * MAX_PROMPT_LENGTH
+        # Derive the effective limit for the mock provider so the prompt
+        # is exactly at the boundary (model-aware, not hardcoded).
+        effective_limit = _max_prompt_chars_for_model(mock_config.default_provider, None)
+        prompt = "x" * effective_limit
 
         # Mock provider resolution to return a provider that succeeds
         mock_provider = MagicMock()
@@ -90,13 +94,14 @@ class TestPromptLengthValidation:
         assert result.success is True
 
     def test_prompt_over_limit_rejected(self, mock_config, mock_memory):
-        """Prompt exceeding MAX_PROMPT_LENGTH should return error."""
+        """Prompt exceeding the model-derived limit should return error."""
         from foundry_mcp.core.research.workflows.deep_research import (
             DeepResearchWorkflow,
         )
 
         workflow = DeepResearchWorkflow(mock_config, mock_memory)
-        prompt = "x" * (MAX_PROMPT_LENGTH + 1)
+        effective_limit = _max_prompt_chars_for_model(mock_config.default_provider, None)
+        prompt = "x" * (effective_limit + 1)
 
         result = asyncio.run(
             workflow._execute_provider_async(
@@ -108,7 +113,7 @@ class TestPromptLengthValidation:
         assert result.success is False
         assert result.error is not None
         assert "exceeds maximum" in result.error
-        assert str(MAX_PROMPT_LENGTH) in result.error
+        assert str(effective_limit) in result.error
         assert result.metadata.get("validation_error") == "prompt_too_long"
 
     def test_prompt_well_under_limit_accepted(self, mock_config, mock_memory):

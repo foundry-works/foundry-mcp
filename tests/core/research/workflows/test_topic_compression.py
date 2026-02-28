@@ -1078,13 +1078,14 @@ class TestCompressionTokenTracking:
 
     @pytest.mark.asyncio
     async def test_compression_tokens_tracked_in_state(self) -> None:
-        """Compression tokens are added to state.total_tokens_used via execute_llm_call."""
+        """Compression tokens are recorded in phase_metrics (skip_token_tracking=True for concurrency safety)."""
         mixin = StubGatheringMixin()
         state = _make_state(num_sub_queries=1)
-        initial_tokens = state.total_tokens_used
 
         tr = _add_sources_for_topic(state, "sq-0", num_sources=2)
         state.topic_research_results.append(tr)
+
+        initial_metrics = len(state.phase_metrics)
 
         stats = await mixin._compress_topic_findings_async(
             state=state,
@@ -1092,8 +1093,12 @@ class TestCompressionTokenTracking:
             timeout=60.0,
         )
 
-        # execute_llm_call tracks tokens per-topic
-        assert state.total_tokens_used > initial_tokens
+        # Compression uses skip_token_tracking=True to avoid races during
+        # parallel compression.  Tokens are recorded via PhaseMetrics instead.
+        compression_metrics = [m for m in state.phase_metrics[initial_metrics:] if m.phase == "compression"]
+        assert len(compression_metrics) >= 1
+        total_tracked = sum(m.input_tokens + m.output_tokens for m in compression_metrics)
+        assert total_tracked > 0
 
     @pytest.mark.asyncio
     async def test_compression_phase_metrics_recorded(self) -> None:
