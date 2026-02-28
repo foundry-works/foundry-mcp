@@ -1,0 +1,677 @@
+# =============================================================================
+# foundry-mcp Configuration Reference
+# =============================================================================
+#
+# COMPLETE reference of every configuration field. All values shown are the
+# built-in defaults. Uncomment and modify only what you need.
+#
+# For a minimal quick-start config, see: samples/foundry-mcp.toml
+# For searchable documentation, see:     dev_docs/guides/config-reference.md
+#
+# Configuration priority (highest to lowest):
+#   1. Environment variables
+#   2. Project config  (./foundry-mcp.toml)
+#   3. User config     (~/.foundry-mcp.toml)
+#   4. XDG config      (~/.config/foundry-mcp/config.toml)
+#   5. Built-in defaults (shown below)
+#
+# Override the config file path:  FOUNDRY_MCP_CONFIG_FILE=/path/to/config.toml
+#
+# =============================================================================
+
+
+# =============================================================================
+# Provider Aliases
+# =============================================================================
+#
+# Short names for provider specs. Aliases are expanded at config parse time
+# in all *_provider string fields, *_providers list fields, tier values,
+# consultation priority lists, and fallback chains.
+#
+# [providers]
+# pro    = "[cli]gemini:pro"
+# fast   = "[cli]gemini:flash"
+# opus   = "[cli]claude:opus"
+# codex  = "[cli]codex:gpt-5.2-codex"
+# sonnet = "[cli]claude:sonnet"
+
+
+# =============================================================================
+# [workspace]
+# =============================================================================
+# Env: FOUNDRY_MCP_SPECS_DIR, FOUNDRY_MCP_RESEARCH_DIR
+
+[workspace]
+# specs_dir = "./specs"                    # Where spec files live (auto-detected if unset)
+# research_dir = "./specs/.research"       # Research state storage (defaults to specs_dir/.research)
+
+
+# =============================================================================
+# [logging]
+# =============================================================================
+# Env: FOUNDRY_MCP_LOG_LEVEL
+
+[logging]
+# level = "INFO"                           # DEBUG | INFO | WARNING | ERROR
+# structured = true                        # JSON logs (true) or human-readable (false)
+
+
+# =============================================================================
+# [tools]
+# =============================================================================
+# Env: FOUNDRY_MCP_DISABLED_TOOLS (comma-separated)
+#
+# Available tools: health, plan, pr, error, journal, authoring, review, spec,
+#   task, provider, environment, lifecycle, verification, server, test, research
+
+[tools]
+# disabled_tools = []                      # List of tool names to disable
+
+
+# =============================================================================
+# [git]
+# =============================================================================
+# Env: FOUNDRY_MCP_GIT_ENABLED, FOUNDRY_MCP_GIT_AUTO_COMMIT,
+#      FOUNDRY_MCP_GIT_AUTO_PUSH, FOUNDRY_MCP_GIT_AUTO_PR,
+#      FOUNDRY_MCP_GIT_COMMIT_CADENCE, FOUNDRY_MCP_GIT_SHOW_PREVIEW
+
+[git]
+# enabled = false                          # Enable git-aware workflows
+# auto_commit = false                      # Auto-commit after task/phase
+# auto_push = false                        # Auto-push after commit
+# auto_pr = false                          # Auto-create PR after push
+# commit_cadence = "manual"                # "manual" | "task" | "phase"
+# show_before_commit = true                # Show staged diff before commit
+
+
+# =============================================================================
+# [autonomy_posture]
+# =============================================================================
+# Env: FOUNDRY_MCP_AUTONOMY_POSTURE
+#
+# Preset profiles that configure autonomy_security + autonomy_session_defaults.
+# Explicit field overrides in those sections take priority over the profile.
+#
+# Profiles:
+#   "unattended"  — autonomy_runner role, strict gates, no escape hatches
+#   "supervised"  — maintainer role, allows lock bypass & gate waiver
+#   "debug"       — full flexibility, manual gate policy, no enforcement
+
+[autonomy_posture]
+# profile = null                           # null | "unattended" | "supervised" | "debug"
+
+
+# =============================================================================
+# [autonomy_security]
+# =============================================================================
+# Env: FOUNDRY_MCP_ROLE, FOUNDRY_MCP_AUTONOMY_SECURITY_ALLOW_LOCK_BYPASS,
+#      FOUNDRY_MCP_AUTONOMY_SECURITY_ALLOW_GATE_WAIVER,
+#      FOUNDRY_MCP_AUTONOMY_SECURITY_ENFORCE_REQUIRED_PHASE_GATES,
+#      FOUNDRY_MCP_AUTONOMY_SECURITY_RATE_LIMIT_MAX_CONSECUTIVE_DENIALS,
+#      FOUNDRY_MCP_AUTONOMY_SECURITY_RATE_LIMIT_DENIAL_WINDOW_SECONDS,
+#      FOUNDRY_MCP_AUTONOMY_SECURITY_RATE_LIMIT_RETRY_AFTER_SECONDS
+
+[autonomy_security]
+# role = "maintainer"                      # "maintainer" | "autonomy_runner"
+# allow_lock_bypass = false                # Allow bypassing task locks
+# allow_gate_waiver = false                # Allow waiving phase gates
+# enforce_required_phase_gates = true      # Enforce required gates invariant
+# rate_limit_max_consecutive_denials = 10  # Max denials before rate-limiting
+# rate_limit_denial_window_seconds = 60    # Window for denial counting
+# rate_limit_retry_after_seconds = 5       # Cooldown after rate limit hit
+
+
+# =============================================================================
+# [autonomy_session_defaults]
+# =============================================================================
+# Env: FOUNDRY_MCP_AUTONOMY_DEFAULT_GATE_POLICY,
+#      FOUNDRY_MCP_AUTONOMY_DEFAULT_STOP_ON_PHASE_COMPLETION,
+#      FOUNDRY_MCP_AUTONOMY_DEFAULT_AUTO_RETRY_FIDELITY_GATE,
+#      FOUNDRY_MCP_AUTONOMY_DEFAULT_MAX_TASKS_PER_SESSION,
+#      FOUNDRY_MCP_AUTONOMY_DEFAULT_MAX_CONSECUTIVE_ERRORS,
+#      FOUNDRY_MCP_AUTONOMY_DEFAULT_MAX_FIDELITY_REVIEW_CYCLES_PER_PHASE
+
+[autonomy_session_defaults]
+# gate_policy = "strict"                   # "strict" | "lenient" | "manual"
+# stop_on_phase_completion = false         # Pause when a phase completes
+# auto_retry_fidelity_gate = true          # Auto-retry after fidelity gate failure
+# max_tasks_per_session = 100              # Max tasks before session ends
+# max_consecutive_errors = 3               # Max consecutive errors before halt
+# max_fidelity_review_cycles_per_phase = 3 # Max gate retry cycles per phase
+
+
+# =============================================================================
+# [consultation]
+# =============================================================================
+# Env: FOUNDRY_MCP_CONSULTATION_PRIORITY (comma-separated),
+#      FOUNDRY_MCP_CONSULTATION_TIMEOUT, FOUNDRY_MCP_CONSULTATION_MAX_RETRIES,
+#      FOUNDRY_MCP_CONSULTATION_RETRY_DELAY,
+#      FOUNDRY_MCP_CONSULTATION_FALLBACK_ENABLED,
+#      FOUNDRY_MCP_CONSULTATION_CACHE_TTL
+#
+# AI provider consultation for reviews, plan analysis, and fidelity gates.
+# The consultation system is separate from the research system — consultation
+# is used for code review and plan review; research is used for knowledge tasks.
+
+[consultation]
+# priority = []                            # Provider specs in priority order (first available wins)
+# default_timeout = 300.0                  # Seconds per provider call
+# max_retries = 2                          # Retry attempts per provider
+# retry_delay = 5.0                        # Seconds between retries
+# fallback_enabled = true                  # Fall back to next provider on failure
+# cache_ttl = 3600                         # Cache TTL in seconds
+
+# Per-provider overrides:
+# [consultation.overrides]
+# "[cli]opencode:openai/gpt-5.2-codex" = { timeout = 600 }
+
+# Per-workflow overrides:
+# [consultation.workflows.fidelity_review]
+# min_models = 1                           # Minimum models for consensus (>= 1)
+# timeout_override = 600.0                 # Workflow-specific timeout
+
+# [consultation.workflows.plan_review]
+# min_models = 1
+# timeout_override = 600.0
+
+# [consultation.workflows.markdown_plan_review]
+# min_models = 1
+# timeout_override = 600.0
+
+
+# =============================================================================
+# [research] — Core
+# =============================================================================
+# Research workflows: chat, consensus, thinkdeep, ideate, deep-research.
+
+[research]
+# enabled = true                           # Master switch for research tools
+# default_provider = "gemini"              # Default LLM provider spec
+# consensus_providers = ["gemini", "claude"]  # Providers for consensus workflow
+# default_timeout = 360.0                  # Default timeout (seconds) for provider calls
+# ttl_hours = 24                           # Thread/state TTL before cleanup (hours)
+# max_messages_per_thread = 100            # Max messages per conversation thread
+# thinkdeep_max_depth = 5                  # Max investigation depth for thinkdeep
+# ideate_perspectives = ["technical", "creative", "practical", "visionary"]
+
+# --- Rate limiting ---
+# search_rate_limit = 60                   # Global requests per minute
+# max_concurrent_searches = 3              # Max concurrent search requests
+
+# --- Audit ---
+# audit_verbosity = "full"                 # "full" | "minimal"
+
+
+# -----------------------------------------------------------------------------
+# Timeout Presets — [research.timeouts]
+# -----------------------------------------------------------------------------
+# A single preset knob scales all *_timeout defaults by a multiplier.
+# Individual overrides (flat keys or keys inside this table) still win.
+#
+# Presets:
+#   fast    = 0.5x   (fast local models, low-latency APIs)
+#   default = 1.0x   (baseline)
+#   relaxed = 1.5x   (CLI providers with variable latency)
+#   patient = 3.0x   (slow/overloaded providers)
+#
+# [research.timeouts]
+# preset = "default"
+# # Per-timeout overrides (full field names):
+# # deep_research_synthesis_timeout = 900.0
+
+
+# -----------------------------------------------------------------------------
+# Fallback Provider Chains — [research.fallback_chains], [research.phase_fallbacks]
+# -----------------------------------------------------------------------------
+# Named provider chains reduce duplication. Values are expanded through
+# [providers] aliases. Explicit per-phase lists take priority over chains.
+#
+# [research.fallback_chains]
+# strong = ["[cli]gemini:pro", "[cli]codex:gpt-5.2-codex", "[cli]claude:opus"]
+# fast   = ["[cli]gemini:flash", "[cli]claude:sonnet"]
+#
+# [research.phase_fallbacks]
+# planning  = "fast"                       # Use the "fast" chain
+# synthesis = "strong"                     # Use the "strong" chain
+
+
+# -----------------------------------------------------------------------------
+# Deep Research — Core Workflow
+# -----------------------------------------------------------------------------
+# These can also be specified under [research.deep_research] without the
+# "deep_research_" prefix. Flat keys take priority over sub-table keys.
+
+# deep_research_max_iterations = 3         # Max refinement iterations (1–20)
+# deep_research_max_sub_queries = 5        # Max sub-queries per decomposition (1–50)
+# deep_research_max_sources = 5            # Max sources per sub-query (1–100)
+# deep_research_max_concurrent = 3         # Max parallel operations (1–20)
+# deep_research_timeout = 2400.0           # Whole workflow timeout, seconds (max 3600)
+# deep_research_follow_links = true        # Follow and extract URLs
+# deep_research_audit_artifacts = true     # Write audit artifacts for debugging
+# deep_research_mode = "general"           # "general" | "academic" | "technical"
+# deep_research_providers = ["tavily", "google", "semantic_scholar"]  # Search providers
+
+# deep_research_stale_task_seconds = 300.0 # Seconds before a task is considered stale
+# status_persistence_throttle_seconds = 5  # Min seconds between status file writes
+
+
+# -----------------------------------------------------------------------------
+# Deep Research — Clarification Phase
+# -----------------------------------------------------------------------------
+# Optional phase that analyzes the query for completeness before research.
+
+# deep_research_allow_clarification = true
+# deep_research_clarification_provider = null  # Uses default_provider if unset
+# deep_research_clarification_model = null
+
+
+# -----------------------------------------------------------------------------
+# Deep Research — Brief Phase
+# -----------------------------------------------------------------------------
+# Query enrichment before planning.
+
+# deep_research_brief_provider = null      # Uses default_provider if unset
+# deep_research_brief_model = null
+
+
+# -----------------------------------------------------------------------------
+# Deep Research — Planning Critique
+# -----------------------------------------------------------------------------
+# deep_research_enable_planning_critique = false
+
+
+# -----------------------------------------------------------------------------
+# Deep Research — Supervision (Iterative Coverage Assessment)
+# -----------------------------------------------------------------------------
+# After gathering, an LLM supervisor assesses coverage gaps and dispatches
+# additional research units until confidence threshold is met.
+
+# deep_research_enable_supervision = true
+# deep_research_max_supervision_rounds = 6             # Max rounds (1–20)
+# deep_research_supervision_min_sources_per_query = 2   # Min sources per query
+# deep_research_coverage_confidence_threshold = 0.75    # Confidence target (0.0–1.0)
+# deep_research_supervision_wall_clock_timeout = 1800.0 # Wall-clock limit (seconds)
+# deep_research_supervision_provider = null
+# deep_research_supervision_model = null
+# deep_research_max_concurrent_research_units = 5       # Max parallel units (1–20)
+
+# --- Delegation ---
+# deep_research_delegation_provider = null
+# deep_research_delegation_model_name = null
+
+
+# -----------------------------------------------------------------------------
+# Deep Research — Topic Agents (Gathering)
+# -----------------------------------------------------------------------------
+# Each sub-query runs a mini ReAct loop: search → reflect → refine → ...
+
+# deep_research_topic_max_tool_calls = 10  # Max tool calls per topic
+#   (backward-compat alias: deep_research_topic_max_searches)
+# deep_research_enable_extract = true      # Allow URL content extraction
+# deep_research_extract_max_per_iteration = 2  # Max URLs extracted per iteration
+# deep_research_enable_content_dedup = true    # Deduplicate content across topics
+# deep_research_content_dedup_threshold = 0.8  # Similarity threshold (0.0–1.0)
+
+# --- Per-topic reflection ---
+# deep_research_topic_reflection_provider = null
+# deep_research_topic_reflection_model = null
+
+
+# -----------------------------------------------------------------------------
+# Deep Research — Fetch-Time Summarization
+# -----------------------------------------------------------------------------
+# Compress content at fetch time to reduce token usage.
+
+# deep_research_summarization_provider = null
+# deep_research_summarization_model = null
+# deep_research_max_content_length = 50000      # Max chars before summarizing
+# deep_research_summarization_timeout = 60       # Timeout per summarization (seconds)
+# deep_research_summarization_min_content_length = 300  # Min chars to bother summarizing
+# deep_research_inline_compression = true        # Compress inline during gathering
+
+
+# -----------------------------------------------------------------------------
+# Deep Research — Per-Topic Compression
+# -----------------------------------------------------------------------------
+# Aggregate compression applied per topic after gathering.
+
+# deep_research_compression_provider = null
+# deep_research_compression_model = null
+# deep_research_compression_max_content_length = 50000
+
+
+# -----------------------------------------------------------------------------
+# Deep Research — Document Digest
+# -----------------------------------------------------------------------------
+# Structured digests with key findings and evidence snippets.
+
+# deep_research_digest_min_chars = 10000          # Min chars before digesting
+# deep_research_digest_max_sources = 8            # Max sources per batch
+# deep_research_digest_timeout = 120.0            # Timeout per digest (seconds)
+# deep_research_digest_max_concurrent = 3         # Max parallel digests
+# deep_research_digest_include_evidence = true    # Include direct quotes
+# deep_research_digest_evidence_max_chars = 400   # Max chars per evidence snippet
+# deep_research_digest_max_evidence_snippets = 5  # Max snippets per digest
+# deep_research_digest_fetch_pdfs = false          # Fetch/extract PDF content
+# deep_research_digest_provider = null
+# deep_research_digest_providers = []              # Fallback providers for digest
+
+
+# -----------------------------------------------------------------------------
+# Deep Research — Content Archive
+# -----------------------------------------------------------------------------
+# Archive original content before digesting/compressing.
+
+# deep_research_archive_content = false
+# deep_research_archive_retention_days = 30
+
+
+# -----------------------------------------------------------------------------
+# Deep Research — Synthesis & Evaluation
+# -----------------------------------------------------------------------------
+
+# deep_research_synthesis_provider = null
+# deep_research_synthesis_providers = []           # Fallback providers
+
+# deep_research_evaluation_provider = null
+# deep_research_evaluation_model = null
+# deep_research_evaluation_timeout = 360.0
+
+# deep_research_reflection_provider = null
+# deep_research_reflection_model = null
+# deep_research_reflection_timeout = 60.0
+
+
+# -----------------------------------------------------------------------------
+# Deep Research — Per-Phase Timeouts
+# -----------------------------------------------------------------------------
+
+# deep_research_planning_timeout = 360.0           # Query decomposition (seconds)
+# deep_research_synthesis_timeout = 600.0           # Report generation (seconds)
+# deep_research_summarization_timeout = 60          # Fetch-time summarization (seconds)
+
+
+# -----------------------------------------------------------------------------
+# Deep Research — Per-Phase Providers
+# -----------------------------------------------------------------------------
+
+# deep_research_planning_provider = null
+# deep_research_planning_providers = []             # Fallback providers
+
+
+# -----------------------------------------------------------------------------
+# Deep Research — Retry Settings
+# -----------------------------------------------------------------------------
+
+# deep_research_max_retries = 2                     # Retries per provider before fallback
+# deep_research_retry_delay = 5.0                   # Seconds between retries
+
+
+# -----------------------------------------------------------------------------
+# Model Tiers — [research.model_tiers]
+# -----------------------------------------------------------------------------
+# Configure all 11 deep-research model roles via 3 named tiers.
+# Per-role overrides (deep_research_{role}_provider/model) take priority.
+#
+# Precedence chain (highest to lowest):
+#   1. Role-specific fields (deep_research_{role}_provider/model)
+#   2. Role resolution chain (e.g., delegation → supervision → reflection)
+#   3. Tier-based lookup (when model_tiers is configured)
+#   4. Cost-tier defaults (summarization/compression → gemini-2.5-flash)
+#   5. default_provider
+#
+# Tier names: frontier, standard, efficient
+#
+# Default role → tier mapping:
+#   frontier  : research, report, evaluation, supervision
+#   standard  : reflection, topic_reflection, clarification, brief, delegation
+#   efficient : summarization, compression
+#
+# Simple form (provider spec string):
+# [research.model_tiers]
+# frontier  = "[cli]gemini:pro"
+# standard  = "[cli]gemini:flash"
+# efficient = "[cli]gemini:flash"
+#
+# Table form (explicit model override):
+# [research.model_tiers.frontier]
+# provider = "[cli]gemini:pro"
+# model = "gemini-2.5-pro"
+#
+# Custom role-to-tier reassignment:
+# [research.model_tiers.role_assignments]
+# summarization = "standard"               # Promote from efficient → standard
+
+
+# -----------------------------------------------------------------------------
+# Summarization — Token Budget Management
+# -----------------------------------------------------------------------------
+# When content exceeds budget, summarization compresses it to fit.
+
+# summarization_provider = null             # Primary provider (uses default_provider if unset)
+# summarization_providers = []              # Fallback providers
+# summarization_timeout = 60.0              # Timeout per request (seconds)
+# summarization_cache_enabled = true        # Cache by content hash + level + provider
+
+
+# -----------------------------------------------------------------------------
+# Token Management
+# -----------------------------------------------------------------------------
+
+# token_management_enabled = true           # Master switch for budget management
+# token_safety_margin = 0.15               # Fraction reserved as buffer (0.0–1.0)
+# runtime_overhead = 60000                  # Tokens reserved for CLI/IDE runtime context
+
+# Per-model context/output limit overrides:
+# [research.model_context_overrides."claude:opus"]
+# context_window = 180000
+# max_output_tokens = 16000
+# budgeting_mode = "input_only"            # "input_only" | "combined"
+# output_reserved = 8000                   # Only for "combined" mode
+
+
+# -----------------------------------------------------------------------------
+# Content Dropping & Archive
+# -----------------------------------------------------------------------------
+
+# allow_content_dropping = false            # Drop low-priority content when budget exhausted
+# content_archive_enabled = false           # Archive dropped/compressed content to disk
+# content_archive_ttl_hours = 168           # Archive retention (hours, default 7 days)
+# research_archive_dir = null               # Archive directory (default: research_dir/.archive)
+
+
+# -----------------------------------------------------------------------------
+# Search Providers — Tavily
+# -----------------------------------------------------------------------------
+# Get API key at https://tavily.com/
+# Env: TAVILY_API_KEY
+#
+# Can also be specified as [research.tavily] sub-table without "tavily_" prefix.
+# Flat keys take priority over sub-table keys.
+
+# tavily_api_key = null                    # API key (prefer TAVILY_API_KEY env var)
+# tavily_search_depth = "basic"            # "basic" | "advanced" | "fast" | "ultra_fast"
+# tavily_topic = "general"                 # "general" | "news"
+# tavily_news_days = null                  # Days limit for news (1–365, topic="news" only)
+# tavily_include_images = false            # Include image results
+# tavily_country = null                    # ISO 3166-1 alpha-2 code (e.g., "US")
+# tavily_chunks_per_source = 3            # Chunks per source for advanced search (1–5)
+# tavily_auto_parameters = false           # Auto-configure based on query intent
+# tavily_extract_depth = "basic"           # "basic" | "advanced"
+# tavily_extract_include_images = false    # Include images in extractions
+
+
+# -----------------------------------------------------------------------------
+# Search Providers — Perplexity
+# -----------------------------------------------------------------------------
+# Get API key at https://www.perplexity.ai/settings/api
+# Env: PERPLEXITY_API_KEY
+#
+# Can also be specified as [research.perplexity] sub-table.
+
+# perplexity_api_key = null                # API key (prefer PERPLEXITY_API_KEY env var)
+# perplexity_search_context_size = "medium" # "low" | "medium" | "high"
+# perplexity_max_tokens = 50000            # Max response tokens
+# perplexity_max_tokens_per_page = 2048    # Max tokens per page
+# perplexity_recency_filter = null         # "day" | "week" | "month" | "year"
+# perplexity_country = null                # ISO 3166-1 alpha-2 code
+
+
+# -----------------------------------------------------------------------------
+# Search Providers — Semantic Scholar
+# -----------------------------------------------------------------------------
+# API key optional but recommended for higher rate limits.
+# Env: SEMANTIC_SCHOLAR_API_KEY
+#
+# Can also be specified as [research.semantic_scholar] sub-table.
+
+# semantic_scholar_api_key = null          # API key (prefer env var)
+# semantic_scholar_publication_types = null # Filter: Review, JournalArticle, Conference, etc.
+# semantic_scholar_sort_by = null          # "citationCount" | "publicationDate" | "paperId"
+# semantic_scholar_sort_order = "desc"     # "asc" | "desc"
+# semantic_scholar_use_extended_fields = true  # Include TLDR and extended metadata
+
+
+# -----------------------------------------------------------------------------
+# Search Providers — Google
+# -----------------------------------------------------------------------------
+# Env: GOOGLE_API_KEY, GOOGLE_CSE_ID
+
+# google_api_key = null                    # Google API key (prefer GOOGLE_API_KEY env var)
+# google_cse_id = null                     # Custom Search Engine ID (prefer GOOGLE_CSE_ID)
+
+
+# -----------------------------------------------------------------------------
+# Per-Provider Rate Limits
+# -----------------------------------------------------------------------------
+
+# [research.per_provider_rate_limits]
+# tavily = 60
+# perplexity = 60
+# google = 100
+# semantic_scholar = 20
+
+
+# =============================================================================
+# [observability]
+# =============================================================================
+# Requires optional dependencies:
+#   pip install foundry-mcp[tracing]       (OpenTelemetry)
+#   pip install foundry-mcp[metrics]       (Prometheus)
+#   pip install foundry-mcp[observability] (both)
+#
+# When dependencies are not installed, features gracefully degrade to no-ops.
+#
+# Env: FOUNDRY_MCP_OBSERVABILITY_ENABLED, FOUNDRY_MCP_OTEL_ENABLED,
+#      FOUNDRY_MCP_OTEL_ENDPOINT, FOUNDRY_MCP_OTEL_SERVICE_NAME,
+#      FOUNDRY_MCP_OTEL_SAMPLE_RATE, FOUNDRY_MCP_PROMETHEUS_ENABLED,
+#      FOUNDRY_MCP_PROMETHEUS_PORT, FOUNDRY_MCP_PROMETHEUS_HOST,
+#      FOUNDRY_MCP_PROMETHEUS_NAMESPACE
+
+[observability]
+# enabled = false                          # Master switch for all observability
+# otel_enabled = false                     # Enable OpenTelemetry tracing
+# otel_endpoint = "localhost:4317"         # OTLP gRPC endpoint
+# otel_service_name = "foundry-mcp"        # Service name in traces
+# otel_sample_rate = 1.0                   # Sampling rate: 0.0 (none) to 1.0 (all)
+# prometheus_enabled = false               # Enable Prometheus metrics
+# prometheus_port = 0                      # HTTP port for /metrics (0 = disabled)
+# prometheus_host = "0.0.0.0"              # HTTP server bind address
+# prometheus_namespace = "foundry_mcp"     # Metric name prefix
+
+
+# =============================================================================
+# [health]
+# =============================================================================
+# Env: FOUNDRY_MCP_HEALTH_ENABLED, FOUNDRY_MCP_HEALTH_LIVENESS_TIMEOUT,
+#      FOUNDRY_MCP_HEALTH_READINESS_TIMEOUT, FOUNDRY_MCP_HEALTH_TIMEOUT,
+#      FOUNDRY_MCP_DISK_SPACE_THRESHOLD_MB, FOUNDRY_MCP_DISK_SPACE_WARNING_MB
+
+[health]
+# enabled = true                           # Enable health probes
+# liveness_timeout = 1.0                   # Liveness check timeout (seconds)
+# readiness_timeout = 5.0                  # Readiness check timeout (seconds)
+# health_timeout = 10.0                    # Full health check timeout (seconds)
+# disk_space_threshold_mb = 100            # Critical disk space threshold (MB)
+# disk_space_warning_mb = 500              # Warning disk space threshold (MB)
+
+
+# =============================================================================
+# [error_collection]
+# =============================================================================
+# Env: FOUNDRY_MCP_ERROR_COLLECTION_ENABLED, FOUNDRY_MCP_ERROR_STORAGE_PATH,
+#      FOUNDRY_MCP_ERROR_RETENTION_DAYS, FOUNDRY_MCP_ERROR_MAX_ERRORS,
+#      FOUNDRY_MCP_ERROR_INCLUDE_STACK_TRACES, FOUNDRY_MCP_ERROR_REDACT_INPUTS
+
+[error_collection]
+# enabled = true                           # Enable error collection
+# storage_path = ""                        # Default: ~/.foundry-mcp/errors
+# retention_days = 30                      # Delete records older than this
+# max_errors = 10000                       # Max error records to keep
+# include_stack_traces = true              # Include stack traces
+# redact_inputs = true                     # Redact sensitive input data
+
+
+# =============================================================================
+# [metrics_persistence]
+# =============================================================================
+# Env: FOUNDRY_MCP_METRICS_PERSISTENCE_ENABLED, FOUNDRY_MCP_METRICS_STORAGE_PATH,
+#      FOUNDRY_MCP_METRICS_RETENTION_DAYS, FOUNDRY_MCP_METRICS_MAX_RECORDS,
+#      FOUNDRY_MCP_METRICS_BUCKET_INTERVAL, FOUNDRY_MCP_METRICS_FLUSH_INTERVAL,
+#      FOUNDRY_MCP_METRICS_PERSIST_METRICS (comma-separated)
+
+[metrics_persistence]
+# enabled = false                          # Enable metrics persistence
+# storage_path = ""                        # Default: ~/.foundry-mcp/metrics
+# retention_days = 7                       # Delete records older than this
+# max_records = 100000                     # Max metric records to keep
+# bucket_interval_seconds = 60             # Aggregation bucket interval
+# flush_interval_seconds = 30              # Flush to disk interval
+# persist_metrics = [                      # Metrics to persist (empty = all)
+#     "tool_invocations_total",
+#     "tool_duration_seconds",
+#     "tool_errors_total",
+#     "health_status",
+# ]
+
+
+# =============================================================================
+# [test]
+# =============================================================================
+# Built-in runners: pytest, go, npm, jest, make
+
+[test]
+# default_runner = "pytest"                # Default test runner
+
+# Custom runner example:
+# [test.runners.myrunner]
+# command = ["python", "-m", "pytest"]
+# run_args = ["-v", "--tb=short"]
+# discover_args = ["--collect-only", "-q"]
+# pattern = "test_*.py"
+# timeout = 300
+
+
+# =============================================================================
+# Removed Fields
+# =============================================================================
+# The following fields have been removed. If you have them in your config,
+# remove them and use the replacements listed below.
+#
+# [implement] section — orphaned, never parsed. Use [autonomy_posture] instead.
+# [workflow] section — orphaned, never parsed. Use [autonomy_session_defaults].
+# [feature_flags] section — orphaned, never parsed.
+#
+# deep_research_enable_reflection       — always-on in supervision loop
+# deep_research_enable_contradiction_detection — folded into supervision
+# deep_research_enable_topic_agents     — always-on
+# deep_research_analysis_timeout        → deep_research_planning_timeout / synthesis_timeout
+# deep_research_refinement_timeout      → deep_research_planning_timeout / synthesis_timeout
+# deep_research_analysis_provider       → deep_research_planning_provider / synthesis_provider
+# deep_research_refinement_provider     → deep_research_planning_provider / synthesis_provider
+# deep_research_analysis_providers      → deep_research_planning_providers / synthesis_providers
+# deep_research_refinement_providers    → deep_research_planning_providers / synthesis_providers
+# tavily_extract_in_deep_research       → deep_research_enable_extract
+# tavily_extract_max_urls               → deep_research_extract_max_per_iteration
+# deep_research_digest_policy           — auto-handled, removed
+# notes_dir                             — phantom field, never existed in config
