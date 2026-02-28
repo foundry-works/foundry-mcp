@@ -1,8 +1,13 @@
-# PLAN-0: Prerequisites — Supervision Refactoring & State Model Architecture
+# PLAN-0: Prerequisites — Remaining Supervision Refactoring & State Model Architecture
 
-> **Goal**: Prepare the codebase for PLAN-1 through PLAN-4 by addressing two structural bottlenecks: `supervision.py` (3,340 lines, modified by 3 of 4 plans) and `DeepResearchState` (1,517 lines, gaining ~7 new field groups across all plans).
+> **Goal**: Prepare the codebase for PLAN-1 through PLAN-4 by completing the supervision refactoring (partially done) and introducing the `ResearchExtensions` container to prevent `DeepResearchState` bloat.
 >
-> **Estimated scope**: ~400-600 LOC changes (refactoring, not new features) + ~200-300 LOC tests
+> **Current state**: The original 3,445-line supervision module has already been split into three files:
+> - `supervision.py` (2,174 lines) — orchestration, delegation loop, first-round decomposition
+> - `supervision_coverage.py` (424 lines) — coverage assessment, delta computation, verdict parsing
+> - `supervision_prompts.py` (847 lines) — 16+ pure prompt builder functions
+>
+> **Remaining scope**: ~200-400 LOC changes (further refactoring of the orchestration core) + ~200-300 LOC tests
 >
 > **Dependencies**: None — this is the foundation for everything else
 >
@@ -18,88 +23,88 @@
 
 ---
 
-## 1. Refactor `supervision.py` into Focused Modules
+## 1. Complete Supervision Refactoring
 
-### Problem
+### Current State (Already Done)
 
-`supervision.py` is 3,340 lines containing 6 distinct responsibilities:
+The original supervision module has already been split along two boundaries:
 
-| Section | Lines | Responsibility |
-|---------|-------|---------------|
-| Main entry point | 92-121 | Routes between delegation and legacy models |
-| Delegation model | 119-1777 | Parallel directive execution, compression, evidence inventory |
-| First-round decomposition | 1777-1971 | Initial query decomposition prompts |
-| Decompose-critique-revise | 1971-2382 | Multi-step first-round pipeline |
-| Legacy query-generation | 2382-2637 | Fallback supervision model |
-| Shared helpers | 2637-3340 | Coverage assessment, prompt builders, response parsers |
+**`supervision_coverage.py` (424 lines)** — standalone functions, no `self`:
+- `critique_has_issues()` — verdict/issue parsing from critique text
+- `build_per_query_coverage()` — per-sub-query coverage metrics
+- `store_coverage_snapshot()` — persist coverage state
+- `compute_coverage_delta()` — round-over-round coverage changes
+- `assess_coverage_heuristic()` — 3-dimensional confidence scoring (source adequacy, domain diversity, completion rate)
 
-Three of four subsequent plans modify this file (PLAN-1 adds provenance, PLAN-2 adds provider delegation, PLAN-3 adds influence scoring). Without refactoring, merge conflicts and cognitive load will compound.
+**`supervision_prompts.py` (847 lines)** — pure prompt builder functions:
+- `render_supervision_conversation_history()` — history rendering with sanitization
+- `classify_query_complexity()` — simple/moderate/complex classification
+- `build_combined_think_delegate_system_prompt()` / `build_combined_think_delegate_user_prompt()`
+- `build_delegation_system_prompt()` / `build_delegation_user_prompt()`
+- `build_first_round_think_system_prompt()` / `build_first_round_think_prompt()`
+- `build_first_round_delegation_system_prompt()` / `build_first_round_delegation_user_prompt()`
+- `build_critique_system_prompt()` / `build_critique_user_prompt()`
+- `build_revision_system_prompt()` / `build_revision_user_prompt()`
+- `build_think_prompt()` / `build_think_system_prompt()`
 
-### Changes
+**`supervision.py` (2,174 lines)** — the remaining orchestration mixin with:
+- `_execute_supervision_async()` entry point and delegation loop
+- `_execute_supervision_delegation_async()` — main round loop (think→delegate→execute→assess)
+- `_run_think_delegate_step()` — combined think+delegate LLM orchestration
+- `_execute_and_merge_directives()` — parallel directive execution and source merging
+- `_compress_directive_results_inline()` / `_build_directive_fallback_summary()` / `_build_evidence_inventory()`
+- `_post_round_bookkeeping()` — coverage delta, state serialization, history trim
+- `_should_exit_wall_clock()` / `_should_exit_heuristic()` — exit conditions
+- `_first_round_decompose_critique_revise()` — decompose→critique→revise pipeline
+- `_run_first_round_generate()` / `_run_first_round_critique()` / `_run_first_round_revise()`
+- Thin wrapper methods delegating to `supervision_coverage` and `supervision_prompts`
 
-#### 1a. Extract delegation model
+### What Remains
 
-**File: `phases/supervision_delegation.py`** (NEW — extracted from supervision.py)
+The remaining `supervision.py` (2,174 lines) contains two logically distinct responsibility groups that could benefit from further separation, primarily to reduce merge conflicts when PLAN-1 (provenance logging) and PLAN-3 (influence scoring) modify these areas:
 
-Move lines 119-1777 into a new module containing:
-- `_execute_supervision_delegation_async()`
-- `_supervision_think_step()` / `_supervision_delegate_step()` / `_supervision_combined_think_delegate_step()`
-- `_build_combined_think_delegate_system_prompt()` / `_build_combined_think_delegate_user_prompt()`
-- `_parse_combined_response()` / `_extract_gap_analysis_section()`
-- `_execute_directives_async()` / `_compress_directive_results_inline()`
-- `_build_directive_fallback_summary()` / `_build_evidence_inventory()`
-- `_classify_query_complexity()`
-- `_build_delegation_system_prompt()` / `_build_delegation_user_prompt()`
-- `_apply_directive_caps()` / `_parse_delegation_response()`
-
-Implement as a mixin class `DelegationMixin` that `SupervisionPhaseMixin` inherits from.
-
-#### 1b. Extract first-round decomposition
+#### 1a. Extract first-round decomposition pipeline
 
 **File: `phases/supervision_first_round.py`** (NEW — extracted from supervision.py)
 
-Move lines 1777-2382 into a new module containing:
-- `_build_first_round_think_system_prompt()` / `_build_first_round_think_prompt()`
-- `_build_first_round_delegation_system_prompt()` / `_build_first_round_delegation_user_prompt()`
-- `_first_round_decompose_critique_revise()`
-- `_build_critique_system_prompt()` / `_build_critique_user_prompt()`
-- `_build_revision_system_prompt()` / `_build_revision_user_prompt()`
-- `_critique_has_issues()`
+Move the first-round decompose-critique-revise pipeline into a standalone module:
+- `_first_round_decompose_critique_revise()` — orchestrates the full decompose→critique→revise cycle
+- `_run_first_round_generate()` — initial decomposition LLM call
+- `_run_first_round_critique()` — critique of generated sub-queries
+- `_run_first_round_revise()` — revision based on critique feedback
 
-Implement as a mixin class `FirstRoundMixin` that `SupervisionPhaseMixin` inherits from.
+These methods are self-contained — they call prompt builders from `supervision_prompts.py` and `critique_has_issues()` from `supervision_coverage.py`, but don't share state mutation patterns with the main delegation loop.
 
-#### 1c. Extract coverage assessment
+Implement as standalone async functions that take explicit parameters (state, config, memory), consistent with the existing extraction pattern used for `supervision_coverage.py` and `supervision_prompts.py`.
 
-**File: `phases/supervision_coverage.py`** (NEW — extracted from supervision.py)
+#### 1b. Evaluate further delegation extraction (optional)
 
-Move `_assess_coverage_heuristic()` and its helpers into a focused module. This is the method that PLAN-3 will modify for influence-aware scoring — isolating it prevents conflicts with delegation and first-round changes.
+The delegation loop (`_execute_supervision_delegation_async()` and its helpers) is the core orchestration logic and is tightly coupled — splitting it further would create fragmentation without clarity gain. However, the following self-contained helpers could optionally be extracted to a `supervision_helpers.py`:
+- `_compress_directive_results_inline()`
+- `_build_directive_fallback_summary()`
+- `_build_evidence_inventory()`
 
-Implement as a mixin class `CoverageMixin` or as standalone functions that take `DeepResearchState` as input.
+This is lower priority than item 1a and may not be worth the indirection.
 
-#### 1d. Slim down supervision.py
+#### 1c. Remove thin wrapper methods
 
-After extraction, `supervision.py` becomes:
-- Imports from the three new modules
-- `SupervisionPhaseMixin` class definition (inheriting `DelegationMixin`, `FirstRoundMixin`, `CoverageMixin`)
-- `_execute_supervision_async()` entry point (~30 lines)
-- Legacy query-generation model (~250 lines — small enough to keep inline)
-- Remaining shared prompt/parse helpers (~400 lines)
+After item 1a, the remaining thin wrapper methods at the bottom of `supervision.py` (lines ~2107-2174) that simply delegate to `supervision_coverage` and `supervision_prompts` can be inlined at their call sites, reducing the file by ~60 lines.
 
-**Target: supervision.py drops from 3,340 to ~700-800 lines.**
+**Target: supervision.py drops from 2,174 to ~1,700-1,800 lines** (more modest than the original target, reflecting that the high-value extractions are already done).
 
 ### Backward Compatibility
 
 - `SupervisionPhaseMixin` public interface is unchanged
 - All existing tests pass without modification
 - `from phases.supervision import SupervisionPhaseMixin` still works
-- Internal method names are preserved (just moved to mixin base classes)
+- Imports from `supervision_coverage` and `supervision_prompts` are unchanged
 
 ### Testing
 
 - Existing supervision tests pass without changes (zero-diff verification)
-- New test: import each extracted module independently
-- New test: verify mixin composition produces same method resolution order
-- ~50-80 LOC of new structural tests
+- New test: import `supervision_first_round` module independently
+- New test: verify first-round pipeline produces same results when called from extracted module
+- ~30-50 LOC of new structural tests
 
 ---
 
@@ -107,7 +112,7 @@ After extraction, `supervision.py` becomes:
 
 ### Problem
 
-Across PLAN-1 through PLAN-4, `DeepResearchState` (1,517 lines) gains approximately 7 new field groups:
+Across PLAN-1 through PLAN-4, `DeepResearchState` (1,659 lines, 52 fields, 47 methods) gains approximately 7 new field groups:
 
 | Plan | New Fields |
 |------|-----------|
@@ -200,29 +205,26 @@ This lets downstream code use `state.research_profile` naturally while the stora
 | File | Change Type | Items |
 |------|-------------|-------|
 | `phases/supervision.py` | Refactor (shrink) | 1 |
-| `phases/supervision_delegation.py` | **New** (extracted) | 1a |
-| `phases/supervision_first_round.py` | **New** (extracted) | 1b |
-| `phases/supervision_coverage.py` | **New** (extracted) | 1c |
+| `phases/supervision_first_round.py` | **New** (extracted) | 1a |
+| `phases/supervision_coverage.py` | Already exists (424 lines) | — |
+| `phases/supervision_prompts.py` | Already exists (847 lines) | — |
 | `phases/__init__.py` | Modify (exports) | 1 |
 | `models/deep_research.py` | Modify | 2 (ResearchExtensions) |
 
 ## Execution Order
 
 ```
-[1a. Extract delegation model]──────────┐
-[1b. Extract first-round decomposition]─┤ (parallel — independent extractions)
-[1c. Extract coverage assessment]────────┤
-                                          │
-[1d. Slim down supervision.py]───────────┘ (after all extractions)
+[1a. Extract first-round decomposition]──┐
+[1c. Remove thin wrappers]───────────────┤ (sequential — 1c depends on 1a)
                                           │
 [2. ResearchExtensions container]─────────  (independent of item 1)
 ```
 
-Items 1a-1c can be done in parallel. Item 1d is their integration point. Item 2 is fully independent.
+Item 1a is the primary extraction. Item 1c is cleanup after 1a. Item 2 is fully independent.
 
 ## Success Criteria
 
-- `supervision.py` is under 800 lines
+- `supervision.py` is under 1,800 lines (down from 2,174)
 - All existing tests pass with zero changes
 - `DeepResearchState` has a single `extensions` field for all new capabilities
 - No behavioral changes — purely structural

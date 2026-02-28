@@ -233,14 +233,16 @@ class CitationNetwork(BaseModel):
     stats: dict  # {total_nodes, total_edges, discovered_count, foundational_count, ...}
 ```
 
-#### 2b. Add to state
+#### 2b. Add to ResearchExtensions
 
 ```python
-# In DeepResearchState:
-citation_network: Optional[CitationNetwork] = Field(
-    default=None,
-    description="Citation network built from discovered academic sources",
-)
+# In ResearchExtensions (PLAN-0 item 2):
+citation_network: Optional[CitationNetwork] = None
+
+# Convenience accessor on DeepResearchState:
+@property
+def citation_network(self) -> Optional[CitationNetwork]:
+    return self.extensions.citation_network
 ```
 
 **File: `src/foundry_mcp/core/research/workflows/deep_research/phases/citation_network.py`** (NEW)
@@ -496,14 +498,16 @@ Respond as JSON:
 
 **File: `src/foundry_mcp/core/research/models/deep_research.py`**
 
-#### 3d. Add to state
+#### 3d. Add to ResearchExtensions
 
 ```python
-# In DeepResearchState:
-methodology_assessments: list[MethodologyAssessment] = Field(
-    default_factory=list,
-    description="Methodology quality assessments for academic sources",
-)
+# In ResearchExtensions (PLAN-0 item 2):
+methodology_assessments: list[MethodologyAssessment] = Field(default_factory=list)
+
+# Convenience accessor on DeepResearchState:
+@property
+def methodology_assessments(self) -> list[MethodologyAssessment]:
+    return self.extensions.methodology_assessments
 ```
 
 **File: `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py`**
@@ -850,7 +854,7 @@ Note: Item 4 LOC estimate is contingent — if no MCP servers validate, this is 
 | `phases/topic_research.py` | Modify | 1 (PDF extraction routing) |
 | `document_digest/digestor.py` | Modify | 1 (page-aware digest) |
 | `phases/citation_network.py` | **New** | 2 |
-| `models/deep_research.py` | Modify | 2 (CitationNetwork) — via ResearchExtensions |
+| `models/deep_research.py` | Modify | 2 (CitationNetwork), 3 (MethodologyAssessment) — via ResearchExtensions |
 | `models/sources.py` | Modify | 3 (StudyDesign, MethodologyAssessment) |
 | `phases/methodology_assessment.py` | **New** | 3 |
 | `phases/synthesis.py` | Modify | 3 (assessment injection into prompt) |

@@ -12,18 +12,18 @@ These plans respond to that thesis by making foundry-mcp's deep research excelle
 
 | Plan | Theme | Impl LOC | Test LOC | Dependencies |
 |------|-------|----------|----------|-------------|
-| [PLAN-0: Prerequisites](PLAN-0-PREREQUISITES.md) | Supervision refactoring, state model architecture | ~400-600 | ~200-300 | None |
-| [PLAN-1: Foundations](PLAN-1-FOUNDATIONS.md) | Profiles, provenance, academic output | ~1000-1400 | ~400-550 | PLAN-0 |
-| [PLAN-2: Academic Tools](PLAN-2-ACADEMIC-TOOLS.md) | Providers, citation tools, strategic primitives | ~1000-1350 | ~600-800 | PLAN-0, PLAN-1.1 |
+| [PLAN-0: Prerequisites](PLAN-0-PREREQUISITES.md) | Remaining supervision refactoring, state model architecture | ~200-400 | ~200-300 | None |
+| [PLAN-1: Foundations](PLAN-1-FOUNDATIONS.md) | Profiles, provenance, academic output | ~1000-1350 | ~450-580 | PLAN-0 |
+| [PLAN-2: Academic Tools](PLAN-2-ACADEMIC-TOOLS.md) | Providers, citation tools, strategic primitives | ~960-1350 | ~600-800 | PLAN-0, PLAN-1.1 |
 | [PLAN-3: Research Intelligence](PLAN-3-RESEARCH-INTELLIGENCE.md) | Ranking, landscape, export | ~660-940 | ~350-460 | PLAN-0 (soft: PLAN-1, PLAN-2) |
 | [PLAN-4: Deep Analysis](PLAN-4-DEEP-ANALYSIS.md) | PDF, citation networks, methodology, MCP bridge | ~1250-1650 | ~420-580 | PLAN-0, PLAN-1, PLAN-2.1 |
 
-**Total**: ~4,300-5,900 LOC implementation + ~2,000-2,700 LOC tests
+**Total**: ~4,070-5,690 LOC implementation + ~2,020-2,720 LOC tests
 
 ## Key Design Decisions
 
 ### Prerequisites first
-`supervision.py` (3,340 lines) is modified by 3 of 4 plans. PLAN-0 refactors it into focused modules before any feature work begins. Similarly, `DeepResearchState` gains ~7 new field groups — PLAN-0 introduces a `ResearchExtensions` container to prevent state model bloat.
+The supervision module (originally 3,445 lines across three files: `supervision.py` at 2,174, `supervision_coverage.py` at 424, and `supervision_prompts.py` at 847) is modified by 3 of 4 plans. The high-value extractions (coverage helpers, prompt builders) are already done. PLAN-0 completes the remaining refactoring (first-round decomposition extraction) before feature work begins. Similarly, `DeepResearchState` (1,659 lines) gains ~7 new field groups — PLAN-0 introduces a `ResearchExtensions` container to prevent state model bloat.
 
 ### Profiles over modes
 Instead of a monolithic `research_mode` enum (`GENERAL` | `ACADEMIC` | `TECHNICAL`), research profiles compose capabilities declaratively. Named profiles (e.g., `systematic-review`, `bibliometric`) provide sensible defaults; per-request overrides provide flexibility. The old `research_mode` parameter continues to work via backward-compatible mapping.
@@ -52,7 +52,7 @@ PLAN-4's PDF analysis extends the existing production-ready `pdf_extractor.py` (
 ## Execution Order
 
 ```
-PLAN-0.1  Refactor supervision.py ─────────────────────────┐
+PLAN-0.1  Complete supervision refactoring ────────────────┐
 PLAN-0.2  ResearchExtensions container model ───────────────┤ (parallel)
                                                              │
 PLAN-1.1  Research Profiles ─────────────────────────────────┤
@@ -87,7 +87,8 @@ PLAN-4.5    CORE Provider (independent)
 ### Parallelism opportunities
 
 After PLAN-0 completes, significant parallel work is possible:
-- **PLAN-1 items 1/2/6** + **PLAN-3 items 1-5** + **PLAN-4 items 1/3/5** can all proceed concurrently
+- **PLAN-3 item 1** (influence ranking) can start immediately — `supervision_coverage.py` already exists as a standalone module
+- **PLAN-1 items 1/2/6** + **PLAN-3 items 2-5** + **PLAN-4 items 1/3/5** can all proceed concurrently after PLAN-0
 - **PLAN-2 Tier 1** (OpenAlex) is the critical path item — unlocks items 5-7 and PLAN-4.2
 
 ## What's NOT in these plans
@@ -102,11 +103,14 @@ After PLAN-0 completes, significant parallel work is possible:
 
 | Change | Rationale |
 |--------|-----------|
-| Added PLAN-0 (Prerequisites) | `supervision.py` (3,340 lines) is a merge bottleneck — refactor before feature work |
-| ResearchExtensions container | Prevents `DeepResearchState` bloat from ~7 new field groups |
+| Added PLAN-0 (Prerequisites) | Supervision module is a merge bottleneck — refactor before feature work |
+| PLAN-0 scope reduced | Coverage helpers and prompt builders already extracted to `supervision_coverage.py` (424 lines) and `supervision_prompts.py` (847 lines); only first-round decomposition extraction remains |
+| ResearchExtensions container | Prevents `DeepResearchState` (1,659 lines) bloat from ~7 new field groups |
 | Provider tiers in PLAN-2 | OpenAlex is Tier 1 (required); Unpaywall/Crossref/OpenCitations are Tier 2 (optional enrichment) |
+| PLAN-2 resilience config aligned | Rate limiting uses existing `ProviderResilienceConfig` pattern, not flat RPS dict |
 | Relaxed PLAN-3 dependencies | Works with existing Semantic Scholar metadata; upstream plans enhance but don't gate |
-| PDF extractor reconciliation | PLAN-4.1 extends existing `pdf_extractor.py` instead of creating a duplicate with `pymupdf` |
+| PLAN-3/4 state fields on extensions | ResearchLandscape, CitationNetwork, MethodologyAssessments stored on `state.extensions`, not directly on DeepResearchState |
+| PDF extractor reconciliation | PLAN-4.1 extends existing `pdf_extractor.py` (834 lines) instead of creating a duplicate with `pymupdf` |
 | Citation network deferred to user-triggered | 30+ API calls is too expensive for automatic pipeline step |
 | Methodology scoring demoted | Removed numeric rigor score; kept qualitative metadata extraction |
 | MCP bridge contingent | Speculative server URLs must be validated before building bridge infrastructure |
@@ -118,7 +122,7 @@ These plans reorganize features from earlier planning along architectural bounda
 
 | Item | Rationale |
 |------|-----------|
-| Supervision Refactoring | Prerequisite — prevents merge conflicts across 3 of 4 plans |
+| Supervision Refactoring (remaining) | First-round decomposition extraction — coverage and prompt extractions already complete |
 | ResearchExtensions Container | State model discipline — one field for all new capabilities |
 | Research Profiles | Replaces monolithic `research_mode` with composable, named profiles |
 | Provenance Audit Trail | Addresses reproducibility gap — the sharpest criticism of the MCP approach |

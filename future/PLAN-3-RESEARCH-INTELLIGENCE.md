@@ -5,7 +5,7 @@
 > **Estimated scope**: ~900-1300 LOC implementation + ~350-500 LOC tests across 8-10 files
 >
 > **Dependencies (relaxed)**:
-> - **Hard dependency**: PLAN-0 (supervision refactoring for item 1), PLAN-1 item 6 (structured output for landscape/export data)
+> - **Hard dependency**: PLAN-0 (ResearchExtensions container for items 2, 4), PLAN-1 item 6 (structured output for landscape/export data)
 > - **Soft dependency**: PLAN-1 items 1, 3, 4 and PLAN-2 item 1 — these *enhance* results but are not required. Each item works with whatever metadata is available from existing providers (Semantic Scholar already provides citation_count, year, venue, authors). When upstream plans ship, these items automatically produce richer output.
 >
 > **Design change**: Items are designed to work with existing Semantic Scholar metadata and degrade gracefully when richer metadata (from OpenAlex, profiles, etc.) is unavailable. This decouples PLAN-3 from the PLAN-1/PLAN-2 critical path.
@@ -29,7 +29,7 @@ The supervision coverage assessment (`phases/supervision.py`) treats all sources
 
 ### Current Coverage Assessment
 
-In `_assess_coverage_heuristic()`:
+In `assess_coverage_heuristic()` (already extracted to `supervision_coverage.py`, 424 lines):
 ```python
 source_ratios = []
 for sq in completed:
@@ -44,7 +44,7 @@ This counts sources without regard to impact. 3 blog posts score the same as 3 s
 
 ### Changes
 
-**File: `phases/supervision_coverage.py`** (refactored in PLAN-0)
+**File: `phases/supervision_coverage.py`** (already exists — 424 lines of coverage helpers)
 
 #### 1a. Add influence-weighted source adequacy dimension
 
@@ -162,14 +162,16 @@ class ResearchLandscape(BaseModel):
     )
 ```
 
-#### 2b. Add landscape field to state
+#### 2b. Add landscape field to ResearchExtensions
 
 ```python
-# In DeepResearchState:
-research_landscape: Optional[ResearchLandscape] = Field(
-    default=None,
-    description="Structured metadata about the research landscape (populated after synthesis)",
-)
+# In ResearchExtensions (PLAN-0 item 2):
+research_landscape: Optional[ResearchLandscape] = None
+
+# Convenience accessor on DeepResearchState:
+@property
+def research_landscape(self) -> Optional[ResearchLandscape]:
+    return self.extensions.research_landscape
 ```
 
 **File: `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py`**
@@ -450,7 +452,7 @@ structured_output.exports = {
 
 | File | Change Type | Items |
 |------|-------------|-------|
-| `phases/supervision_coverage.py` | Modify | 1 (influence scoring) — refactored in PLAN-0 |
+| `phases/supervision_coverage.py` | Modify | 1 (influence scoring) — already exists (424 lines) |
 | `phases/synthesis.py` | Modify | 2 (landscape builder), 3 (gap injection), 4 (comparison tables) |
 | `phases/compression.py` | Modify | 1 (citation count in supervisor brief) |
 | `models/deep_research.py` | Modify | 2 (ResearchLandscape, StudyComparison) — via ResearchExtensions |
@@ -464,12 +466,12 @@ structured_output.exports = {
 ## Dependency Graph
 
 ```
-[PLAN-0: Prerequisites] (supervision refactoring for item 1)
+[PLAN-0: ResearchExtensions] (container model for items 2, 4)
        │
-       ├──▶ [1. Influence-Aware Ranking] (uses existing Semantic Scholar metadata)
+       ├──▶ [1. Influence-Aware Ranking] (modifies supervision_coverage.py — already extracted)
        │         Enhanced by: PLAN-2 item 1 (OpenAlex richer citation data)
        │
-       ├──▶ [2. Research Landscape] (pure data transformation)
+       ├──▶ [2. Research Landscape] (pure data transformation, stored on extensions)
        │         │
        │         └──▶ [4. Cross-Study Comparison Tables] (extends landscape model)
        │
@@ -480,4 +482,4 @@ structured_output.exports = {
                  Enhanced by: PLAN-1 item 4 (APA formatting), PLAN-2 item 3 (Crossref metadata)
 ```
 
-All items are largely independent and can be developed in any order after PLAN-0. Item 4 extends item 2's model. Upstream plans enhance output quality but are not required — items work with existing Semantic Scholar metadata.
+Item 1 can start immediately (supervision_coverage.py already exists as a standalone module). Items 2 and 4 need PLAN-0's ResearchExtensions container. Items 3 and 5 are fully independent. Upstream plans enhance output quality but are not required — items work with existing Semantic Scholar metadata.

@@ -2,7 +2,7 @@
 
 > **Goal**: Expand the research pipeline's academic capabilities with citation graph tools, new academic providers (OpenAlex, Unpaywall, Crossref, OpenCitations), adaptive provider selection from the brief phase, and strategic research primitives that improve how topic researchers navigate the literature.
 >
-> **Estimated scope**: ~1500-2000 LOC implementation + ~600-800 LOC tests (including mock fixtures) across 12-16 files
+> **Estimated scope**: ~960-1350 LOC implementation + ~600-800 LOC tests (including mock fixtures) across 12-16 files
 >
 > **Dependencies**: PLAN-0 (supervision refactoring), PLAN-1 item 1 (Research Profiles) for profile-driven provider selection
 >
@@ -545,11 +545,11 @@ if not profile.providers_explicitly_set:
 
 If the profile explicitly specifies providers, respect that — hints are only for auto-configuration.
 
-**File: `phases/supervision_delegation.py`** (refactored in PLAN-0)
+**File: `phases/supervision.py`** (orchestration) and **`phases/supervision_prompts.py`** (prompt builders)
 
 #### 7c. Use active providers in delegation
 
-When creating topic researcher tasks, pass `state.active_providers` so the researcher knows which search tools are available:
+When creating topic researcher tasks, pass `state.active_providers` so the researcher knows which search tools are available. Modify `build_delegation_user_prompt()` in `supervision_prompts.py` to include:
 
 ```python
 # In delegation prompt:
@@ -583,22 +583,55 @@ The existing resilience layer (`providers/resilience/`) supports per-provider ra
 
 **File: `src/foundry_mcp/core/research/providers/resilience/config.py`**
 
-#### 8a. Add default rate limits for new providers
+#### 8a. Add resilience configs for new providers
+
+The existing `PROVIDER_CONFIGS` dict maps provider names to `ProviderResilienceConfig` instances (with `requests_per_second`, `burst_limit`, `max_retries`, `base_delay`, `max_delay`, `jitter`, `circuit_failure_threshold`, `circuit_recovery_timeout`). Add entries for new providers following this pattern:
 
 ```python
-DEFAULT_RATE_LIMITS = {
-    "tavily": 60,           # 60 RPS (existing)
-    "google": 10,           # 10 RPS (existing)
-    "semantic_scholar": 1,  # 1 RPS without key (existing)
-    "perplexity": 10,       # (existing)
-    "openalex": 10,         # 10 RPS (polite pool)
-    "unpaywall": 2,         # Conservative (100K/day)
-    "crossref": 50,         # 50 RPS (polite pool)
-    "opencitations": 20,    # Conservative (no documented limit)
-}
+# Add to PROVIDER_CONFIGS dict:
+"openalex": ProviderResilienceConfig(
+    requests_per_second=10.0,   # 10 RPS (polite pool)
+    burst_limit=5,
+    max_retries=3,
+    base_delay=1.0,
+    max_delay=60.0,
+    jitter=0.5,
+    circuit_failure_threshold=5,
+    circuit_recovery_timeout=30.0,
+),
+"unpaywall": ProviderResilienceConfig(
+    requests_per_second=2.0,    # Conservative (100K/day)
+    burst_limit=2,
+    max_retries=3,
+    base_delay=1.5,
+    max_delay=60.0,
+    jitter=0.5,
+    circuit_failure_threshold=5,
+    circuit_recovery_timeout=30.0,
+),
+"crossref": ProviderResilienceConfig(
+    requests_per_second=10.0,   # 50 RPS polite pool, conservative default
+    burst_limit=5,
+    max_retries=3,
+    base_delay=1.0,
+    max_delay=60.0,
+    jitter=0.5,
+    circuit_failure_threshold=5,
+    circuit_recovery_timeout=30.0,
+),
+"opencitations": ProviderResilienceConfig(
+    requests_per_second=5.0,    # Conservative (no documented limit)
+    burst_limit=3,
+    max_retries=3,
+    base_delay=1.0,
+    max_delay=60.0,
+    jitter=0.5,
+    circuit_failure_threshold=5,
+    circuit_recovery_timeout=30.0,
+),
 ```
 
-These are overridden by `per_provider_rate_limits` in `ResearchConfig` if specified.
+These are the defaults used by `get_provider_config()`. Per-provider overrides can be specified in `ResearchConfig.per_provider_rate_limits`.
 
 **File: `src/foundry_mcp/config/research.py`**
 
@@ -658,7 +691,8 @@ crossref_enabled: bool = True             # Free, on by default
 | `models/deep_research.py` | Modify | 5 (CitationSearchTool, RelatedPapersTool) |
 | `phases/topic_research.py` | Modify | 5 (tool injection, dispatch), 6 (strategic primitives) |
 | `phases/brief.py` | Modify | 7 (provider hint extraction) |
-| `phases/supervision_delegation.py` | Modify | 7 (active providers in delegation) — refactored in PLAN-0 |
+| `phases/supervision.py` | Modify | 7 (active providers in delegation orchestration) |
+| `phases/supervision_prompts.py` | Modify | 7 (active providers in delegation prompts) |
 | `providers/resilience/config.py` | Modify | 8 (rate limits for new providers) |
 | `config/research.py` | Modify | 8 (new provider config fields) |
 

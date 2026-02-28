@@ -4,7 +4,7 @@
 >
 > **Estimated scope**: ~1000-1400 LOC implementation + ~400-550 LOC tests across 10-14 files
 >
-> **Dependencies**: PLAN-0 (ResearchExtensions container model, supervision.py refactoring)
+> **Dependencies**: PLAN-0 (ResearchExtensions container model, remaining supervision.py refactoring)
 >
 > **Note on state model**: All new state fields (`research_profile`, `provenance`, `structured_output`) are stored on `state.extensions` (introduced in PLAN-0 item 2), not directly on `DeepResearchState`. Convenience property accessors on the state object keep downstream code clean.
 
@@ -255,19 +255,19 @@ state.provenance.append(
 )
 ```
 
-**Files: `phases/supervision_delegation.py`, `phases/supervision_coverage.py`** (refactored in PLAN-0)
+**Files: `phases/supervision.py` (orchestration), `phases/supervision_coverage.py` (coverage helpers)**
 
 #### 2e. Log supervision events
 
-Instrument the following points (in refactored modules from PLAN-0 item 1):
-1. In `supervision_delegation.py`: after delegation response — log `decomposition` event with directives
+Instrument the following points in existing supervision modules:
+1. In `supervision.py`: after delegation response in `_run_think_delegate_step()` — log `decomposition` event with directives
 2. In topic researcher after each provider search — log `provider_query` event
-3. When sources are added to state — log `source_discovered` event
+3. When sources are added to state in `_execute_and_merge_directives()` — log `source_discovered` event
 4. When deduplication occurs — log `source_deduplicated` event
-5. In `supervision_coverage.py`: after `_assess_coverage_heuristic()` — log `coverage_assessment` with scores and decision
+5. In `supervision_coverage.py`: after `assess_coverage_heuristic()` — log `coverage_assessment` with scores and decision
 6. When gaps are added — log `gap_identified`
 7. When gaps are resolved — log `gap_resolved`
-8. At end of each supervision round — log `iteration_complete`
+8. At end of each supervision round in `_post_round_bookkeeping()` — log `iteration_complete`
 
 **File: `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py`**
 
@@ -514,11 +514,11 @@ Your brief MUST additionally address these dimensions:
 
 If the profile specifies `source_type_hierarchy`, `disciplinary_scope`, `time_period`, or `methodology_preferences`, inject those as pre-filled constraints so the brief incorporates them.
 
-**File: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision.py`**
+**File: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision_prompts.py`**
 
 #### 5b. Profile-aware decomposition
 
-In `_build_first_round_delegation_system_prompt()`, append when academic:
+In `build_first_round_delegation_system_prompt()`, append when academic:
 
 ```
 Additional decomposition guidelines for ACADEMIC research:
@@ -642,9 +642,9 @@ This is always present in the response. Consumers that want just the report igno
 | `phases/synthesis.py` | Modify | 3 (literature_review type), 6 (structured output) |
 | `phases/_citation_postprocess.py` | Modify | 4 (APA formatting) |
 | `phases/brief.py` | Modify | 5 (profile-aware brief) |
-| `phases/supervision_delegation.py` | Modify | 2 (provenance logging) — refactored in PLAN-0 |
-| `phases/supervision_coverage.py` | Modify | 2 (provenance logging) — refactored in PLAN-0 |
-| `phases/supervision_first_round.py` | Modify | 5 (profile-aware decomposition) — refactored in PLAN-0 |
+| `phases/supervision.py` | Modify | 2 (provenance logging in orchestration loop) |
+| `phases/supervision_coverage.py` | Modify | 2 (provenance logging after coverage assessment) |
+| `phases/supervision_prompts.py` | Modify | 5 (profile-aware decomposition prompts) |
 | `phases/topic_research.py` | Modify | 2 (provenance logging for provider queries) |
 | `memory.py` | Modify | 2 (provenance persistence) |
 | `handlers_deep_research.py` | Modify | 1 (profile parameter), 2 (provenance endpoint), 6 (structured output in response) |
