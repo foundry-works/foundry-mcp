@@ -930,10 +930,14 @@ class DeepResearchState(BaseModel):
     # Provider tracking (per-phase LLM provider configuration)
     # Supports ProviderSpec format: "[cli]gemini:pro" or simple names: "gemini"
     planning_provider: Optional[str] = Field(default=None)
+    analysis_provider: Optional[str] = Field(default=None)
     synthesis_provider: Optional[str] = Field(default=None)
+    refinement_provider: Optional[str] = Field(default=None)
     # Per-phase model overrides (from ProviderSpec parsing)
     planning_model: Optional[str] = Field(default=None)
+    analysis_model: Optional[str] = Field(default=None)
     synthesis_model: Optional[str] = Field(default=None)
+    refinement_model: Optional[str] = Field(default=None)
 
     # Supervision tracking (iterative coverage assessment)
     supervision_round: int = Field(

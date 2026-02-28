@@ -14,7 +14,6 @@ from typing import Any, List, Optional
 from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.errors.provider import ContextWindowError, ProviderTimeoutError
 from foundry_mcp.core.llm_config.provider_spec import ProviderSpec
-from foundry_mcp.core.research.token_management import get_effective_context, get_model_limits
 from foundry_mcp.core.providers import (
     ProviderContext,
     ProviderHooks,
@@ -27,6 +26,7 @@ from foundry_mcp.core.providers import (
 )
 from foundry_mcp.core.providers.registry import available_providers, resolve_provider
 from foundry_mcp.core.research.memory import ResearchMemory
+from foundry_mcp.core.research.token_management import get_effective_context, get_model_limits
 
 logger = logging.getLogger(__name__)
 

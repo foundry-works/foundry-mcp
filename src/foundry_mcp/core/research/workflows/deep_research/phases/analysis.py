@@ -17,8 +17,8 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, Optional
 
-from foundry_mcp.core.research.docx_extractor import DocxExtractor  # noqa: F401  # re-export for test patch targets
 from foundry_mcp.core.research.document_digest import DocumentDigestor  # noqa: F401  # re-export for test patch targets
+from foundry_mcp.core.research.docx_extractor import DocxExtractor  # noqa: F401  # re-export for test patch targets
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.models.sources import SourceQuality
 from foundry_mcp.core.research.pdf_extractor import PDFExtractor  # noqa: F401  # re-export for test patch targets

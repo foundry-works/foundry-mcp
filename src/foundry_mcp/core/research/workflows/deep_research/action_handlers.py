@@ -21,7 +21,7 @@ from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
 )
 from foundry_mcp.core.research.models.sources import ResearchMode
-from foundry_mcp.core.research.workflows.base import MAX_PROMPT_LENGTH, WorkflowResult, _max_prompt_chars_for_model
+from foundry_mcp.core.research.workflows.base import WorkflowResult, _max_prompt_chars_for_model
 from foundry_mcp.core.research.workflows.deep_research._constants import (
     MAX_CONCURRENT_PROVIDERS,
     MAX_ITERATIONS,
