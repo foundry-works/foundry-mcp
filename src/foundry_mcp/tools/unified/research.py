@@ -26,6 +26,7 @@ from foundry_mcp.tools.unified.research_handlers._helpers import (  # noqa: F401
 from foundry_mcp.tools.unified.research_handlers.handlers_deep_research import (  # noqa: F401
     _handle_deep_research,
     _handle_deep_research_delete,
+    _handle_deep_research_export,
     _handle_deep_research_list,
     _handle_deep_research_report,
     _handle_deep_research_status,

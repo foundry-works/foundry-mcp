@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
 )
+from foundry_mcp.core.research.models.sources import ResearchMode, SourceType
 
 # ======================================================================
 # Verdict / issue parsing patterns
@@ -286,6 +287,83 @@ def compute_coverage_delta(
 
 
 # ======================================================================
+# PLAN-3: Influence-aware source scoring
+# ======================================================================
+
+
+def _is_academic_mode(state: DeepResearchState) -> bool:
+    """Check if the research session is in academic mode.
+
+    Returns True when:
+    - state.research_mode == ACADEMIC, OR
+    - state.extensions.research_profile has source_quality_mode == "academic"
+      (PLAN-1 forward-compatible)
+    """
+    if state.research_mode == ResearchMode.ACADEMIC:
+        return True
+    profile = state.extensions.research_profile
+    if profile is not None and hasattr(profile, "source_quality_mode"):
+        return getattr(profile, "source_quality_mode", None) == "academic"
+    return False
+
+
+def compute_source_influence(
+    state: DeepResearchState,
+    config: Any,
+) -> float:
+    """Compute influence score based on citation metadata.
+
+    For academic-mode sessions:
+    - Sources with citation_count >= high threshold (100): weight 3x
+    - Sources with citation_count >= medium threshold (20): weight 2x
+    - Sources with citation_count >= low threshold (5): weight 1x
+    - Sources with citation_count < low threshold or unknown: weight 0.5x
+    - Bonus for influential_citation_count > 0
+
+    Returns 0.0-1.0 score indicating how many high-impact sources are present.
+    For non-academic sessions, returns 1.0 (neutral — no impact on coverage).
+    """
+    if not _is_academic_mode(state):
+        return 1.0
+
+    academic_sources = [s for s in state.sources if s.source_type == SourceType.ACADEMIC]
+    if not academic_sources:
+        return 0.5  # No academic sources in academic mode is a weak signal
+
+    high_threshold = getattr(config, "deep_research_influence_high_citation_threshold", 100)
+    medium_threshold = getattr(config, "deep_research_influence_medium_citation_threshold", 20)
+    low_threshold = getattr(config, "deep_research_influence_low_citation_threshold", 5)
+
+    total_weight = 0.0
+    max_possible_weight = 0.0
+
+    for source in academic_sources:
+        citation_count = source.metadata.get("citation_count")
+        influential_count = source.metadata.get("influential_citation_count", 0)
+
+        if citation_count is not None and citation_count >= high_threshold:
+            weight = 3.0
+        elif citation_count is not None and citation_count >= medium_threshold:
+            weight = 2.0
+        elif citation_count is not None and citation_count >= low_threshold:
+            weight = 1.0
+        else:
+            weight = 0.5
+
+        # Bonus for influential citations
+        if influential_count and influential_count > 0:
+            weight += 0.5
+
+        total_weight += weight
+        max_possible_weight += 3.5  # Max: 3.0 base + 0.5 influential bonus
+
+    if max_possible_weight == 0:
+        return 0.5
+
+    return min(1.0, total_weight / max_possible_weight)
+
+
+# ======================================================================
 # Heuristic coverage assessment
 # ======================================================================
 
@@ -373,17 +451,38 @@ def assess_coverage_heuristic(
     # --- Dimension 3: Query completion rate ---
     query_completion_rate = len(completed) / total_queries if total_queries > 0 else 0.0
 
+    # --- Dimension 4 (PLAN-3): Source influence ---
+    source_influence = compute_source_influence(state, config)
+
     # --- Weighted confidence ---
-    weights = getattr(
+    # Use academic weights when in academic mode and no explicit weights are set.
+    is_academic = _is_academic_mode(state)
+    explicit_weights = getattr(
         config,
         "deep_research_coverage_confidence_weights",
         None,
-    ) or {"source_adequacy": 0.5, "domain_diversity": 0.2, "query_completion_rate": 0.3}
+    )
+    if explicit_weights:
+        weights = explicit_weights
+    elif is_academic:
+        weights = getattr(
+            config,
+            "deep_research_academic_coverage_weights",
+            None,
+        ) or {
+            "source_adequacy": 0.3,
+            "domain_diversity": 0.15,
+            "query_completion_rate": 0.2,
+            "source_influence": 0.35,
+        }
+    else:
+        weights = {"source_adequacy": 0.5, "domain_diversity": 0.2, "query_completion_rate": 0.3}
     total_weight = sum(weights.values())
-    dimensions = {
+    dimensions: dict[str, float] = {
         "source_adequacy": source_adequacy,
         "domain_diversity": domain_diversity,
         "query_completion_rate": query_completion_rate,
+        "source_influence": source_influence,
     }
     confidence = (
         sum(dimensions[k] * weights.get(k, 0.0) for k in dimensions) / total_weight if total_weight > 0 else 0.0

@@ -110,6 +110,12 @@ class ResearchConfig:
     deep_research_coverage_confidence_weights: Optional[dict] = (
         None  # Dimension weights: {source_adequacy, domain_diversity, query_completion_rate}
     )
+    # PLAN-3: Academic coverage weights (used when research_mode == ACADEMIC)
+    deep_research_academic_coverage_weights: Optional[dict] = None  # Default: {source_adequacy: 0.3, domain_diversity: 0.15, query_completion_rate: 0.2, source_influence: 0.35}
+    # PLAN-3: Influence scoring thresholds (citation counts)
+    deep_research_influence_high_citation_threshold: int = 100
+    deep_research_influence_medium_citation_threshold: int = 20
+    deep_research_influence_low_citation_threshold: int = 5
     deep_research_supervision_wall_clock_timeout: float = (
         1800.0  # Max wall-clock seconds for entire supervision phase (default 30 min)
     )

@@ -15,7 +15,11 @@ if TYPE_CHECKING:
     from foundry_mcp.core.research.memory import ResearchMemory
 
 from foundry_mcp.core.research.context_budget import AllocationResult
-from foundry_mcp.core.research.models.deep_research import DeepResearchState
+from foundry_mcp.core.research.models.deep_research import (
+    DeepResearchState,
+    ResearchLandscape,
+)
+from foundry_mcp.core.research.models.sources import ResearchMode, SourceType
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research._budgeting import (
     allocate_synthesis_budget,
@@ -784,6 +788,19 @@ class SynthesisPhaseMixin:
         # Store report in state
         state.report = report
 
+        # PLAN-3: Build research landscape metadata (pure data transformation)
+        try:
+            landscape = self._build_research_landscape(state)
+            state.extensions.research_landscape = landscape
+            logger.info(
+                "Built research landscape: %d timeline entries, %d venues, %d top-cited papers",
+                len(landscape.timeline),
+                len(landscape.venue_distribution),
+                len(landscape.top_cited_papers),
+            )
+        except Exception:
+            logger.warning("Failed to build research landscape", exc_info=True)
+
         # Auto-save report as markdown file
         output_path = _save_report_markdown(state)
         if output_path:
@@ -839,6 +856,102 @@ class SynthesisPhaseMixin:
             },
         )
 
+    # ------------------------------------------------------------------
+    # PLAN-3: Research landscape builder
+    # ------------------------------------------------------------------
+
+    def _build_research_landscape(self, state: DeepResearchState) -> ResearchLandscape:
+        """Extract structured landscape metadata from research sources.
+
+        Pure data transformation — iterates state.sources, aggregates by year,
+        venue, field, citation count, and author. No additional API or LLM calls.
+        """
+        timeline_data: dict[int, dict[str, Any]] = {}
+        venue_dist: dict[str, int] = {}
+        field_dist: dict[str, int] = {}
+        author_freq: dict[str, int] = {}
+        source_type_count: dict[str, int] = {}
+        cited_papers: list[dict[str, Any]] = []
+
+        for source in state.sources:
+            # Source type breakdown
+            st = source.source_type.value if hasattr(source.source_type, "value") else str(source.source_type)
+            source_type_count[st] = source_type_count.get(st, 0) + 1
+
+            meta = source.metadata or {}
+
+            # Year-based timeline
+            year = meta.get("year")
+            if year and isinstance(year, int):
+                if year not in timeline_data:
+                    timeline_data[year] = {"year": year, "count": 0, "key_papers": []}
+                timeline_data[year]["count"] += 1
+                citation_count = meta.get("citation_count", 0) or 0
+                if citation_count >= 10:
+                    timeline_data[year]["key_papers"].append(
+                        {"title": source.title, "citation_count": citation_count}
+                    )
+
+            # Venue distribution
+            venue = meta.get("venue") or meta.get("journal")
+            if venue and isinstance(venue, str) and venue.strip():
+                venue_dist[venue.strip()] = venue_dist.get(venue.strip(), 0) + 1
+
+            # Field distribution
+            fields = meta.get("fields_of_study") or meta.get("fields") or []
+            if isinstance(fields, list):
+                for f in fields:
+                    if isinstance(f, str) and f.strip():
+                        field_dist[f.strip()] = field_dist.get(f.strip(), 0) + 1
+
+            # Author frequency
+            authors = meta.get("authors") or []
+            if isinstance(authors, list):
+                for author in authors:
+                    name = author.get("name", author) if isinstance(author, dict) else str(author)
+                    if name and isinstance(name, str) and name.strip():
+                        author_freq[name.strip()] = author_freq.get(name.strip(), 0) + 1
+
+            # Collect papers with citation counts for top-cited ranking
+            citation_count = meta.get("citation_count")
+            if citation_count is not None and isinstance(citation_count, (int, float)):
+                author_names = []
+                for a in (meta.get("authors") or []):
+                    if isinstance(a, dict):
+                        author_names.append(a.get("name", ""))
+                    elif isinstance(a, str):
+                        author_names.append(a)
+                cited_papers.append({
+                    "title": source.title,
+                    "authors": ", ".join(author_names),
+                    "year": meta.get("year"),
+                    "citation_count": int(citation_count),
+                    "doi": meta.get("doi", ""),
+                })
+
+        # Sort timeline ascending by year
+        timeline = sorted(timeline_data.values(), key=lambda x: x["year"])
+        # Sort key_papers descending within each year
+        for entry in timeline:
+            entry["key_papers"] = sorted(
+                entry["key_papers"], key=lambda x: x.get("citation_count", 0), reverse=True
+            )[:5]
+
+        # Top-cited papers descending
+        top_cited = sorted(cited_papers, key=lambda x: x.get("citation_count", 0), reverse=True)[:20]
+
+        # Sort author frequency descending
+        sorted_authors = dict(sorted(author_freq.items(), key=lambda x: x[1], reverse=True)[:30])
+
+        return ResearchLandscape(
+            timeline=timeline,
+            venue_distribution=venue_dist,
+            field_distribution=field_dist,
+            top_cited_papers=top_cited,
+            author_frequency=sorted_authors,
+            source_type_breakdown=source_type_count,
+        )
+
     def _build_synthesis_system_prompt(self, state: DeepResearchState) -> str:
         """Build system prompt for report synthesis.
 
@@ -854,7 +967,7 @@ class SynthesisPhaseMixin:
         query_type = _classify_query_type(state.original_query)
         structure_guidance = _STRUCTURE_GUIDANCE.get(query_type, _STRUCTURE_GUIDANCE["explanation"])
 
-        return f"""You are a research synthesizer. Your task is to create a comprehensive, well-structured research report from analyzed findings.
+        base_prompt = f"""You are a research synthesizer. Your task is to create a comprehensive, well-structured research report from analyzed findings.
 
 ## Report Structure
 
@@ -897,6 +1010,32 @@ If the query is in English, write in English. If the query is in Chinese, write 
 The research and findings may be in English, but you must translate information to match the query language.
 
 IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
+
+        # PLAN-3: Add academic-specific synthesis instructions
+        if state.research_mode == ResearchMode.ACADEMIC:
+            base_prompt += """
+
+## Study Comparison Table (Academic Mode)
+
+If the research involves multiple empirical studies, include a markdown comparison table
+in the "Methodological Approaches" section with columns:
+
+| Study | Year | Method | Sample | Key Finding | Effect Size | Limitations |
+|-------|------|--------|--------|-------------|-------------|-------------|
+
+Only include this table when there are 3+ empirical studies with sufficient methodological
+detail. Populate from the findings provided — do not invent data. Use "Not reported" for
+missing values rather than omitting the study.
+
+## Research Gaps & Future Directions (Academic Mode)
+
+For the "Research Gaps & Future Directions" section:
+- Base this on the identified research gaps provided in the input
+- Distinguish between completely unexplored areas and partially addressed topics
+- For each gap, suggest specific research questions or methodological approaches
+- Prioritize gaps by their potential impact on the field"""
+
+        return base_prompt
 
     def _build_synthesis_user_prompt(
         self,
@@ -1095,7 +1234,32 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                         prompt_parts.append(f"  Preferred source: [{cn}]")
             prompt_parts.append("")
 
-        if state.gaps:
+        # PLAN-3: Enhanced gap injection for academic queries
+        is_academic = state.research_mode == ResearchMode.ACADEMIC
+        unresolved_gaps = [g for g in state.gaps if not g.resolved]
+        resolved_gaps = [g for g in state.gaps if g.resolved]
+
+        if unresolved_gaps and is_academic:
+            prompt_parts.append("## Identified Research Gaps (from iterative analysis)")
+            for i, gap in enumerate(unresolved_gaps, 1):
+                prompt_parts.append(f"{i}. {sanitize_external_content(gap.description)} (priority: {gap.priority})")
+            prompt_parts.append(
+                "\nIncorporate these gaps into a 'Research Gaps & Future Directions' "
+                "section. Frame them constructively — what specific studies or "
+                "methodologies would address each gap?"
+            )
+            prompt_parts.append("")
+
+            if resolved_gaps:
+                prompt_parts.append("## Partially Addressed Gaps")
+                for gap in resolved_gaps:
+                    resolution = sanitize_external_content(gap.resolution_notes or "No details")
+                    prompt_parts.append(
+                        f"- {sanitize_external_content(gap.description)} — Addressed by: {resolution}"
+                    )
+                prompt_parts.append("")
+        elif state.gaps:
+            # Non-academic: original compact format
             prompt_parts.append("## Knowledge Gaps Identified")
             for gap in state.gaps:
                 status = "addressed" if gap.resolved else "unresolved"

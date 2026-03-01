@@ -378,3 +378,91 @@ def _handle_deep_research_delete(
             }
         )
     )
+
+
+# ---------------------------------------------------------------------------
+# PLAN-3: BibTeX / RIS export
+# ---------------------------------------------------------------------------
+
+_DR_EXPORT_SCHEMA = {
+    "research_id": Str(required=True),
+}
+
+
+def _handle_deep_research_export(
+    *,
+    research_id: Optional[str] = None,
+    format: str = "bibtex",
+    academic_only: bool = True,
+    **kwargs: Any,
+) -> dict:
+    """Export bibliography from a completed research session.
+
+    Args:
+        research_id: ID of the deep research session.
+        format: Export format — ``"bibtex"`` or ``"ris"``.
+        academic_only: When True, only export academic sources.
+
+    Returns:
+        Response envelope with the exported bibliography string.
+    """
+    payload = {"research_id": research_id}
+    err = validate_payload(payload, _DR_EXPORT_SCHEMA, tool_name="research", action="deep-research-export")
+    if err:
+        return err
+
+    memory = _get_memory()
+    assert research_id is not None  # validated by _DR_EXPORT_SCHEMA
+    state = memory.load_deep_research(research_id)
+
+    if state is None:
+        return asdict(
+            error_response(
+                f"Research session '{research_id}' not found",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Use deep-research-list to find valid research IDs",
+            )
+        )
+
+    from foundry_mcp.core.research.models.sources import SourceType
+
+    # Filter sources
+    sources = state.sources
+    if academic_only:
+        sources = [s for s in sources if s.source_type == SourceType.ACADEMIC]
+
+    if not sources:
+        return asdict(
+            success_response(
+                data={
+                    "research_id": research_id,
+                    "format": format,
+                    "source_count": 0,
+                    "content": "",
+                    "message": "No sources to export"
+                    + (" (try academic_only=false)" if academic_only else ""),
+                }
+            )
+        )
+
+    # Generate export
+    if format == "ris":
+        from foundry_mcp.core.research.export.ris import sources_to_ris
+
+        content = sources_to_ris(sources)
+    else:
+        from foundry_mcp.core.research.export.bibtex import sources_to_bibtex
+
+        content = sources_to_bibtex(sources)
+
+    return asdict(
+        success_response(
+            data={
+                "research_id": research_id,
+                "format": format,
+                "source_count": len(sources),
+                "content": content,
+            }
+        )
+    )

@@ -768,6 +768,60 @@ class DeepResearchPhase(str, Enum):
     SYNTHESIS = "synthesis"
 
 
+class StudyComparison(BaseModel):
+    """Structured comparison of an empirical study (PLAN-3 item 4)."""
+
+    study_title: str
+    authors: str = ""
+    year: Optional[int] = None
+    methodology: Optional[str] = None
+    sample_description: Optional[str] = None
+    key_finding: Optional[str] = None
+    source_id: str = ""
+
+
+class ResearchLandscape(BaseModel):
+    """Structured metadata about the research landscape (PLAN-3 item 2).
+
+    Built from source metadata after synthesis — pure data transformation,
+    no additional LLM or API calls. Included in structured output for
+    downstream consumption by visualization or analysis tools.
+    """
+
+    timeline: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="[{year: int, count: int, key_papers: [{title, citation_count}]}]",
+    )
+    methodology_breakdown: dict[str, int] = Field(
+        default_factory=dict,
+        description='{"RCT": 5, "qualitative": 3, "meta_analysis": 2, ...}',
+    )
+    venue_distribution: dict[str, int] = Field(
+        default_factory=dict,
+        description='{"Journal of Educational Psychology": 4, ...}',
+    )
+    field_distribution: dict[str, int] = Field(
+        default_factory=dict,
+        description='{"Education": 8, "Psychology": 5, ...}',
+    )
+    top_cited_papers: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="[{title, authors, year, citation_count, doi}] sorted by citation_count desc",
+    )
+    author_frequency: dict[str, int] = Field(
+        default_factory=dict,
+        description="Most prolific authors in results, by count",
+    )
+    source_type_breakdown: dict[str, int] = Field(
+        default_factory=dict,
+        description='{"academic": 15, "web": 3}',
+    )
+    study_comparisons: list[StudyComparison] = Field(
+        default_factory=list,
+        description="Structured comparisons of empirical studies (PLAN-3 item 4)",
+    )
+
+
 class ResearchExtensions(BaseModel):
     """Container for extended research capabilities.
 
@@ -796,9 +850,9 @@ class ResearchExtensions(BaseModel):
     )
 
     # PLAN-3: Intelligence
-    research_landscape: Optional[Any] = Field(
+    research_landscape: Optional[ResearchLandscape] = Field(
         default=None,
-        description="Research landscape from PLAN-3 (forward reference placeholder)",
+        description="Structured research landscape metadata (PLAN-3)",
     )
 
     # PLAN-4: Deep Analysis
@@ -1080,6 +1134,11 @@ class DeepResearchState(BaseModel):
     def provenance(self) -> Optional[Any]:
         """Convenience accessor for extensions.provenance."""
         return self.extensions.provenance
+
+    @property
+    def research_landscape(self) -> Optional[ResearchLandscape]:
+        """Convenience accessor for extensions.research_landscape."""
+        return self.extensions.research_landscape
 
     # =========================================================================
     # Collection Management Methods

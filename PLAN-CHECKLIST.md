@@ -1,106 +1,74 @@
-# PLAN-0 Checklist: Prerequisites
+# PLAN-3 Checklist: Research Intelligence
 
 > Track implementation progress for [PLAN.md](PLAN.md).
-> Mark items `[x]` as completed. Sub-items can be worked in parallel where noted.
+> Mark items `[x]` as completed.
 
 ---
 
-## Phase 1: Complete Supervision Refactoring
+## Item 1: Influence-Aware Source Ranking
 
-### 1a. Extract first-round decomposition pipeline
-> **New file**: `phases/supervision_first_round.py`
-> **Parallel with**: Phase 2 (independent)
+- [x] Add influence scoring config to `config/research.py`
+  - [x] `deep_research_influence_high_citation_threshold` (default: 100)
+  - [x] `deep_research_influence_medium_citation_threshold` (default: 20)
+  - [x] `deep_research_influence_low_citation_threshold` (default: 5)
+  - [x] `deep_research_academic_coverage_weights` (default: source_adequacy 0.3, domain_diversity 0.15, query_completion_rate 0.2, source_influence 0.35)
+- [x] Add `_is_academic_mode()` helper to `supervision_coverage.py`
+- [x] Add `compute_source_influence()` to `supervision_coverage.py`
+- [x] Integrate `source_influence` dimension into `assess_coverage_heuristic()`
+- [x] Use academic weights when `research_mode == ACADEMIC` and no explicit weights set
+- [x] Update compression supervisor brief to request citation counts
+- [x] Tests: general mode returns neutral, high/mixed/unknown citations scored correctly
+- [x] Tests: academic weights include source_influence, general weights neutral
 
-- [ ] Identify exact line ranges for the 4 methods to extract from `supervision.py`
-  - [ ] `_first_round_decompose_critique_revise()`
-  - [ ] `_run_first_round_generate()`
-  - [ ] `_run_first_round_critique()`
-  - [ ] `_run_first_round_revise()`
-- [ ] Determine function signatures (state, config, memory params) matching existing extraction pattern
-- [ ] Create `phases/supervision_first_round.py` with extracted functions
-- [ ] Update `supervision.py` to import and delegate to extracted functions
-- [ ] Update `phases/__init__.py` exports if needed
-- [ ] Verify all existing supervision tests pass unchanged (zero-diff)
-- [ ] Add structural test: import `supervision_first_round` module independently
-- [ ] Add test: first-round pipeline produces same results via extracted module
+## Item 2: Research Landscape Metadata
 
-### 1b. Evaluate further delegation extraction (optional)
-> **Priority**: Low — skip if 1a achieves target line count
+- [x] Add `ResearchLandscape` model to `models/deep_research.py`
+  - [x] timeline, methodology_breakdown, venue_distribution, field_distribution
+  - [x] top_cited_papers, author_frequency, source_type_breakdown
+  - [x] study_comparisons (shared with item 4)
+- [x] Update `ResearchExtensions.research_landscape` to concrete `ResearchLandscape` type
+- [x] Add `DeepResearchState.research_landscape` convenience accessor
+- [x] Add `_build_research_landscape()` method to `SynthesisPhaseMixin`
+- [x] Call landscape builder from `_finalize_synthesis_report()`
+- [x] Tests: empty landscape, populated landscape, extensions field, state accessor
 
-- [ ] Assess whether extracting these helpers to `supervision_helpers.py` is worth it:
-  - [ ] `_compress_directive_results_inline()`
-  - [ ] `_build_directive_fallback_summary()`
-  - [ ] `_build_evidence_inventory()`
-- [ ] If proceeding: create `supervision_helpers.py`, update imports, verify tests
+## Item 3: Explicit Research Gaps Section
 
-### 1c. Remove thin wrapper methods
-> **Depends on**: 1a complete
+- [x] Enhance `_append_contradictions_and_gaps()` in `synthesis.py`
+- [x] Inject structured unresolved gaps with priority for academic mode
+- [x] Include resolved gaps with resolution notes for academic mode
+- [x] Add constructive framing instructions for "Research Gaps & Future Directions" section
+- [x] Preserve original compact format for non-academic queries
+- [x] Tests: unresolved gaps available, resolution notes preserved
 
-- [ ] Identify thin wrapper methods at bottom of `supervision.py` (~lines 2107-2174)
-- [ ] Inline each wrapper at its call site(s)
-- [ ] Remove ~60 lines of wrapper methods
-- [ ] Verify all existing tests pass unchanged
+## Item 4: Cross-Study Comparison Tables
 
-### Phase 1 Validation
+- [x] Add `StudyComparison` model to `models/deep_research.py`
+- [x] Add `study_comparisons` field to `ResearchLandscape`
+- [x] Add comparison table instructions to synthesis system prompt for academic mode
+- [x] Add "Research Gaps & Future Directions" instructions for academic mode
 
-- [ ] `supervision.py` is under 1,800 lines
-- [ ] `supervision_first_round.py` exists and is importable
-- [ ] Full test suite passes with zero test modifications
-- [ ] `from phases.supervision import SupervisionPhaseMixin` still works
+## Item 5: BibTeX & RIS Export
 
----
-
-## Phase 2: ResearchExtensions Container Model
-> **Parallel with**: Phase 1 (independent)
-
-### 2a. Add ResearchExtensions model
-> **File**: `models/deep_research.py`
-
-- [ ] Define `ResearchExtensions(BaseModel)` with `Config: exclude_none = True`
-- [ ] Add placeholder fields with forward references (all `Optional`, all `None` default):
-  - [ ] `research_profile: Optional["ResearchProfile"] = None`
-  - [ ] `provenance: Optional["ProvenanceLog"] = None`
-  - [ ] `structured_output: Optional["StructuredResearchOutput"] = None`
-  - [ ] `research_landscape: Optional["ResearchLandscape"] = None`
-  - [ ] `citation_network: Optional["CitationNetwork"] = None`
-  - [ ] `methodology_assessments: list["MethodologyAssessment"] = Field(default_factory=list)`
-
-### 2b. Add extensions field to DeepResearchState
-
-- [ ] Add `extensions: ResearchExtensions = Field(default_factory=ResearchExtensions)` to `DeepResearchState`
-- [ ] Verify existing serialized states are backward-compatible (default empty extensions)
-
-### 2c. Add convenience accessors
-
-- [ ] Add `@property research_profile` on `DeepResearchState`
-- [ ] Add `@property provenance` on `DeepResearchState`
-- [ ] Verify accessor behavior with both None and populated extensions
-
-### Phase 2 Testing
-
-- [ ] Unit test: `ResearchExtensions()` default serializes to `{}`
-- [ ] Unit test: extensions with one field populated serializes only that field
-- [ ] Unit test: `DeepResearchState` with default extensions is backward-compatible
-- [ ] Unit test: convenience property accessors work correctly
-- [ ] Full test suite passes with zero test modifications
+- [x] Create `core/research/export/__init__.py`
+- [x] Create `core/research/export/bibtex.py`
+  - [x] `sources_to_bibtex()` with stable unique citation keys
+  - [x] `source_to_bibtex_entry()` with entry type detection
+  - [x] BibTeX special character escaping
+- [x] Create `core/research/export/ris.py`
+  - [x] `sources_to_ris()` with TY-ER blocks
+  - [x] `source_to_ris_entry()` with entry type mapping
+- [x] Add `_handle_deep_research_export()` handler
+- [x] Wire `deep-research-export` action into router
+- [x] Tests: BibTeX full/minimal/conference/escaping/uniqueness/empty
+- [x] Tests: RIS full/minimal/conference/empty/multi-author
 
 ---
 
 ## Final Validation
 
-- [ ] `supervision.py` < 1,800 lines
-- [ ] All existing tests pass with zero changes
-- [ ] `DeepResearchState` has a single `extensions` field
-- [ ] No behavioral changes — purely structural
-- [ ] New structural tests all pass (~70-110 LOC total)
-
----
-
-## Estimated Scope
-
-| Item | Impl LOC | Test LOC |
-|------|----------|----------|
-| 1a. First-round extraction | ~100-200 | ~30-50 |
-| 1c. Wrapper inlining | ~-60 (removal) | 0 |
-| 2a-c. ResearchExtensions | ~100-200 | ~40-60 |
-| **Total** | **~200-400** | **~70-110** |
+- [x] All 27 new PLAN-3 tests pass
+- [x] All 192 existing tests pass with zero regressions
+- [x] No behavioral changes to general-mode queries
+- [x] Academic features activate only when `research_mode == ACADEMIC`
+- [x] Export action wired into research router

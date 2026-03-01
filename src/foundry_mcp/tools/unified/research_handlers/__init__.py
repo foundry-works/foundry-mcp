@@ -22,6 +22,7 @@ from foundry_mcp.tools.unified.research_handlers.handlers_deep_research import (
     _handle_deep_research,
     _handle_deep_research_delete,
     _handle_deep_research_evaluate,
+    _handle_deep_research_export,
     _handle_deep_research_list,
     _handle_deep_research_report,
     _handle_deep_research_status,
@@ -101,6 +102,11 @@ _ACTION_DEFINITIONS = [
         name="deep-research-evaluate",
         handler=_handle_deep_research_evaluate,
         summary=_ACTION_SUMMARY["deep-research-evaluate"],
+    ),
+    ActionDefinition(
+        name="deep-research-export",
+        handler=_handle_deep_research_export,
+        summary=_ACTION_SUMMARY["deep-research-export"],
     ),
     ActionDefinition(
         name="thread-list",
