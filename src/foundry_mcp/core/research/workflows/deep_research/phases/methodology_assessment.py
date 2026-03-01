@@ -20,6 +20,9 @@ from foundry_mcp.core.research.models.sources import (
     SourceType,
     StudyDesign,
 )
+from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
+    sanitize_external_content,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -73,9 +76,9 @@ def _build_extraction_user_prompt(
     )
 
     return (
-        f"Source: {source_title}\n"
+        f"Source: {sanitize_external_content(source_title)}\n"
         f"{basis_note}\n\n"
-        f"Content:\n{content[:8000]}"  # Cap content to avoid token overflow
+        f"Content:\n{sanitize_external_content(content[:8000])}"  # Cap content to avoid token overflow
     )
 
 
@@ -391,22 +394,24 @@ def format_methodology_context(
         if assessment.effect_size or assessment.statistical_significance:
             effect_parts = []
             if assessment.effect_size:
-                effect_parts.append(assessment.effect_size)
+                effect_parts.append(sanitize_external_content(assessment.effect_size))
             if assessment.statistical_significance:
                 effect_parts.append(f"({assessment.statistical_significance})")
             lines.append(f"    Effect: {' '.join(effect_parts)}")
 
         # Sample description
         if assessment.sample_description:
-            lines.append(f"    Sample: {assessment.sample_description}")
+            lines.append(f"    Sample: {sanitize_external_content(assessment.sample_description)}")
 
         # Limitations
         if assessment.limitations_noted:
-            lines.append(f"    Limitations: {'; '.join(assessment.limitations_noted)}")
+            safe_limitations = [sanitize_external_content(l) for l in assessment.limitations_noted]
+            lines.append(f"    Limitations: {'; '.join(safe_limitations)}")
 
         # Biases
         if assessment.potential_biases:
-            lines.append(f"    Potential biases: {'; '.join(assessment.potential_biases)}")
+            safe_biases = [sanitize_external_content(b) for b in assessment.potential_biases]
+            lines.append(f"    Potential biases: {'; '.join(safe_biases)}")
 
         # Content basis caveat
         if assessment.content_basis == "abstract":

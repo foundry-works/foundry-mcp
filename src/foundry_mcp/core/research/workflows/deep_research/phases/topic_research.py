@@ -501,7 +501,8 @@ def _build_react_user_prompt(
             role = msg.get("role", "unknown")
             content = msg.get("content", "")
             if role == "assistant":
-                parts.append(f'\n<turn number="{i + 1}" role="assistant">\n{content}\n</turn>')
+                safe_content = sanitize_external_content(content)
+                parts.append(f'\n<turn number="{i + 1}" role="assistant">\n{safe_content}\n</turn>')
             elif role == "tool":
                 tool_name = msg.get("tool", "unknown")
                 # Tool results contain web-sourced content — sanitize before
@@ -2222,7 +2223,9 @@ class TopicResearchMixin:
         result.sources_found += 1
 
         # Build response for the researcher
-        content_preview = content[:500] + "..." if len(content) > 500 else content
+        content_preview = sanitize_external_content(
+            content[:500] + "..." if len(content) > 500 else content
+        )
         response_parts = [
             f"Extracted {pdf_result.extracted_page_count} pages from PDF ({len(content)} chars).",
             section_info,

@@ -352,8 +352,8 @@ class TestOpenAlexSearch:
             assert params["per_page"] == MAX_PER_PAGE
 
     @pytest.mark.asyncio
-    async def test_search_api_key_in_params(self, provider, mock_http_response):
-        """Test API key is passed as query parameter."""
+    async def test_search_api_key_in_headers(self, provider, mock_http_response):
+        """Test API key is passed via x-api-key header, not query params."""
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_http_response)
@@ -362,8 +362,10 @@ class TestOpenAlexSearch:
             mock_client_class.return_value = mock_client
 
             await provider.search("test")
+            headers = mock_client.get.call_args.kwargs["headers"]
             params = mock_client.get.call_args.kwargs["params"]
-            assert params["api_key"] == "test-key"
+            assert headers["x-api-key"] == "test-key"
+            assert "api_key" not in params
 
     @pytest.mark.asyncio
     async def test_search_sub_query_id(self, provider, mock_http_response):

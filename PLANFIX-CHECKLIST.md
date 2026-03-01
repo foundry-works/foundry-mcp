@@ -1,4 +1,4 @@
-# Post-Review Fix Plan — Checklist
+# Post-Review Fix Plan v2 — Checklist
 
 > Track implementation progress for [PLANFIX.md](PLANFIX.md).
 > Mark items `[x]` as completed.
@@ -7,362 +7,337 @@
 
 ## FIX-0: Security Fixes
 
-### Item 0.1: Move OpenAlex API Key to Header
+### Item 0.1: Move OpenAlex API Key to Header *(carryover)*
 > **File**: `src/foundry_mcp/core/research/providers/openalex.py`
 
-- [ ] Replace `params["api_key"] = self._api_key` with `headers["x-api-key"] = self._api_key`
-- [ ] Remove `api_key` from `params` dict entirely
-- [ ] Verify `redact_headers()` in `shared.py` covers the `x-api-key` header name
-- [ ] Update any tests that assert on query params containing `api_key`
+- [x] Replace `params["api_key"] = self._api_key` with `headers["x-api-key"] = self._api_key`
+- [x] Remove `api_key` from `params` dict entirely
+- [x] Verify `redact_headers()` in `shared.py` covers the `x-api-key` header name
+- [x] Update any tests that assert on query params containing `api_key`
 
 #### Item 0.1 Validation
 
-- [ ] API key not present in any request URL or query string
-- [ ] API key present in request headers
-- [ ] `redact_headers()` redacts the key in debug logs
-- [ ] All existing OpenAlex tests pass
+- [x] API key not present in any request URL or query string
+- [x] API key present in request headers
+- [x] `redact_headers()` redacts the key in debug logs
+- [x] All existing OpenAlex tests pass
 
 ---
 
-### Item 0.2: Sanitize Assistant Messages in ReAct Prompt
+### Item 0.2: Sanitize Assistant Messages in ReAct Prompt *(carryover)*
 > **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py`
 
-- [ ] Apply `sanitize_external_content()` to `content` in the `role == "assistant"` branch of `_build_react_user_prompt` (line ~504)
-- [ ] Import `sanitize_external_content` if not already imported at module level
+- [x] Apply `sanitize_external_content()` to `content` in the `role == "assistant"` branch of `_build_react_user_prompt` (line ~504)
+- [x] Verify `sanitize_external_content` is already imported at module level (it is — line 40)
 
 #### Item 0.2 Validation
 
-- [ ] Assistant messages containing `<system>` tags are sanitized in the prompt
-- [ ] Existing topic research tests pass unchanged
-- [ ] Add unit test: assistant content with injection payload is sanitized
+- [x] Assistant messages containing `<system>` tags are sanitized in the prompt
+- [x] Existing topic research tests pass unchanged
+- [x] Add unit test: assistant content with injection payload is sanitized
 
 ---
 
-### Item 0.3: Sanitize Content in Methodology Assessment Prompts
+### Item 0.3: Sanitize Content in Methodology Assessment Prompts *(carryover)*
 > **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/methodology_assessment.py`
 
-- [ ] Import `sanitize_external_content` from `_injection_protection`
-- [ ] Wrap `source_title` with `sanitize_external_content()` in `_build_extraction_user_prompt`
-- [ ] Wrap `content` with `sanitize_external_content()` in `_build_extraction_user_prompt`
-- [ ] Wrap `assessment.effect_size` with `sanitize_external_content()` in `format_methodology_context`
-- [ ] Wrap `assessment.sample_description` with `sanitize_external_content()` in `format_methodology_context`
-- [ ] Wrap `assessment.limitations_noted` list items with `sanitize_external_content()` in `format_methodology_context`
-- [ ] Wrap `assessment.potential_biases` list items with `sanitize_external_content()` in `format_methodology_context`
+- [x] Import `sanitize_external_content` from `_injection_protection`
+- [x] Wrap `source_title` with `sanitize_external_content()` in `_build_extraction_user_prompt` (line ~76)
+- [x] Wrap `content` with `sanitize_external_content()` in `_build_extraction_user_prompt` (line ~78)
+- [x] Wrap `assessment.effect_size` with `sanitize_external_content()` in `format_methodology_context`
+- [x] Wrap `assessment.sample_description` with `sanitize_external_content()` in `format_methodology_context`
+- [x] Wrap `assessment.limitations_noted` list items with `sanitize_external_content()` in `format_methodology_context`
+- [x] Wrap `assessment.potential_biases` list items with `sanitize_external_content()` in `format_methodology_context`
 
 #### Item 0.3 Validation
 
-- [ ] Source title with `<system>` tags is sanitized in extraction prompt
-- [ ] Source content with injection payload is sanitized in extraction prompt
-- [ ] Assessment fields with injection payloads are sanitized in synthesis context
-- [ ] Add unit test: injection payload in source content is stripped
+- [x] Source title with `<system>` tags is sanitized in extraction prompt
+- [x] Source content with injection payload is sanitized in extraction prompt
+- [x] Assessment fields with injection payloads are sanitized in synthesis context
+- [x] Add unit test: injection payload in source content is stripped
 
 ---
 
-## FIX-1: Integration Blockers
+### Item 0.4: Sanitize PDF Content Preview at Point of Creation
+> **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py`
 
-### Item 1.1: Wire Methodology Assessment as User-Triggered Action
-> **Files**: `src/foundry_mcp/tools/unified/research_handlers/handlers_deep_research.py`, `src/foundry_mcp/tools/unified/research_handlers/__init__.py`
+- [x] Apply `sanitize_external_content()` to `content_preview` at line ~2225
+- [x] Verify `sanitize_external_content` is already imported at module level (it is — line 40)
 
-- [x] Add `_handle_deep_research_assess()` handler function
-  - [x] Load completed research state by `research_id`
-  - [x] Validate session is completed (or has sources)
-  - [x] Filter to academic sources with content > min_content_length
-  - [x] Skip if fewer than 2 eligible sources
-  - [x] Instantiate `MethodologyAssessor` and call `assess_sources()`
-  - [x] Save assessments to `state.extensions.methodology_assessments`
-  - [x] Persist updated state
-  - [x] Return assessments in success response
-- [x] Register `"deep-research-assess"` action in `ACTION_REGISTRY` in `__init__.py`
-- [x] Add `ActionDefinition` with appropriate summary and validation schema
+#### Item 0.4 Validation
+
+- [x] PDF content preview with injection payload is sanitized before storage in message_history
+- [x] Existing topic research tests pass unchanged
+- [x] Add unit test: PDF content with `<system>` tags is sanitized in tool result
+
+---
+
+## FIX-1: Broken Features
+
+### Item 1.1: Fix Methodology Assessment Handler — All Results UNKNOWN
+> **Files**: `src/foundry_mcp/tools/unified/research_handlers/handlers_deep_research.py`, `src/foundry_mcp/core/research/workflows/deep_research/phases/methodology_assessment.py`
+
+- [ ] Refactor `_assess_single` to accept an `llm_call_fn` callable parameter instead of requiring full `workflow` + `state`
+- [ ] Update `assess_sources()` to accept and pass through `llm_call_fn`
+- [ ] In the handler (`_handle_deep_research_assess`), construct an appropriate `llm_call_fn` using `execute_llm_call` with provider/model from config
+- [ ] Pass the `llm_call_fn` through to `assess_sources()`
+- [ ] Verify the LLM call path is actually exercised (not falling through to UNKNOWN)
 
 #### Item 1.1 Validation
 
-- [x] `deep-research-assess` action callable on completed research session
-- [x] Returns methodology assessments for eligible academic sources
-- [x] Handles missing/incomplete session gracefully
-- [x] Assessments persisted and visible in subsequent `deep-research-report` calls
-- [ ] Add integration test: assess action on session with academic sources
+- [ ] `deep-research-assess` action on a session with academic sources produces real assessments (not all UNKNOWN)
+- [ ] Assessments include correct `study_design` values from LLM extraction
+- [ ] Fallback to UNKNOWN still works when LLM call fails
+- [ ] `confidence` forced to `"low"` for abstract-only content
+- [ ] Add integration test: assess action with mocked LLM returns valid assessments
 
 ---
 
-### Item 1.2: Add Missing Config Fields to `from_toml_dict()`
-> **File**: `src/foundry_mcp/config/research.py`
+### Item 1.2: Wire Export Parameters Through MCP Tool Signature
+> **File**: `src/foundry_mcp/tools/unified/research_handlers/__init__.py`, `src/foundry_mcp/tools/unified/research_handlers/handlers_deep_research.py`
 
-- [x] Add `deep_research_pdf_max_pages=data.get("deep_research_pdf_max_pages", 50)` to `cls()` call
-- [x] Add `deep_research_pdf_priority_sections=data.get("deep_research_pdf_priority_sections", ["methods", "results", "discussion"])` to `cls()` call
-- [x] Add `deep_research_citation_network_max_refs_per_paper=data.get("deep_research_citation_network_max_refs_per_paper", 20)` to `cls()` call
-- [x] Add `deep_research_citation_network_max_cites_per_paper=data.get("deep_research_citation_network_max_cites_per_paper", 20)` to `cls()` call
-- [x] Add `deep_research_methodology_assessment_provider=data.get("deep_research_methodology_assessment_provider", None)` to `cls()` call
-- [x] Add `deep_research_methodology_assessment_timeout=data.get("deep_research_methodology_assessment_timeout", 60.0)` to `cls()` call
-- [x] Add `deep_research_methodology_assessment_min_content_length=data.get("deep_research_methodology_assessment_min_content_length", 200)` to `cls()` call
-- [x] Add `deep_research_academic_coverage_weights=data.get("deep_research_academic_coverage_weights", ...)` to `cls()` call
-- [x] Add `deep_research_influence_high_citation_threshold=data.get("deep_research_influence_high_citation_threshold", 100)` to `cls()` call
-- [x] Add `deep_research_influence_medium_citation_threshold=data.get("deep_research_influence_medium_citation_threshold", 20)` to `cls()` call
-- [x] Add `deep_research_influence_low_citation_threshold=data.get("deep_research_influence_low_citation_threshold", 5)` to `cls()` call
+- [ ] Add `export_format: Optional[str] = None` parameter to `research()` function signature
+- [ ] Add `academic_only: Optional[bool] = None` parameter to `research()` function signature
+- [ ] Rename `format` parameter to `export_format` in `_handle_deep_research_export` (fixes Python built-in shadow)
+- [ ] Update dispatch to pass `export_format` and `academic_only` through to handler
+- [ ] Add validation: reject unknown `export_format` values (only `"bibtex"` and `"ris"` accepted)
 
 #### Item 1.2 Validation
 
-- [ ] Add unit test: `from_toml_dict` with each new field set to non-default value
-- [x] Verify defaults match class field declarations
-- [x] Existing config tests pass unchanged
-
----
-
-### Item 1.3: Guard Against Legacy Session `AttributeError`
-> **Files**: Multiple phase files
-
-- [x] `synthesis.py:1140` — Guard `state.research_profile.name` with None check
-- [x] Audit `synthesis.py` for all other `state.research_profile.X` accesses without guards
-- [x] Audit `brief.py` for unguarded `state.research_profile` accesses
-- [x] Audit `supervision_prompts.py` for unguarded `state.research_profile` accesses
-- [x] Audit `topic_research.py` for unguarded `state.research_profile` accesses
-- [x] Audit `_citation_postprocess.py` for unguarded `state.research_profile` accesses
-
-#### Item 1.3 Validation
-
-- [ ] Add unit test: synthesis with `state.research_profile = None` does not raise
-- [ ] Add unit test: brief with `state.research_profile = None` does not raise
-- [x] Existing tests pass unchanged
-
----
-
-### Item 1.4: Fix `pubmed` Provider Hint Always Dropped
-> **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/brief.py`
-
-- [x] Decision: replace `pubmed` with `semantic_scholar` in `_DISCIPLINE_PROVIDER_MAP` (no PubMed MCP integration exists)
-- [x] Implement chosen fix
-- [x] Document rationale in code comment
-
-#### Item 1.4 Validation
-
-- [x] Biomedical query brief produces a working provider hint (not silently dropped)
-- [x] Existing brief tests pass (updated assertions for semantic_scholar)
+- [ ] LLM client can see `export_format` and `academic_only` in the tool schema
+- [ ] `export_format="ris"` produces RIS output
+- [ ] `export_format="bibtex"` produces BibTeX output
+- [ ] `export_format="csv"` returns a validation error (not silent bibtex fallback)
+- [ ] Default behavior unchanged when parameters not provided
+- [ ] Existing export tests pass (updated parameter names)
 
 ---
 
 ## FIX-2: Correctness Fixes
 
-### Item 2.1: Fix Citation Network Foundational Paper Threshold
-> **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/citation_network.py`
+### Item 2.1: Fix Context Window Retry — Same Truncation Produces Same Failure
+> **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py`
 
-- [x] Remove dead `threshold = max(3, ...)` calculation
-- [x] Fix `effective_threshold` to implement intended logic (document which logic is intended)
-- [x] Update docstring to match actual behavior
+- [ ] Add `budget_fraction: float = 1.0` parameter to `_truncate_researcher_history`
+- [ ] Apply `budget_fraction` multiplier to `effective_budget` calculation inside the function
+- [ ] On `ContextWindowError` retry (line ~927), call with `budget_fraction=0.5`
+- [ ] On generic context-window-sniff retry (line ~990), call with `budget_fraction=0.5`
+- [ ] Log the aggressive truncation at DEBUG level
 
 #### Item 2.1 Validation
 
-- [x] Threshold calculation produces correct values for 5, 10, 20 discovered papers
-- [x] Existing citation network tests pass (update threshold assertions if needed)
+- [ ] Retry with `budget_fraction=0.5` produces a shorter prompt than initial attempt
+- [ ] Normal (non-retry) truncation behavior unchanged (`budget_fraction=1.0` default)
+- [ ] Existing context window tests pass unchanged
+- [ ] Add unit test: retry truncation is strictly shorter than initial truncation
 
 ---
 
-### Item 2.2: Add `MethodologyAssessment` Content-Basis Validator
-> **File**: `src/foundry_mcp/core/research/models/sources.py`
+### Item 2.2: Add Cancellation Check in Synthesis Retry Loop
+> **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py`
 
-- [x] Add `@model_validator(mode="after")` to `MethodologyAssessment`
-- [x] Validator forces `confidence = "low"` when `content_basis == "abstract"`
-- [x] Add warning log when confidence is downgraded
+- [ ] Add `self._check_cancellation(state)` at the top of the `for outer_attempt in range(...)` loop body (line ~627)
 
 #### Item 2.2 Validation
 
-- [x] `MethodologyAssessment(confidence="high", content_basis="abstract")` -> confidence is `"low"`
-- [x] `MethodologyAssessment(confidence="high", content_basis="full_text")` -> confidence stays `"high"`
-- [x] Existing tests pass unchanged
+- [ ] Cancelled research exits synthesis retry loop promptly
+- [ ] Non-cancelled research continues retry loop normally
+- [ ] Existing synthesis tests pass unchanged
 
 ---
 
-### Item 2.3: Fix `mark_interrupted()` Missing Provenance Timestamp
-> **File**: `src/foundry_mcp/core/research/models/deep_research.py`
+### Item 2.3: Fix Premature State Save — Provenance Event Lost on Crash
+> **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py`
 
-- [x] Add provenance timestamp to `mark_interrupted()`:
-  ```python
-  if self.extensions.provenance:
-      self.extensions.provenance.completed_at = datetime.now(timezone.utc)
-  ```
+- [ ] Move `synthesis_completed` provenance append (lines ~920-935) to before the state save (line ~895)
+- [ ] Reorder: build landscape → build structured output → append provenance → save state → finalize_phase
+- [ ] Verify `finalize_phase` still runs after the save
 
 #### Item 2.3 Validation
 
-- [x] Interrupted session has `provenance.completed_at` set
-- [x] Existing tests pass unchanged
+- [ ] `synthesis_completed` provenance event is present in saved state
+- [ ] Landscape and structured output are present in saved state
+- [ ] Existing synthesis tests pass unchanged
 
 ---
 
-### Item 2.4: Fix Duplicate Synthesis Provenance Event
-> **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py`
+### Item 2.4: Wrap Profile Resolution in try/except for ValidationError
+> **File**: `src/foundry_mcp/config/research.py`
 
-- [x] In `_inject_supplementary_raw_notes`, replace `_build_synthesis_system_prompt()` call with a length-only calculation (pass system prompt length as parameter, or cache and reuse)
-- [x] Verify only one `synthesis_query_type` provenance event is appended per synthesis
+- [ ] Import `ValidationError` from pydantic at module level (or use existing import)
+- [ ] Wrap `ResearchProfile(**self.deep_research_profiles[profile_name])` at line ~932 in try/except
+- [ ] Catch `(TypeError, ValidationError)` and raise `ValueError` with descriptive message
+- [ ] Wrap `profile.model_copy(update=profile_overrides)` at line ~942 in try/except
+- [ ] Catch `(TypeError, ValidationError)` and raise `ValueError` with descriptive message
 
 #### Item 2.4 Validation
 
-- [x] Run synthesis and verify exactly one `synthesis_query_type` provenance entry
-- [x] Existing tests pass unchanged
+- [ ] Malformed profile config (wrong types, bad field names) produces clean `ValueError`
+- [ ] Invalid `profile_overrides` produces clean `ValueError`
+- [ ] Valid profile construction still works unchanged
+- [ ] Handler's `except ValueError` catches both cases
+- [ ] Add unit test: invalid profile config produces ValueError with descriptive message
 
 ---
 
-### Item 2.5: Tighten `extract_status_code` Regex
-> **File**: `src/foundry_mcp/core/research/providers/shared.py`
+### Item 2.5: Validate Academic Coverage Weight Keys
+> **File**: `src/foundry_mcp/config/research.py`
 
-- [x] Replace `r"\b([1-5]\d{2})\b"` with a more anchored pattern (e.g., `r"(?:HTTP|API|status)\s*(?:error\s*)?(\d{3})\b|^(\d{3})\s"`)
-- [x] Or extract status code from exception's response attribute when available, falling back to regex
+- [ ] Add `_VALID_ACADEMIC_WEIGHT_KEYS = {"source_adequacy", "domain_diversity", "query_completion_rate", "source_influence"}` constant
+- [ ] Add validation in `__post_init__` for `deep_research_academic_coverage_weights` when not None
+- [ ] Strip unknown keys (with warning log) matching the pattern for general weights
+- [ ] Validate values are numeric and >= 0
 
 #### Item 2.5 Validation
 
-- [x] Error message "Found 200 results" does NOT extract 200 as status code
-- [x] Error message "API error 429: rate limited" correctly extracts 429
-- [x] Existing resilience tests pass unchanged
+- [ ] Academic weights with valid keys pass validation
+- [ ] Academic weights with unknown key `"typo"` strips the key and logs warning
+- [ ] Academic weights with `source_influence` key passes validation (unlike general weights)
+- [ ] General weights with `source_influence` key still stripped (no regression)
+- [ ] Existing config tests pass unchanged
 
 ---
 
-### Item 2.6: Fix `min_citation_count=0` Falsy Check
-> **File**: `src/foundry_mcp/core/research/providers/semantic_scholar.py`
+### Item 2.6: Fix `_save_report_markdown` Using `Path.cwd()`
+> **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py`
 
-- [x] Change `if min_citation_count:` to `if min_citation_count is not None:`
+- [ ] Accept `output_dir` parameter (default None) in `_save_report_markdown`
+- [ ] When None, derive path from `self.memory` workspace directory if available
+- [ ] Fall back to `Path.cwd()` only as last resort, with warning log
+- [ ] Wrap entire save in try/except to ensure failures never crash synthesis
 
 #### Item 2.6 Validation
 
-- [x] `min_citation_count=0` is applied as a filter (not skipped)
-- [x] `min_citation_count=None` is correctly skipped
-- [x] Existing tests pass unchanged
+- [ ] Report saved to workspace directory when available
+- [ ] Falls back to cwd when no workspace configured
+- [ ] Failed save logs warning but does not crash synthesis
+- [ ] Existing tests pass unchanged
 
 ---
 
-## FIX-3: Code Quality & Cleanup
+## FIX-3: Input Validation & Defense-in-Depth
 
-### Item 3.1: Remove `if api_key or True:` Debug Artifact
-> **File**: `src/foundry_mcp/tools/unified/research_handlers/handlers_deep_research.py`
+### Item 3.1: Validate `paper_id` from LLM Tool Calls
+> **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py`
 
-- [x] Remove the `if api_key or True:` conditional
-- [x] Unconditionally create `SemanticScholarProvider`
-- [x] Keep the comment explaining S2 works without a key at lower rate
+- [ ] Add `_PAPER_ID_RE = re.compile(r"^[a-zA-Z0-9._/:\-]{1,256}$")` constant
+- [ ] Add `_validate_paper_id(paper_id: str) -> str | None` helper (returns error message or None)
+- [ ] Call `_validate_paper_id` in `_handle_citation_search_tool` before provider call (line ~2280)
+- [ ] Call `_validate_paper_id` in `_handle_related_papers_tool` before provider call (line ~2362)
+- [ ] Return validation error message to researcher LLM on failure
 
 #### Item 3.1 Validation
 
-- [x] Provider creation is unconditional
-- [x] Existing tests pass unchanged
+- [ ] Valid DOI `"10.1038/nature12373"` passes validation
+- [ ] Valid S2 ID `"649def34f8be52c8b66281af98ae884c09aef38b"` passes validation
+- [ ] Valid ArXiv ID `"2301.07041"` passes validation
+- [ ] Empty string is rejected
+- [ ] String > 256 chars is rejected
+- [ ] String with shell metacharacters is rejected
+- [ ] Existing citation search tests pass unchanged
 
 ---
 
-### Item 3.2: Replace Deprecated `asyncio.get_event_loop()`
-> **File**: `src/foundry_mcp/tools/unified/research_handlers/handlers_deep_research.py`
+### Item 3.2: URL-Encode DOI Values in Provider API Paths
+> **Files**: `src/foundry_mcp/core/research/providers/openalex.py`, `src/foundry_mcp/core/research/providers/crossref.py`
 
-- [x] Replace `asyncio.get_event_loop()` with try/except `asyncio.get_running_loop()` pattern
-- [x] Match the pattern used in `handlers_extract.py:101-109`
+- [ ] Import `urllib.parse.quote` in both files
+- [ ] In `openalex.py:257`: apply `quote(work_id, safe="")` before f-string interpolation
+- [ ] In `crossref.py:213`: apply `quote(doi, safe="")` before f-string interpolation
 
 #### Item 3.2 Validation
 
-- [x] No `DeprecationWarning` on Python 3.12+
-- [x] Existing tests pass unchanged
+- [ ] DOI with special chars `"10.1000/foo_bar#baz"` is URL-encoded in request path
+- [ ] Standard DOI `"10.1038/nature12373"` still resolves correctly (encoding is transparent)
+- [ ] Existing provider tests pass unchanged
+- [ ] Add unit test: DOI with path traversal chars is safely encoded
 
 ---
 
-### Item 3.3: Consolidate Report Handler State Loading
-> **File**: `src/foundry_mcp/tools/unified/research_handlers/handlers_deep_research.py`
+### Item 3.3: Sanitize OpenAlex Filter Values
+> **File**: `src/foundry_mcp/core/research/providers/openalex.py`
 
-- [x] Load state once early in the success branch of `_handle_deep_research_report`
-- [x] Remove duplicate `memory.load_deep_research()` calls (lines ~264, 274, 288, 291)
-- [x] Reuse single `state` variable throughout
+- [ ] Add `_ALLOWED_FILTER_KEYS` frozenset with known OpenAlex filter field names
+- [ ] Add `_build_filter_string(filters: dict) -> str` helper
+- [ ] Validate filter keys against allowlist (warn and skip unknown keys)
+- [ ] Strip commas, pipes, and colons from filter values (operator characters)
+- [ ] Replace inline filter construction (lines ~227-232) with helper call
 
 #### Item 3.3 Validation
 
-- [x] State loaded exactly once per report request
-- [x] Report response still includes provenance when `include_provenance=True`
-- [x] Existing tests pass unchanged
+- [ ] Known filter key passes through: `{"publication_year": "2024"}` → `"publication_year:2024"`
+- [ ] Unknown filter key is skipped with warning: `{"evil_key": "value"}` → dropped
+- [ ] Malicious filter value stripped: `{"publication_year": "2024,type:dataset"}` → `"publication_year:2024typedataset"`
+- [ ] Boolean filter values still handled correctly: `{"is_oa": True}` → `"is_oa:true"`
+- [ ] Existing provider tests pass unchanged
 
 ---
 
-### Item 3.4: Fix Magic-Number Default Comparison for Network Config
-> **File**: `src/foundry_mcp/tools/unified/research_handlers/handlers_deep_research.py`
+## FIX-4: Robustness & Quality
 
-- [x] Change `max_refs` and `max_cites` parameter types to `Optional[int] = None`
-- [x] Replace `if effective_max_refs == 20:` with `if effective_max_refs is None:`
-- [x] Replace `if effective_max_cites == 20:` with `if effective_max_cites is None:`
+### Item 4.1: Fix Duplicate `_classify_query_type` / Duplicate Provenance
+> **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py`
 
-#### Item 3.4 Validation
-
-- [x] User passing `max_refs=20` explicitly is not overridden by config
-- [x] User passing no value correctly falls back to config
-- [x] Existing tests pass unchanged
-
----
-
-## FIX-4: Robustness Hardening
-
-### Item 4.1: Use `find` Instead of `rfind` for Supervisor Brief Split
-> **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/compression.py`
-
-- [x] Change `content.rfind(_SUPERVISOR_BRIEF_MARKER)` to `content.find(_SUPERVISOR_BRIEF_MARKER)`
+- [ ] Extract pure `_classify_query_type` function (no provenance side effect)
+- [ ] Call it once early in `_execute_synthesis_async` and store result
+- [ ] Pass stored `query_type` to `_build_synthesis_system_prompt`, `_build_synthesis_tail`, and `_finalize_synthesis_report`
+- [ ] Log `synthesis_query_type` provenance event once explicitly after classification
+- [ ] Remove provenance logging from `_build_synthesis_system_prompt`
 
 #### Item 4.1 Validation
 
-- [x] First occurrence of marker is used for split (not last)
-- [x] Existing compression tests pass unchanged
+- [ ] Only one `synthesis_query_type` provenance event per synthesis run
+- [ ] Query type classification result consistent across all consumers
+- [ ] Existing synthesis tests pass (update provenance count assertions if needed)
 
 ---
 
-### Item 4.2: Use Word Boundaries for Provider Hint Keywords
-> **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/brief.py`
+### Item 4.2: Use `Literal` Type for `MethodologyAssessment.confidence`
+> **File**: `src/foundry_mcp/core/research/models/sources.py`
 
-- [x] Replace `if keyword in text_lower:` with `if re.search(rf"\b{re.escape(keyword)}\b", text_lower):`
-- [x] Import `re` if not already imported
+- [ ] Change `confidence: str = "low"` to `confidence: Literal["high", "medium", "low"] = "low"`
+- [ ] Add `from typing import Literal` import (if not already present)
 
 #### Item 4.2 Validation
 
-- [x] `"health"` does NOT match "healthy eating habits"
-- [x] `"health"` DOES match "public health research"
-- [x] `"learning"` does NOT match "learning disabilities"
-- [x] `"machine learning"` DOES match "advances in machine learning"
-- [x] Existing brief tests pass (update keyword test assertions if needed)
+- [ ] `MethodologyAssessment(confidence="invalid")` raises `ValidationError`
+- [ ] `MethodologyAssessment(confidence="high")` succeeds
+- [ ] Existing tests pass unchanged
 
 ---
 
-### Item 4.3: Make `methodology_assessments` Optional for Exclude-None Consistency
-> **File**: `src/foundry_mcp/core/research/models/deep_research.py`
+### Item 4.3: Request `confidence` Field in Methodology LLM Prompt
+> **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/methodology_assessment.py`
 
-- [x] Change `methodology_assessments: list[MethodologyAssessment] = Field(default_factory=list)` to `methodology_assessments: Optional[list[MethodologyAssessment]] = None`
-- [x] Update convenience accessor on `DeepResearchState` to return `self.extensions.methodology_assessments or []`
+- [ ] Add `"confidence"` field to the JSON schema in `METHODOLOGY_EXTRACTION_SYSTEM_PROMPT` (line ~43-58)
+- [ ] Add description: `"Your confidence in the assessment: 'high' (full text with clear methods section), 'medium' (substantial content), 'low' (abstract only or limited content)"`
 
 #### Item 4.3 Validation
 
-- [x] Unused extensions serialize without `methodology_assessments` key
-- [x] Accessor returns empty list when None
-- [x] Existing tests pass (updated 2 test assertions for new None default)
+- [ ] LLM prompt includes `confidence` in the requested JSON schema
+- [ ] `_parse_llm_response` correctly reads LLM-provided confidence
+- [ ] Content-basis override still forces `"low"` for abstract-only (FIX from v1 review)
+- [ ] Existing tests pass unchanged
 
 ---
 
-### Item 4.4: Use `Literal` Type for `MethodologyAssessment.confidence`
-> **File**: `src/foundry_mcp/core/research/models/sources.py`
+### Item 4.4: Add Timeout to Citation Network `asyncio.gather`
+> **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/citation_network.py`
 
-- [x] Change `confidence: str = "low"` to `confidence: Literal["high", "medium", "low"] = "low"`
-- [x] Add `from typing import Literal` import
+- [ ] Wrap `asyncio.gather(*tasks, return_exceptions=True)` at line ~165 with `asyncio.wait_for(..., timeout=timeout or 90.0)`
+- [ ] Catch `asyncio.TimeoutError` and log warning with partial results
 
 #### Item 4.4 Validation
 
-- [x] `MethodologyAssessment(confidence="invalid")` raises `ValidationError`
-- [x] `MethodologyAssessment(confidence="high")` succeeds
-- [x] Existing tests pass unchanged
-
----
-
-### Item 4.5: Extract `_truncate_abstract` to Shared Utility
-> **Files**: `providers/shared.py`, `providers/openalex.py`, `providers/crossref.py`, `providers/semantic_scholar.py`
-
-- [x] Move `_truncate_abstract` to `shared.py` as a module-level function `truncate_abstract()`
-- [x] Update imports in `openalex.py`
-- [x] Update imports in `crossref.py`
-- [x] Update imports in `semantic_scholar.py`
-- [x] Remove duplicate method definitions from all three providers
-
-#### Item 4.5 Validation
-
-- [x] All three providers use the shared function
-- [x] Existing provider tests pass unchanged
+- [ ] Citation network build respects timeout
+- [ ] Partial results returned on timeout (nodes/edges collected before timeout)
+- [ ] Existing citation network tests pass unchanged
 
 ---
 
 ## FIX-5: Test Improvements
 
-### Item 5.1: Fix `study_design="rct"` Test Bug
+### Item 5.1: Fix `study_design="rct"` Test Bug *(carryover)*
 > **File**: `tests/core/research/test_methodology_assessment.py`
 
 - [ ] Change `_make_llm_json_response(study_design="rct")` to `_make_llm_json_response(study_design="randomized_controlled_trial")` (line ~805)
@@ -370,12 +345,12 @@
 
 #### Item 5.1 Validation
 
-- [ ] First source in the test produces a valid `randomized_controlled_trial` assessment (not UNKNOWN fallback)
+- [ ] First source produces a valid `randomized_controlled_trial` assessment (not UNKNOWN fallback)
 - [ ] Second source still correctly triggers the LLM failure fallback path
 
 ---
 
-### Item 5.2: Add PDF Extraction HTTP Tests
+### Item 5.2: Add PDF Extraction HTTP Tests *(carryover)*
 > **File**: `tests/core/research/test_pdf_analysis.py`
 
 - [ ] Add test: `test_extract_from_url_success` with mocked HTTP response returning PDF bytes
@@ -390,18 +365,10 @@
 
 ---
 
-### Item 5.3: Fix RIS Page Range Spec Compliance
+### Item 5.3: Fix RIS Page Range Spec Compliance *(carryover)*
 > **File**: `src/foundry_mcp/core/research/export/ris.py`
 
-- [ ] Split page ranges into `SP` and `EP` tags:
-  ```python
-  if pages and "-" in str(pages):
-      parts = str(pages).split("-", 1)
-      lines.append(f"SP  - {parts[0].strip()}")
-      lines.append(f"EP  - {parts[1].strip()}")
-  else:
-      lines.append(f"SP  - {pages}")
-  ```
+- [ ] Split page ranges into `SP` and `EP` tags
 - [ ] Update existing RIS tests to expect split tags
 
 #### Item 5.3 Validation
@@ -413,13 +380,35 @@
 
 ---
 
+### Item 5.4: Add Methodology Assessment Integration Test
+> **File**: `tests/core/research/test_methodology_assessment.py` or `tests/integration/`
+
+- [ ] Add test that mocks LLM at `execute_llm_call` level (not at workflow level)
+- [ ] Verify handler path produces real assessments (not UNKNOWN)
+- [ ] Verify `confidence` override for abstract-only content
+
+#### Item 5.4 Validation
+
+- [ ] Test covers the handler → assessor → LLM call → parse → return path
+- [ ] At least one assessment has `study_design != "unknown"`
+- [ ] Abstract-only source has `confidence == "low"`
+
+---
+
 ## Final Validation
 
 - [ ] All 7,582+ tests pass
 - [ ] No new warnings on Python 3.12+
 - [ ] No API keys in URL query strings
 - [ ] All external content sanitized before LLM prompt interpolation
-- [ ] All config fields parsed from TOML
+- [ ] All MCP tool parameters visible in tool schema
+- [ ] Methodology assessment produces real results (not all UNKNOWN)
+- [ ] Context window retry uses more aggressive truncation
+- [ ] Synthesis retry loop checks cancellation
+- [ ] Profile resolution errors produce clean error messages
+- [ ] Academic coverage weights validated
+- [ ] paper_id validated before API calls
+- [ ] DOI values URL-encoded in provider paths
+- [ ] OpenAlex filter values sanitized
+- [ ] RIS export produces spec-compliant page ranges
 - [ ] Legacy sessions (pre-PLAN-1) can continue without errors
-- [ ] RIS export produces spec-compliant output
-- [ ] Methodology assessment callable as user-triggered action

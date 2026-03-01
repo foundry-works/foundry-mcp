@@ -428,7 +428,7 @@ class OpenAlexProvider(SearchProvider):
         if params is None:
             params = {}
         if self._api_key:
-            params["api_key"] = self._api_key
+            headers["x-api-key"] = self._api_key
 
         async def make_request() -> dict[str, Any]:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
