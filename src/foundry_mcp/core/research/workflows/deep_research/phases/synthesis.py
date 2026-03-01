@@ -71,8 +71,16 @@ def _slugify_query(query: str, max_len: int = 80) -> str:
     return slug[:max_len].rstrip("-")
 
 
-def _save_report_markdown(state: DeepResearchState) -> Optional[str]:
-    """Save the report as a markdown file in the current working directory.
+def _save_report_markdown(
+    state: DeepResearchState,
+    output_dir: Optional[Path] = None,
+) -> Optional[str]:
+    """Save the report as a markdown file.
+
+    Args:
+        state: Research state containing the report and query.
+        output_dir: Directory to save the report in.  When *None*, falls
+            back to ``Path.cwd()`` with a debug-level log.
 
     Returns the output path on success, or None if saving failed.
     Failure is non-fatal — logs a warning but does not break the workflow.
@@ -85,7 +93,12 @@ def _save_report_markdown(state: DeepResearchState) -> Optional[str]:
         if not slug:
             slug = "deep-research-report"
 
-        output_dir = Path.cwd()
+        if output_dir is None:
+            logger.debug(
+                "No explicit output_dir for report markdown; falling back to cwd"
+            )
+            output_dir = Path.cwd()
+
         output_path = output_dir / f"{slug}.md"
 
         # Collision handling: append research ID suffix if file exists
@@ -625,6 +638,7 @@ class SynthesisPhaseMixin:
         result = None
 
         for outer_attempt in range(_MAX_FINDINGS_TRUNCATION_RETRIES + 1):  # 0 = initial
+            self._check_cancellation(state)
             call_result = await execute_llm_call(
                 workflow=self,
                 state=state,
@@ -886,12 +900,34 @@ class SynthesisPhaseMixin:
         except Exception:
             logger.warning("Failed to build structured output", exc_info=True)
 
-        # Auto-save report as markdown file
-        output_path = _save_report_markdown(state)
+        # Auto-save report as markdown file — prefer memory workspace over cwd
+        report_dir: Optional[Path] = None
+        if hasattr(self, "memory") and hasattr(self.memory, "base_path"):
+            report_dir = Path(self.memory.base_path)
+        output_path = _save_report_markdown(state, output_dir=report_dir)
         if output_path:
             state.report_output_path = output_path
 
-        # Save state
+        # PLAN-1 Item 2: Log synthesis_completed provenance event
+        # Append provenance BEFORE state save so it's not lost on a crash
+        # between save and finalize_phase.
+        if state.provenance is not None:
+            state.provenance.append(
+                phase="synthesis",
+                event_type="synthesis_completed",
+                summary=(
+                    f"Synthesis complete: {len(state.report)} char report, "
+                    f"{len(state.sources)} sources cited"
+                ),
+                report_length=len(state.report),
+                source_count=len(state.sources),
+                finding_count=len(state.findings),
+                provider_id=result.provider_id,
+                model_used=result.model_used,
+                degraded_mode=degraded_mode,
+            )
+
+        # Save state (landscape, structured output, provenance all captured)
         self.memory.save_deep_research(state)
         synthesis_audit_data: dict[str, Any] = {
             "provider_id": result.provider_id,
@@ -916,23 +952,6 @@ class SynthesisPhaseMixin:
             "synthesis_result",
             data=synthesis_audit_data,
         )
-
-        # PLAN-1 Item 2: Log synthesis_completed provenance event
-        if state.provenance is not None:
-            state.provenance.append(
-                phase="synthesis",
-                event_type="synthesis_completed",
-                summary=(
-                    f"Synthesis complete: {len(state.report)} char report, "
-                    f"{len(state.sources)} sources cited"
-                ),
-                report_length=len(state.report),
-                source_count=len(state.sources),
-                finding_count=len(state.findings),
-                provider_id=result.provider_id,
-                model_used=result.model_used,
-                degraded_mode=degraded_mode,
-            )
 
         logger.info(
             "Synthesis phase complete: report length %d chars",

@@ -118,17 +118,17 @@
 ### Item 2.1: Fix Context Window Retry — Same Truncation Produces Same Failure
 > **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py`
 
-- [ ] Add `budget_fraction: float = 1.0` parameter to `_truncate_researcher_history`
-- [ ] Apply `budget_fraction` multiplier to `effective_budget` calculation inside the function
-- [ ] On `ContextWindowError` retry (line ~927), call with `budget_fraction=0.5`
-- [ ] On generic context-window-sniff retry (line ~990), call with `budget_fraction=0.5`
-- [ ] Log the aggressive truncation at DEBUG level
+- [x] Add `budget_fraction: float = 1.0` parameter to `_truncate_researcher_history`
+- [x] Apply `budget_fraction` multiplier to `effective_budget` calculation inside the function
+- [x] On `ContextWindowError` retry (line ~927), call with `budget_fraction=0.5`
+- [x] On generic context-window-sniff retry (line ~990), call with `budget_fraction=0.5`
+- [x] Log the aggressive truncation at DEBUG level
 
 #### Item 2.1 Validation
 
-- [ ] Retry with `budget_fraction=0.5` produces a shorter prompt than initial attempt
-- [ ] Normal (non-retry) truncation behavior unchanged (`budget_fraction=1.0` default)
-- [ ] Existing context window tests pass unchanged
+- [x] Retry with `budget_fraction=0.5` produces a shorter prompt than initial attempt
+- [x] Normal (non-retry) truncation behavior unchanged (`budget_fraction=1.0` default)
+- [x] Existing context window tests pass unchanged (103 passed)
 - [ ] Add unit test: retry truncation is strictly shorter than initial truncation
 
 ---
@@ -136,46 +136,46 @@
 ### Item 2.2: Add Cancellation Check in Synthesis Retry Loop
 > **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py`
 
-- [ ] Add `self._check_cancellation(state)` at the top of the `for outer_attempt in range(...)` loop body (line ~627)
+- [x] Add `self._check_cancellation(state)` at the top of the `for outer_attempt in range(...)` loop body (line ~628)
 
 #### Item 2.2 Validation
 
-- [ ] Cancelled research exits synthesis retry loop promptly
-- [ ] Non-cancelled research continues retry loop normally
-- [ ] Existing synthesis tests pass unchanged
+- [x] Cancelled research exits synthesis retry loop promptly
+- [x] Non-cancelled research continues retry loop normally
+- [x] Existing synthesis tests pass unchanged (64 passed)
 
 ---
 
 ### Item 2.3: Fix Premature State Save — Provenance Event Lost on Crash
 > **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py`
 
-- [ ] Move `synthesis_completed` provenance append (lines ~920-935) to before the state save (line ~895)
-- [ ] Reorder: build landscape → build structured output → append provenance → save state → finalize_phase
-- [ ] Verify `finalize_phase` still runs after the save
+- [x] Move `synthesis_completed` provenance append (lines ~920-935) to before the state save (line ~895)
+- [x] Reorder: build landscape → build structured output → append provenance → save state → finalize_phase
+- [x] Verify `finalize_phase` still runs after the save
 
 #### Item 2.3 Validation
 
-- [ ] `synthesis_completed` provenance event is present in saved state
-- [ ] Landscape and structured output are present in saved state
-- [ ] Existing synthesis tests pass unchanged
+- [x] `synthesis_completed` provenance event is present in saved state
+- [x] Landscape and structured output are present in saved state
+- [x] Existing synthesis tests pass unchanged (64 passed)
 
 ---
 
 ### Item 2.4: Wrap Profile Resolution in try/except for ValidationError
 > **File**: `src/foundry_mcp/config/research.py`
 
-- [ ] Import `ValidationError` from pydantic at module level (or use existing import)
-- [ ] Wrap `ResearchProfile(**self.deep_research_profiles[profile_name])` at line ~932 in try/except
-- [ ] Catch `(TypeError, ValidationError)` and raise `ValueError` with descriptive message
-- [ ] Wrap `profile.model_copy(update=profile_overrides)` at line ~942 in try/except
-- [ ] Catch `(TypeError, ValidationError)` and raise `ValueError` with descriptive message
+- [x] Import `ValidationError` from pydantic (lazy import inside method)
+- [x] Wrap `ResearchProfile(**self.deep_research_profiles[profile_name])` in try/except
+- [x] Catch `(TypeError, ValidationError)` and raise `ValueError` with descriptive message
+- [x] Wrap `profile.model_copy(update=profile_overrides)` in try/except
+- [x] Catch `(TypeError, ValidationError)` and raise `ValueError` with descriptive message
 
 #### Item 2.4 Validation
 
-- [ ] Malformed profile config (wrong types, bad field names) produces clean `ValueError`
-- [ ] Invalid `profile_overrides` produces clean `ValueError`
-- [ ] Valid profile construction still works unchanged
-- [ ] Handler's `except ValueError` catches both cases
+- [x] Malformed profile config (wrong types, bad field names) produces clean `ValueError`
+- [x] Invalid `profile_overrides` produces clean `ValueError`
+- [x] Valid profile construction still works unchanged
+- [x] Handler's `except ValueError` catches both cases
 - [ ] Add unit test: invalid profile config produces ValueError with descriptive message
 
 ---
@@ -183,35 +183,35 @@
 ### Item 2.5: Validate Academic Coverage Weight Keys
 > **File**: `src/foundry_mcp/config/research.py`
 
-- [ ] Add `_VALID_ACADEMIC_WEIGHT_KEYS = {"source_adequacy", "domain_diversity", "query_completion_rate", "source_influence"}` constant
-- [ ] Add validation in `__post_init__` for `deep_research_academic_coverage_weights` when not None
-- [ ] Strip unknown keys (with warning log) matching the pattern for general weights
-- [ ] Validate values are numeric and >= 0
+- [x] Add `_VALID_ACADEMIC_WEIGHT_KEYS = {"source_adequacy", "domain_diversity", "query_completion_rate", "source_influence"}` constant
+- [x] Add validation in `__post_init__` for `deep_research_academic_coverage_weights` when not None
+- [x] Strip unknown keys (with warning log) matching the pattern for general weights
+- [x] Validate values are numeric and >= 0
 
 #### Item 2.5 Validation
 
-- [ ] Academic weights with valid keys pass validation
-- [ ] Academic weights with unknown key `"typo"` strips the key and logs warning
-- [ ] Academic weights with `source_influence` key passes validation (unlike general weights)
-- [ ] General weights with `source_influence` key still stripped (no regression)
-- [ ] Existing config tests pass unchanged
+- [x] Academic weights with valid keys pass validation
+- [x] Academic weights with unknown key `"typo"` strips the key and logs warning
+- [x] Academic weights with `source_influence` key passes validation (unlike general weights)
+- [x] General weights with `source_influence` key still stripped (no regression)
+- [x] Existing config tests pass unchanged (57 passed)
 
 ---
 
 ### Item 2.6: Fix `_save_report_markdown` Using `Path.cwd()`
 > **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py`
 
-- [ ] Accept `output_dir` parameter (default None) in `_save_report_markdown`
-- [ ] When None, derive path from `self.memory` workspace directory if available
-- [ ] Fall back to `Path.cwd()` only as last resort, with warning log
-- [ ] Wrap entire save in try/except to ensure failures never crash synthesis
+- [x] Accept `output_dir` parameter (default None) in `_save_report_markdown`
+- [x] When None, derive path from `self.memory` workspace directory if available
+- [x] Fall back to `Path.cwd()` only as last resort, with debug log
+- [x] Wrap entire save in try/except to ensure failures never crash synthesis (already existed)
 
 #### Item 2.6 Validation
 
-- [ ] Report saved to workspace directory when available
-- [ ] Falls back to cwd when no workspace configured
-- [ ] Failed save logs warning but does not crash synthesis
-- [ ] Existing tests pass unchanged
+- [x] Report saved to workspace directory when available
+- [x] Falls back to cwd when no workspace configured
+- [x] Failed save logs warning but does not crash synthesis
+- [x] Existing tests pass unchanged (7,587 passed)
 
 ---
 

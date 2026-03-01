@@ -929,7 +929,14 @@ class ResearchConfig:
         # Step 2: Look up profile (built-in first, then config-defined)
         profile: Optional[ResearchProfile] = BUILTIN_PROFILES.get(profile_name)
         if profile is None and profile_name in self.deep_research_profiles:
-            profile = ResearchProfile(**self.deep_research_profiles[profile_name])
+            from pydantic import ValidationError
+
+            try:
+                profile = ResearchProfile(**self.deep_research_profiles[profile_name])
+            except (TypeError, ValidationError) as exc:
+                raise ValueError(
+                    f"Invalid profile config for {profile_name!r}: {exc}"
+                ) from exc
         if profile is None:
             available = sorted(set(BUILTIN_PROFILES) | set(self.deep_research_profiles))
             raise ValueError(
@@ -939,7 +946,14 @@ class ResearchConfig:
 
         # Step 3: Apply per-request overrides
         if profile_overrides:
-            profile = profile.model_copy(update=profile_overrides)
+            from pydantic import ValidationError as _ValidationError
+
+            try:
+                profile = profile.model_copy(update=profile_overrides)
+            except (TypeError, _ValidationError) as exc:
+                raise ValueError(
+                    f"Invalid profile overrides for {profile_name!r}: {exc}"
+                ) from exc
 
         return profile
 
@@ -1144,6 +1158,38 @@ class ResearchConfig:
                             v,
                         )
                         del weights[k]
+
+        # Validate academic_coverage_weights schema (includes source_influence)
+        _VALID_ACADEMIC_WEIGHT_KEYS = {
+            "source_adequacy", "domain_diversity", "query_completion_rate", "source_influence",
+        }
+        if self.deep_research_academic_coverage_weights is not None:
+            acad_weights = self.deep_research_academic_coverage_weights
+            if not isinstance(acad_weights, dict):
+                logger.warning(
+                    "deep_research_academic_coverage_weights must be a dict, got %s; resetting to None",
+                    type(acad_weights).__name__,
+                )
+                self.deep_research_academic_coverage_weights = None
+            else:
+                unknown_acad_keys = set(acad_weights.keys()) - _VALID_ACADEMIC_WEIGHT_KEYS
+                if unknown_acad_keys:
+                    logger.warning(
+                        "deep_research_academic_coverage_weights contains unknown keys: %s "
+                        "(valid keys: %s); removing them",
+                        unknown_acad_keys,
+                        _VALID_ACADEMIC_WEIGHT_KEYS,
+                    )
+                    for k in unknown_acad_keys:
+                        del acad_weights[k]
+                for k, v in list(acad_weights.items()):
+                    if not isinstance(v, (int, float)):
+                        logger.warning(
+                            "deep_research_academic_coverage_weights[%r]=%r is not numeric; removing",
+                            k,
+                            v,
+                        )
+                        del acad_weights[k]
 
     def _validate_tavily_config(self) -> None:
         """Validate all Tavily configuration fields.

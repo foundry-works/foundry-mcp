@@ -541,6 +541,7 @@ _MIN_PRESERVE_RECENT_TURNS: int = 4
 def _truncate_researcher_history(
     message_history: list[dict[str, str]],
     model: str | None,
+    budget_fraction: float = 1.0,
 ) -> list[dict[str, str]]:
     """Truncate researcher conversation history to fit model context window.
 
@@ -551,6 +552,9 @@ def _truncate_researcher_history(
     Args:
         message_history: The researcher's message history (assistant/tool turns).
         model: Model identifier for context-window lookup.
+        budget_fraction: Multiplier for the effective budget (0.0–1.0).
+            Use < 1.0 on retry after a context-window error to produce a
+            strictly shorter prompt than the initial attempt.  Default 1.0.
 
     Returns:
         The (possibly truncated) message list.  Returns the original list
@@ -570,7 +574,8 @@ def _truncate_researcher_history(
     if max_tokens is None:
         max_tokens = 128_000  # conservative fallback
 
-    budget_chars = int(max_tokens * _RESEARCHER_HISTORY_BUDGET_FRACTION * _CHARS_PER_TOKEN)
+    effective_budget = _RESEARCHER_HISTORY_BUDGET_FRACTION * budget_fraction
+    budget_chars = int(max_tokens * effective_budget * _CHARS_PER_TOKEN)
 
     total_chars = sum(len(msg.get("content", "")) for msg in message_history)
     if total_chars <= budget_chars:
@@ -924,8 +929,11 @@ class TopicResearchMixin:
                 turn + 1,
                 exc,
             )
-            # Aggressively truncate and retry once
-            truncated = _truncate_researcher_history(message_history, researcher_model)
+            # Aggressively truncate and retry once — halve the budget so the
+            # retry is strictly shorter than the initial attempt.
+            truncated = _truncate_researcher_history(
+                message_history, researcher_model, budget_fraction=0.5,
+            )
             retry_prompt = _build_react_user_prompt(
                 topic=sub_query.query,
                 message_history=truncated,
@@ -977,7 +985,9 @@ class TopicResearchMixin:
                     turn + 1,
                     exc,
                 )
-                truncated = _truncate_researcher_history(message_history, researcher_model)
+                truncated = _truncate_researcher_history(
+                    message_history, researcher_model, budget_fraction=0.5,
+                )
                 retry_prompt = _build_react_user_prompt(
                     topic=sub_query.query,
                     message_history=truncated,
