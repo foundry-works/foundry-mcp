@@ -175,7 +175,7 @@ class TestStructureAdaptive:
         """Comparison query includes comparison-specific structure guidance."""
         stub = StubSynthesis()
         state = _make_state(query="React vs Vue for building web apps")
-        prompt = stub._build_synthesis_system_prompt(state)
+        prompt = stub._build_synthesis_system_prompt(state, query_type="comparison")
 
         assert "comparison" in prompt.lower()
         assert "Comparative Analysis" in prompt or "Overview of [Subject A]" in prompt
@@ -184,7 +184,7 @@ class TestStructureAdaptive:
         """Enumeration query includes list-specific structure guidance."""
         stub = StubSynthesis()
         state = _make_state(query="Top 5 Python web frameworks")
-        prompt = stub._build_synthesis_system_prompt(state)
+        prompt = stub._build_synthesis_system_prompt(state, query_type="enumeration")
 
         assert "enumeration" in prompt.lower() or "list" in prompt.lower()
 
@@ -192,7 +192,7 @@ class TestStructureAdaptive:
         """How-to query includes step-by-step structure guidance."""
         stub = StubSynthesis()
         state = _make_state(query="How to deploy a FastAPI application")
-        prompt = stub._build_synthesis_system_prompt(state)
+        prompt = stub._build_synthesis_system_prompt(state, query_type="howto")
 
         assert "Step" in prompt
         assert "Prerequisites" in prompt
@@ -201,7 +201,7 @@ class TestStructureAdaptive:
         """General explanation query includes thematic structure guidance."""
         stub = StubSynthesis()
         state = _make_state(query="What is quantum computing?")
-        prompt = stub._build_synthesis_system_prompt(state)
+        prompt = stub._build_synthesis_system_prompt(state, query_type="explanation")
 
         assert "Key Findings" in prompt
         assert "Theme/Category" in prompt
@@ -216,7 +216,7 @@ class TestStructureAdaptive:
             ("What is quantum computing?", "explanation"),
         ]:
             state = _make_state(query=query)
-            prompt = stub._build_synthesis_system_prompt(state)
+            prompt = stub._build_synthesis_system_prompt(state, query_type=expected_type)
             assert "Conclusions" in prompt, f"Missing Conclusions for query type {expected_type}"
 
 
@@ -313,7 +313,7 @@ class TestQueryTypeHintInUserPrompt:
         """Comparison query adds comparison hint to user prompt."""
         stub = StubSynthesis()
         state = _make_state(query="React vs Vue for web development")
-        prompt = stub._build_synthesis_user_prompt(state)
+        prompt = stub._build_synthesis_user_prompt(state, query_type="comparison")
 
         assert "comparison" in prompt.lower()
         assert "Query type hint" in prompt
@@ -322,7 +322,7 @@ class TestQueryTypeHintInUserPrompt:
         """Enumeration query adds enumeration hint to user prompt."""
         stub = StubSynthesis()
         state = _make_state(query="List the best Python frameworks")
-        prompt = stub._build_synthesis_user_prompt(state)
+        prompt = stub._build_synthesis_user_prompt(state, query_type="enumeration")
 
         assert "enumeration" in prompt.lower() or "list" in prompt.lower()
         assert "Query type hint" in prompt
@@ -331,7 +331,7 @@ class TestQueryTypeHintInUserPrompt:
         """How-to query adds procedural hint to user prompt."""
         stub = StubSynthesis()
         state = _make_state(query="How to deploy a FastAPI application")
-        prompt = stub._build_synthesis_user_prompt(state)
+        prompt = stub._build_synthesis_user_prompt(state, query_type="howto")
 
         assert "how-to" in prompt.lower() or "step-by-step" in prompt.lower()
         assert "Query type hint" in prompt
@@ -340,7 +340,7 @@ class TestQueryTypeHintInUserPrompt:
         """Explanation query adds overview hint to user prompt."""
         stub = StubSynthesis()
         state = _make_state(query="What are the effects of caffeine on sleep?")
-        prompt = stub._build_synthesis_user_prompt(state)
+        prompt = stub._build_synthesis_user_prompt(state, query_type="explanation")
 
         assert "explanation" in prompt.lower() or "overview" in prompt.lower()
         assert "Query type hint" in prompt
@@ -486,14 +486,14 @@ class TestSynthesisPromptAlignment:
     def test_query_type_classification_still_works(self) -> None:
         """Query-type classification produces correct structure guidance for all types."""
         stub = StubSynthesis()
-        for query, expected_keyword in [
-            ("React vs Vue for web apps", "comparison"),
-            ("Top 5 Python frameworks", "enumeration"),
-            ("How to deploy FastAPI", "how-to"),
-            ("What is quantum computing?", "Key Findings"),
+        for query, query_type, expected_keyword in [
+            ("React vs Vue for web apps", "comparison", "comparison"),
+            ("Top 5 Python frameworks", "enumeration", "enumeration"),
+            ("How to deploy FastAPI", "howto", "how-to"),
+            ("What is quantum computing?", "explanation", "Key Findings"),
         ]:
             state = _make_state(query=query)
-            prompt = stub._build_synthesis_system_prompt(state)
+            prompt = stub._build_synthesis_system_prompt(state, query_type=query_type)
             assert expected_keyword in prompt, f"Missing '{expected_keyword}' for query '{query}'"
 
 

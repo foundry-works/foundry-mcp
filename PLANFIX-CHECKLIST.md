@@ -279,60 +279,60 @@
 ### Item 4.1: Fix Duplicate `_classify_query_type` / Duplicate Provenance
 > **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py`
 
-- [ ] Extract pure `_classify_query_type` function (no provenance side effect)
-- [ ] Call it once early in `_execute_synthesis_async` and store result
-- [ ] Pass stored `query_type` to `_build_synthesis_system_prompt`, `_build_synthesis_tail`, and `_finalize_synthesis_report`
-- [ ] Log `synthesis_query_type` provenance event once explicitly after classification
-- [ ] Remove provenance logging from `_build_synthesis_system_prompt`
+- [x] Extract pure `_classify_query_type` function (no provenance side effect)
+- [x] Call it once early in `_execute_synthesis_async` and store result
+- [x] Pass stored `query_type` to `_build_synthesis_system_prompt`, `_build_synthesis_tail`, and `_finalize_synthesis_report`
+- [x] Log `synthesis_query_type` provenance event once explicitly after classification
+- [x] Remove provenance logging from `_build_synthesis_system_prompt`
 
 #### Item 4.1 Validation
 
-- [ ] Only one `synthesis_query_type` provenance event per synthesis run
-- [ ] Query type classification result consistent across all consumers
-- [ ] Existing synthesis tests pass (update provenance count assertions if needed)
+- [x] Only one `synthesis_query_type` provenance event per synthesis run
+- [x] Query type classification result consistent across all consumers
+- [x] Existing synthesis tests pass (update provenance count assertions if needed)
 
 ---
 
 ### Item 4.2: Use `Literal` Type for `MethodologyAssessment.confidence`
 > **File**: `src/foundry_mcp/core/research/models/sources.py`
 
-- [ ] Change `confidence: str = "low"` to `confidence: Literal["high", "medium", "low"] = "low"`
-- [ ] Add `from typing import Literal` import (if not already present)
+- [x] Change `confidence: str = "low"` to `confidence: Literal["high", "medium", "low"] = "low"`
+- [x] Add `from typing import Literal` import (if not already present)
 
 #### Item 4.2 Validation
 
-- [ ] `MethodologyAssessment(confidence="invalid")` raises `ValidationError`
-- [ ] `MethodologyAssessment(confidence="high")` succeeds
-- [ ] Existing tests pass unchanged
+- [x] `MethodologyAssessment(confidence="invalid")` raises `ValidationError`
+- [x] `MethodologyAssessment(confidence="high")` succeeds
+- [x] Existing tests pass unchanged
 
 ---
 
 ### Item 4.3: Request `confidence` Field in Methodology LLM Prompt
 > **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/methodology_assessment.py`
 
-- [ ] Add `"confidence"` field to the JSON schema in `METHODOLOGY_EXTRACTION_SYSTEM_PROMPT` (line ~43-58)
-- [ ] Add description: `"Your confidence in the assessment: 'high' (full text with clear methods section), 'medium' (substantial content), 'low' (abstract only or limited content)"`
+- [x] Add `"confidence"` field to the JSON schema in `METHODOLOGY_EXTRACTION_SYSTEM_PROMPT` (line ~43-58)
+- [x] Add description: `"Your confidence in the assessment: 'high' (full text with clear methods section), 'medium' (substantial content), 'low' (abstract only or limited content)"`
 
 #### Item 4.3 Validation
 
-- [ ] LLM prompt includes `confidence` in the requested JSON schema
-- [ ] `_parse_llm_response` correctly reads LLM-provided confidence
-- [ ] Content-basis override still forces `"low"` for abstract-only (FIX from v1 review)
-- [ ] Existing tests pass unchanged
+- [x] LLM prompt includes `confidence` in the requested JSON schema
+- [x] `_parse_llm_response` correctly reads LLM-provided confidence
+- [x] Content-basis override still forces `"low"` for abstract-only (FIX from v1 review)
+- [x] Existing tests pass unchanged
 
 ---
 
 ### Item 4.4: Add Timeout to Citation Network `asyncio.gather`
 > **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/citation_network.py`
 
-- [ ] Wrap `asyncio.gather(*tasks, return_exceptions=True)` at line ~165 with `asyncio.wait_for(..., timeout=timeout or 90.0)`
-- [ ] Catch `asyncio.TimeoutError` and log warning with partial results
+- [x] Wrap `asyncio.gather(*tasks, return_exceptions=True)` at line ~165 with `asyncio.wait_for(..., timeout=timeout or 90.0)`
+- [x] Catch `asyncio.TimeoutError` and log warning with partial results
 
 #### Item 4.4 Validation
 
-- [ ] Citation network build respects timeout
-- [ ] Partial results returned on timeout (nodes/edges collected before timeout)
-- [ ] Existing citation network tests pass unchanged
+- [x] Citation network build respects timeout
+- [x] Partial results returned on timeout (nodes/edges collected before timeout)
+- [x] Existing citation network tests pass unchanged
 
 ---
 

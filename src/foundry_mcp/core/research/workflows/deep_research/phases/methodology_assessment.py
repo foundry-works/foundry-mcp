@@ -54,6 +54,7 @@ Return ONLY a JSON object with these fields:
 - statistical_significance: reported significance as string (e.g. "p<0.001") or null
 - limitations_noted: list of limitations mentioned (empty list if none)
 - potential_biases: list of potential biases identified (empty list if none)
+- confidence: your confidence in the assessment — "high" (full text with clear methods section), "medium" (substantial content but methods unclear), or "low" (abstract only or limited content)
 
 Rules:
 - Use null for any field where information is not clearly stated

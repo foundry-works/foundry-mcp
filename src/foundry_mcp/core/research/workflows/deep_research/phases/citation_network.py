@@ -113,11 +113,18 @@ class CitationNetworkBuilder:
     async def build_network(
         self,
         sources: list[ResearchSource],
+        *,
+        timeout: Optional[float] = 90.0,
     ) -> CitationNetwork:
         """Build a citation network from research session sources.
 
         Filters to academic sources with paper IDs, fetches references
         and citations for each, then assembles the graph.
+
+        Args:
+            sources: Research sources to build the network from.
+            timeout: Maximum seconds to wait for all API calls.
+                Defaults to 90s.  On timeout, partial results are used.
 
         Returns:
             CitationNetwork with nodes, edges, foundational papers,
@@ -162,7 +169,17 @@ class CitationNetworkBuilder:
                 return refs, cites
 
         tasks = [fetch_for_source(pid) for _, pid in academic_sources]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        try:
+            results = await asyncio.wait_for(
+                asyncio.gather(*tasks, return_exceptions=True),
+                timeout=timeout or 90.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Citation network build timed out after %.0fs; using partial results",
+                timeout or 90.0,
+            )
+            results = [TimeoutError("citation network build timed out")] * len(tasks)
 
         for (_src, pid), result in zip(academic_sources, results):
             if isinstance(result, BaseException):

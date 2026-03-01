@@ -433,11 +433,24 @@ class SynthesisPhaseMixin:
             },
         )
 
+        # Classify query type once for the entire synthesis phase.
+        query_type = _classify_query_type(
+            state.original_query, profile=state.research_profile,
+        )
+        if state.provenance is not None:
+            state.provenance.append(
+                phase="synthesis",
+                event_type="synthesis_query_type",
+                summary=f"Query classified as '{query_type}' for synthesis structure",
+                query_type=query_type,
+            )
+
         # Allocate budget, build prompts, run final-fit validation.
         system_prompt, user_prompt = self._prepare_synthesis_budget_and_prompts(
             state,
             provider_id,
             degraded_mode,
+            query_type=query_type,
         )
 
         # Check for cancellation before making provider call
@@ -468,6 +481,7 @@ class SynthesisPhaseMixin:
             total_chars_dropped=total_chars_dropped,
             used_fallback=used_fallback,
             degraded_mode=degraded_mode,
+            query_type=query_type,
         )
 
     # ------------------------------------------------------------------
@@ -543,6 +557,8 @@ class SynthesisPhaseMixin:
         state: DeepResearchState,
         provider_id: Optional[str],
         degraded_mode: bool,
+        *,
+        query_type: str = "explanation",
     ) -> tuple[str, str]:
         """Allocate token budget, build prompts, and run final-fit validation.
 
@@ -550,6 +566,7 @@ class SynthesisPhaseMixin:
             state: Current research state.
             provider_id: LLM provider to use.
             degraded_mode: Whether synthesis is running from raw notes.
+            query_type: Pre-classified query type for structural guidance.
 
         Returns:
             A tuple of (system_prompt, user_prompt) ready for the LLM call.
@@ -575,13 +592,14 @@ class SynthesisPhaseMixin:
         )
 
         # Build the synthesis prompt with allocated content
-        system_prompt = self._build_synthesis_system_prompt(state)
+        system_prompt = self._build_synthesis_system_prompt(state, query_type=query_type)
         system_prompt_tokens = len(system_prompt) // 4
         user_prompt = self._build_synthesis_user_prompt(
             state,
             allocation_result,
             degraded_mode=degraded_mode,
             system_prompt_tokens=system_prompt_tokens,
+            query_type=query_type,
         )
 
         # Final-fit validation before provider dispatch
@@ -836,6 +854,8 @@ class SynthesisPhaseMixin:
         total_chars_dropped: int,
         used_fallback: bool,
         degraded_mode: bool,
+        *,
+        query_type: str = "explanation",
     ) -> WorkflowResult:
         """Extract the report, post-process citations, audit, and build the result.
 
@@ -850,6 +870,7 @@ class SynthesisPhaseMixin:
             total_chars_dropped: Total characters dropped during retries.
             used_fallback: Whether generic prompt truncation was used.
             degraded_mode: Whether synthesis ran from raw notes.
+            query_type: Pre-classified query type (computed once upstream).
 
         Returns:
             WorkflowResult with the final synthesis report.
@@ -863,9 +884,6 @@ class SynthesisPhaseMixin:
             report = result.content
 
         # Post-process citations: remove dangling refs, append Sources/References
-        query_type = _classify_query_type(
-            state.original_query, profile=state.research_profile,
-        )
         report, citation_metadata = postprocess_citations(
             report, state, query_type=query_type,
         )
@@ -1161,30 +1179,25 @@ class SynthesisPhaseMixin:
             profile=state.research_profile.name if state.research_profile else "general",
         )
 
-    def _build_synthesis_system_prompt(self, state: DeepResearchState) -> str:
+    def _build_synthesis_system_prompt(
+        self,
+        state: DeepResearchState,
+        *,
+        query_type: str = "explanation",
+    ) -> str:
         """Build system prompt for report synthesis.
 
         The prompt is state-aware: it detects query language and adapts
         structural guidance based on query type.
 
         Args:
-            state: Current research state used for language and structure hints
+            state: Current research state used for language and structure hints.
+            query_type: Pre-classified query type (computed once upstream).
 
         Returns:
             System prompt string
         """
-        profile = state.research_profile
-        query_type = _classify_query_type(state.original_query, profile=profile)
         structure_guidance = _STRUCTURE_GUIDANCE.get(query_type, _STRUCTURE_GUIDANCE["explanation"])
-
-        # PLAN-1 Item 2: Log synthesis_query_type provenance event
-        if state.provenance is not None:
-            state.provenance.append(
-                phase="synthesis",
-                event_type="synthesis_query_type",
-                summary=f"Query classified as '{query_type}' for synthesis structure",
-                query_type=query_type,
-            )
 
         base_prompt = f"""You are a research synthesizer. Your task is to create a comprehensive, well-structured research report from analyzed findings.
 
@@ -1278,6 +1291,7 @@ This is a **literature review** synthesis. Follow these additional guidelines:
         *,
         degraded_mode: bool = False,
         system_prompt_tokens: int = 0,
+        query_type: str = "explanation",
     ) -> str:
         """Build user prompt with findings and sources for synthesis.
 
@@ -1288,6 +1302,7 @@ This is a **literature review** synthesis. Follow these additional guidelines:
                 compressed findings are available (Phase 3b ODR alignment).
             system_prompt_tokens: Pre-computed system prompt token estimate
                 (avoids rebuilding the system prompt just for size calculation).
+            query_type: Pre-classified query type (computed once upstream).
 
         Returns:
             User prompt string
@@ -1337,6 +1352,7 @@ This is a **literature review** synthesis. Follow these additional guidelines:
                 id_to_citation,
                 allocation_result,
                 system_prompt_tokens=system_prompt_tokens,
+                query_type=query_type,
             )
 
         # When a global compressed digest is available, use it as the
@@ -1360,6 +1376,7 @@ This is a **literature review** synthesis. Follow these additional guidelines:
                 id_to_citation,
                 allocation_result,
                 system_prompt_tokens=system_prompt_tokens,
+                query_type=query_type,
             )
 
         # ---------------------------------------------------------------
@@ -1395,6 +1412,7 @@ This is a **literature review** synthesis. Follow these additional guidelines:
                 id_to_citation,
                 allocation_result,
                 system_prompt_tokens=system_prompt_tokens,
+                query_type=query_type,
             )
 
         # ---------------------------------------------------------------
@@ -1437,6 +1455,7 @@ This is a **literature review** synthesis. Follow these additional guidelines:
             id_to_citation,
             allocation_result,
             system_prompt_tokens=system_prompt_tokens,
+            query_type=query_type,
         )
 
     def _append_contradictions_and_gaps(
@@ -1515,6 +1534,7 @@ This is a **literature review** synthesis. Follow these additional guidelines:
         allocation_result: Optional[AllocationResult] = None,
         *,
         system_prompt_tokens: int = 0,
+        query_type: str = "explanation",
     ) -> str:
         """Append source reference and instructions to the synthesis prompt.
 
@@ -1527,6 +1547,7 @@ This is a **literature review** synthesis. Follow these additional guidelines:
             id_to_citation: source-id → citation-number mapping
             allocation_result: Optional budget allocation result
             system_prompt_tokens: Pre-computed system prompt token estimate
+            query_type: Pre-classified query type (computed once upstream).
 
         Returns:
             Complete user prompt string
@@ -1603,7 +1624,6 @@ This is a **literature review** synthesis. Follow these additional guidelines:
                 prompt_parts.append(methodology_section)
 
         # Add synthesis instructions with query-type structural hint
-        query_type = _classify_query_type(state.original_query, profile=state.research_profile)
         query_type_labels = {
             "comparison": "comparison (side-by-side analysis of alternatives)",
             "enumeration": "list/enumeration (discrete items or options)",
