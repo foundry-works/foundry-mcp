@@ -27,6 +27,7 @@ from foundry_mcp.core.research.models.deep_research import (
     CitationSearchTool,
     DeepResearchState,
     ExtractContentTool,
+    ExtractPDFTool,
     RelatedPapersTool,
     ResearcherToolCall,
     ThinkTool,
@@ -48,6 +49,34 @@ from foundry_mcp.core.research.workflows.deep_research.source_quality import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ------------------------------------------------------------------
+# PDF URL detection helper (PLAN-4 Item 1c)
+# ------------------------------------------------------------------
+
+# URL patterns that strongly indicate a PDF resource.
+_PDF_URL_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"\.pdf(\?|#|$)", re.IGNORECASE),
+    re.compile(r"arxiv\.org/pdf/", re.IGNORECASE),
+    re.compile(r"arxiv\.org/ftp/", re.IGNORECASE),
+]
+
+
+def _is_pdf_url(url: str) -> bool:
+    """Detect whether a URL likely points to a PDF document.
+
+    Checks URL patterns (*.pdf, arxiv.org/pdf/*) without making
+    any network requests.  Content-Type based detection is handled
+    downstream by the extraction layer.
+
+    Args:
+        url: URL string to check.
+
+    Returns:
+        True if the URL matches a known PDF pattern.
+    """
+    return any(pattern.search(url) for pattern in _PDF_URL_PATTERNS)
 
 
 # ------------------------------------------------------------------
@@ -290,6 +319,15 @@ Apply these strategies deliberately. State which strategy you are using in your 
 - **When to use**: Your last 2 tool calls returned mostly familiar material.
 """
 
+# PDF extraction tool documentation (injected when profile enables PDF extraction)
+_EXTRACT_PDF_PROMPT = """
+### extract_pdf
+Extract full text from an open-access academic paper PDF. Use this for papers where the abstract is insufficient — methods sections, detailed results, and supplementary data are only available in the full text.
+Arguments: {"url": "direct PDF URL (e.g. https://arxiv.org/pdf/2301.00001.pdf)", "max_pages": 30}
+Returns: Full paper text with section structure (Abstract, Methods, Results, etc.) and page numbers. Only works with open-access PDFs; paywalled papers will fail gracefully.
+Use this when `extract_content` returns limited content for an academic paper and you have a direct PDF link (often ending in .pdf or from arxiv.org/pdf/).
+"""
+
 
 # ------------------------------------------------------------------
 # Shared dedup helper for _topic_search and _topic_extract
@@ -379,6 +417,7 @@ def _build_researcher_system_prompt(
     budget_remaining: int,
     extract_enabled: bool,
     citation_tools_enabled: bool = False,
+    pdf_extraction_enabled: bool = False,
     date_str: str | None = None,
 ) -> str:
     """Build the researcher system prompt with budget and context.
@@ -389,6 +428,8 @@ def _build_researcher_system_prompt(
         extract_enabled: Whether extract_content tool is available.
         citation_tools_enabled: Whether citation_search and related_papers
             tools are available (gated by research profile).
+        pdf_extraction_enabled: Whether extract_pdf tool is available
+            (gated by research profile enable_pdf_extraction).
         date_str: Today's date string. Defaults to UTC today.
 
     Returns:
@@ -420,6 +461,13 @@ def _build_researcher_system_prompt(
         prompt = prompt.replace(
             "## Response Format",
             f"{_CITATION_TOOLS_PROMPT}\n{_STRATEGIC_RESEARCH_PROMPT}\n## Response Format",
+        )
+
+    if pdf_extraction_enabled:
+        # Insert extract_pdf tool documentation before the Response Format section
+        prompt = prompt.replace(
+            "## Response Format",
+            f"{_EXTRACT_PDF_PROMPT}\n## Response Format",
         )
 
     return prompt
@@ -629,9 +677,10 @@ class TopicResearchMixin:
 
         extract_enabled, extract_max_per_iter, provider_id, researcher_model = self._resolve_topic_research_config()
 
-        # Resolve citation tools flag from research profile
+        # Resolve profile-gated tool flags
         profile = state.research_profile
         citation_tools_enabled = getattr(profile, "enable_citation_tools", False) if profile else False
+        pdf_extraction_enabled = getattr(profile, "enable_pdf_extraction", False) if profile else False
 
         message_history: list[dict[str, str]] = []
         max_turns = max_searches * 3  # generous: 3x budget allows think steps
@@ -663,6 +712,7 @@ class TopicResearchMixin:
                 max_searches=max_searches,
                 extract_enabled=extract_enabled,
                 citation_tools_enabled=citation_tools_enabled,
+                pdf_extraction_enabled=pdf_extraction_enabled,
                 turn=turn,
             )
             if llm_result is None:
@@ -676,6 +726,7 @@ class TopicResearchMixin:
                 budget_remaining=budget_remaining,
                 extract_enabled=extract_enabled,
                 citation_tools_enabled=citation_tools_enabled,
+                pdf_extraction_enabled=pdf_extraction_enabled,
             )
             response, tokens_delta = await self._parse_with_retry_async(
                 raw_content=raw_content,
@@ -737,6 +788,7 @@ class TopicResearchMixin:
                 extract_enabled=extract_enabled,
                 extract_max_per_iter=extract_max_per_iter,
                 citation_tools_enabled=citation_tools_enabled,
+                pdf_extraction_enabled=pdf_extraction_enabled,
             )
             tool_calls_used += calls_delta
             budget_remaining -= budget_delta
@@ -803,6 +855,7 @@ class TopicResearchMixin:
         extract_enabled: bool,
         turn: int,
         citation_tools_enabled: bool = False,
+        pdf_extraction_enabled: bool = False,
     ) -> Any | None:
         """Execute a single researcher LLM call for one ReAct turn.
 
@@ -821,6 +874,7 @@ class TopicResearchMixin:
             turn: Current turn index (for logging).
             citation_tools_enabled: Whether citation_search and related_papers
                 tools are available.
+            pdf_extraction_enabled: Whether extract_pdf tool is available.
 
         Returns:
             LLM result object on success, None on failure.
@@ -830,6 +884,7 @@ class TopicResearchMixin:
             budget_remaining=budget_remaining,
             extract_enabled=extract_enabled,
             citation_tools_enabled=citation_tools_enabled,
+            pdf_extraction_enabled=pdf_extraction_enabled,
         )
         truncated_history = _truncate_researcher_history(message_history, researcher_model)
         user_prompt = _build_react_user_prompt(
@@ -1125,6 +1180,7 @@ class TopicResearchMixin:
         extract_enabled: bool,
         extract_max_per_iter: int,
         citation_tools_enabled: bool = False,
+        pdf_extraction_enabled: bool = False,
     ) -> tuple[bool, int, int]:
         """Dispatch all tool calls from a single researcher turn.
 
@@ -1234,6 +1290,48 @@ class TopicResearchMixin:
                     {
                         "role": "tool",
                         "tool": "extract_content",
+                        "content": tool_result_text,
+                    }
+                )
+
+            elif tool_call.tool == "extract_pdf":
+                if not pdf_extraction_enabled:
+                    message_history.append(
+                        {
+                            "role": "tool",
+                            "tool": "extract_pdf",
+                            "content": "PDF extraction is not available for this research profile.",
+                        }
+                    )
+                    continue
+
+                if budget_remaining - budget_delta <= 0:
+                    message_history.append(
+                        {
+                            "role": "tool",
+                            "tool": "extract_pdf",
+                            "content": "Budget exhausted. No more extractions allowed.",
+                        }
+                    )
+                    continue
+
+                tool_result_text = await self._handle_extract_pdf_tool(
+                    tool_call=tool_call,
+                    sub_query=sub_query,
+                    state=state,
+                    result=result,
+                    seen_urls=seen_urls,
+                    seen_titles=seen_titles,
+                    state_lock=state_lock,
+                    semaphore=semaphore,
+                    timeout=timeout,
+                )
+                tool_calls_delta += 1
+                budget_delta += 1
+                message_history.append(
+                    {
+                        "role": "tool",
+                        "tool": "extract_pdf",
                         "content": tool_result_text,
                     }
                 )
@@ -1991,6 +2089,151 @@ class TopicResearchMixin:
         return "\n\n".join(blocks)
 
     # ------------------------------------------------------------------
+    # PDF extraction handler (PLAN-4 Item 1d)
+    # ------------------------------------------------------------------
+
+    async def _handle_extract_pdf_tool(
+        self,
+        tool_call: ResearcherToolCall,
+        sub_query: SubQuery,
+        state: DeepResearchState,
+        result: TopicResearchResult,
+        seen_urls: set[str],
+        seen_titles: dict[str, str],
+        state_lock: asyncio.Lock,
+        semaphore: asyncio.Semaphore,
+        timeout: float,
+    ) -> str:
+        """Handle an extract_pdf tool call: fetch and extract a PDF.
+
+        Uses PDFExtractor to download and extract text from an open-access
+        PDF URL, then applies section detection and prioritized extraction.
+        Creates a ResearchSource with page boundary metadata.
+
+        Args:
+            tool_call: The extract_pdf tool call with url argument.
+            sub_query: The sub-query being researched.
+            state: Current research state.
+            result: TopicResearchResult to update.
+            seen_urls: Shared URL dedup set.
+            seen_titles: Shared title dedup dict.
+            state_lock: Lock for thread-safe state mutations.
+            semaphore: Semaphore for concurrency control.
+            timeout: Extraction timeout.
+
+        Returns:
+            Formatted tool result string with extracted content summary.
+        """
+        from foundry_mcp.core.research.models.sources import ResearchSource, SourceType
+        from foundry_mcp.core.research.pdf_extractor import PDFExtractor
+        from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
+            validate_extract_url,
+        )
+
+        # Parse arguments
+        try:
+            args = ExtractPDFTool.model_validate(tool_call.arguments)
+            url = args.url
+            max_pages = args.max_pages
+        except Exception:
+            url = tool_call.arguments.get("url", "")
+            max_pages = int(tool_call.arguments.get("max_pages", 30))
+
+        if not url:
+            return "Error: url is required for extract_pdf."
+
+        # SSRF protection
+        if not validate_extract_url(url, resolve_dns=True):
+            return "Error: URL failed security validation."
+
+        # Use config for max_pages if available
+        config_max_pages = getattr(self.config, "deep_research_pdf_max_pages", 50)
+        max_pages = min(max_pages, config_max_pages)
+
+        priority_sections = getattr(
+            self.config, "deep_research_pdf_priority_sections", None
+        ) or ["methods", "results", "discussion"]
+
+        async with semaphore:
+            try:
+                extractor = PDFExtractor(max_pages=max_pages, timeout=timeout)
+                pdf_result = await asyncio.wait_for(
+                    extractor.extract_from_url(url),
+                    timeout=timeout,
+                )
+            except asyncio.TimeoutError:
+                return f"PDF extraction timed out after {timeout:.0f}s for {url}"
+            except Exception as exc:
+                logger.warning("PDF extraction failed for %s: %s", url, exc)
+                return f"PDF extraction failed: {exc}"
+
+        if not pdf_result.success:
+            warnings_str = "; ".join(pdf_result.warnings[:3]) if pdf_result.warnings else "no text extracted"
+            return f"PDF extraction yielded no text ({warnings_str}). The PDF may be scanned or paywalled."
+
+        # Section detection and prioritized extraction
+        sections = extractor.detect_sections(pdf_result)
+        content = extractor.extract_prioritized(
+            pdf_result,
+            max_chars=50000,
+            priority_sections=list(priority_sections),
+        )
+
+        # Build section summary for the researcher
+        section_names = list(sections.keys()) if sections else []
+        section_info = f"Sections detected: {', '.join(section_names)}" if section_names else "No standard sections detected"
+
+        # Build page boundary metadata for downstream digest pipeline
+        page_boundaries = [
+            (i + 1, start, end)
+            for i, (start, end) in enumerate(pdf_result.page_offsets)
+        ]
+
+        # Create source with PDF metadata
+        source = ResearchSource(
+            url=url,
+            title=f"PDF: {url.split('/')[-1][:80]}",
+            source_type=SourceType.ACADEMIC,
+            content=content,
+            snippet=f"Full-text PDF ({pdf_result.extracted_page_count} pages). {section_info}",
+            sub_query_id=sub_query.id,
+            metadata={
+                "pdf_extraction": True,
+                "page_count": pdf_result.page_count,
+                "extracted_page_count": pdf_result.extracted_page_count,
+                "sections": section_names,
+                "page_boundaries": page_boundaries,
+                "warnings": pdf_result.warnings[:5],
+            },
+        )
+
+        was_added, dedup_reason = await _dedup_and_add_source(
+            source=source,
+            sub_query=sub_query,
+            state=state,
+            seen_urls=seen_urls,
+            seen_titles=seen_titles,
+            state_lock=state_lock,
+        )
+
+        if not was_added:
+            return f"PDF content from {url} was deduplicated ({dedup_reason})."
+
+        result.sources_found += 1
+
+        # Build response for the researcher
+        content_preview = content[:500] + "..." if len(content) > 500 else content
+        response_parts = [
+            f"Extracted {pdf_result.extracted_page_count} pages from PDF ({len(content)} chars).",
+            section_info,
+            f"\nCONTENT PREVIEW:\n{content_preview}",
+        ]
+        if pdf_result.warnings:
+            response_parts.append(f"\nWarnings: {'; '.join(pdf_result.warnings[:3])}")
+
+        return "\n".join(response_parts)
+
+    # ------------------------------------------------------------------
     # Citation and related papers handlers
     # ------------------------------------------------------------------
 
@@ -2454,8 +2697,9 @@ class TopicResearchMixin:
     ) -> int:
         """Extract full content from promising URLs found in search results.
 
-        Uses Tavily Extract API to fetch and parse page content. Extracted
-        sources are deduplicated against existing sources and added to state.
+        Uses Tavily Extract API for web pages and PDFExtractor for PDF URLs.
+        PDF URLs are detected by pattern (*.pdf, arxiv.org/pdf/*) and routed
+        to the PDF extraction pipeline with section detection.
 
         Args:
             urls: URLs to extract (pre-validated, max per config)
@@ -2479,12 +2723,34 @@ class TopicResearchMixin:
         if not urls:
             return 0
 
+        # Split PDF URLs from regular web URLs for routing
+        pdf_urls = [u for u in urls if _is_pdf_url(u)]
+        web_urls = [u for u in urls if not _is_pdf_url(u)]
+
+        added = 0
+
+        # --- Route PDF URLs to PDFExtractor ---
+        if pdf_urls:
+            added += await self._extract_pdf_urls(
+                pdf_urls=pdf_urls,
+                sub_query=sub_query,
+                state=state,
+                seen_urls=seen_urls,
+                seen_titles=seen_titles,
+                state_lock=state_lock,
+                semaphore=semaphore,
+                timeout=timeout,
+            )
+
+        # --- Route web URLs to Tavily Extract ---
+        if not web_urls:
+            return added
+
         api_key = self.config.tavily_api_key or os.environ.get("TAVILY_API_KEY")
         if not api_key:
             logger.debug("Tavily API key not available for topic extract")
-            return 0
+            return added
 
-        added = 0
         async with semaphore:
             try:
                 provider = TavilyExtractProvider(api_key=api_key)
@@ -2492,7 +2758,7 @@ class TopicResearchMixin:
 
                 extracted_sources = await asyncio.wait_for(
                     provider.extract(
-                        urls=urls,
+                        urls=web_urls,
                         extract_depth=extract_depth,
                         format="markdown",
                         query=sub_query.query,
@@ -2550,5 +2816,128 @@ class TopicResearchMixin:
                     sub_query.id,
                     exc,
                 )
+
+        return added
+
+    # ------------------------------------------------------------------
+    # PDF URL extraction helper (PLAN-4 Item 1c)
+    # ------------------------------------------------------------------
+
+    async def _extract_pdf_urls(
+        self,
+        pdf_urls: list[str],
+        sub_query: SubQuery,
+        state: DeepResearchState,
+        seen_urls: set[str],
+        seen_titles: dict[str, str],
+        state_lock: asyncio.Lock,
+        semaphore: asyncio.Semaphore,
+        timeout: float = 60.0,
+    ) -> int:
+        """Extract content from PDF URLs via PDFExtractor.
+
+        Called by ``_topic_extract`` when URLs match PDF patterns.
+        Creates ResearchSource objects with page boundary metadata
+        for downstream page-aware digest locators.
+
+        Args:
+            pdf_urls: PDF URLs to extract (pre-validated).
+            sub_query: The sub-query being researched.
+            state: Current research state.
+            seen_urls: Shared URL dedup set.
+            seen_titles: Shared title dedup dict.
+            state_lock: Lock for thread-safe state mutations.
+            semaphore: Semaphore for concurrency control.
+            timeout: Per-extraction timeout.
+
+        Returns:
+            Number of new sources added from PDF extraction.
+        """
+        from foundry_mcp.core.research.models.sources import ResearchSource, SourceType
+        from foundry_mcp.core.research.pdf_extractor import PDFExtractor
+
+        config_max_pages = getattr(self.config, "deep_research_pdf_max_pages", 50)
+        priority_sections = getattr(
+            self.config, "deep_research_pdf_priority_sections", None
+        ) or ["methods", "results", "discussion"]
+
+        added = 0
+        for url in pdf_urls:
+            try:
+                extractor = PDFExtractor(max_pages=config_max_pages, timeout=timeout)
+                async with semaphore:
+                    pdf_result = await asyncio.wait_for(
+                        extractor.extract_from_url(url),
+                        timeout=timeout,
+                    )
+
+                if not pdf_result.success:
+                    logger.debug("PDF extraction yielded no text for %s", url)
+                    continue
+
+                # Section-aware content extraction
+                sections = extractor.detect_sections(pdf_result)
+                content = extractor.extract_prioritized(
+                    pdf_result,
+                    max_chars=50000,
+                    priority_sections=list(priority_sections),
+                )
+                section_names = list(sections.keys()) if sections else []
+
+                # Page boundaries for digest locators
+                page_boundaries = [
+                    (i + 1, start, end)
+                    for i, (start, end) in enumerate(pdf_result.page_offsets)
+                ]
+
+                source = ResearchSource(
+                    url=url,
+                    title=f"PDF: {url.split('/')[-1][:80]}",
+                    source_type=SourceType.ACADEMIC,
+                    content=content,
+                    snippet=f"Full-text PDF ({pdf_result.extracted_page_count} pages)",
+                    sub_query_id=sub_query.id,
+                    metadata={
+                        "pdf_extraction": True,
+                        "extract_source": True,
+                        "page_count": pdf_result.page_count,
+                        "extracted_page_count": pdf_result.extracted_page_count,
+                        "sections": section_names,
+                        "page_boundaries": page_boundaries,
+                        "warnings": pdf_result.warnings[:5],
+                    },
+                )
+
+                was_added, dedup_reason = await _dedup_and_add_source(
+                    source=source,
+                    sub_query=sub_query,
+                    state=state,
+                    seen_urls=seen_urls,
+                    seen_titles=seen_titles,
+                    state_lock=state_lock,
+                )
+                if was_added:
+                    added += 1
+                    logger.info(
+                        "PDF extracted for %r: %s (%d pages, %d chars)",
+                        sub_query.id,
+                        url[:80],
+                        pdf_result.extracted_page_count,
+                        len(content),
+                    )
+                elif dedup_reason and state.provenance is not None:
+                    state.provenance.append(
+                        phase="supervision",
+                        event_type="source_deduplicated",
+                        summary=f"PDF source deduplicated ({dedup_reason}): {url[:80]}",
+                        source_url=url,
+                        source_title=f"PDF: {url.split('/')[-1][:80]}",
+                        reason=dedup_reason,
+                    )
+
+            except asyncio.TimeoutError:
+                logger.warning("PDF extraction timed out for %s after %.1fs", url, timeout)
+            except Exception as exc:
+                logger.warning("PDF extraction failed for %s: %s. Falling back to Tavily.", url, exc)
 
         return added

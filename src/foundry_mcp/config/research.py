@@ -311,6 +311,13 @@ class ResearchConfig:
     deep_research_digest_evidence_max_chars: int = 400  # Max chars per evidence snippet
     deep_research_digest_max_evidence_snippets: int = 5  # Max evidence snippets per digest
     deep_research_digest_fetch_pdfs: bool = False  # Whether to fetch and extract PDF content
+
+    # PDF extraction settings for academic paper analysis (PLAN-4 Item 1)
+    deep_research_pdf_max_pages: int = 50  # Max pages to extract from academic PDFs
+    deep_research_pdf_priority_sections: List[str] = field(
+        default_factory=lambda: ["methods", "results", "discussion"]
+    )  # Sections to prioritize when truncating PDF content
+
     deep_research_archive_content: bool = False  # Archive canonical text for digested sources
     deep_research_archive_retention_days: int = 30  # Days to retain archived digest content (0 = keep indefinitely)
     # Digest LLM provider configuration (uses default provider if not set)

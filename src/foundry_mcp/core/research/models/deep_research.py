@@ -519,6 +519,26 @@ class ExtractContentTool(BaseModel):
         return safe[:2]
 
 
+class ExtractPDFTool(BaseModel):
+    """Tool schema for extracting full text from academic paper PDFs.
+
+    Profile-gated: only available when ``enable_pdf_extraction`` is True
+    (systematic-review profile). The researcher calls this when a direct
+    PDF link is available and the abstract is insufficient.
+    """
+
+    url: str = Field(
+        ...,
+        description="Direct PDF URL (e.g. https://arxiv.org/pdf/2301.00001.pdf)",
+    )
+    max_pages: int = Field(
+        default=30,
+        ge=1,
+        le=100,
+        description="Maximum pages to extract (default 30)",
+    )
+
+
 class ThinkTool(BaseModel):
     """Tool schema for strategic reflection.
 
@@ -598,7 +618,7 @@ class ResearcherToolCall(BaseModel):
 
     tool: str = Field(
         ...,
-        description="Tool name: web_search, extract_content, think, research_complete, citation_search, related_papers",
+        description="Tool name: web_search, extract_content, extract_pdf, think, research_complete, citation_search, related_papers",
     )
     arguments: dict[str, Any] = Field(
         default_factory=dict,
@@ -635,6 +655,7 @@ class ResearcherResponse(BaseModel):
 RESEARCHER_TOOL_SCHEMAS: dict[str, type[BaseModel]] = {
     "web_search": WebSearchTool,
     "extract_content": ExtractContentTool,
+    "extract_pdf": ExtractPDFTool,
     "think": ThinkTool,
     "research_complete": ResearchCompleteTool,
     "citation_search": CitationSearchTool,
