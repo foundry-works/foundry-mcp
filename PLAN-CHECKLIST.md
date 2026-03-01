@@ -132,21 +132,21 @@
 ### 4a. Strategic guidance in researcher prompt
 > **File**: `phases/topic_research.py`
 
-- [ ] Add "Research Strategies" section to academic researcher system prompt
-- [ ] Include BROADEN strategy (alternative terminology, related_papers, reformulation)
-- [ ] Include DEEPEN strategy (citation_search on seminal papers, methodological variations)
-- [ ] Include VALIDATE strategy (corroboration via search, citations, parallel studies)
-- [ ] Include SATURATE strategy (>50% duplicates = coverage sufficient, call research_complete)
-- [ ] Gate on `profile.enable_citation_tools == True`
+- [x] Add "Research Strategies" section to academic researcher system prompt
+- [x] Include BROADEN strategy (alternative terminology, related_papers, reformulation)
+- [x] Include DEEPEN strategy (citation_search on seminal papers, methodological variations)
+- [x] Include VALIDATE strategy (corroboration via search, citations, parallel studies)
+- [x] Include SATURATE strategy (>50% duplicates = coverage sufficient, call research_complete)
+- [x] Gate on `profile.enable_citation_tools == True`
 
 ### 4b. Strategy provenance logging
-- [ ] Pattern-match think output for strategy keywords (BROADEN, DEEPEN, VALIDATE, SATURATE)
-- [ ] Log detected strategy choice in provenance
+- [x] Pattern-match think output for strategy keywords (BROADEN, DEEPEN, VALIDATE, SATURATE)
+- [x] Log detected strategy choice in provenance
 
 ### Item 4 Testing
-- [ ] Unit test: academic researcher prompt includes strategy guidance
-- [ ] Unit test: general researcher prompt does NOT include strategy guidance
-- [ ] Unit test: strategy keywords in think output captured in provenance
+- [x] Unit test: academic researcher prompt includes strategy guidance
+- [x] Unit test: general researcher prompt does NOT include strategy guidance
+- [x] Unit test: strategy keywords in think output captured in provenance
 
 ---
 

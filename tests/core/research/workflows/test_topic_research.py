@@ -792,9 +792,9 @@ class TestReActLoop:
         execution_order: list[str] = []
         original_handle_think = mixin._handle_think_tool
 
-        def tracking_think(tool_call, sub_query, result):
+        def tracking_think(tool_call, sub_query, result, **kwargs):
             execution_order.append("think")
-            return original_handle_think(tool_call, sub_query, result)
+            return original_handle_think(tool_call, sub_query, result, **kwargs)
 
         mixin._handle_think_tool = tracking_think
 

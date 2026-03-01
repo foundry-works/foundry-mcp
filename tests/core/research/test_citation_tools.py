@@ -620,3 +620,319 @@ class TestNoveltyTrackingAcrossTools:
 
         assert was_added is True
         assert reason is None
+
+
+# ====================================================================
+# PLAN-2 Item 4: Strategic Research Primitives
+# ====================================================================
+
+
+class TestStrategicResearchPrompt:
+    """Tests for strategic research guidance in academic researcher prompt."""
+
+    def test_academic_prompt_includes_strategy_guidance(self):
+        """Strategy guidance appears when citation tools are enabled."""
+        prompt = _build_researcher_system_prompt(
+            budget_total=10,
+            budget_remaining=10,
+            extract_enabled=True,
+            citation_tools_enabled=True,
+        )
+        assert "## Research Strategies" in prompt
+        assert "### BROADEN" in prompt
+        assert "### DEEPEN" in prompt
+        assert "### VALIDATE" in prompt
+        assert "### SATURATE" in prompt
+
+    def test_general_prompt_does_not_include_strategy_guidance(self):
+        """Strategy guidance is NOT in prompt when citation tools are disabled."""
+        prompt = _build_researcher_system_prompt(
+            budget_total=10,
+            budget_remaining=10,
+            extract_enabled=True,
+            citation_tools_enabled=False,
+        )
+        assert "## Research Strategies" not in prompt
+        assert "BROADEN" not in prompt
+        assert "DEEPEN" not in prompt
+        assert "VALIDATE" not in prompt
+        assert "SATURATE" not in prompt
+
+    def test_strategy_guidance_default_disabled(self):
+        """Strategy guidance is NOT in prompt with default parameters."""
+        prompt = _build_researcher_system_prompt(
+            budget_total=5,
+            budget_remaining=5,
+            extract_enabled=True,
+        )
+        assert "## Research Strategies" not in prompt
+
+    def test_strategy_guidance_includes_tool_references(self):
+        """Strategy descriptions reference citation_search and related_papers."""
+        prompt = _build_researcher_system_prompt(
+            budget_total=5,
+            budget_remaining=5,
+            extract_enabled=True,
+            citation_tools_enabled=True,
+        )
+        # DEEPEN should reference citation_search
+        assert "citation_search" in prompt
+        # BROADEN should reference related_papers
+        assert "related_papers" in prompt
+
+    def test_strategy_guidance_placed_before_response_format(self):
+        """Strategy section appears before Response Format in the prompt."""
+        prompt = _build_researcher_system_prompt(
+            budget_total=5,
+            budget_remaining=5,
+            extract_enabled=True,
+            citation_tools_enabled=True,
+        )
+        strategies_pos = prompt.index("## Research Strategies")
+        response_format_pos = prompt.index("## Response Format")
+        assert strategies_pos < response_format_pos
+
+    def test_strategy_guidance_placed_after_citation_tools(self):
+        """Strategy section appears after citation tool documentation."""
+        prompt = _build_researcher_system_prompt(
+            budget_total=5,
+            budget_remaining=5,
+            extract_enabled=True,
+            citation_tools_enabled=True,
+        )
+        citation_tools_pos = prompt.index("### citation_search")
+        strategies_pos = prompt.index("## Research Strategies")
+        assert citation_tools_pos < strategies_pos
+
+
+class TestStrategyProvenanceLogging:
+    """Tests for strategy keyword detection in think tool provenance."""
+
+    @pytest.fixture
+    def mixin(self):
+        """Create a StubTopicResearch for think tool testing."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            TopicResearchMixin,
+        )
+
+        # Minimal concrete subclass for testing
+        class _Stub(TopicResearchMixin):
+            pass
+
+        return _Stub.__new__(_Stub)
+
+    def test_strategy_keyword_detected_in_provenance(self, mixin):
+        """Strategy keywords in think reasoning are logged as provenance events."""
+        from foundry_mcp.core.research.models.deep_research import (
+            ProvenanceLog,
+            SubQuery,
+            TopicResearchResult,
+        )
+
+        state = MagicMock()
+        state.provenance = ProvenanceLog(
+            session_id="test-session",
+            query="test query",
+            started_at="2026-01-01T00:00:00Z",
+        )
+
+        sq = SubQuery(id="sq-1", query="test", rationale="test", priority=1)
+        result = TopicResearchResult(sub_query_id="sq-1")
+
+        tool_call = ResearcherToolCall(
+            tool="think",
+            arguments={"reasoning": "Applying DEEPEN strategy: using citation_search on the seminal paper."},
+        )
+        mixin._handle_think_tool(
+            tool_call=tool_call,
+            sub_query=sq,
+            result=result,
+            state=state,
+        )
+
+        # Should have exactly one strategy_detected event
+        strategy_events = [e for e in state.provenance.entries if e.event_type == "strategy_detected"]
+        assert len(strategy_events) == 1
+        assert "DEEPEN" in strategy_events[0].details["strategies"]
+        assert strategy_events[0].details["sub_query_id"] == "sq-1"
+
+    def test_multiple_strategies_detected(self, mixin):
+        """Multiple strategy keywords in one think call are all detected."""
+        from foundry_mcp.core.research.models.deep_research import (
+            ProvenanceLog,
+            SubQuery,
+            TopicResearchResult,
+        )
+
+        state = MagicMock()
+        state.provenance = ProvenanceLog(
+            session_id="test-session",
+            query="test query",
+            started_at="2026-01-01T00:00:00Z",
+        )
+
+        sq = SubQuery(id="sq-2", query="test", rationale="test", priority=1)
+        result = TopicResearchResult(sub_query_id="sq-2")
+
+        tool_call = ResearcherToolCall(
+            tool="think",
+            arguments={"reasoning": "Should BROADEN first, then VALIDATE the key findings."},
+        )
+        mixin._handle_think_tool(
+            tool_call=tool_call,
+            sub_query=sq,
+            result=result,
+            state=state,
+        )
+
+        strategy_events = [e for e in state.provenance.entries if e.event_type == "strategy_detected"]
+        assert len(strategy_events) == 1
+        strategies = strategy_events[0].details["strategies"]
+        assert "BROADEN" in strategies
+        assert "VALIDATE" in strategies
+
+    def test_no_strategy_keyword_no_provenance(self, mixin):
+        """Think calls without strategy keywords do not log provenance events."""
+        from foundry_mcp.core.research.models.deep_research import (
+            ProvenanceLog,
+            SubQuery,
+            TopicResearchResult,
+        )
+
+        state = MagicMock()
+        state.provenance = ProvenanceLog(
+            session_id="test-session",
+            query="test query",
+            started_at="2026-01-01T00:00:00Z",
+        )
+
+        sq = SubQuery(id="sq-3", query="test", rationale="test", priority=1)
+        result = TopicResearchResult(sub_query_id="sq-3")
+
+        tool_call = ResearcherToolCall(
+            tool="think",
+            arguments={"reasoning": "I found several good sources on the topic already."},
+        )
+        mixin._handle_think_tool(
+            tool_call=tool_call,
+            sub_query=sq,
+            result=result,
+            state=state,
+        )
+
+        strategy_events = [e for e in state.provenance.entries if e.event_type == "strategy_detected"]
+        assert len(strategy_events) == 0
+
+    def test_strategy_detection_case_insensitive(self, mixin):
+        """Strategy detection is case-insensitive (lowercase 'broaden' is detected)."""
+        from foundry_mcp.core.research.models.deep_research import (
+            ProvenanceLog,
+            SubQuery,
+            TopicResearchResult,
+        )
+
+        state = MagicMock()
+        state.provenance = ProvenanceLog(
+            session_id="test-session",
+            query="test query",
+            started_at="2026-01-01T00:00:00Z",
+        )
+
+        sq = SubQuery(id="sq-4", query="test", rationale="test", priority=1)
+        result = TopicResearchResult(sub_query_id="sq-4")
+
+        tool_call = ResearcherToolCall(
+            tool="think",
+            arguments={"reasoning": "I should broaden the search to include related fields."},
+        )
+        mixin._handle_think_tool(
+            tool_call=tool_call,
+            sub_query=sq,
+            result=result,
+            state=state,
+        )
+
+        strategy_events = [e for e in state.provenance.entries if e.event_type == "strategy_detected"]
+        assert len(strategy_events) == 1
+        assert "BROADEN" in strategy_events[0].details["strategies"]
+
+    def test_no_provenance_when_state_is_none(self, mixin):
+        """No crash when state is None (backward compat with existing callers)."""
+        from foundry_mcp.core.research.models.deep_research import (
+            SubQuery,
+            TopicResearchResult,
+        )
+
+        sq = SubQuery(id="sq-5", query="test", rationale="test", priority=1)
+        result = TopicResearchResult(sub_query_id="sq-5")
+
+        tool_call = ResearcherToolCall(
+            tool="think",
+            arguments={"reasoning": "Applying SATURATE: coverage is sufficient."},
+        )
+        # Should not raise — state defaults to None
+        response = mixin._handle_think_tool(
+            tool_call=tool_call,
+            sub_query=sq,
+            result=result,
+        )
+        assert "Reflection recorded" in response
+
+    def test_no_provenance_when_provenance_is_none(self, mixin):
+        """No crash when state.provenance is None."""
+        from foundry_mcp.core.research.models.deep_research import (
+            SubQuery,
+            TopicResearchResult,
+        )
+
+        state = MagicMock()
+        state.provenance = None
+
+        sq = SubQuery(id="sq-6", query="test", rationale="test", priority=1)
+        result = TopicResearchResult(sub_query_id="sq-6")
+
+        tool_call = ResearcherToolCall(
+            tool="think",
+            arguments={"reasoning": "Applying DEEPEN to trace citations."},
+        )
+        response = mixin._handle_think_tool(
+            tool_call=tool_call,
+            sub_query=sq,
+            result=result,
+            state=state,
+        )
+        assert "Reflection recorded" in response
+
+    def test_reasoning_excerpt_truncated(self, mixin):
+        """Provenance reasoning_excerpt is truncated to 200 chars."""
+        from foundry_mcp.core.research.models.deep_research import (
+            ProvenanceLog,
+            SubQuery,
+            TopicResearchResult,
+        )
+
+        state = MagicMock()
+        state.provenance = ProvenanceLog(
+            session_id="test-session",
+            query="test query",
+            started_at="2026-01-01T00:00:00Z",
+        )
+
+        sq = SubQuery(id="sq-7", query="test", rationale="test", priority=1)
+        result = TopicResearchResult(sub_query_id="sq-7")
+
+        long_reasoning = "BROADEN " + "x" * 300
+        tool_call = ResearcherToolCall(
+            tool="think",
+            arguments={"reasoning": long_reasoning},
+        )
+        mixin._handle_think_tool(
+            tool_call=tool_call,
+            sub_query=sq,
+            result=result,
+            state=state,
+        )
+
+        strategy_events = [e for e in state.provenance.entries if e.event_type == "strategy_detected"]
+        assert len(strategy_events) == 1
+        assert len(strategy_events[0].details["reasoning_excerpt"]) == 200

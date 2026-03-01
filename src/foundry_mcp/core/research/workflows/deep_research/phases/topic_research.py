@@ -259,6 +259,37 @@ Arguments: {{"paper_id": "DOI or Semantic Scholar paper ID", "max_results": 5}}
 Returns: List of related papers based on content similarity. Use this to discover work the initial search may have missed — especially useful for finding papers that use different terminology for the same concept.
 """
 
+# Strategic research guidance injected alongside citation tools
+_STRATEGIC_RESEARCH_PROMPT = """
+## Research Strategies
+
+Apply these strategies deliberately. State which strategy you are using in your `think` calls so your reasoning is transparent.
+
+### BROADEN — Expand coverage when initial results are narrow
+- Reformulate with alternative terminology, synonyms, or related concepts.
+- Use `related_papers` to discover adjacent work that uses different vocabulary.
+- Search across disciplinary boundaries (e.g., a clinical concept may have a parallel in public health or social science).
+- **When to use**: Your first 1-2 searches returned results from a single perspective or subdomain.
+
+### DEEPEN — Drill into a promising thread
+- Use `citation_search` on a seminal or highly-cited paper to trace subsequent developments.
+- Search for methodological variations, replications, or extensions of key findings.
+- Extract full text from the most relevant sources to capture nuance that abstracts miss.
+- **When to use**: You found a key paper and need to understand the lineage of work it spawned.
+
+### VALIDATE — Corroborate or challenge a finding
+- Search explicitly for contradictory evidence, failed replications, or critical commentary.
+- Use `citation_search` to find papers that cite a controversial claim — citing papers often include critique.
+- Cross-check across providers: a finding corroborated by independent sources is far more reliable.
+- **When to use**: A finding seems too clean, comes from a single group, or is central to your answer.
+
+### SATURATE — Recognize when coverage is sufficient
+- If >50% of new results are duplicates or near-duplicates of sources you already have, coverage is likely saturated.
+- Check novelty tags: a pattern of [RELATED] and [DUPLICATE] signals diminishing returns.
+- Call `research_complete` — additional searches at saturation add noise without new signal.
+- **When to use**: Your last 2 tool calls returned mostly familiar material.
+"""
+
 
 # ------------------------------------------------------------------
 # Shared dedup helper for _topic_search and _topic_extract
@@ -384,10 +415,11 @@ def _build_researcher_system_prompt(
         )
 
     if citation_tools_enabled:
-        # Insert citation tool documentation before the Response Format section
+        # Insert citation tool documentation and strategic guidance
+        # before the Response Format section
         prompt = prompt.replace(
             "## Response Format",
-            f"{_CITATION_TOOLS_PROMPT}\n## Response Format",
+            f"{_CITATION_TOOLS_PROMPT}\n{_STRATEGIC_RESEARCH_PROMPT}\n## Response Format",
         )
 
     return prompt
@@ -1117,6 +1149,7 @@ class TopicResearchMixin:
                     tool_call=tool_call,
                     sub_query=sub_query,
                     result=result,
+                    state=state,
                 )
                 message_history.append(
                     {
@@ -1502,11 +1535,15 @@ class TopicResearchMixin:
     # Tool dispatch handlers
     # ------------------------------------------------------------------
 
+    # Strategy keywords recognized in think tool output for provenance logging
+    _STRATEGY_KEYWORDS = ("BROADEN", "DEEPEN", "VALIDATE", "SATURATE")
+
     def _handle_think_tool(
         self,
         tool_call: ResearcherToolCall,
         sub_query: SubQuery,
         result: TopicResearchResult,
+        state: DeepResearchState | None = None,
     ) -> str:
         """Handle a Think tool call: log reasoning, return acknowledgment.
 
@@ -1514,6 +1551,7 @@ class TopicResearchMixin:
             tool_call: The think tool call with reasoning argument.
             sub_query: The sub-query being researched (for logging).
             result: TopicResearchResult to update with reflection notes.
+            state: Optional research state for provenance logging.
 
         Returns:
             Tool result string.
@@ -1530,6 +1568,21 @@ class TopicResearchMixin:
             reasoning[:200] if reasoning else "(empty)",
         )
         result.reflection_notes.append(f"[think] {reasoning}")
+
+        # Detect strategy keywords and log in provenance
+        if reasoning and state is not None and state.provenance is not None:
+            reasoning_upper = reasoning.upper()
+            detected = [kw for kw in self._STRATEGY_KEYWORDS if kw in reasoning_upper]
+            if detected:
+                state.provenance.append(
+                    phase="supervision",
+                    event_type="strategy_detected",
+                    summary=f"Strategy {', '.join(detected)} used in topic {sub_query.id}",
+                    strategies=detected,
+                    sub_query_id=sub_query.id,
+                    reasoning_excerpt=reasoning[:200],
+                )
+
         return (
             "Reflection recorded. Before your next search, check the stop criteria:\n"
             "- Do I have 3+ high-quality relevant sources?\n"

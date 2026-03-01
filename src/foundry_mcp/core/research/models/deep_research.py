@@ -1052,7 +1052,7 @@ class ProvenanceEntry(BaseModel):
             "Event type: brief_generated, decomposition, provider_query, "
             "source_discovered, source_deduplicated, coverage_assessment, "
             "gap_identified, gap_resolved, iteration_complete, "
-            "synthesis_query_type, synthesis_completed"
+            "synthesis_query_type, synthesis_completed, strategy_detected"
         ),
     )
     summary: str = Field(
