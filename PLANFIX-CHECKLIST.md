@@ -145,36 +145,36 @@
 ### Item 2.1: Fix Citation Network Foundational Paper Threshold
 > **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/citation_network.py`
 
-- [ ] Remove dead `threshold = max(3, ...)` calculation
-- [ ] Fix `effective_threshold` to implement intended logic (document which logic is intended)
-- [ ] Update docstring to match actual behavior
+- [x] Remove dead `threshold = max(3, ...)` calculation
+- [x] Fix `effective_threshold` to implement intended logic (document which logic is intended)
+- [x] Update docstring to match actual behavior
 
 #### Item 2.1 Validation
 
-- [ ] Threshold calculation produces correct values for 5, 10, 20 discovered papers
-- [ ] Existing citation network tests pass (update threshold assertions if needed)
+- [x] Threshold calculation produces correct values for 5, 10, 20 discovered papers
+- [x] Existing citation network tests pass (update threshold assertions if needed)
 
 ---
 
 ### Item 2.2: Add `MethodologyAssessment` Content-Basis Validator
 > **File**: `src/foundry_mcp/core/research/models/sources.py`
 
-- [ ] Add `@model_validator(mode="after")` to `MethodologyAssessment`
-- [ ] Validator forces `confidence = "low"` when `content_basis == "abstract"`
-- [ ] Add warning log when confidence is downgraded
+- [x] Add `@model_validator(mode="after")` to `MethodologyAssessment`
+- [x] Validator forces `confidence = "low"` when `content_basis == "abstract"`
+- [x] Add warning log when confidence is downgraded
 
 #### Item 2.2 Validation
 
-- [ ] `MethodologyAssessment(confidence="high", content_basis="abstract")` -> confidence is `"low"`
-- [ ] `MethodologyAssessment(confidence="high", content_basis="full_text")` -> confidence stays `"high"`
-- [ ] Existing tests pass unchanged
+- [x] `MethodologyAssessment(confidence="high", content_basis="abstract")` -> confidence is `"low"`
+- [x] `MethodologyAssessment(confidence="high", content_basis="full_text")` -> confidence stays `"high"`
+- [x] Existing tests pass unchanged
 
 ---
 
 ### Item 2.3: Fix `mark_interrupted()` Missing Provenance Timestamp
 > **File**: `src/foundry_mcp/core/research/models/deep_research.py`
 
-- [ ] Add provenance timestamp to `mark_interrupted()`:
+- [x] Add provenance timestamp to `mark_interrupted()`:
   ```python
   if self.extensions.provenance:
       self.extensions.provenance.completed_at = datetime.now(timezone.utc)
@@ -182,48 +182,48 @@
 
 #### Item 2.3 Validation
 
-- [ ] Interrupted session has `provenance.completed_at` set
-- [ ] Existing tests pass unchanged
+- [x] Interrupted session has `provenance.completed_at` set
+- [x] Existing tests pass unchanged
 
 ---
 
 ### Item 2.4: Fix Duplicate Synthesis Provenance Event
 > **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py`
 
-- [ ] In `_inject_supplementary_raw_notes`, replace `_build_synthesis_system_prompt()` call with a length-only calculation (pass system prompt length as parameter, or cache and reuse)
-- [ ] Verify only one `synthesis_query_type` provenance event is appended per synthesis
+- [x] In `_inject_supplementary_raw_notes`, replace `_build_synthesis_system_prompt()` call with a length-only calculation (pass system prompt length as parameter, or cache and reuse)
+- [x] Verify only one `synthesis_query_type` provenance event is appended per synthesis
 
 #### Item 2.4 Validation
 
-- [ ] Run synthesis and verify exactly one `synthesis_query_type` provenance entry
-- [ ] Existing tests pass unchanged
+- [x] Run synthesis and verify exactly one `synthesis_query_type` provenance entry
+- [x] Existing tests pass unchanged
 
 ---
 
 ### Item 2.5: Tighten `extract_status_code` Regex
 > **File**: `src/foundry_mcp/core/research/providers/shared.py`
 
-- [ ] Replace `r"\b([1-5]\d{2})\b"` with a more anchored pattern (e.g., `r"(?:HTTP|API|status)\s*(?:error\s*)?(\d{3})\b|^(\d{3})\s"`)
-- [ ] Or extract status code from exception's response attribute when available, falling back to regex
+- [x] Replace `r"\b([1-5]\d{2})\b"` with a more anchored pattern (e.g., `r"(?:HTTP|API|status)\s*(?:error\s*)?(\d{3})\b|^(\d{3})\s"`)
+- [x] Or extract status code from exception's response attribute when available, falling back to regex
 
 #### Item 2.5 Validation
 
-- [ ] Error message "Found 200 results" does NOT extract 200 as status code
-- [ ] Error message "API error 429: rate limited" correctly extracts 429
-- [ ] Existing resilience tests pass unchanged
+- [x] Error message "Found 200 results" does NOT extract 200 as status code
+- [x] Error message "API error 429: rate limited" correctly extracts 429
+- [x] Existing resilience tests pass unchanged
 
 ---
 
 ### Item 2.6: Fix `min_citation_count=0` Falsy Check
 > **File**: `src/foundry_mcp/core/research/providers/semantic_scholar.py`
 
-- [ ] Change `if min_citation_count:` to `if min_citation_count is not None:`
+- [x] Change `if min_citation_count:` to `if min_citation_count is not None:`
 
 #### Item 2.6 Validation
 
-- [ ] `min_citation_count=0` is applied as a filter (not skipped)
-- [ ] `min_citation_count=None` is correctly skipped
-- [ ] Existing tests pass unchanged
+- [x] `min_citation_count=0` is applied as a filter (not skipped)
+- [x] `min_citation_count=None` is correctly skipped
+- [x] Existing tests pass unchanged
 
 ---
 

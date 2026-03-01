@@ -1990,13 +1990,17 @@ class DeepResearchState(BaseModel):
         Args:
             reason: Reason for interruption (default: "SIGTERM")
         """
-        self.completed_at = datetime.now(timezone.utc)
-        self.updated_at = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        self.completed_at = now
+        self.updated_at = now
         self.metadata["interrupted"] = True
         self.metadata["terminal_status"] = "interrupted"
         self.metadata["interrupt_reason"] = reason
         self.metadata["interrupt_phase"] = self.phase.value
         self.metadata["interrupt_iteration"] = self.iteration
+        # Stamp provenance completion (consistent with mark_failed/mark_cancelled)
+        if self.extensions.provenance is not None:
+            self.extensions.provenance.completed_at = now.isoformat()
 
     # ==========================================================================
     # Content Fidelity Tracking Methods

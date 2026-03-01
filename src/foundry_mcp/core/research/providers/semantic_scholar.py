@@ -307,7 +307,7 @@ class SemanticScholarProvider(SearchProvider):
             params["fieldsOfStudy"] = ",".join(fields_of_study)
         if open_access_pdf:
             params["openAccessPdf"] = ""  # Empty string means filter to only open access
-        if min_citation_count:
+        if min_citation_count is not None:
             params["minCitationCount"] = min_citation_count
         if publication_types:
             params["publicationTypes"] = ",".join(publication_types)

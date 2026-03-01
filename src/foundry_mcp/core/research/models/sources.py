@@ -1,12 +1,15 @@
 """Source and finding models for deep research workflows."""
 
 import hashlib
+import logging
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+logger = logging.getLogger(__name__)
+
+from pydantic import BaseModel, Field, model_validator
 
 from foundry_mcp.core.research.models.enums import ConfidenceLevel
 
@@ -575,3 +578,15 @@ class MethodologyAssessment(BaseModel):
         default="abstract",
         description="Content used for assessment: 'abstract' or 'full_text'",
     )
+
+    @model_validator(mode="after")
+    def _enforce_abstract_confidence(self) -> "MethodologyAssessment":
+        """Force confidence to 'low' when assessment is based on abstract only."""
+        if self.content_basis == "abstract" and self.confidence != "low":
+            logger.warning(
+                "Downgrading confidence from '%s' to 'low' for abstract-based assessment (source %s)",
+                self.confidence,
+                self.source_id,
+            )
+            self.confidence = "low"
+        return self

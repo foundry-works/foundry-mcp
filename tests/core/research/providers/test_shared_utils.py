@@ -40,7 +40,11 @@ class TestExtractStatusCode:
         assert extract_status_code("500 Internal Server Error") == 500
 
     def test_embedded_in_message(self):
-        assert extract_status_code("Got 403 from server") == 403
+        # Unanchored numbers like "Got 403" are no longer matched to avoid
+        # false positives (e.g. "Found 200 results").  Use keyword-anchored
+        # patterns like "error 403" or "HTTP 403" instead.
+        assert extract_status_code("Got 403 from server") is None
+        assert extract_status_code("HTTP error 403 from server") == 403
 
     def test_no_status_code(self):
         assert extract_status_code("Connection refused") is None

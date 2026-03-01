@@ -563,10 +563,12 @@ class SynthesisPhaseMixin:
 
         # Build the synthesis prompt with allocated content
         system_prompt = self._build_synthesis_system_prompt(state)
+        system_prompt_tokens = len(system_prompt) // 4
         user_prompt = self._build_synthesis_user_prompt(
             state,
             allocation_result,
             degraded_mode=degraded_mode,
+            system_prompt_tokens=system_prompt_tokens,
         )
 
         # Final-fit validation before provider dispatch
@@ -1256,6 +1258,7 @@ This is a **literature review** synthesis. Follow these additional guidelines:
         allocation_result: Optional[AllocationResult] = None,
         *,
         degraded_mode: bool = False,
+        system_prompt_tokens: int = 0,
     ) -> str:
         """Build user prompt with findings and sources for synthesis.
 
@@ -1264,6 +1267,8 @@ This is a **literature review** synthesis. Follow these additional guidelines:
             allocation_result: Optional budget allocation result for token-aware prompts
             degraded_mode: When True, build prompt from raw_notes because no
                 compressed findings are available (Phase 3b ODR alignment).
+            system_prompt_tokens: Pre-computed system prompt token estimate
+                (avoids rebuilding the system prompt just for size calculation).
 
         Returns:
             User prompt string
@@ -1312,6 +1317,7 @@ This is a **literature review** synthesis. Follow these additional guidelines:
                 prompt_parts,
                 id_to_citation,
                 allocation_result,
+                system_prompt_tokens=system_prompt_tokens,
             )
 
         # When a global compressed digest is available, use it as the
@@ -1334,6 +1340,7 @@ This is a **literature review** synthesis. Follow these additional guidelines:
                 prompt_parts,
                 id_to_citation,
                 allocation_result,
+                system_prompt_tokens=system_prompt_tokens,
             )
 
         # ---------------------------------------------------------------
@@ -1368,6 +1375,7 @@ This is a **literature review** synthesis. Follow these additional guidelines:
                 prompt_parts,
                 id_to_citation,
                 allocation_result,
+                system_prompt_tokens=system_prompt_tokens,
             )
 
         # ---------------------------------------------------------------
@@ -1409,6 +1417,7 @@ This is a **literature review** synthesis. Follow these additional guidelines:
             prompt_parts,
             id_to_citation,
             allocation_result,
+            system_prompt_tokens=system_prompt_tokens,
         )
 
     def _append_contradictions_and_gaps(
@@ -1485,6 +1494,8 @@ This is a **literature review** synthesis. Follow these additional guidelines:
         prompt_parts: list[str],
         id_to_citation: dict[str, int],
         allocation_result: Optional[AllocationResult] = None,
+        *,
+        system_prompt_tokens: int = 0,
     ) -> str:
         """Append source reference and instructions to the synthesis prompt.
 
@@ -1496,6 +1507,7 @@ This is a **literature review** synthesis. Follow these additional guidelines:
             prompt_parts: Accumulated prompt sections (mutated in-place)
             id_to_citation: source-id → citation-number mapping
             allocation_result: Optional budget allocation result
+            system_prompt_tokens: Pre-computed system prompt token estimate
 
         Returns:
             Complete user prompt string
@@ -1604,13 +1616,15 @@ This is a **literature review** synthesis. Follow these additional guidelines:
         # compression, improving report depth without risking token-limit
         # failures.
         prompt = "\n".join(prompt_parts)
-        prompt = self._inject_supplementary_raw_notes(state, prompt)
+        prompt = self._inject_supplementary_raw_notes(state, prompt, system_prompt_tokens=system_prompt_tokens)
         return prompt
 
     def _inject_supplementary_raw_notes(
         self,
         state: DeepResearchState,
         prompt: str,
+        *,
+        system_prompt_tokens: int = 0,
     ) -> str:
         """Append supplementary raw notes when token headroom allows.
 
@@ -1648,11 +1662,11 @@ This is a **literature review** synthesis. Follow these additional guidelines:
         # Estimate current prompt size in tokens (4 chars ≈ 1 token heuristic)
         current_tokens = len(prompt) // 4
 
-        # Estimate the system prompt token count so we don't over-allocate
-        # headroom. The system prompt occupies context-window space alongside
-        # the user prompt but was previously ignored in this calculation.
-        system_prompt = self._build_synthesis_system_prompt(state)
-        system_prompt_tokens = len(system_prompt) // 4
+        # Use pre-computed system prompt token estimate to avoid rebuilding
+        # the system prompt (which would append a duplicate provenance event).
+        # Falls back to a conservative estimate if not provided.
+        if not system_prompt_tokens:
+            system_prompt_tokens = 2000  # conservative fallback
 
         # Available headroom = effective_context - system_prompt - current_tokens - output_reserved
         headroom_tokens = context_window - system_prompt_tokens - current_tokens - SYNTHESIS_OUTPUT_RESERVED

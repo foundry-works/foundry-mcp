@@ -420,8 +420,12 @@ class TestFoundationalPapers:
         assert "W999" in foundational
 
     def test_not_foundational_below_threshold(self):
-        """Papers cited by < 3 discovered papers should not be foundational."""
-        discovered = {"W1", "W2", "W3", "W4", "W5"}
+        """Papers cited by fewer than the effective threshold should not be foundational.
+
+        With 15 discovered papers, threshold = min(3, max(1, int(15*0.3))) = min(3, 4) = 3.
+        A paper cited by only 2 should NOT be foundational.
+        """
+        discovered = {f"W{i}" for i in range(1, 16)}  # 15 discovered papers
         nodes = {pid: CitationNode(paper_id=pid, title=f"P{pid}", is_discovered=True) for pid in discovered}
         nodes["W999"] = CitationNode(paper_id="W999", title="Peripheral")
 

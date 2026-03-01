@@ -259,9 +259,10 @@ class CitationNetworkBuilder:
             if edge.citing_paper_id in discovered_ids:
                 cited_by_discovered[edge.cited_paper_id] += 1
 
-        threshold = max(3, int(len(discovered_ids) * 0.3))
-        # Use min of 3 and threshold to be inclusive
-        effective_threshold = min(3, threshold)
+        # "Cited by >= 3 OR >= 30% of discovered papers, whichever is lower"
+        # — ensures small sets (e.g. 5 papers) use a proportional threshold
+        # while large sets cap at 3.
+        effective_threshold = min(3, max(1, int(len(discovered_ids) * 0.3)))
 
         foundational = [
             pid

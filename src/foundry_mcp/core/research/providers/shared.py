@@ -284,8 +284,11 @@ def extract_domain(url: str) -> Optional[str]:
 def extract_status_code(error_message: str) -> Optional[int]:
     """Extract an HTTP status code from an error message string.
 
-    Looks for patterns like ``"HTTP 503"``, ``"API error 429:"``, or bare
-    ``"500"`` / ``"502"`` / ``"503"`` / ``"504"`` status codes.
+    Looks for patterns like ``"HTTP 503"``, ``"API error 429:"``, ``"status 404"``,
+    or a bare status code at the start of the message.
+
+    Uses an anchored regex to avoid false positives from incidental 3-digit
+    numbers in error messages (e.g. "Found 200 results").
 
     Args:
         error_message: Error message that may contain an HTTP status code.
@@ -295,9 +298,18 @@ def extract_status_code(error_message: str) -> Optional[int]:
     """
     if not error_message:
         return None
-    match = re.search(r"\b([1-5]\d{2})\b", error_message)
+    # Match status codes preceded by HTTP/status/error keywords, or at start of string.
+    # Anchored to known patterns to avoid false positives from incidental numbers
+    # (e.g. "Found 200 results" should NOT extract 200).
+    match = re.search(
+        r"(?:HTTP|status|error)\s*(?:code\s*)?:?\s*(\d{3})\b|^(\d{3})\s",
+        error_message,
+        re.IGNORECASE,
+    )
     if match:
-        return int(match.group(1))
+        code = int(match.group(1) or match.group(2))
+        if 100 <= code <= 599:
+            return code
     return None
 
 
