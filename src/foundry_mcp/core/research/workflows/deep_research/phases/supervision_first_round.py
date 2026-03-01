@@ -180,15 +180,21 @@ async def run_first_round_generate(
     """
     _, execute_structured_llm_call = _get_lifecycle_fns()
 
+    # PLAN-2 Item 5: Pass active providers from adaptive selection
+    active_providers: list[str] | None = state.metadata.get("active_providers")
+
     workflow._check_cancellation(state)
     gen_result = await execute_structured_llm_call(
         workflow=workflow,
         state=state,
         phase_name="supervision_delegate_generate",
-        system_prompt=build_first_round_delegation_system_prompt(state.research_profile),
+        system_prompt=build_first_round_delegation_system_prompt(
+            state.research_profile, active_providers=active_providers
+        ),
         user_prompt=build_first_round_delegation_user_prompt(
             state,
             think_output,
+            active_providers=active_providers,
         ),
         provider_id=effective_provider,
         model=state.supervision_model,

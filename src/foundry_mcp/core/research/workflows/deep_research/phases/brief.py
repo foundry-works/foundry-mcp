@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from foundry_mcp.core.research.memory import ResearchMemory
 
 from foundry_mcp.core.research.models.deep_research import (
+    BUILTIN_PROFILES,
     DeepResearchState,
     ResearchBriefOutput,
     ResearchProfile,
@@ -172,6 +173,18 @@ class BriefPhaseMixin:
                 state.id,
             )
 
+        # PLAN-2 Item 5: Adaptive provider selection from brief signals
+        effective_brief = brief_text or state.original_query
+        provider_hints = self._extract_provider_hints(effective_brief, state.research_profile)
+        active_providers = self._apply_provider_hints(state, provider_hints)
+        if provider_hints:
+            logger.info(
+                "Adaptive provider selection: hints=%s, active=%s (research %s)",
+                provider_hints,
+                active_providers,
+                state.id,
+            )
+
         # Persist state with the generated brief
         self.memory.save_deep_research(state)
 
@@ -186,8 +199,21 @@ class BriefPhaseMixin:
                 "brief_length": len(brief_text),
                 "brief_generated": bool(brief_text),
                 "research_brief": state.research_brief,
+                "provider_hints": provider_hints,
+                "active_providers": active_providers,
             },
         )
+
+        # PLAN-2 Item 5: Log adaptive provider selection provenance event
+        if state.provenance is not None and provider_hints:
+            state.provenance.append(
+                phase="brief",
+                event_type="provider_hints_extracted",
+                summary=f"Adaptive provider selection: {len(provider_hints)} hint(s) extracted from brief",
+                provider_hints=provider_hints,
+                active_providers=active_providers,
+                profile_name=state.research_profile.name,
+            )
 
         # PLAN-1 Item 2: Log brief_generated provenance event
         if state.provenance is not None and brief_text:
@@ -363,6 +389,124 @@ class BriefPhaseMixin:
             parts.append("\n")
 
         return "\n".join(parts)
+
+    # ------------------------------------------------------------------
+    # PLAN-2 Item 5: Adaptive Provider Selection
+    # ------------------------------------------------------------------
+
+    # Discipline keyword → provider hint mapping.  Keywords are matched
+    # case-insensitively against the brief text.  Each tuple maps a set
+    # of discipline signals to a recommended search provider.
+    _DISCIPLINE_PROVIDER_MAP: list[tuple[list[str], str]] = [
+        (
+            ["biomedical", "clinical", "health", "medical", "medicine", "epidemiology", "pharmaceutical"],
+            "pubmed",
+        ),
+        (
+            ["computer science", "machine learning", "artificial intelligence", "deep learning", "natural language processing"],
+            "semantic_scholar",
+        ),
+        (
+            ["education", "pedagogy", "curriculum", "teaching", "learning outcomes"],
+            "openalex",
+        ),
+        (
+            ["social science", "sociology", "economics", "political science", "anthropology"],
+            "openalex",
+        ),
+    ]
+
+    @staticmethod
+    def _extract_provider_hints(
+        brief_text: str,
+        profile: ResearchProfile,
+    ) -> list[str]:
+        """Extract provider hints from discipline signals in the brief.
+
+        Scans the research brief for discipline keywords and maps them to
+        recommended search providers.  This enables the pipeline to
+        dynamically add discipline-specific providers when the brief
+        reveals an academic domain.
+
+        Args:
+            brief_text: The generated research brief text.
+            profile: Active research profile (used for disciplinary_scope).
+
+        Returns:
+            Deduplicated list of provider name hints (may include providers
+            not currently available — caller must filter).
+        """
+        hints: list[str] = []
+        text_lower = brief_text.lower()
+
+        # Check brief text for discipline signals
+        for keywords, provider in BriefPhaseMixin._DISCIPLINE_PROVIDER_MAP:
+            for keyword in keywords:
+                if keyword in text_lower:
+                    if provider not in hints:
+                        hints.append(provider)
+                    break  # One keyword match per discipline group is sufficient
+
+        # Also check profile.disciplinary_scope if specified
+        if profile.disciplinary_scope:
+            scope_text = " ".join(profile.disciplinary_scope).lower()
+            for keywords, provider in BriefPhaseMixin._DISCIPLINE_PROVIDER_MAP:
+                for keyword in keywords:
+                    if keyword in scope_text:
+                        if provider not in hints:
+                            hints.append(provider)
+                        break
+
+        return hints
+
+    @staticmethod
+    def _apply_provider_hints(
+        state: DeepResearchState,
+        hints: list[str],
+        known_providers: frozenset[str] | None = None,
+    ) -> list[str]:
+        """Apply extracted provider hints to the session state.
+
+        Merges hints additively with the profile's existing provider list.
+        Hints are only applied when the profile uses built-in defaults
+        (i.e., ``profile.name`` is in ``BUILTIN_PROFILES``).  Custom
+        profiles with explicitly chosen providers are not modified.
+
+        Unknown or unavailable provider hints are silently dropped.
+
+        Args:
+            state: Current research state (reads profile, writes metadata).
+            hints: Provider name hints from ``_extract_provider_hints``.
+            known_providers: Set of valid provider names.  When ``None``,
+                defaults to the standard set of registered providers.
+
+        Returns:
+            The resolved active provider list stored in state.metadata.
+        """
+        if known_providers is None:
+            known_providers = frozenset(
+                {"tavily", "semantic_scholar", "google", "openalex", "crossref", "perplexity"}
+            )
+
+        profile = state.research_profile
+
+        # Start with the profile's current provider list
+        active: list[str] = list(profile.providers)
+
+        # Store raw hints in metadata regardless of application
+        state.metadata["provider_hints"] = hints
+
+        # Only augment built-in profiles — custom profiles have explicit
+        # provider choices that should not be overridden.
+        is_builtin = profile.name in BUILTIN_PROFILES
+        if is_builtin and hints:
+            for hint in hints:
+                # Silently drop unknown/unavailable providers
+                if hint in known_providers and hint not in active:
+                    active.append(hint)
+
+        state.metadata["active_providers"] = active
+        return active
 
     def _build_brief_user_prompt(self, state: DeepResearchState) -> str:
         """Build user prompt for research brief generation.

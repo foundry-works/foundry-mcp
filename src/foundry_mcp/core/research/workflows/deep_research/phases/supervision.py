@@ -980,11 +980,15 @@ class SupervisionPhaseMixin:
                 timeout,
             )
 
+        # PLAN-2 Item 5: Pass active providers from adaptive selection
+        active_providers: list[str] | None = state.metadata.get("active_providers")
+
         system_prompt = build_delegation_system_prompt()
         user_prompt = build_delegation_user_prompt(
             state,
             coverage_data,
             think_output,
+            active_providers=active_providers,
         )
 
         # Use structured output parsing with automatic retry on parse failure
@@ -1653,7 +1657,10 @@ class SupervisionPhaseMixin:
         coverage_data: list[dict[str, Any]],
         think_output: Optional[str] = None,
     ) -> str:
-        return build_delegation_user_prompt(state, coverage_data, think_output)
+        active_providers: list[str] | None = state.metadata.get("active_providers")
+        return build_delegation_user_prompt(
+            state, coverage_data, think_output, active_providers=active_providers
+        )
 
     def _apply_directive_caps(
         self,
@@ -1774,14 +1781,20 @@ class SupervisionPhaseMixin:
         self, state: Optional[DeepResearchState] = None
     ) -> str:
         profile = state.research_profile if state is not None else None
-        return build_first_round_delegation_system_prompt(profile)
+        active_providers: list[str] | None = (
+            state.metadata.get("active_providers") if state is not None else None
+        )
+        return build_first_round_delegation_system_prompt(profile, active_providers=active_providers)
 
     def _build_first_round_delegation_user_prompt(
         self,
         state: DeepResearchState,
         think_output: Optional[str] = None,
     ) -> str:
-        return build_first_round_delegation_user_prompt(state, think_output)
+        active_providers: list[str] | None = state.metadata.get("active_providers")
+        return build_first_round_delegation_user_prompt(
+            state, think_output, active_providers=active_providers
+        )
 
     # ==================================================================
     # First-round decompose → critique → revise pipeline

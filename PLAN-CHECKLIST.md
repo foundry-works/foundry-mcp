@@ -156,30 +156,30 @@
 ### 5a. Extract provider hints from brief
 > **File**: `phases/brief.py`
 
-- [ ] Add `_extract_provider_hints(brief, profile)` method
-- [ ] Map discipline signals: biomedical/clinical/health → pubmed
-- [ ] Map: computer science/machine learning → semantic_scholar
-- [ ] Map: education → openalex
-- [ ] Map: social science/economics → openalex
-- [ ] Respect explicit profile providers (no override)
+- [x] Add `_extract_provider_hints(brief, profile)` method
+- [x] Map discipline signals: biomedical/clinical/health → pubmed
+- [x] Map: computer science/machine learning → semantic_scholar
+- [x] Map: education → openalex
+- [x] Map: social science/economics → openalex
+- [x] Respect explicit profile providers (no override)
 
 ### 5b. Apply hints to session state
-- [ ] If `not profile.providers_explicitly_set`: augment provider list with hints
-- [ ] Deduplicate provider list
-- [ ] Silently drop unknown/unavailable provider hints
+- [x] If `not profile.providers_explicitly_set`: augment provider list with hints
+- [x] Deduplicate provider list
+- [x] Silently drop unknown/unavailable provider hints
 
 ### 5c. Use active providers in delegation
 > **Files**: `phases/supervision.py`, `phases/supervision_prompts.py`
 
-- [ ] Pass `state.active_providers` when creating topic researcher tasks
-- [ ] Modify `build_delegation_user_prompt()` to include available providers list
+- [x] Pass `state.active_providers` when creating topic researcher tasks
+- [x] Modify `build_delegation_user_prompt()` to include available providers list
 
 ### Item 5 Testing
-- [ ] Unit test: biomedical brief triggers PubMed hint
-- [ ] Unit test: education brief triggers OpenAlex hint
-- [ ] Unit test: explicit profile providers not overridden by hints
-- [ ] Unit test: hints are additive (don't remove existing providers)
-- [ ] Unit test: unknown/unavailable provider hints silently dropped
+- [x] Unit test: biomedical brief triggers PubMed hint
+- [x] Unit test: education brief triggers OpenAlex hint
+- [x] Unit test: explicit profile providers not overridden by hints
+- [x] Unit test: hints are additive (don't remove existing providers)
+- [x] Unit test: unknown/unavailable provider hints silently dropped
 
 ---
 

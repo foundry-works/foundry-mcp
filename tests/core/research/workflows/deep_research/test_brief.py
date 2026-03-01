@@ -512,3 +512,300 @@ class TestAcademicBriefEnrichment:
         # Systematic review has source_type_hierarchy pre-specified
         assert "pre-specified" in prompt
         assert "peer-reviewed" in prompt
+
+
+# ===========================================================================
+# PLAN-2 Item 5: Adaptive Provider Selection tests
+# ===========================================================================
+
+
+class TestExtractProviderHints:
+    """Tests for _extract_provider_hints() — discipline keyword mapping."""
+
+    def test_biomedical_brief_triggers_pubmed_hint(self):
+        """Biomedical keywords in brief text trigger PubMed hint."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
+
+        brief = (
+            "I am looking for clinical trials and biomedical research on "
+            "the efficacy of mRNA vaccines in immunocompromised populations."
+        )
+        hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
+        assert "pubmed" in hints
+
+    def test_clinical_keyword_triggers_pubmed(self):
+        """The keyword 'clinical' triggers PubMed hint."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
+
+        brief = "Investigate clinical outcomes of cognitive behavioral therapy."
+        hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
+        assert "pubmed" in hints
+
+    def test_health_keyword_triggers_pubmed(self):
+        """The keyword 'health' triggers PubMed hint."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
+
+        brief = "Public health interventions for childhood obesity prevention."
+        hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
+        assert "pubmed" in hints
+
+    def test_cs_brief_triggers_semantic_scholar_hint(self):
+        """Computer science keywords trigger Semantic Scholar hint."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
+
+        brief = (
+            "I need to survey machine learning approaches for natural "
+            "language processing in low-resource languages."
+        )
+        hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
+        assert "semantic_scholar" in hints
+
+    def test_education_brief_triggers_openalex_hint(self):
+        """Education keywords trigger OpenAlex hint."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
+
+        brief = (
+            "Research on pedagogy and curriculum design for STEM education "
+            "in K-12 settings."
+        )
+        hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
+        assert "openalex" in hints
+
+    def test_social_science_brief_triggers_openalex_hint(self):
+        """Social science keywords trigger OpenAlex hint."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
+
+        brief = "The impact of economics policy on social science outcomes in urban sociology."
+        hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
+        assert "openalex" in hints
+
+    def test_generic_brief_produces_no_hints(self):
+        """A generic brief with no discipline keywords produces no hints."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
+
+        brief = "Compare the best project management tools available in 2024."
+        hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
+        assert hints == []
+
+    def test_multiple_disciplines_produce_multiple_hints(self):
+        """Brief spanning multiple disciplines produces multiple hints."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
+
+        brief = (
+            "Investigating the intersection of clinical medicine and "
+            "machine learning for diagnostic imaging."
+        )
+        hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
+        assert "pubmed" in hints
+        assert "semantic_scholar" in hints
+        assert len(hints) == 2
+
+    def test_profile_disciplinary_scope_adds_hints(self):
+        """Profile disciplinary_scope triggers hints even if brief text is generic."""
+        from foundry_mcp.core.research.models.deep_research import ResearchProfile
+
+        profile = ResearchProfile(
+            name="general",
+            disciplinary_scope=["education", "psychology"],
+        )
+        brief = "A study on student outcomes."  # No discipline keywords
+        hints = BriefPhaseMixin._extract_provider_hints(brief, profile)
+        assert "openalex" in hints
+
+    def test_hints_are_deduplicated(self):
+        """Duplicate provider hints from brief and profile are deduplicated."""
+        from foundry_mcp.core.research.models.deep_research import ResearchProfile
+
+        profile = ResearchProfile(
+            name="general",
+            disciplinary_scope=["education"],
+        )
+        brief = "Research on pedagogy and teaching methods."  # Also triggers openalex
+        hints = BriefPhaseMixin._extract_provider_hints(brief, profile)
+        assert hints.count("openalex") == 1
+
+    def test_case_insensitive_matching(self):
+        """Discipline keyword matching is case-insensitive."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
+
+        brief = "BIOMEDICAL research on CLINICAL trials."
+        hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
+        assert "pubmed" in hints
+
+
+class TestApplyProviderHints:
+    """Tests for _apply_provider_hints() — merging hints into active providers."""
+
+    def test_hints_are_additive(self):
+        """Hints add new providers without removing existing ones."""
+        state = _make_state()
+        # Default general profile has ["tavily", "semantic_scholar"]
+        active = BriefPhaseMixin._apply_provider_hints(state, ["openalex"])
+        assert "tavily" in active
+        assert "semantic_scholar" in active
+        assert "openalex" in active
+
+    def test_existing_providers_preserved_in_order(self):
+        """Existing providers remain at the front of the list."""
+        state = _make_state()
+        active = BriefPhaseMixin._apply_provider_hints(state, ["openalex"])
+        # Original providers come first
+        assert active.index("tavily") < active.index("openalex")
+        assert active.index("semantic_scholar") < active.index("openalex")
+
+    def test_no_duplicate_providers(self):
+        """Hints that match existing providers don't create duplicates."""
+        state = _make_state()
+        # semantic_scholar is already in the general profile
+        active = BriefPhaseMixin._apply_provider_hints(state, ["semantic_scholar"])
+        assert active.count("semantic_scholar") == 1
+
+    def test_unknown_providers_silently_dropped(self):
+        """Provider hints not in the known set are silently dropped."""
+        state = _make_state()
+        active = BriefPhaseMixin._apply_provider_hints(
+            state,
+            ["pubmed", "unknown_provider", "openalex"],
+        )
+        # pubmed and unknown_provider are not in the default known set
+        assert "pubmed" not in active
+        assert "unknown_provider" not in active
+        # openalex IS known and should be added
+        assert "openalex" in active
+
+    def test_explicit_profile_providers_not_overridden(self):
+        """Custom (non-builtin) profiles are not augmented with hints."""
+        from foundry_mcp.core.research.models.deep_research import (
+            ResearchExtensions,
+            ResearchProfile,
+        )
+
+        profile = ResearchProfile(
+            name="custom-medical",
+            providers=["tavily"],
+        )
+        state = _make_state()
+        state.extensions = ResearchExtensions(research_profile=profile)
+
+        active = BriefPhaseMixin._apply_provider_hints(state, ["openalex", "semantic_scholar"])
+        # Custom profile — hints should NOT be applied
+        assert active == ["tavily"]
+        assert "openalex" not in active
+        assert "semantic_scholar" not in active
+
+    def test_builtin_profile_is_augmented(self):
+        """Built-in profiles (e.g., 'general') are augmented with hints."""
+        state = _make_state()
+        # Default profile is "general" which is in BUILTIN_PROFILES
+        active = BriefPhaseMixin._apply_provider_hints(state, ["openalex"])
+        assert "openalex" in active
+
+    def test_empty_hints_preserve_original(self):
+        """Empty hints list preserves the original provider list."""
+        state = _make_state()
+        active = BriefPhaseMixin._apply_provider_hints(state, [])
+        assert active == state.research_profile.providers
+
+    def test_metadata_stores_hints_and_active(self):
+        """Both raw hints and active providers are stored in state.metadata."""
+        state = _make_state()
+        BriefPhaseMixin._apply_provider_hints(state, ["openalex", "pubmed"])
+        assert state.metadata["provider_hints"] == ["openalex", "pubmed"]
+        assert "active_providers" in state.metadata
+        # pubmed is unknown, so only openalex is added
+        assert "openalex" in state.metadata["active_providers"]
+        assert "pubmed" not in state.metadata["active_providers"]
+
+    def test_hints_stored_even_for_custom_profile(self):
+        """Raw hints are always stored in metadata, even when not applied."""
+        from foundry_mcp.core.research.models.deep_research import (
+            ResearchExtensions,
+            ResearchProfile,
+        )
+
+        profile = ResearchProfile(name="custom", providers=["tavily"])
+        state = _make_state()
+        state.extensions = ResearchExtensions(research_profile=profile)
+
+        BriefPhaseMixin._apply_provider_hints(state, ["openalex"])
+        assert state.metadata["provider_hints"] == ["openalex"]
+        # Active providers should still be the custom list
+        assert state.metadata["active_providers"] == ["tavily"]
+
+
+class TestAdaptiveProviderSelectionIntegration:
+    """Integration tests: brief phase triggers adaptive provider selection."""
+
+    @pytest.mark.asyncio
+    async def test_brief_phase_extracts_and_applies_hints(self, monkeypatch):
+        """Brief phase extracts provider hints and stores them in metadata."""
+        stub = StubBrief()
+        state = _make_state(query="Clinical trials for biomedical vaccines")
+
+        brief_json = json.dumps(
+            {
+                "research_brief": (
+                    "Investigate clinical trial outcomes for biomedical vaccine "
+                    "candidates targeting respiratory diseases."
+                ),
+            }
+        )
+
+        async def mock_execute_structured(**kwargs):
+            parse_fn = kwargs.get("parse_fn")
+            parsed = parse_fn(brief_json) if parse_fn else None
+            return StructuredLLMCallResult(
+                result=_make_llm_result(brief_json),
+                llm_call_duration_ms=50.0,
+                parsed=parsed,
+                parse_retries=0,
+            )
+
+        monkeypatch.setattr(
+            "foundry_mcp.core.research.workflows.deep_research.phases.brief.execute_structured_llm_call",
+            mock_execute_structured,
+        )
+
+        result = await stub._execute_brief_async(state, provider_id="test", timeout=60.0)
+
+        assert result.success
+        assert "provider_hints" in state.metadata
+        assert "pubmed" in state.metadata["provider_hints"]
+        assert "active_providers" in state.metadata
+
+    @pytest.mark.asyncio
+    async def test_brief_phase_no_hints_for_generic_query(self, monkeypatch):
+        """Brief phase produces no hints for generic non-academic queries."""
+        stub = StubBrief()
+        state = _make_state(query="Best project management tools in 2024")
+
+        brief_json = json.dumps(
+            {
+                "research_brief": (
+                    "Compare and evaluate the best project management software "
+                    "tools available in 2024 for mid-size teams."
+                ),
+            }
+        )
+
+        async def mock_execute_structured(**kwargs):
+            parse_fn = kwargs.get("parse_fn")
+            parsed = parse_fn(brief_json) if parse_fn else None
+            return StructuredLLMCallResult(
+                result=_make_llm_result(brief_json),
+                llm_call_duration_ms=50.0,
+                parsed=parsed,
+                parse_retries=0,
+            )
+
+        monkeypatch.setattr(
+            "foundry_mcp.core.research.workflows.deep_research.phases.brief.execute_structured_llm_call",
+            mock_execute_structured,
+        )
+
+        result = await stub._execute_brief_async(state, provider_id="test", timeout=60.0)
+
+        assert result.success
+        assert state.metadata["provider_hints"] == []
+        # Active providers should just be the profile defaults
+        assert state.metadata["active_providers"] == state.research_profile.providers

@@ -5188,3 +5188,124 @@ class TestAllDirectivesFail:
         # The loop should have stopped after the first round (0 new sources)
         # Round 0 ran → incremented to 1 → bookkeeping returns True (stop)
         assert state.supervision_round == 1
+
+
+# ===========================================================================
+# PLAN-2 Item 5: Adaptive Provider Selection — Prompt Integration Tests
+# ===========================================================================
+
+
+class TestAdaptiveProviderSelectionPrompts:
+    """Tests for active provider injection into delegation prompts."""
+
+    def test_delegation_user_prompt_includes_active_providers(self):
+        """Delegation user prompt includes 'Available Search Providers' section."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_delegation_user_prompt,
+        )
+
+        state = _make_state(num_completed=2, sources_per_query=2)
+        coverage = StubSupervision(delegation_model=True)._build_per_query_coverage(state)
+
+        prompt = build_delegation_user_prompt(
+            state,
+            coverage,
+            active_providers=["tavily", "semantic_scholar", "openalex"],
+        )
+
+        assert "Available Search Providers" in prompt
+        assert "tavily" in prompt
+        assert "semantic_scholar" in prompt
+        assert "openalex" in prompt
+
+    def test_delegation_user_prompt_omits_providers_when_none(self):
+        """Delegation user prompt omits providers section when active_providers is None."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_delegation_user_prompt,
+        )
+
+        state = _make_state(num_completed=2, sources_per_query=2)
+        coverage = StubSupervision(delegation_model=True)._build_per_query_coverage(state)
+
+        prompt = build_delegation_user_prompt(state, coverage, active_providers=None)
+
+        assert "Available Search Providers" not in prompt
+
+    def test_delegation_user_prompt_omits_providers_when_empty(self):
+        """Delegation user prompt omits providers section when list is empty."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_delegation_user_prompt,
+        )
+
+        state = _make_state(num_completed=2, sources_per_query=2)
+        coverage = StubSupervision(delegation_model=True)._build_per_query_coverage(state)
+
+        prompt = build_delegation_user_prompt(state, coverage, active_providers=[])
+
+        assert "Available Search Providers" not in prompt
+
+    def test_first_round_system_prompt_includes_active_providers(self):
+        """First-round delegation system prompt includes provider awareness."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_first_round_delegation_system_prompt,
+        )
+
+        prompt = build_first_round_delegation_system_prompt(
+            profile=None,
+            active_providers=["tavily", "openalex"],
+        )
+
+        assert "Available Search Providers" in prompt
+        assert "tavily" in prompt
+        assert "openalex" in prompt
+
+    def test_first_round_system_prompt_omits_providers_when_none(self):
+        """First-round delegation system prompt omits providers when None."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_first_round_delegation_system_prompt,
+        )
+
+        prompt = build_first_round_delegation_system_prompt(profile=None, active_providers=None)
+
+        assert "Available Search Providers" not in prompt
+
+    def test_first_round_user_prompt_includes_active_providers(self):
+        """First-round delegation user prompt includes active providers."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_first_round_delegation_user_prompt,
+        )
+
+        state = _make_state(num_completed=0, sources_per_query=0)
+
+        prompt = build_first_round_delegation_user_prompt(
+            state,
+            think_output="Decomposition plan here",
+            active_providers=["tavily", "semantic_scholar"],
+        )
+
+        assert "Available Search Providers" in prompt
+        assert "tavily" in prompt
+        assert "semantic_scholar" in prompt
+
+    def test_stub_delegation_prompt_reads_metadata(self):
+        """Stub's _build_delegation_user_prompt reads active_providers from state.metadata."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=2, sources_per_query=2)
+        state.metadata["active_providers"] = ["tavily", "openalex", "semantic_scholar"]
+        coverage = stub._build_per_query_coverage(state)
+
+        prompt = stub._build_delegation_user_prompt(state, coverage)
+
+        assert "Available Search Providers" in prompt
+        assert "openalex" in prompt
+
+    def test_stub_delegation_prompt_no_metadata(self):
+        """Stub's _build_delegation_user_prompt works when no active_providers in metadata."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=2, sources_per_query=2)
+        # No "active_providers" in metadata
+        coverage = stub._build_per_query_coverage(state)
+
+        prompt = stub._build_delegation_user_prompt(state, coverage)
+
+        assert "Available Search Providers" not in prompt

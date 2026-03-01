@@ -297,6 +297,7 @@ def build_delegation_user_prompt(
     state: DeepResearchState,
     coverage_data: list[dict[str, Any]],
     think_output: Optional[str] = None,
+    active_providers: Optional[list[str]] = None,
 ) -> str:
     """Build user prompt for directive generation.
 
@@ -304,6 +305,7 @@ def build_delegation_user_prompt(
         state: Current research state
         coverage_data: Per-sub-query coverage data
         think_output: Gap analysis from think step
+        active_providers: Active search providers for this session (PLAN-2 Item 5)
 
     Returns:
         User prompt string
@@ -344,6 +346,18 @@ def build_delegation_user_prompt(
             "",
         ]
     )
+
+    # PLAN-2 Item 5: Active search providers
+    if active_providers:
+        parts.extend(
+            [
+                "## Available Search Providers",
+                f"The following search providers are active for this session: **{', '.join(active_providers)}**.",
+                "When structuring directives, consider which providers are best suited for each research angle "
+                "(e.g., academic providers for scholarly sources, web providers for recent developments).",
+                "",
+            ]
+        )
 
     # Prior supervisor conversation (accumulated across rounds)
     if state.supervision_messages:
@@ -520,6 +534,7 @@ def build_first_round_think_prompt(state: DeepResearchState) -> str:
 
 def build_first_round_delegation_system_prompt(
     profile: Optional[ResearchProfile] = None,
+    active_providers: Optional[list[str]] = None,
 ) -> str:
     """Build system prompt for first-round decomposition delegation.
 
@@ -533,6 +548,7 @@ def build_first_round_delegation_system_prompt(
 
     Args:
         profile: Active research profile (used to inject academic guidelines)
+        active_providers: Active search providers for this session (PLAN-2 Item 5)
 
     Returns:
         System prompt instructing initial query decomposition via directives
@@ -549,6 +565,17 @@ def build_first_round_delegation_system_prompt(
     # PLAN-1 Item 5b: Academic decomposition guidelines
     if profile is not None and profile.source_quality_mode == ResearchMode.ACADEMIC:
         guidelines += _build_academic_decomposition_guidelines(profile)
+
+    # PLAN-2 Item 5: Inject active provider awareness
+    if active_providers:
+        guidelines += (
+            "\n\n**Available Search Providers:** "
+            + ", ".join(active_providers)
+            + "\nWhen designing directives, consider which providers are best suited "
+            "for each research angle (e.g., academic providers like semantic_scholar "
+            "or openalex for scholarly sources, web providers like tavily for recent "
+            "developments and grey literature)."
+        )
 
     preamble = "You are a research lead performing initial query decomposition. Your task is to break down a research query into focused, parallel research directives — each assigned to a specialized researcher.\n\n"
     return preamble + _build_delegation_core_prompt().replace("%GUIDELINES%", guidelines)
@@ -607,12 +634,14 @@ def _build_academic_decomposition_guidelines(profile: ResearchProfile) -> str:
 def build_first_round_delegation_user_prompt(
     state: DeepResearchState,
     think_output: Optional[str] = None,
+    active_providers: Optional[list[str]] = None,
 ) -> str:
     """Build user prompt for first-round decomposition delegation.
 
     Args:
         state: Current research state with research_brief
         think_output: Decomposition strategy from think step
+        active_providers: Active search providers for this session (PLAN-2 Item 5)
 
     Returns:
         User prompt string
@@ -643,6 +672,17 @@ def build_first_round_delegation_user_prompt(
             [
                 "## Additional Context",
                 ctx["system_prompt"],
+                "",
+            ]
+        )
+
+    # PLAN-2 Item 5: Active search providers
+    if active_providers:
+        parts.extend(
+            [
+                "## Available Search Providers",
+                f"The following search providers are active for this session: **{', '.join(active_providers)}**.",
+                "Consider which providers are best suited for each directive's research angle.",
                 "",
             ]
         )
