@@ -90,6 +90,7 @@ class ActionHandlersMixin:
         max_concurrent: int,
         background: bool,
         task_timeout: Optional[float],
+        research_profile: Optional[Any] = None,
     ) -> WorkflowResult:
         """Start a new deep research session."""
         if not query:
@@ -156,6 +157,10 @@ class ActionHandlersMixin:
             # Supervision configuration
             max_supervision_rounds=self.config.deep_research_max_supervision_rounds,
         )
+
+        # PLAN-1: Attach resolved research profile to extensions
+        if research_profile is not None:
+            state.extensions.research_profile = research_profile
 
         # Save initial state
         self.memory.save_deep_research(state)

@@ -822,6 +822,160 @@ class ResearchLandscape(BaseModel):
     )
 
 
+# =========================================================================
+# PLAN-1: Research Profiles
+# =========================================================================
+
+
+class ResearchProfile(BaseModel):
+    """Named bundle of settings that configures the deep research pipeline per-session.
+
+    Replaces the monolithic ``ResearchMode`` enum with composable, declarative
+    configuration.  Named profiles provide sensible defaults; per-request
+    overrides (applied via ``model_copy(update=...)``) provide flexibility.
+
+    Built-in profiles are registered in :data:`BUILTIN_PROFILES`.
+    """
+
+    name: str = Field(
+        default="general",
+        description="Profile identifier (must match a built-in or config-defined name)",
+    )
+    providers: list[str] = Field(
+        default_factory=lambda: ["tavily", "semantic_scholar"],
+        description="Ordered list of search providers to use",
+    )
+    source_quality_mode: ResearchMode = Field(
+        default=ResearchMode.GENERAL,
+        description="Controls domain-tier scoring heuristics",
+    )
+    citation_style: str = Field(
+        default="default",
+        description="Citation format: 'default' | 'apa' | 'ieee' | 'chicago'",
+    )
+    export_formats: list[str] = Field(
+        default_factory=lambda: ["bibtex"],
+        description="Supported export formats for bibliography",
+    )
+    synthesis_template: Optional[str] = Field(
+        default=None,
+        description="Force a synthesis query type (None = auto-detect, 'literature_review', etc.)",
+    )
+    enable_citation_tools: bool = Field(
+        default=False,
+        description="Enable citation analysis tools",
+    )
+    enable_methodology_assessment: bool = Field(
+        default=False,
+        description="Enable methodology quality assessment",
+    )
+    enable_citation_network: bool = Field(
+        default=False,
+        description="Enable citation network analysis",
+    )
+    enable_pdf_extraction: bool = Field(
+        default=False,
+        description="Enable PDF content extraction",
+    )
+    source_type_hierarchy: Optional[list[str]] = Field(
+        default=None,
+        description="Ordered source type preference (e.g. ['peer-reviewed', 'meta-analysis', ...])",
+    )
+    disciplinary_scope: Optional[list[str]] = Field(
+        default=None,
+        description="Target disciplines (e.g. ['psychology', 'education'])",
+    )
+    time_period: Optional[str] = Field(
+        default=None,
+        description="Time scope (e.g. '2010-2024', 'last 5 years')",
+    )
+    methodology_preferences: Optional[list[str]] = Field(
+        default=None,
+        description="Preferred methodologies (e.g. ['RCT', 'meta-analysis', 'qualitative'])",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+# ---------------------------------------------------------------------------
+# Built-in profile definitions
+# ---------------------------------------------------------------------------
+
+PROFILE_GENERAL = ResearchProfile(
+    name="general",
+    providers=["tavily", "semantic_scholar"],
+    source_quality_mode=ResearchMode.GENERAL,
+    citation_style="default",
+)
+
+PROFILE_ACADEMIC = ResearchProfile(
+    name="academic",
+    providers=["semantic_scholar", "tavily"],
+    source_quality_mode=ResearchMode.ACADEMIC,
+    citation_style="apa",
+    export_formats=["bibtex", "ris"],
+    enable_citation_tools=True,
+    source_type_hierarchy=[
+        "peer-reviewed",
+        "meta-analysis",
+        "book",
+        "preprint",
+        "report",
+    ],
+)
+
+PROFILE_SYSTEMATIC_REVIEW = ResearchProfile(
+    name="systematic-review",
+    providers=["semantic_scholar", "tavily"],
+    source_quality_mode=ResearchMode.ACADEMIC,
+    citation_style="apa",
+    export_formats=["bibtex", "ris"],
+    synthesis_template="literature_review",
+    enable_citation_tools=True,
+    enable_methodology_assessment=True,
+    enable_pdf_extraction=True,
+    source_type_hierarchy=[
+        "peer-reviewed",
+        "meta-analysis",
+        "book",
+        "preprint",
+        "report",
+    ],
+)
+
+PROFILE_BIBLIOMETRIC = ResearchProfile(
+    name="bibliometric",
+    providers=["semantic_scholar", "tavily"],
+    source_quality_mode=ResearchMode.ACADEMIC,
+    citation_style="apa",
+    export_formats=["bibtex", "ris"],
+    enable_citation_tools=True,
+    enable_citation_network=True,
+)
+
+PROFILE_TECHNICAL = ResearchProfile(
+    name="technical",
+    providers=["tavily", "google"],
+    source_quality_mode=ResearchMode.TECHNICAL,
+    citation_style="default",
+)
+
+BUILTIN_PROFILES: dict[str, ResearchProfile] = {
+    "general": PROFILE_GENERAL,
+    "academic": PROFILE_ACADEMIC,
+    "systematic-review": PROFILE_SYSTEMATIC_REVIEW,
+    "bibliometric": PROFILE_BIBLIOMETRIC,
+    "technical": PROFILE_TECHNICAL,
+}
+
+# Legacy research_mode → profile name mapping (backward compatibility)
+_RESEARCH_MODE_TO_PROFILE: dict[str, str] = {
+    "general": "general",
+    "academic": "academic",
+    "technical": "technical",
+}
+
+
 class ResearchExtensions(BaseModel):
     """Container for extended research capabilities.
 
@@ -836,9 +990,9 @@ class ResearchExtensions(BaseModel):
     """
 
     # PLAN-1: Foundations
-    research_profile: Optional[Any] = Field(
+    research_profile: Optional[ResearchProfile] = Field(
         default=None,
-        description="Research profile from PLAN-1 (forward reference placeholder)",
+        description="Research profile controlling providers, citation style, and capabilities",
     )
     provenance: Optional[Any] = Field(
         default=None,
@@ -1126,9 +1280,13 @@ class DeepResearchState(BaseModel):
     # =========================================================================
 
     @property
-    def research_profile(self) -> Optional[Any]:
-        """Convenience accessor for extensions.research_profile."""
-        return self.extensions.research_profile
+    def research_profile(self) -> ResearchProfile:
+        """Convenience accessor for extensions.research_profile.
+
+        Returns the configured profile, or the default GENERAL profile
+        if none was explicitly set.
+        """
+        return self.extensions.research_profile or PROFILE_GENERAL
 
     @property
     def provenance(self) -> Optional[Any]:

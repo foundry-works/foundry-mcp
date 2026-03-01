@@ -19,10 +19,12 @@ from foundry_mcp.core.research.models.conversations import (
 
 # --- Wave 3: Extracted sub-modules ---
 from foundry_mcp.core.research.models.deep_research import (
+    BUILTIN_PROFILES,
     DeepResearchConfig,
     DeepResearchPhase,
     DeepResearchState,
     ResearchExtensions,
+    ResearchProfile,
 )
 from foundry_mcp.core.research.models.digest import (
     DigestPayload,
@@ -116,4 +118,7 @@ __all__ = [
     # Deep research state
     "ResearchExtensions",
     "DeepResearchState",
+    # PLAN-1: Research profiles
+    "ResearchProfile",
+    "BUILTIN_PROFILES",
 ]

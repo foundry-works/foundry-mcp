@@ -57,6 +57,8 @@ def _handle_deep_research(
     timeout_per_operation: float = 120.0,
     max_concurrent: int = 3,
     task_timeout: Optional[float] = None,
+    research_profile: Optional[str] = None,
+    profile_overrides: Optional[dict] = None,
     **kwargs: Any,
 ) -> dict:
     """Handle deep-research action with background execution.
@@ -95,6 +97,23 @@ def _handle_deep_research(
     config = _get_config()
     workflow = DeepResearchWorkflow(config.research, _get_memory())
 
+    # PLAN-1: Resolve research profile from parameters + config
+    resolved_profile = None
+    if deep_research_action == "start":
+        try:
+            resolved_profile = config.research.resolve_profile(
+                research_profile=research_profile,
+                research_mode=None,  # Legacy mode comes from config.deep_research_mode
+                profile_overrides=profile_overrides,
+            )
+        except ValueError as exc:
+            return _validation_error(
+                field="research_profile",
+                action="deep-research",
+                message=str(exc),
+                remediation="Use a valid profile name: general, academic, systematic-review, bibliometric, technical",
+            )
+
     # Apply config default for task_timeout if not explicitly set
     # Precedence: explicit param > config > hardcoded fallback
     effective_timeout = task_timeout
@@ -116,6 +135,7 @@ def _handle_deep_research(
         max_concurrent=max_concurrent,
         background=True,
         task_timeout=effective_timeout,
+        research_profile=resolved_profile,
     )
 
     if result.success:

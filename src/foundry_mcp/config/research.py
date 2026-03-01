@@ -17,6 +17,7 @@ from foundry_mcp.config.parsing import _expand_alias, _expand_alias_list, _parse
 
 if TYPE_CHECKING:
     from foundry_mcp.core.llm_config.provider_spec import ProviderSpec
+    from foundry_mcp.core.research.models.deep_research import ResearchProfile
 
 logger = logging.getLogger(__name__)
 
@@ -217,6 +218,9 @@ class ResearchConfig:
     deep_research_audit_artifacts: bool = True
     # Research mode: "general" | "academic" | "technical"
     deep_research_mode: str = "general"
+    # PLAN-1: Research profile configuration
+    deep_research_default_profile: str = "general"  # Default profile when none specified
+    deep_research_profiles: Dict[str, dict] = field(default_factory=dict)  # Custom profile definitions from config
     # Search rate limiting configuration
     search_rate_limit: int = 60  # requests per minute (global default)
     max_concurrent_searches: int = 3  # for asyncio.Semaphore in gathering phase
@@ -670,6 +674,9 @@ class ResearchConfig:
             deep_research_audit_artifacts=_parse_bool(data.get("deep_research_audit_artifacts", True)),
             # Research mode
             deep_research_mode=str(data.get("deep_research_mode", "general")),
+            # PLAN-1: Research profiles
+            deep_research_default_profile=str(data.get("deep_research_default_profile", "general")),
+            deep_research_profiles=dict(data.get("deep_research_profiles", {})),
             # Search rate limiting configuration
             search_rate_limit=int(data.get("search_rate_limit", 60)),
             max_concurrent_searches=int(data.get("max_concurrent_searches", 3)),
@@ -798,6 +805,77 @@ class ResearchConfig:
                 f"{sorted(self._VALID_DEEP_RESEARCH_MODES)}, "
                 f"got {self.deep_research_mode!r}"
             )
+
+    # -----------------------------------------------------------------
+    # PLAN-1: Research profile resolution
+    # -----------------------------------------------------------------
+
+    def resolve_profile(
+        self,
+        research_profile: Optional[str] = None,
+        research_mode: Optional[str] = None,
+        profile_overrides: Optional[dict] = None,
+    ) -> "ResearchProfile":
+        """Resolve a :class:`ResearchProfile` from request parameters and config.
+
+        Resolution order (first match wins):
+        1. Explicit ``research_profile`` name → look up built-in or config-defined
+        2. Legacy ``research_mode`` → map to built-in profile name
+        3. Config default (``deep_research_default_profile``)
+
+        After resolution, ``profile_overrides`` (if any) are applied on top via
+        ``model_copy(update=...)``.
+
+        Raises:
+            ValueError: If the resolved profile name is unknown.
+        """
+        from foundry_mcp.core.research.models.deep_research import (
+            BUILTIN_PROFILES,
+            ResearchProfile,
+            _RESEARCH_MODE_TO_PROFILE,
+        )
+
+        # Warn if both new and legacy parameters specified
+        if research_profile and research_mode:
+            warnings.warn(
+                f"Both research_profile={research_profile!r} and "
+                f"research_mode={research_mode!r} specified; "
+                f"research_profile takes precedence. "
+                f"research_mode is deprecated — use research_profile instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
+        # Step 1: Determine profile name
+        profile_name: Optional[str] = None
+        if research_profile:
+            profile_name = research_profile
+        elif research_mode:
+            profile_name = _RESEARCH_MODE_TO_PROFILE.get(research_mode)
+            if profile_name is None:
+                raise ValueError(
+                    f"Unknown research_mode {research_mode!r}; "
+                    f"valid values: {sorted(_RESEARCH_MODE_TO_PROFILE)}"
+                )
+        else:
+            profile_name = self.deep_research_default_profile
+
+        # Step 2: Look up profile (built-in first, then config-defined)
+        profile: Optional[ResearchProfile] = BUILTIN_PROFILES.get(profile_name)
+        if profile is None and profile_name in self.deep_research_profiles:
+            profile = ResearchProfile(**self.deep_research_profiles[profile_name])
+        if profile is None:
+            available = sorted(set(BUILTIN_PROFILES) | set(self.deep_research_profiles))
+            raise ValueError(
+                f"Unknown research profile {profile_name!r}; "
+                f"available profiles: {available}"
+            )
+
+        # Step 3: Apply per-request overrides
+        if profile_overrides:
+            profile = profile.model_copy(update=profile_overrides)
+
+        return profile
 
     def _validate_deep_research_bounds(self) -> None:
         """Validate deep research configuration bounds.

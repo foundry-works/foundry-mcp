@@ -230,6 +230,8 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
         completed_only: bool = False,
         wait: bool = True,
         wait_timeout: float = 90,
+        research_profile: Optional[str] = None,
+        profile_overrides: Optional[dict] = None,
     ) -> dict:
         """Execute research workflows via the action router.
 
@@ -289,6 +291,8 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
             completed_only: Filter to completed sessions only (deep-research-list)
             wait: Block until state changes (long-poll) for deep-research-status
             wait_timeout: Max seconds to wait (clamped to 90) for deep-research-status
+            research_profile: Named profile for deep-research (general, academic, systematic-review, bibliometric, technical)
+            profile_overrides: Per-request overrides applied on top of the resolved profile
 
         Returns:
             Response envelope with action results
