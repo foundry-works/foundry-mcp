@@ -61,6 +61,17 @@ PROVIDER_CONFIGS: dict[str, ProviderResilienceConfig] = {
         circuit_failure_threshold=5,
         circuit_recovery_timeout=30.0,
     ),
+    "openalex": ProviderResilienceConfig(
+        # Conservative 50 RPS (100 hard cap); high burst for batch lookups
+        requests_per_second=50.0,
+        burst_limit=10,
+        max_retries=3,
+        base_delay=1.0,
+        max_delay=60.0,
+        jitter=0.5,
+        circuit_failure_threshold=5,
+        circuit_recovery_timeout=30.0,
+    ),
 }
 
 

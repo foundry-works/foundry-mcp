@@ -8,6 +8,7 @@ Supported providers:
 - PerplexitySearchProvider: Web search via Perplexity Search API
 - GoogleSearchProvider: Web search via Google Custom Search API
 - SemanticScholarProvider: Academic paper search via Semantic Scholar API
+- OpenAlexProvider: Academic paper search via OpenAlex API
 """
 
 from foundry_mcp.core.errors.search import (
@@ -35,6 +36,7 @@ from foundry_mcp.core.research.providers.resilience import (
     get_resilience_manager,
     reset_resilience_manager_for_testing,
 )
+from foundry_mcp.core.research.providers.openalex import OpenAlexProvider
 from foundry_mcp.core.research.providers.semantic_scholar import (
     SemanticScholarProvider,
 )
@@ -54,6 +56,7 @@ __all__ = [
     "PerplexitySearchProvider",
     "GoogleSearchProvider",
     "SemanticScholarProvider",
+    "OpenAlexProvider",
     # Errors
     "SearchProviderError",
     "RateLimitError",

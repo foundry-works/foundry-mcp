@@ -55,6 +55,8 @@ class ResearchConfig:
         google_api_key: API key for Google Custom Search (optional, reads from GOOGLE_API_KEY env var)
         google_cse_id: Google Custom Search Engine ID (optional, reads from GOOGLE_CSE_ID env var)
         semantic_scholar_api_key: API key for Semantic Scholar (optional, reads from SEMANTIC_SCHOLAR_API_KEY env var)
+        openalex_api_key: API key for OpenAlex (optional, reads from OPENALEX_API_KEY env var)
+        openalex_enabled: Whether OpenAlex provider is enabled (default: True)
         tavily_search_depth: Tavily search depth ("basic", "advanced", "fast", "ultra_fast")
         tavily_topic: Tavily search topic ("general", "news")
         tavily_news_days: Days limit for news search (1-365, only for topic="news")
@@ -230,6 +232,7 @@ class ResearchConfig:
             "perplexity": 60,  # Perplexity: ~1 req/sec (pricing: $5/1k requests)
             "google": 100,  # Google CSE: 100 queries/day free, ~100/min paid
             "semantic_scholar": 20,  # Semantic Scholar: ~20 req/min (100 req/5min unauthenticated)
+            "openalex": 3000,  # OpenAlex: ~50 req/sec (100 hard cap)
         }
     )
     # Search provider API keys (all optional, read from env vars if not set)
@@ -238,6 +241,8 @@ class ResearchConfig:
     google_api_key: Optional[str] = None
     google_cse_id: Optional[str] = None
     semantic_scholar_api_key: Optional[str] = None
+    openalex_api_key: Optional[str] = None
+    openalex_enabled: bool = True
     # Token management configuration
     token_management_enabled: bool = True  # Master switch for token management
     token_safety_margin: float = 0.15  # Fraction of budget to reserve as buffer
@@ -563,6 +568,7 @@ class ResearchConfig:
                 "perplexity": 60,
                 "google": 100,
                 "semantic_scholar": 20,  # ~20 req/min unauthenticated
+                "openalex": 3000,  # ~50 req/sec
             },
         )
         if isinstance(per_provider_rate_limits, dict):
@@ -687,6 +693,8 @@ class ResearchConfig:
             google_api_key=data.get("google_api_key"),
             google_cse_id=data.get("google_cse_id"),
             semantic_scholar_api_key=data.get("semantic_scholar_api_key"),
+            openalex_api_key=data.get("openalex_api_key"),
+            openalex_enabled=_parse_bool(data.get("openalex_enabled", True)),
             # Tavily search configuration
             tavily_search_depth=str(data.get("tavily_search_depth", "basic")),
             tavily_topic=str(data.get("tavily_topic", "general")),
@@ -1807,6 +1815,11 @@ class ResearchConfig:
                 "config_key": "semantic_scholar_api_key",
                 "env_var": "SEMANTIC_SCHOLAR_API_KEY",
                 "setup_url": "https://www.semanticscholar.org/product/api",
+            },
+            "openalex": {
+                "config_key": "openalex_api_key",
+                "env_var": "OPENALEX_API_KEY",
+                "setup_url": "https://openalex.org/users/me",
             },
         }
 
