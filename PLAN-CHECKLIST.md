@@ -189,36 +189,36 @@
 ### 4a. Add APA formatting function
 > **File**: `phases/_citation_postprocess.py`
 
-- [ ] Implement `format_source_apa(source: ResearchSource) -> str`
-  - [ ] Full academic: `Authors (Year). Title. *Venue*. DOI_URL`
-  - [ ] Handle "et al." for >5 authors
-  - [ ] Web source: `Author/Organization (Year). Title. *Site Name*. URL`
-  - [ ] Minimal fallback: `Title. URL`
-  - [ ] Missing year → "n.d." per APA convention
+- [x] Implement `format_source_apa(source: ResearchSource) -> str`
+  - [x] Full academic: `Authors (Year). Title. *Venue*. DOI_URL`
+  - [x] Handle "et al." for >5 authors
+  - [x] Web source: `Author/Organization (Year). Title. *Site Name*. URL`
+  - [x] Minimal fallback: `Title. URL`
+  - [x] Missing year → "n.d." per APA convention
 
 ### 4b. Add format_style parameter
 > **File**: `phases/_citation_postprocess.py`
 
-- [ ] Add `format_style` parameter to `build_sources_section()`
-- [ ] When `"apa"`: use `format_source_apa()`, header "## References"
-- [ ] When `"default"`: preserve existing `[{cn}] [{title}]({url})` format exactly
+- [x] Add `format_style` parameter to `build_sources_section()`
+- [x] When `"apa"`: use `format_source_apa()`, header "## References"
+- [x] When `"default"`: preserve existing `[{cn}] [{title}]({url})` format exactly
 
 ### 4c. Connect to profile
 > **File**: `phases/_citation_postprocess.py`
 
-- [ ] Read `state.research_profile.citation_style` in `postprocess_citations()`
-- [ ] Force `format_style="apa"` when `query_type == "literature_review"` regardless of profile
+- [x] Read `state.research_profile.citation_style` in `postprocess_citations()`
+- [x] Force `format_style="apa"` when `query_type == "literature_review"` regardless of profile
 
 ### Item 4 Testing
 
-- [ ] `format_source_apa()` with full academic metadata (all fields present)
-- [ ] `format_source_apa()` with partial metadata (missing venue, DOI)
-- [ ] `format_source_apa()` with web source (no academic metadata)
-- [ ] `format_source_apa()` with >5 authors ("et al.")
-- [ ] `format_source_apa()` with missing year ("n.d.")
-- [ ] `build_sources_section(format_style="apa")` → "## References" header
-- [ ] `build_sources_section(format_style="default")` → existing format preserved
-- [ ] Integration: synthesis in academic profile produces APA references
+- [x] `format_source_apa()` with full academic metadata (all fields present)
+- [x] `format_source_apa()` with partial metadata (missing venue, DOI)
+- [x] `format_source_apa()` with web source (no academic metadata)
+- [x] `format_source_apa()` with >5 authors ("et al.")
+- [x] `format_source_apa()` with missing year ("n.d.")
+- [x] `build_sources_section(format_style="apa")` → "## References" header
+- [x] `build_sources_section(format_style="default")` → existing format preserved
+- [x] Integration: synthesis in academic profile produces APA references
 
 ---
 

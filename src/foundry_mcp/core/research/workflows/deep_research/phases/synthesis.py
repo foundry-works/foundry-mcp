@@ -842,8 +842,13 @@ class SynthesisPhaseMixin:
             # Use raw content as fallback
             report = result.content
 
-        # Post-process citations: remove dangling refs, append Sources section
-        report, citation_metadata = postprocess_citations(report, state)
+        # Post-process citations: remove dangling refs, append Sources/References
+        query_type = _classify_query_type(
+            state.original_query, profile=state.research_profile,
+        )
+        report, citation_metadata = postprocess_citations(
+            report, state, query_type=query_type,
+        )
 
         # Store report in state
         state.report = report
