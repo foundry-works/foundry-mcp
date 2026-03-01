@@ -263,37 +263,37 @@
 ### 6a. Add StructuredResearchOutput model
 > **File**: `models/deep_research.py`
 
-- [ ] Define `StructuredResearchOutput(BaseModel)` with fields:
-  - [ ] `sources: list[dict]` — full metadata, reference-manager ready
-  - [ ] `findings: list[dict]` — with confidence + source IDs
-  - [ ] `gaps: list[dict]` — unresolved only
-  - [ ] `contradictions: list[dict]` — cross-source conflicts
-  - [ ] `query_type: str = "explanation"`
-  - [ ] `profile: str = "general"`
+- [x] Define `StructuredResearchOutput(BaseModel)` with fields:
+  - [x] `sources: list[dict]` — full metadata, reference-manager ready
+  - [x] `findings: list[dict]` — with confidence + source IDs
+  - [x] `gaps: list[dict]` — unresolved only
+  - [x] `contradictions: list[dict]` — cross-source conflicts
+  - [x] `query_type: str = "explanation"`
+  - [x] `profile: str = "general"`
 
 ### 6b. Build structured output after synthesis
 > **File**: `phases/synthesis.py`
 
-- [ ] Add `_build_structured_output()` method
-  - [ ] Sources: `{id, title, url, source_type, authors, year, venue, doi, citation_count, ...}` — flat, denormalized
-  - [ ] Findings: `{id, content, confidence, source_ids, category}`
-  - [ ] Gaps: `{id, description, priority, suggested_queries}` — unresolved only
-  - [ ] Contradictions: `{id, description, source_ids}`
-- [ ] Call from synthesis finalization, store on `state.extensions.structured_output`
+- [x] Add `_build_structured_output()` method
+  - [x] Sources: `{id, title, url, source_type, authors, year, venue, doi, citation_count, ...}` — flat, denormalized
+  - [x] Findings: `{id, content, confidence, source_ids, category}`
+  - [x] Gaps: `{id, description, priority, suggested_queries}` — unresolved only
+  - [x] Contradictions: `{id, description, source_ids}`
+- [x] Call from synthesis finalization, store on `state.extensions.structured_output`
 
 ### 6c. Include in report response
 > **File**: `handlers_deep_research.py`
 
-- [ ] Add `structured` field to `deep-research-report` response
-- [ ] Always present: `state.extensions.structured_output.model_dump() if structured else None`
+- [x] Add `structured` field to `deep-research-report` response
+- [x] Always present: `state.extensions.structured_output.model_dump() if structured else None`
 
 ### Item 6 Testing
 
-- [ ] `_build_structured_output()` with diverse sources
-- [ ] Sources include full denormalized metadata
-- [ ] Only unresolved gaps included
-- [ ] Structured output appears in report response
-- [ ] Serialization roundtrip
+- [x] `_build_structured_output()` with diverse sources
+- [x] Sources include full denormalized metadata
+- [x] Only unresolved gaps included
+- [x] Structured output appears in report response
+- [x] Serialization roundtrip
 
 ---
 

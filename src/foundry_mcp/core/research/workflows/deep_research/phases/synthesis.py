@@ -19,6 +19,7 @@ from foundry_mcp.core.research.context_budget import AllocationResult
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
     ResearchLandscape,
+    StructuredResearchOutput,
 )
 from foundry_mcp.core.research.models.sources import ResearchMode, SourceType
 from foundry_mcp.core.research.workflows.base import WorkflowResult
@@ -866,6 +867,20 @@ class SynthesisPhaseMixin:
         except Exception:
             logger.warning("Failed to build research landscape", exc_info=True)
 
+        # PLAN-1 Item 6: Build structured output (pure data transformation)
+        try:
+            structured = self._build_structured_output(state, query_type)
+            state.extensions.structured_output = structured
+            logger.info(
+                "Built structured output: %d sources, %d findings, %d gaps, %d contradictions",
+                len(structured.sources),
+                len(structured.findings),
+                len(structured.gaps),
+                len(structured.contradictions),
+            )
+        except Exception:
+            logger.warning("Failed to build structured output", exc_info=True)
+
         # Auto-save report as markdown file
         output_path = _save_report_markdown(state)
         if output_path:
@@ -1032,6 +1047,94 @@ class SynthesisPhaseMixin:
             top_cited_papers=top_cited,
             author_frequency=sorted_authors,
             source_type_breakdown=source_type_count,
+        )
+
+    # ------------------------------------------------------------------
+    # PLAN-1 Item 6: Structured output builder
+    # ------------------------------------------------------------------
+
+    def _build_structured_output(
+        self,
+        state: DeepResearchState,
+        query_type: str,
+    ) -> StructuredResearchOutput:
+        """Transform research state into a machine-readable structured output.
+
+        Pure data transformation — no LLM calls. Denormalizes sources,
+        findings, gaps, and contradictions into flat dicts suitable for
+        downstream tool consumption (Zotero, visualization, etc.).
+
+        Args:
+            state: Current research state after synthesis.
+            query_type: Classified query type from synthesis.
+
+        Returns:
+            StructuredResearchOutput with all fields populated.
+        """
+        # Sources: denormalized with full public metadata
+        structured_sources = []
+        for src in state.sources:
+            meta = src.public_metadata()
+            entry: dict[str, Any] = {
+                "id": src.id,
+                "title": src.title,
+                "url": src.url,
+                "source_type": src.source_type.value if hasattr(src.source_type, "value") else str(src.source_type),
+                "quality": src.quality.value if hasattr(src.quality, "value") else str(src.quality),
+                "citation_number": src.citation_number,
+                "authors": meta.get("authors"),
+                "year": meta.get("year"),
+                "venue": meta.get("venue"),
+                "doi": meta.get("doi"),
+                "citation_count": meta.get("citation_count"),
+            }
+            # Include any remaining public metadata not already denormalized
+            for key, val in meta.items():
+                if key not in entry:
+                    entry[key] = val
+            structured_sources.append(entry)
+
+        # Findings: with confidence + source IDs + category
+        structured_findings = []
+        for finding in state.findings:
+            structured_findings.append({
+                "id": finding.id,
+                "content": finding.content,
+                "confidence": finding.confidence.value if hasattr(finding.confidence, "value") else str(finding.confidence),
+                "source_ids": finding.source_ids,
+                "category": finding.category,
+            })
+
+        # Gaps: unresolved only
+        structured_gaps = []
+        for gap in state.gaps:
+            if gap.resolved:
+                continue
+            structured_gaps.append({
+                "id": gap.id,
+                "description": gap.description,
+                "priority": gap.priority,
+                "suggested_queries": gap.suggested_queries,
+            })
+
+        # Contradictions
+        structured_contradictions = []
+        for contradiction in state.contradictions:
+            structured_contradictions.append({
+                "id": contradiction.id,
+                "description": contradiction.description,
+                "finding_ids": contradiction.finding_ids,
+                "severity": contradiction.severity,
+                "resolution": contradiction.resolution,
+            })
+
+        return StructuredResearchOutput(
+            sources=structured_sources,
+            findings=structured_findings,
+            gaps=structured_gaps,
+            contradictions=structured_contradictions,
+            query_type=query_type,
+            profile=state.research_profile.name,
         )
 
     def _build_synthesis_system_prompt(self, state: DeepResearchState) -> str:

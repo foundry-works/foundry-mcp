@@ -25,6 +25,7 @@ from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
     ResearchExtensions,
     ResearchProfile,
+    StructuredResearchOutput,
 )
 from foundry_mcp.core.research.models.digest import (
     DigestPayload,
@@ -121,4 +122,6 @@ __all__ = [
     # PLAN-1: Research profiles
     "ResearchProfile",
     "BUILTIN_PROFILES",
+    # PLAN-1: Structured output
+    "StructuredResearchOutput",
 ]

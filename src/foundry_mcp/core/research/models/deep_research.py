@@ -1078,6 +1078,43 @@ class ProvenanceLog(BaseModel):
             self.entries = self.entries[excess:]
 
 
+class StructuredResearchOutput(BaseModel):
+    """Machine-readable structured output from a deep research session.
+
+    Produced alongside the prose report during synthesis. Provides
+    denormalized, reference-manager-ready data for downstream tools
+    (Zotero, visualization, citation network analysis, etc.).
+
+    Every field is a flat list of dicts for maximum interoperability
+    — no nested Pydantic models, so consumers can parse with plain JSON.
+    """
+
+    sources: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Full denormalized source metadata, reference-manager ready",
+    )
+    findings: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Key findings with confidence level and supporting source IDs",
+    )
+    gaps: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Unresolved research gaps only (resolved gaps excluded)",
+    )
+    contradictions: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Cross-source conflicts with involved source/finding IDs",
+    )
+    query_type: str = Field(
+        default="explanation",
+        description="Classified query type used for synthesis structure",
+    )
+    profile: str = Field(
+        default="general",
+        description="Research profile name used for the session",
+    )
+
+
 class ResearchExtensions(BaseModel):
     """Container for extended research capabilities.
 
@@ -1100,9 +1137,9 @@ class ResearchExtensions(BaseModel):
         default=None,
         description="Provenance audit trail for research session (PLAN-1 Item 2)",
     )
-    structured_output: Optional[Any] = Field(
+    structured_output: Optional[StructuredResearchOutput] = Field(
         default=None,
-        description="Structured research output from PLAN-1 (forward reference placeholder)",
+        description="Machine-readable structured research output (PLAN-1 Item 6)",
     )
 
     # PLAN-3: Intelligence

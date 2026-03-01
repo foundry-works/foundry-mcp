@@ -283,19 +283,24 @@ def _handle_deep_research_report(
         if resolved_path:
             response_data["output_path"] = resolved_path
 
-        # PLAN-1 Item 2: Include provenance summary in report response
+        # PLAN-1 Items 2 & 6: Include provenance summary and structured output
         if research_id:
             state = memory.load_deep_research(research_id) if not resolved_path else None
             # Try to load state if we don't already have it
             if state is None and research_id:
                 state = memory.load_deep_research(research_id)
-            if state and state.provenance is not None:
-                response_data["provenance_summary"] = {
-                    "entry_count": len(state.provenance.entries),
-                    "started_at": state.provenance.started_at,
-                    "completed_at": state.provenance.completed_at,
-                    "profile": state.provenance.profile,
-                }
+            if state is not None:
+                if state.provenance is not None:
+                    response_data["provenance_summary"] = {
+                        "entry_count": len(state.provenance.entries),
+                        "started_at": state.provenance.started_at,
+                        "completed_at": state.provenance.completed_at,
+                        "profile": state.provenance.profile,
+                    }
+                if state.extensions.structured_output is not None:
+                    response_data["structured"] = state.extensions.structured_output.model_dump(
+                        mode="json",
+                    )
 
         return asdict(
             success_response(
