@@ -9,6 +9,7 @@ Supported providers:
 - GoogleSearchProvider: Web search via Google Custom Search API
 - SemanticScholarProvider: Academic paper search via Semantic Scholar API
 - OpenAlexProvider: Academic paper search via OpenAlex API
+- CrossrefProvider: Bibliographic metadata enrichment via Crossref REST API
 """
 
 from foundry_mcp.core.errors.search import (
@@ -36,6 +37,7 @@ from foundry_mcp.core.research.providers.resilience import (
     get_resilience_manager,
     reset_resilience_manager_for_testing,
 )
+from foundry_mcp.core.research.providers.crossref import CrossrefProvider
 from foundry_mcp.core.research.providers.openalex import OpenAlexProvider
 from foundry_mcp.core.research.providers.semantic_scholar import (
     SemanticScholarProvider,
@@ -57,6 +59,7 @@ __all__ = [
     "GoogleSearchProvider",
     "SemanticScholarProvider",
     "OpenAlexProvider",
+    "CrossrefProvider",
     # Errors
     "SearchProviderError",
     "RateLimitError",

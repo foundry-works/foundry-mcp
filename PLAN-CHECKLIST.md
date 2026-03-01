@@ -61,24 +61,24 @@
 > **Parallel with**: Items 1, 3, 6
 
 ### 2a. Core provider class
-- [ ] Create `src/foundry_mcp/core/research/providers/crossref.py`
-- [ ] Implement `CrossrefProvider` (not a SearchProvider — enrichment only)
-- [ ] Set up `mailto:` in User-Agent header for polite pool
+- [x] Create `src/foundry_mcp/core/research/providers/crossref.py`
+- [x] Implement `CrossrefProvider` (not a SearchProvider — enrichment only)
+- [x] Set up `mailto:` in User-Agent header for polite pool
 
 ### 2b. Work lookup
-- [ ] Implement `get_work(doi)` via `GET /works/{doi}`
-- [ ] Normalize response fields: title, authors, journal, volume, issue, pages, publisher, doi, type, issued
+- [x] Implement `get_work(doi)` via `GET /works/{doi}`
+- [x] Normalize response fields: title, authors, journal, volume, issue, pages, publisher, doi, type, issued
 
 ### 2c. Source enrichment
-- [ ] Implement `enrich_source(source)` — fills missing fields only, never overwrites
-- [ ] Handle DOIs not in Crossref gracefully (return source unchanged)
+- [x] Implement `enrich_source(source)` — fills missing fields only, never overwrites
+- [x] Handle DOIs not in Crossref gracefully (return source unchanged)
 
 ### Item 2 Testing
-- [ ] Unit test: `get_work()` with mocked response, verify field extraction
-- [ ] Unit test: `enrich_source()` fills missing venue but doesn't overwrite existing
-- [ ] Unit test: graceful handling of DOIs not in Crossref
-- [ ] Mock fixture: successful work response
-- [ ] Mock fixture: 404 response
+- [x] Unit test: `get_work()` with mocked response, verify field extraction
+- [x] Unit test: `enrich_source()` fills missing venue but doesn't overwrite existing
+- [x] Unit test: graceful handling of DOIs not in Crossref
+- [x] Mock fixture: successful work response
+- [x] Mock fixture: 404 response
 
 ---
 

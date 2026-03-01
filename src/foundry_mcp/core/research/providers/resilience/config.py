@@ -72,6 +72,17 @@ PROVIDER_CONFIGS: dict[str, ProviderResilienceConfig] = {
         circuit_failure_threshold=5,
         circuit_recovery_timeout=30.0,
     ),
+    "crossref": ProviderResilienceConfig(
+        # Polite pool with mailto: ~50 RPS; conservative at 10 RPS
+        requests_per_second=10.0,
+        burst_limit=5,
+        max_retries=3,
+        base_delay=1.0,
+        max_delay=60.0,
+        jitter=0.5,
+        circuit_failure_threshold=5,
+        circuit_recovery_timeout=30.0,
+    ),
 }
 
 
