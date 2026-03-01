@@ -233,11 +233,21 @@ class AnalysisPhaseMixin(AnalysisPromptsMixin, AnalysisParsingMixin):
 
         # Add gaps to state
         for gap_data in parsed["gaps"]:
-            state.add_gap(
+            gap = state.add_gap(
                 description=gap_data["description"],
                 suggested_queries=gap_data.get("suggested_queries", []),
                 priority=gap_data.get("priority", 1),
             )
+            if gap and state.provenance is not None:
+                state.provenance.append(
+                    phase="analysis",
+                    event_type="gap_identified",
+                    summary=f"Gap identified (priority {gap.priority}): {gap.description[:80]}",
+                    gap_id=gap.id,
+                    description=gap.description,
+                    priority=gap.priority,
+                    suggested_queries=gap.suggested_queries,
+                )
 
         # Update source quality assessments
         for quality_update in parsed.get("quality_updates", []):

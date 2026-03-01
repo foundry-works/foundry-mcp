@@ -16,7 +16,7 @@ import asyncio
 import logging
 import re
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from foundry_mcp.config.research import ResearchConfig
@@ -259,14 +259,17 @@ async def _dedup_and_add_source(
     state_lock: asyncio.Lock,
     content_dedup_enabled: bool = True,
     dedup_threshold: float = 0.8,
-) -> bool:
+) -> tuple[bool, Optional[str]]:
     """Deduplicate a source and add it to state if novel.
 
     Performs URL dedup, title dedup, and optional content-similarity dedup
     using the three-phase lock pattern (fast check → unlocked comparison →
     final commit). Used by both ``_topic_search`` and ``_topic_extract``.
 
-    Returns True if the source was added, False if it was a duplicate.
+    Returns:
+        Tuple of (was_added, dedup_reason). dedup_reason is None when the
+        source was added, or one of "url_match", "title_match",
+        "content_similarity" when deduplicated.
     """
     from foundry_mcp.core.research.workflows.deep_research._content_dedup import (
         content_similarity,
@@ -275,12 +278,12 @@ async def _dedup_and_add_source(
     # --- Phase 1: fast checks under lock (URL + title dedup) ---
     async with state_lock:
         if source.url and source.url in seen_urls:
-            return False
+            return False, "url_match"
 
         normalized_title = _normalize_title(source.title)
         if normalized_title and len(normalized_title) > 20:
             if normalized_title in seen_titles:
-                return False
+                return False, "title_match"
 
         # Snapshot existing sources for content-similarity check
         # outside the lock to avoid O(n^2) contention.
@@ -301,17 +304,17 @@ async def _dedup_and_add_source(
                         sim,
                         existing_src.url or existing_src.title,
                     )
-                    return False
+                    return False, "content_similarity"
 
     # --- Phase 3: final add-or-skip under lock (re-check for races) ---
     async with state_lock:
         if source.url and source.url in seen_urls:
-            return False
+            return False, "url_match"
 
         normalized_title = _normalize_title(source.title)
         if normalized_title and len(normalized_title) > 20:
             if normalized_title in seen_titles:
-                return False
+                return False, "title_match"
             seen_titles[normalized_title] = source.url or ""
 
         if source.url:
@@ -321,7 +324,7 @@ async def _dedup_and_add_source(
 
         state.append_source(source)
         sub_query.source_ids.append(source.id)
-        return True
+        return True, None
 
 
 def _build_researcher_system_prompt(
@@ -1886,8 +1889,9 @@ class TopicResearchMixin:
                     content_dedup_enabled = getattr(self.config, "deep_research_enable_content_dedup", True)
                     dedup_threshold = getattr(self.config, "deep_research_content_dedup_threshold", 0.8)
 
+                    added_source_ids: list[str] = []
                     for source in sources:
-                        was_added = await _dedup_and_add_source(
+                        was_added, dedup_reason = await _dedup_and_add_source(
                             source=source,
                             sub_query=sub_query,
                             state=state,
@@ -1899,6 +1903,28 @@ class TopicResearchMixin:
                         )
                         if was_added:
                             added += 1
+                            added_source_ids.append(source.id)
+                        elif dedup_reason and state.provenance is not None:
+                            state.provenance.append(
+                                phase="supervision",
+                                event_type="source_deduplicated",
+                                summary=f"Source deduplicated ({dedup_reason}): {(source.title or '')[:80]}",
+                                source_url=source.url or "",
+                                source_title=(source.title or "")[:120],
+                                reason=dedup_reason,
+                            )
+
+                    # Log provider_query provenance event
+                    if state.provenance is not None:
+                        state.provenance.append(
+                            phase="supervision",
+                            event_type="provider_query",
+                            summary=f"Queried {provider_name}: {len(sources)} results for '{query[:80]}'",
+                            provider=provider_name,
+                            query=query,
+                            result_count=len(sources),
+                            source_ids=added_source_ids,
+                        )
 
                     # Track search provider query count
                     async with state_lock:
@@ -2001,7 +2027,7 @@ class TopicResearchMixin:
                     source.sub_query_id = sub_query.id
                     source.metadata["extract_source"] = True
 
-                    was_added = await _dedup_and_add_source(
+                    was_added, dedup_reason = await _dedup_and_add_source(
                         source=source,
                         sub_query=sub_query,
                         state=state,
@@ -2013,6 +2039,15 @@ class TopicResearchMixin:
                     )
                     if was_added:
                         added += 1
+                    elif dedup_reason and state.provenance is not None:
+                        state.provenance.append(
+                            phase="supervision",
+                            event_type="source_deduplicated",
+                            summary=f"Source deduplicated ({dedup_reason}): {(source.title or '')[:80]}",
+                            source_url=source.url or "",
+                            source_title=(source.title or "")[:120],
+                            reason=dedup_reason,
+                        )
 
                 logger.info(
                     "Topic extract for %r: %d/%d URLs yielded new sources",
