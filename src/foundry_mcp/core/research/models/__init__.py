@@ -22,6 +22,7 @@ from foundry_mcp.core.research.models.deep_research import (
     DeepResearchConfig,
     DeepResearchPhase,
     DeepResearchState,
+    ResearchExtensions,
 )
 from foundry_mcp.core.research.models.digest import (
     DigestPayload,
@@ -113,5 +114,6 @@ __all__ = [
     "ResearchFinding",
     "ResearchGap",
     # Deep research state
+    "ResearchExtensions",
     "DeepResearchState",
 ]

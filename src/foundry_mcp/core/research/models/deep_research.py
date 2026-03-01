@@ -768,6 +768,57 @@ class DeepResearchPhase(str, Enum):
     SYNTHESIS = "synthesis"
 
 
+class ResearchExtensions(BaseModel):
+    """Container for extended research capabilities.
+
+    All fields from PLAN-1 through PLAN-4 live here rather than
+    directly on DeepResearchState. This keeps the core state model
+    stable and serialization cost proportional to features used.
+
+    Fields are populated lazily by each plan's implementation:
+    - PLAN-1: research_profile, provenance, structured_output
+    - PLAN-3: research_landscape
+    - PLAN-4: citation_network, methodology_assessments
+    """
+
+    # PLAN-1: Foundations
+    research_profile: Optional[Any] = Field(
+        default=None,
+        description="Research profile from PLAN-1 (forward reference placeholder)",
+    )
+    provenance: Optional[Any] = Field(
+        default=None,
+        description="Provenance log from PLAN-1 (forward reference placeholder)",
+    )
+    structured_output: Optional[Any] = Field(
+        default=None,
+        description="Structured research output from PLAN-1 (forward reference placeholder)",
+    )
+
+    # PLAN-3: Intelligence
+    research_landscape: Optional[Any] = Field(
+        default=None,
+        description="Research landscape from PLAN-3 (forward reference placeholder)",
+    )
+
+    # PLAN-4: Deep Analysis
+    citation_network: Optional[Any] = Field(
+        default=None,
+        description="Citation network from PLAN-4 (forward reference placeholder)",
+    )
+    methodology_assessments: list[Any] = Field(
+        default_factory=list,
+        description="Methodology assessments from PLAN-4 (forward reference placeholder)",
+    )
+
+    model_config = {"extra": "forbid"}
+
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+        """Override to exclude None fields by default."""
+        kwargs.setdefault("exclude_none", True)
+        return super().model_dump(**kwargs)
+
+
 class DeepResearchState(BaseModel):
     """Main state model for a deep research session.
 
@@ -968,6 +1019,15 @@ class DeepResearchState(BaseModel):
     system_prompt: Optional[str] = Field(default=None)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+    # Extended capabilities container (PLAN-1 through PLAN-4).
+    # Uses default_factory so the field is always present but lightweight
+    # when unused — exclude_none in ResearchExtensions.model_dump() means
+    # empty extensions add zero overhead to state serialization.
+    extensions: ResearchExtensions = Field(
+        default_factory=ResearchExtensions,
+        description="Extended capabilities from PLAN-1 through PLAN-4",
+    )
+
     # Citation counter — maintained by add_source()/append_source().
     # Avoids O(n) scan of all sources on every add.
     next_citation_number: int = Field(
@@ -1006,6 +1066,20 @@ class DeepResearchState(BaseModel):
             if max_existing >= self.next_citation_number:
                 self.next_citation_number = max_existing + 1
         return self
+
+    # =========================================================================
+    # Extension convenience accessors
+    # =========================================================================
+
+    @property
+    def research_profile(self) -> Optional[Any]:
+        """Convenience accessor for extensions.research_profile."""
+        return self.extensions.research_profile
+
+    @property
+    def provenance(self) -> Optional[Any]:
+        """Convenience accessor for extensions.provenance."""
+        return self.extensions.provenance
 
     # =========================================================================
     # Collection Management Methods
