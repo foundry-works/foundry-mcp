@@ -22,6 +22,9 @@ from foundry_mcp.core.research.models.deep_research import (
     StructuredResearchOutput,
 )
 from foundry_mcp.core.research.models.sources import ResearchMode, SourceType
+from foundry_mcp.core.research.workflows.deep_research.phases.methodology_assessment import (
+    format_methodology_context,
+)
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research._budgeting import (
     allocate_synthesis_budget,
@@ -1557,6 +1560,16 @@ This is a **literature review** synthesis. Follow these additional guidelines:
                     prompt_parts.append(f"  URL: {sanitize_external_content(source.url)}")
 
         prompt_parts.append("")
+
+        # PLAN-4 Item 3: Inject methodology context when available
+        if state.methodology_assessments:
+            methodology_section = format_methodology_context(
+                assessments=state.methodology_assessments,
+                id_to_citation=id_to_citation,
+                sources=state.sources,
+            )
+            if methodology_section:
+                prompt_parts.append(methodology_section)
 
         # Add synthesis instructions with query-type structural hint
         query_type = _classify_query_type(state.original_query, profile=state.research_profile)

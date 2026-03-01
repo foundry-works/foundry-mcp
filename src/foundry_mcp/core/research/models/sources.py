@@ -498,3 +498,80 @@ class ResearchGap(BaseModel):
         description="Notes on how the gap was resolved",
     )
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+# ---------------------------------------------------------------------------
+# Methodology Quality Assessment (PLAN-4 Item 3)
+# ---------------------------------------------------------------------------
+
+
+class StudyDesign(str, Enum):
+    """Study design classification for methodology assessment.
+
+    Covers the standard hierarchy of evidence from meta-analyses down to
+    expert opinion.  Used by ``MethodologyAssessor`` to label each source
+    with a study-design tag that the synthesis LLM can use for qualitative
+    weighting.
+    """
+
+    META_ANALYSIS = "meta_analysis"
+    SYSTEMATIC_REVIEW = "systematic_review"
+    RCT = "randomized_controlled_trial"
+    QUASI_EXPERIMENTAL = "quasi_experimental"
+    COHORT = "cohort_study"
+    CASE_CONTROL = "case_control"
+    CROSS_SECTIONAL = "cross_sectional"
+    QUALITATIVE = "qualitative"
+    CASE_STUDY = "case_study"
+    THEORETICAL = "theoretical"
+    OPINION = "expert_opinion"
+    UNKNOWN = "unknown"
+
+
+class MethodologyAssessment(BaseModel):
+    """Structured methodology metadata extracted from a research source.
+
+    Produces approximate heuristics — **no numeric rigor score**.  Provides
+    structured metadata to the synthesis LLM for qualitative judgment.
+
+    Confidence is forced to ``"low"`` when the assessment is based only on
+    the abstract (``content_basis == "abstract"``).
+    """
+
+    source_id: str = Field(..., description="ID of the assessed ResearchSource")
+    study_design: StudyDesign = Field(
+        default=StudyDesign.UNKNOWN,
+        description="Classified study design (e.g. RCT, cohort, qualitative)",
+    )
+    sample_size: Optional[int] = Field(
+        default=None,
+        description="Reported sample size (N), if extractable",
+    )
+    sample_description: Optional[str] = Field(
+        default=None,
+        description="Brief description of the sample/participants",
+    )
+    effect_size: Optional[str] = Field(
+        default=None,
+        description="Reported effect size (e.g. 'd=0.45', 'OR=2.3')",
+    )
+    statistical_significance: Optional[str] = Field(
+        default=None,
+        description="Reported statistical significance (e.g. 'p<0.001')",
+    )
+    limitations_noted: list[str] = Field(
+        default_factory=list,
+        description="Limitations acknowledged or detected",
+    )
+    potential_biases: list[str] = Field(
+        default_factory=list,
+        description="Potential biases identified",
+    )
+    confidence: str = Field(
+        default="low",
+        description="Extraction confidence: 'high', 'medium', or 'low'",
+    )
+    content_basis: str = Field(
+        default="abstract",
+        description="Content used for assessment: 'abstract' or 'full_text'",
+    )

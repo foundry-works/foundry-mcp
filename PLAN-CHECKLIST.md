@@ -141,74 +141,75 @@
 ### 3a. Methodology assessment model
 > **File**: `src/foundry_mcp/core/research/models/sources.py`
 
-- [ ] Add `StudyDesign` enum (meta_analysis, systematic_review, rct, quasi_experimental, cohort, case_control, cross_sectional, qualitative, case_study, theoretical, opinion, unknown)
-- [ ] Add `MethodologyAssessment` model
-  - [ ] Fields: source_id, study_design, sample_size, sample_description, effect_size, statistical_significance, limitations_noted, potential_biases, confidence, content_basis
-  - [ ] No numeric rigor score — qualitative metadata only
+- [x] Add `StudyDesign` enum (meta_analysis, systematic_review, rct, quasi_experimental, cohort, case_control, cross_sectional, qualitative, case_study, theoretical, opinion, unknown)
+- [x] Add `MethodologyAssessment` model
+  - [x] Fields: source_id, study_design, sample_size, sample_description, effect_size, statistical_significance, limitations_noted, potential_biases, confidence, content_basis
+  - [x] No numeric rigor score — qualitative metadata only
 
 ### 3b. Assessment engine
 > **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/methodology_assessment.py` (NEW)
 
-- [ ] Create `MethodologyAssessor` class
-- [ ] Implement `assess_sources()` method
-  - [ ] Filter to ACADEMIC sources with content > 200 chars
-  - [ ] Batch LLM call for metadata extraction
-  - [ ] Force `confidence="low"` for abstract-only content
-  - [ ] Respect `timeout` parameter
-- [ ] Add unit test: LLM extraction prompt parsing with mocked responses
-- [ ] Add unit test: StudyDesign classification from various abstracts
-- [ ] Add unit test: graceful handling for sources without sufficient content
-- [ ] Add unit test: confidence forced to "low" for abstract-only content
+- [x] Create `MethodologyAssessor` class
+- [x] Implement `assess_sources()` method
+  - [x] Filter to ACADEMIC sources with content > 200 chars
+  - [x] Batch LLM call for metadata extraction
+  - [x] Force `confidence="low"` for abstract-only content
+  - [x] Respect `timeout` parameter
+- [x] Add unit test: LLM extraction prompt parsing with mocked responses
+- [x] Add unit test: StudyDesign classification from various abstracts
+- [x] Add unit test: graceful handling for sources without sufficient content
+- [x] Add unit test: confidence forced to "low" for abstract-only content
 
 ### 3c. LLM extraction prompt
 
-- [ ] Design structured JSON extraction prompt
-  - [ ] Covers: study_design, sample_size, sample_description, effect_size, statistical_significance, limitations, potential_biases, confidence
-  - [ ] Instructs LLM to use null/empty for missing information (no guessing)
+- [x] Design structured JSON extraction prompt
+  - [x] Covers: study_design, sample_size, sample_description, effect_size, statistical_significance, limitations, potential_biases, confidence
+  - [x] Instructs LLM to use null/empty for missing information (no guessing)
 
 ### 3d. Add to ResearchExtensions
 > **File**: `src/foundry_mcp/core/research/models/deep_research.py`
 
-- [ ] Add `methodology_assessments: list[MethodologyAssessment] = Field(default_factory=list)` to `ResearchExtensions`
-- [ ] Add convenience accessor `@property methodology_assessments` on `DeepResearchState`
+- [x] Add `methodology_assessments: list[MethodologyAssessment] = Field(default_factory=list)` to `ResearchExtensions`
+- [x] Add convenience accessor `@property methodology_assessments` on `DeepResearchState`
 
 ### 3e. Feed assessments into synthesis
 > **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/synthesis.py`
 
-- [ ] When assessments available, inject `## Methodology Context` section into synthesis prompt
-  - [ ] Format: study design, sample size, effect size, limitations per source
-  - [ ] Note content basis (full text vs abstract) with confidence caveat
-  - [ ] Frame as "context" for qualitative weighting, not ground truth
-- [ ] Add unit test: assessment data correctly injected into synthesis prompt
+- [x] When assessments available, inject `## Methodology Context` section into synthesis prompt
+  - [x] Format: study design, sample size, effect size, limitations per source
+  - [x] Note content basis (full text vs abstract) with confidence caveat
+  - [x] Frame as "context" for qualitative weighting, not ground truth
+- [x] Add unit test: assessment data correctly injected into synthesis prompt
 
 ### 3f. Configuration
-> **File**: `src/foundry_mcp/core/research/config` (or relevant config module)
+> **File**: `src/foundry_mcp/config/research.py`
 
-- [ ] Add `deep_research_methodology_assessment_provider: Optional[str] = None`
-- [ ] Add `deep_research_methodology_assessment_timeout: float = 60.0`
+- [x] Add `deep_research_methodology_assessment_provider: Optional[str] = None`
+- [x] Add `deep_research_methodology_assessment_timeout: float = 60.0`
+- [x] Add `deep_research_methodology_assessment_min_content_length: int = 200`
 
 ### Item 3 Validation
 
-- [ ] StudyDesign enum covers common study types
-- [ ] MethodologyAssessment model serializes/deserializes correctly
-- [ ] Assessor extracts structured metadata from mocked LLM responses
-- [ ] Confidence forced to "low" for abstract-only content
-- [ ] Assessment context correctly injected into synthesis prompt
-- [ ] Sources with < 200 chars content are skipped
+- [x] StudyDesign enum covers common study types
+- [x] MethodologyAssessment model serializes/deserializes correctly
+- [x] Assessor extracts structured metadata from mocked LLM responses
+- [x] Confidence forced to "low" for abstract-only content
+- [x] Assessment context correctly injected into synthesis prompt
+- [x] Sources with < 200 chars content are skipped
 - [ ] Integration test: end-to-end assessment of 5 academic sources
-- [ ] ~80-100 LOC new tests written
+- [x] ~80-100 LOC new tests written (41 tests, ~370 LOC)
 
 ---
 
 ## Final Validation
 
-- [ ] All three items implemented and tested independently
-- [ ] All features are profile-gated (opt-in only)
-- [ ] No new dependencies added
-- [ ] Existing tests pass unchanged
-- [ ] New config fields added with sensible defaults
-- [ ] ResearchExtensions updated with citation_network and methodology_assessments
-- [ ] Total ~240-360 LOC new tests written
+- [x] All three items implemented and tested independently
+- [x] All features are profile-gated (opt-in only)
+- [x] No new dependencies added
+- [x] Existing tests pass unchanged
+- [x] New config fields added with sensible defaults
+- [x] ResearchExtensions updated with citation_network and methodology_assessments
+- [x] Total ~240-360 LOC new tests written
 
 ---
 

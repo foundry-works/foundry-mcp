@@ -18,11 +18,13 @@ from foundry_mcp.core.research.models.fidelity import (
     PhaseMetrics,
 )
 from foundry_mcp.core.research.models.sources import (
+    MethodologyAssessment,
     ResearchFinding,
     ResearchGap,
     ResearchMode,
     ResearchSource,
     SourceType,
+    StudyDesign,
     SubQuery,
 )
 
@@ -1293,9 +1295,9 @@ class ResearchExtensions(BaseModel):
         default=None,
         description="Citation network graph from PLAN-4 Item 2",
     )
-    methodology_assessments: list[Any] = Field(
+    methodology_assessments: list[MethodologyAssessment] = Field(
         default_factory=list,
-        description="Methodology assessments from PLAN-4 (forward reference placeholder)",
+        description="Methodology quality assessments from PLAN-4 Item 3",
     )
 
     model_config = {"extra": "forbid"}
@@ -1581,6 +1583,11 @@ class DeepResearchState(BaseModel):
     def citation_network(self) -> Optional[CitationNetwork]:
         """Convenience accessor for extensions.citation_network."""
         return self.extensions.citation_network
+
+    @property
+    def methodology_assessments(self) -> list[MethodologyAssessment]:
+        """Convenience accessor for extensions.methodology_assessments."""
+        return self.extensions.methodology_assessments
 
     # =========================================================================
     # Collection Management Methods

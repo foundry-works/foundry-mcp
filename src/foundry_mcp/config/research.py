@@ -322,6 +322,11 @@ class ResearchConfig:
     deep_research_citation_network_max_refs_per_paper: int = 20  # Max backward references per source
     deep_research_citation_network_max_cites_per_paper: int = 20  # Max forward citations per source
 
+    # Methodology quality assessment (PLAN-4 Item 3, experimental)
+    deep_research_methodology_assessment_provider: Optional[str] = None  # Provider for LLM extraction (None = use default)
+    deep_research_methodology_assessment_timeout: float = 60.0  # Timeout per LLM extraction call (seconds)
+    deep_research_methodology_assessment_min_content_length: int = 200  # Min chars to trigger assessment
+
     deep_research_archive_content: bool = False  # Archive canonical text for digested sources
     deep_research_archive_retention_days: int = 30  # Days to retain archived digest content (0 = keep indefinitely)
     # Digest LLM provider configuration (uses default provider if not set)
