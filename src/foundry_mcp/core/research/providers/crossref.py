@@ -55,6 +55,7 @@ from foundry_mcp.core.research.providers.shared import (
     extract_error_message,
     extract_status_code,
     parse_retry_after,
+    truncate_abstract,
 )
 
 logger = logging.getLogger(__name__)
@@ -273,7 +274,7 @@ class CrossrefProvider:
 
         enriched_snippet = source.snippet
         if not enriched_snippet and enriched_content:
-            enriched_snippet = self._truncate_abstract(enriched_content)
+            enriched_snippet = truncate_abstract(enriched_content)
 
         return ResearchSource(
             id=source.id,
@@ -473,26 +474,3 @@ class CrossrefProvider:
             return ", ".join(names[:5]) + " et al."
         return ", ".join(names)
 
-    def _truncate_abstract(
-        self,
-        abstract: Optional[str],
-        max_length: int = 500,
-    ) -> Optional[str]:
-        """Truncate abstract for snippet field.
-
-        Args:
-            abstract: Full abstract text
-            max_length: Maximum snippet length
-
-        Returns:
-            Truncated abstract or None
-        """
-        if not abstract:
-            return None
-        if len(abstract) <= max_length:
-            return abstract
-        truncated = abstract[:max_length]
-        last_space = truncated.rfind(" ")
-        if last_space > max_length * 0.8:
-            truncated = truncated[:last_space]
-        return truncated + "..."

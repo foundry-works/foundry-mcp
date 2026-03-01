@@ -86,8 +86,8 @@ class TestResearchExtensions:
         """Empty ResearchExtensions serializes to {} (exclude_none)."""
         ext = ResearchExtensions()
         data = ext.model_dump()
-        # Only methodology_assessments should be present (empty list)
-        assert data == {"methodology_assessments": []}
+        # All fields are None by default, so exclude_none produces {}
+        assert data == {}
 
     def test_single_field_populated(self):
         """Extensions with one field set serializes only that field."""
@@ -105,10 +105,10 @@ class TestResearchExtensions:
         with pytest.raises(Exception):  # ValidationError
             ResearchExtensions(unknown_field="bad")
 
-    def test_methodology_assessments_default_empty_list(self):
-        """methodology_assessments defaults to empty list, not None."""
+    def test_methodology_assessments_default_none(self):
+        """methodology_assessments defaults to None (excluded by exclude_none)."""
         ext = ResearchExtensions()
-        assert ext.methodology_assessments == []
+        assert ext.methodology_assessments is None
 
     def test_round_trip_serialization(self):
         """ResearchExtensions survives model_dump → model_validate."""

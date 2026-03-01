@@ -4,7 +4,7 @@ import hashlib
 import logging
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -570,7 +570,7 @@ class MethodologyAssessment(BaseModel):
         default_factory=list,
         description="Potential biases identified",
     )
-    confidence: str = Field(
+    confidence: Literal["high", "medium", "low"] = Field(
         default="low",
         description="Extraction confidence: 'high', 'medium', or 'low'",
     )

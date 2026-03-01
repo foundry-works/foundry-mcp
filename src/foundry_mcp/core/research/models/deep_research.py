@@ -1295,8 +1295,8 @@ class ResearchExtensions(BaseModel):
         default=None,
         description="Citation network graph from PLAN-4 Item 2",
     )
-    methodology_assessments: list[MethodologyAssessment] = Field(
-        default_factory=list,
+    methodology_assessments: Optional[list[MethodologyAssessment]] = Field(
+        default=None,
         description="Methodology quality assessments from PLAN-4 Item 3",
     )
 
@@ -1587,7 +1587,8 @@ class DeepResearchState(BaseModel):
     @property
     def methodology_assessments(self) -> list[MethodologyAssessment]:
         """Convenience accessor for extensions.methodology_assessments."""
-        return self.extensions.methodology_assessments
+        assessments = self.extensions.methodology_assessments
+        return assessments if assessments is not None else []
 
     # =========================================================================
     # Collection Management Methods

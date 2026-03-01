@@ -291,72 +291,72 @@
 ### Item 4.1: Use `find` Instead of `rfind` for Supervisor Brief Split
 > **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/compression.py`
 
-- [ ] Change `content.rfind(_SUPERVISOR_BRIEF_MARKER)` to `content.find(_SUPERVISOR_BRIEF_MARKER)`
+- [x] Change `content.rfind(_SUPERVISOR_BRIEF_MARKER)` to `content.find(_SUPERVISOR_BRIEF_MARKER)`
 
 #### Item 4.1 Validation
 
-- [ ] First occurrence of marker is used for split (not last)
-- [ ] Existing compression tests pass unchanged
+- [x] First occurrence of marker is used for split (not last)
+- [x] Existing compression tests pass unchanged
 
 ---
 
 ### Item 4.2: Use Word Boundaries for Provider Hint Keywords
 > **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/brief.py`
 
-- [ ] Replace `if keyword in text_lower:` with `if re.search(rf"\b{re.escape(keyword)}\b", text_lower):`
-- [ ] Import `re` if not already imported
+- [x] Replace `if keyword in text_lower:` with `if re.search(rf"\b{re.escape(keyword)}\b", text_lower):`
+- [x] Import `re` if not already imported
 
 #### Item 4.2 Validation
 
-- [ ] `"health"` does NOT match "healthy eating habits"
-- [ ] `"health"` DOES match "public health research"
-- [ ] `"learning"` does NOT match "learning disabilities"
-- [ ] `"machine learning"` DOES match "advances in machine learning"
-- [ ] Existing brief tests pass (update keyword test assertions if needed)
+- [x] `"health"` does NOT match "healthy eating habits"
+- [x] `"health"` DOES match "public health research"
+- [x] `"learning"` does NOT match "learning disabilities"
+- [x] `"machine learning"` DOES match "advances in machine learning"
+- [x] Existing brief tests pass (update keyword test assertions if needed)
 
 ---
 
 ### Item 4.3: Make `methodology_assessments` Optional for Exclude-None Consistency
 > **File**: `src/foundry_mcp/core/research/models/deep_research.py`
 
-- [ ] Change `methodology_assessments: list[MethodologyAssessment] = Field(default_factory=list)` to `methodology_assessments: Optional[list[MethodologyAssessment]] = None`
-- [ ] Update convenience accessor on `DeepResearchState` to return `self.extensions.methodology_assessments or []`
+- [x] Change `methodology_assessments: list[MethodologyAssessment] = Field(default_factory=list)` to `methodology_assessments: Optional[list[MethodologyAssessment]] = None`
+- [x] Update convenience accessor on `DeepResearchState` to return `self.extensions.methodology_assessments or []`
 
 #### Item 4.3 Validation
 
-- [ ] Unused extensions serialize without `methodology_assessments` key
-- [ ] Accessor returns empty list when None
-- [ ] Existing tests pass unchanged
+- [x] Unused extensions serialize without `methodology_assessments` key
+- [x] Accessor returns empty list when None
+- [x] Existing tests pass (updated 2 test assertions for new None default)
 
 ---
 
 ### Item 4.4: Use `Literal` Type for `MethodologyAssessment.confidence`
 > **File**: `src/foundry_mcp/core/research/models/sources.py`
 
-- [ ] Change `confidence: str = "low"` to `confidence: Literal["high", "medium", "low"] = "low"`
-- [ ] Add `from typing import Literal` import
+- [x] Change `confidence: str = "low"` to `confidence: Literal["high", "medium", "low"] = "low"`
+- [x] Add `from typing import Literal` import
 
 #### Item 4.4 Validation
 
-- [ ] `MethodologyAssessment(confidence="invalid")` raises `ValidationError`
-- [ ] `MethodologyAssessment(confidence="high")` succeeds
-- [ ] Existing tests pass unchanged
+- [x] `MethodologyAssessment(confidence="invalid")` raises `ValidationError`
+- [x] `MethodologyAssessment(confidence="high")` succeeds
+- [x] Existing tests pass unchanged
 
 ---
 
 ### Item 4.5: Extract `_truncate_abstract` to Shared Utility
 > **Files**: `providers/shared.py`, `providers/openalex.py`, `providers/crossref.py`, `providers/semantic_scholar.py`
 
-- [ ] Move `_truncate_abstract` to `shared.py` as a module-level function `truncate_abstract()`
-- [ ] Update imports in `openalex.py`
-- [ ] Update imports in `crossref.py`
-- [ ] Update imports in `semantic_scholar.py`
-- [ ] Remove duplicate method definitions from all three providers
+- [x] Move `_truncate_abstract` to `shared.py` as a module-level function `truncate_abstract()`
+- [x] Update imports in `openalex.py`
+- [x] Update imports in `crossref.py`
+- [x] Update imports in `semantic_scholar.py`
+- [x] Remove duplicate method definitions from all three providers
 
 #### Item 4.5 Validation
 
-- [ ] All three providers use the shared function
-- [ ] Existing provider tests pass unchanged
+- [x] All three providers use the shared function
+- [x] Existing provider tests pass unchanged
 
 ---
 

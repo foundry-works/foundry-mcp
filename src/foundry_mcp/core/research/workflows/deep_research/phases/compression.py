@@ -415,7 +415,7 @@ def _split_supervisor_brief(content: str) -> tuple[str, str | None]:
         (compressed_findings, supervisor_summary) — supervisor_summary
         is ``None`` if the marker was not found.
     """
-    idx = content.rfind(_SUPERVISOR_BRIEF_MARKER)
+    idx = content.find(_SUPERVISOR_BRIEF_MARKER)
     if idx == -1:
         return content, None
 

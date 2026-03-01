@@ -277,6 +277,38 @@ def extract_domain(url: str) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# Text utilities
+# ---------------------------------------------------------------------------
+
+
+def truncate_abstract(
+    abstract: Optional[str],
+    max_length: int = 500,
+) -> Optional[str]:
+    """Truncate an abstract for use as a snippet field.
+
+    Shared utility for academic providers (Semantic Scholar, OpenAlex, CrossRef)
+    that need to produce short snippets from full abstracts.
+
+    Args:
+        abstract: Full abstract text.
+        max_length: Maximum snippet length.
+
+    Returns:
+        Truncated abstract with ``"..."`` suffix, or ``None`` if input is empty.
+    """
+    if not abstract:
+        return None
+    if len(abstract) <= max_length:
+        return abstract
+    truncated = abstract[:max_length]
+    last_space = truncated.rfind(" ")
+    if last_space > max_length * 0.8:
+        truncated = truncated[:last_space]
+    return truncated + "..."
+
+
+# ---------------------------------------------------------------------------
 # Parameterized patterns
 # ---------------------------------------------------------------------------
 

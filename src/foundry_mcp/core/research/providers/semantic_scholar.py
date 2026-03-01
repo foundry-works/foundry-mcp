@@ -53,6 +53,7 @@ from foundry_mcp.core.research.providers.shared import (
     extract_error_message,
     parse_iso_date,
     parse_retry_after,
+    truncate_abstract,
 )
 
 logger = logging.getLogger(__name__)
@@ -532,7 +533,7 @@ class SemanticScholarProvider(SearchProvider):
 
             # Create SearchResult from Semantic Scholar response
             # Use TLDR for snippet if available, fallback to truncated abstract
-            snippet = tldr_text if tldr_text else self._truncate_abstract(paper.get("abstract"))
+            snippet = tldr_text if tldr_text else truncate_abstract(paper.get("abstract"))
             search_result = SearchResult(
                 url=primary_url,
                 title=paper.get("title", "Untitled"),
@@ -649,34 +650,6 @@ class SemanticScholarProvider(SearchProvider):
 
         # Fall back to Semantic Scholar URL
         return paper.get("url", "")
-
-    def _truncate_abstract(
-        self,
-        abstract: Optional[str],
-        max_length: int = 500,
-    ) -> Optional[str]:
-        """Truncate abstract for snippet field.
-
-        Args:
-            abstract: Full abstract text
-            max_length: Maximum snippet length
-
-        Returns:
-            Truncated abstract or None
-        """
-        if not abstract:
-            return None
-
-        if len(abstract) <= max_length:
-            return abstract
-
-        # Truncate at word boundary
-        truncated = abstract[:max_length]
-        last_space = truncated.rfind(" ")
-        if last_space > max_length * 0.8:
-            truncated = truncated[:last_space]
-
-        return truncated + "..."
 
     def _parse_date(self, date_str: Optional[str]) -> Optional[Any]:
         """Parse date string. Delegates to shared utility with extra year-only format."""

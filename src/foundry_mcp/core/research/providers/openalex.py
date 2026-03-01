@@ -52,6 +52,7 @@ from foundry_mcp.core.research.providers.shared import (
     extract_error_message,
     parse_iso_date,
     parse_retry_after,
+    truncate_abstract,
 )
 
 logger = logging.getLogger(__name__)
@@ -531,7 +532,7 @@ class OpenAlexProvider(SearchProvider):
             ]
 
             # Snippet: use abstract truncated
-            snippet = self._truncate_abstract(abstract)
+            snippet = truncate_abstract(abstract)
 
             search_result = SearchResult(
                 url=primary_url or "",
@@ -611,33 +612,6 @@ class OpenAlexProvider(SearchProvider):
         best_oa = work.get("best_oa_location") or {}
         source = best_oa.get("source") or {}
         return source.get("display_name")
-
-    def _truncate_abstract(
-        self,
-        abstract: Optional[str],
-        max_length: int = 500,
-    ) -> Optional[str]:
-        """Truncate abstract for snippet field.
-
-        Args:
-            abstract: Full abstract text
-            max_length: Maximum snippet length
-
-        Returns:
-            Truncated abstract or None
-        """
-        if not abstract:
-            return None
-
-        if len(abstract) <= max_length:
-            return abstract
-
-        truncated = abstract[:max_length]
-        last_space = truncated.rfind(" ")
-        if last_space > max_length * 0.8:
-            truncated = truncated[:last_space]
-
-        return truncated + "..."
 
     async def health_check(self) -> bool:
         """Check if OpenAlex API is accessible."""

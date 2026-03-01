@@ -11,6 +11,7 @@ Adapted from open_deep_research's ``write_research_brief`` pattern.
 from __future__ import annotations
 
 import logging
+import re
 import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Optional
@@ -444,10 +445,11 @@ class BriefPhaseMixin:
         hints: list[str] = []
         text_lower = brief_text.lower()
 
-        # Check brief text for discipline signals
+        # Check brief text for discipline signals using word boundaries
+        # to avoid false positives (e.g. "health" matching "healthy")
         for keywords, provider in BriefPhaseMixin._DISCIPLINE_PROVIDER_MAP:
             for keyword in keywords:
-                if keyword in text_lower:
+                if re.search(rf"\b{re.escape(keyword)}\b", text_lower):
                     if provider not in hints:
                         hints.append(provider)
                     break  # One keyword match per discipline group is sufficient
@@ -457,7 +459,7 @@ class BriefPhaseMixin:
             scope_text = " ".join(profile.disciplinary_scope).lower()
             for keywords, provider in BriefPhaseMixin._DISCIPLINE_PROVIDER_MAP:
                 for keyword in keywords:
-                    if keyword in scope_text:
+                    if re.search(rf"\b{re.escape(keyword)}\b", scope_text):
                         if provider not in hints:
                             hints.append(provider)
                         break
