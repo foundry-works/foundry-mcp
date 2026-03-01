@@ -77,18 +77,18 @@
 ### Item 1.1: Fix Methodology Assessment Handler — All Results UNKNOWN
 > **Files**: `src/foundry_mcp/tools/unified/research_handlers/handlers_deep_research.py`, `src/foundry_mcp/core/research/workflows/deep_research/phases/methodology_assessment.py`
 
-- [ ] Refactor `_assess_single` to accept an `llm_call_fn` callable parameter instead of requiring full `workflow` + `state`
-- [ ] Update `assess_sources()` to accept and pass through `llm_call_fn`
-- [ ] In the handler (`_handle_deep_research_assess`), construct an appropriate `llm_call_fn` using `execute_llm_call` with provider/model from config
-- [ ] Pass the `llm_call_fn` through to `assess_sources()`
-- [ ] Verify the LLM call path is actually exercised (not falling through to UNKNOWN)
+- [x] Refactor `_assess_single` to accept an `llm_call_fn` callable parameter instead of requiring full `workflow` + `state`
+- [x] Update `assess_sources()` to accept and pass through `llm_call_fn`
+- [x] In the handler (`_handle_deep_research_assess`), construct an appropriate `llm_call_fn` using `resolve_provider` + `ProviderRequest` from provider infrastructure
+- [x] Pass the `llm_call_fn` through to `assess_sources()`
+- [x] Verify the LLM call path is actually exercised (not falling through to UNKNOWN)
 
 #### Item 1.1 Validation
 
-- [ ] `deep-research-assess` action on a session with academic sources produces real assessments (not all UNKNOWN)
-- [ ] Assessments include correct `study_design` values from LLM extraction
-- [ ] Fallback to UNKNOWN still works when LLM call fails
-- [ ] `confidence` forced to `"low"` for abstract-only content
+- [x] `deep-research-assess` action on a session with academic sources produces real assessments (not all UNKNOWN)
+- [x] Assessments include correct `study_design` values from LLM extraction
+- [x] Fallback to UNKNOWN still works when LLM call fails
+- [x] `confidence` forced to `"low"` for abstract-only content
 - [ ] Add integration test: assess action with mocked LLM returns valid assessments
 
 ---
@@ -96,20 +96,20 @@
 ### Item 1.2: Wire Export Parameters Through MCP Tool Signature
 > **File**: `src/foundry_mcp/tools/unified/research_handlers/__init__.py`, `src/foundry_mcp/tools/unified/research_handlers/handlers_deep_research.py`
 
-- [ ] Add `export_format: Optional[str] = None` parameter to `research()` function signature
-- [ ] Add `academic_only: Optional[bool] = None` parameter to `research()` function signature
-- [ ] Rename `format` parameter to `export_format` in `_handle_deep_research_export` (fixes Python built-in shadow)
-- [ ] Update dispatch to pass `export_format` and `academic_only` through to handler
-- [ ] Add validation: reject unknown `export_format` values (only `"bibtex"` and `"ris"` accepted)
+- [x] Add `export_format: Optional[str] = None` parameter to `research()` function signature
+- [x] Add `academic_only: Optional[bool] = None` parameter to `research()` function signature
+- [x] Rename `format` parameter to `export_format` in `_handle_deep_research_export` (fixes Python built-in shadow)
+- [x] Update dispatch to pass `export_format` and `academic_only` through to handler
+- [x] Add validation: reject unknown `export_format` values (only `"bibtex"` and `"ris"` accepted)
 
 #### Item 1.2 Validation
 
-- [ ] LLM client can see `export_format` and `academic_only` in the tool schema
-- [ ] `export_format="ris"` produces RIS output
-- [ ] `export_format="bibtex"` produces BibTeX output
-- [ ] `export_format="csv"` returns a validation error (not silent bibtex fallback)
-- [ ] Default behavior unchanged when parameters not provided
-- [ ] Existing export tests pass (updated parameter names)
+- [x] LLM client can see `export_format` and `academic_only` in the tool schema
+- [x] `export_format="ris"` produces RIS output
+- [x] `export_format="bibtex"` produces BibTeX output
+- [x] `export_format="csv"` returns a validation error (not silent bibtex fallback)
+- [x] Default behavior unchanged when parameters not provided
+- [x] Existing export tests pass (updated parameter names)
 
 ---
 

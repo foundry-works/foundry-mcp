@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Optional
+from typing import Any, Callable, Awaitable, Optional
 
 from foundry_mcp.core.research.models.sources import (
     MethodologyAssessment,
@@ -25,6 +25,9 @@ from foundry_mcp.core.research.workflows.deep_research._injection_protection imp
 )
 
 logger = logging.getLogger(__name__)
+
+# Type for standalone LLM call function: (system_prompt, user_prompt) -> content or None
+LLMCallFn = Callable[[str, str], Awaitable[Optional[str]]]
 
 # Minimum content length to attempt assessment
 MIN_CONTENT_LENGTH = 200
@@ -220,6 +223,7 @@ class MethodologyAssessor:
         sources: list[ResearchSource],
         workflow: Any = None,
         state: Any = None,
+        llm_call_fn: Optional[LLMCallFn] = None,
     ) -> list[MethodologyAssessment]:
         """Extract methodology metadata from research sources.
 
@@ -230,6 +234,9 @@ class MethodologyAssessor:
             sources: All research sources (will be filtered to academic).
             workflow: DeepResearchWorkflow instance for LLM calls (optional).
             state: DeepResearchState for execute_llm_call (optional).
+            llm_call_fn: Standalone async callable ``(system_prompt, user_prompt) -> content``
+                for making LLM calls without a full workflow object.  Takes
+                precedence over *workflow*/*state* when provided.
 
         Returns:
             List of MethodologyAssessment, one per assessed source.
@@ -254,6 +261,7 @@ class MethodologyAssessor:
                 content_basis=content_basis,
                 workflow=workflow,
                 state=state,
+                llm_call_fn=llm_call_fn,
             )
             assessments.append(assessment)
 
@@ -273,6 +281,7 @@ class MethodologyAssessor:
         content_basis: str,
         workflow: Any = None,
         state: Any = None,
+        llm_call_fn: Optional[LLMCallFn] = None,
     ) -> MethodologyAssessment:
         """Assess a single source via LLM extraction.
 
@@ -285,8 +294,22 @@ class MethodologyAssessor:
         )
 
         try:
-            if workflow is not None and state is not None:
-                # Use the standard deep research LLM call pipeline
+            # Path 1: Standalone LLM call function (from handler context)
+            if llm_call_fn is not None:
+                content = await llm_call_fn(
+                    METHODOLOGY_EXTRACTION_SYSTEM_PROMPT,
+                    user_prompt,
+                )
+                if content is not None:
+                    return _parse_llm_response(content, source.id, content_basis)
+                else:
+                    logger.warning(
+                        "Methodology assessment LLM call returned None for %s",
+                        source.id,
+                    )
+
+            # Path 2: Full workflow pipeline (from deep research context)
+            elif workflow is not None and state is not None:
                 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
                     LLMCallResult,
                     execute_llm_call,
@@ -320,7 +343,7 @@ class MethodologyAssessor:
                     )
             else:
                 logger.debug(
-                    "No workflow/state provided; skipping LLM call for %s",
+                    "No llm_call_fn or workflow/state provided; skipping LLM call for %s",
                     source.id,
                 )
         except Exception:

@@ -484,18 +484,23 @@ _DR_EXPORT_SCHEMA = {
 }
 
 
+_VALID_EXPORT_FORMATS = frozenset({"bibtex", "ris"})
+
+
 def _handle_deep_research_export(
     *,
     research_id: Optional[str] = None,
-    format: str = "bibtex",
-    academic_only: bool = True,
+    export_format: Optional[str] = None,
+    academic_only: Optional[bool] = None,
+    # Accept legacy name for backward compat but prefer export_format
+    format: Optional[str] = None,
     **kwargs: Any,
 ) -> dict:
     """Export bibliography from a completed research session.
 
     Args:
         research_id: ID of the deep research session.
-        format: Export format — ``"bibtex"`` or ``"ris"``.
+        export_format: Export format — ``"bibtex"`` or ``"ris"``.
         academic_only: When True, only export academic sources.
 
     Returns:
@@ -505,6 +510,21 @@ def _handle_deep_research_export(
     err = validate_payload(payload, _DR_EXPORT_SCHEMA, tool_name="research", action="deep-research-export")
     if err:
         return err
+
+    # Resolve export_format: explicit param > legacy 'format' param > default
+    effective_format = export_format or format or "bibtex"
+    if effective_format not in _VALID_EXPORT_FORMATS:
+        return asdict(
+            error_response(
+                f"Unknown export format '{effective_format}'. Valid formats: {', '.join(sorted(_VALID_EXPORT_FORMATS))}",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
+                remediation="Use export_format='bibtex' or export_format='ris'",
+            )
+        )
+
+    # Default academic_only to True when not provided
+    effective_academic_only = academic_only if academic_only is not None else True
 
     memory = _get_memory()
     assert research_id is not None  # validated by _DR_EXPORT_SCHEMA
@@ -524,7 +544,7 @@ def _handle_deep_research_export(
 
     # Filter sources
     sources = state.sources
-    if academic_only:
+    if effective_academic_only:
         sources = [s for s in sources if s.source_type == SourceType.ACADEMIC]
 
     if not sources:
@@ -532,17 +552,17 @@ def _handle_deep_research_export(
             success_response(
                 data={
                     "research_id": research_id,
-                    "format": format,
+                    "format": effective_format,
                     "source_count": 0,
                     "content": "",
                     "message": "No sources to export"
-                    + (" (try academic_only=false)" if academic_only else ""),
+                    + (" (try academic_only=false)" if effective_academic_only else ""),
                 }
             )
         )
 
     # Generate export
-    if format == "ris":
+    if effective_format == "ris":
         from foundry_mcp.core.research.export.ris import sources_to_ris
 
         content = sources_to_ris(sources)
@@ -555,7 +575,7 @@ def _handle_deep_research_export(
         success_response(
             data={
                 "research_id": research_id,
-                "format": format,
+                "format": effective_format,
                 "source_count": len(sources),
                 "content": content,
             }
@@ -776,9 +796,11 @@ def _handle_deep_research_assess(
     )
 
     # Use config for assessment parameters
+    assess_provider_id = config.research.deep_research_methodology_assessment_provider
+    assess_timeout = config.research.deep_research_methodology_assessment_timeout
     assessor = MethodologyAssessor(
-        provider_id=config.research.deep_research_methodology_assessment_provider,
-        timeout=config.research.deep_research_methodology_assessment_timeout,
+        provider_id=assess_provider_id,
+        timeout=assess_timeout,
         min_content_length=config.research.deep_research_methodology_assessment_min_content_length,
     )
 
@@ -799,20 +821,71 @@ def _handle_deep_research_assess(
             )
         )
 
+    # Build standalone LLM call function using provider infrastructure
+    # so assess_sources can make LLM calls without a full workflow object.
+    async def _llm_call_fn(system_prompt: str, user_prompt: str) -> str | None:
+        import asyncio as _aio
+
+        from foundry_mcp.core.providers import (
+            ProviderHooks,
+            ProviderRequest,
+            ProviderStatus,
+        )
+        from foundry_mcp.core.providers.registry import resolve_provider
+
+        effective_provider_id = assess_provider_id or config.research.default_provider
+        try:
+            provider = resolve_provider(effective_provider_id, hooks=ProviderHooks())
+        except Exception:
+            logger.warning(
+                "Failed to resolve provider '%s' for methodology assessment",
+                effective_provider_id,
+                exc_info=True,
+            )
+            return None
+
+        request = ProviderRequest(
+            prompt=user_prompt,
+            system_prompt=system_prompt,
+            timeout=assess_timeout,
+            temperature=0.1,
+        )
+        # provider.generate is synchronous — run in executor to avoid blocking
+        loop = _aio.get_running_loop()
+        try:
+            result = await loop.run_in_executor(None, provider.generate, request)
+        except Exception:
+            logger.warning(
+                "Methodology assessment provider call failed",
+                exc_info=True,
+            )
+            return None
+
+        if result.status == ProviderStatus.SUCCESS:
+            return result.content
+        logger.warning(
+            "Methodology assessment provider returned status %s",
+            result.status.value,
+        )
+        return None
+
     # Run async assessor
     try:
         asyncio.get_running_loop()
     except RuntimeError:
-        assessments = asyncio.run(assessor.assess_sources(state.sources))
+        assessments = asyncio.run(
+            assessor.assess_sources(state.sources, llm_call_fn=_llm_call_fn)
+        )
     else:
         # Avoid blocking a running loop by executing in a worker thread.
         import concurrent.futures
 
-        assess_timeout = config.research.deep_research_methodology_assessment_timeout * len(eligible) + 30
+        total_timeout = assess_timeout * len(eligible) + 30
         with concurrent.futures.ThreadPoolExecutor() as pool:
             assessments = pool.submit(
-                asyncio.run, assessor.assess_sources(state.sources)
-            ).result(timeout=assess_timeout)
+                asyncio.run,
+                assessor.assess_sources(state.sources, llm_call_fn=_llm_call_fn),
+            ).result(timeout=total_timeout)
 
     # Save assessments to state
     state.extensions.methodology_assessments = assessments

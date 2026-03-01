@@ -252,6 +252,8 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
         profile_overrides: Optional[dict] = None,
         max_references_per_paper: int = 20,
         max_citations_per_paper: int = 20,
+        export_format: Optional[str] = None,
+        academic_only: Optional[bool] = None,
     ) -> dict:
         """Execute research workflows via the action router.
 
@@ -268,6 +270,7 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
         - deep-research-evaluate: Evaluate research report quality (LLM-as-judge)
         - deep-research-network: Build citation network graph from research session sources
         - deep-research-assess: Run methodology quality assessment on research session sources
+        - deep-research-export: Export bibliography from research session (bibtex or ris format)
         - thread-list: List conversation threads
         - thread-get: Get thread details including messages
         - thread-delete: Delete a conversation thread
@@ -317,6 +320,8 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
             profile_overrides: Per-request overrides applied on top of the resolved profile
             max_references_per_paper: Max backward references per paper (deep-research-network)
             max_citations_per_paper: Max forward citations per paper (deep-research-network)
+            export_format: Export format for deep-research-export: "bibtex" or "ris"
+            academic_only: When true, only export academic sources (deep-research-export, default true)
 
         Returns:
             Response envelope with action results
