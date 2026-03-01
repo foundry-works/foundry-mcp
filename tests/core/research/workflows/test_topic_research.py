@@ -3332,3 +3332,209 @@ class TestContentDedupOutsideLock:
         )
         # Both should complete without deadlock; exact count depends on dedup
         assert all(isinstance(r, int) for r in results)
+
+
+# =============================================================================
+# Integration: Topic Researcher Extracts PDF and Includes in Findings
+# =============================================================================
+
+
+class TestTopicResearcherPDFIntegration:
+    """Integration test: topic researcher extracts PDF and includes in findings.
+
+    Exercises the full pipeline: _topic_extract detects PDF URL, routes to
+    _extract_pdf_urls, calls PDFExtractor (with mocked network), runs real
+    detect_sections and extract_prioritized, and adds source to state with
+    correct PDF metadata.
+    """
+
+    @pytest.mark.asyncio
+    async def test_topic_extract_routes_pdf_and_adds_source_with_metadata(self) -> None:
+        """Full pipeline: PDF URL -> PDFExtractor -> sections -> prioritized -> state."""
+        from foundry_mcp.core.research.pdf_extractor import PDFExtractionResult, PDFExtractor
+
+        # Build a synthetic academic PDF extraction result
+        text = (
+            "Abstract\n"
+            "This paper examines the effects of X on Y.\n\n"
+            "1. Introduction\n"
+            "Prior work established a baseline.\n\n"
+            "2. Methods\n"
+            "We recruited 500 participants from three hospitals.\n\n"
+            "3. Results\n"
+            "Treatment group showed significant improvement (p<0.001).\n\n"
+            "Discussion\n"
+            "Our findings support the hypothesis.\n\n"
+            "Conclusion\n"
+            "X is effective.\n\n"
+            "References\n"
+            "Smith, A. et al. (2020). Prior work."
+        )
+        pdf_result = PDFExtractionResult(
+            text=text,
+            page_offsets=[(0, len(text) // 2), (len(text) // 2, len(text))],
+            warnings=[],
+            page_count=2,
+            extracted_page_count=2,
+        )
+
+        # Create a real PDFExtractor so detect_sections and extract_prioritized
+        # run their actual logic; only mock extract_from_url to skip network I/O.
+        real_extractor = PDFExtractor(max_pages=50, timeout=30.0)
+        real_extractor.extract_from_url = AsyncMock(return_value=pdf_result)
+
+        mixin = StubTopicResearch()
+        mixin.config.deep_research_pdf_max_pages = 50
+        mixin.config.deep_research_pdf_priority_sections = ["methods", "results", "discussion"]
+        mixin.config.deep_research_enable_content_dedup = False
+
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        pdf_url = "https://arxiv.org/pdf/2301.00001.pdf"
+
+        with patch(
+            "foundry_mcp.core.research.pdf_extractor.PDFExtractor",
+            return_value=real_extractor,
+        ):
+            added = await mixin._topic_extract(
+                urls=[pdf_url],
+                sub_query=sq,
+                state=state,
+                seen_urls=set(),
+                seen_titles={},
+                state_lock=asyncio.Lock(),
+                semaphore=asyncio.Semaphore(3),
+                timeout=30.0,
+            )
+
+        # Source was added
+        assert added == 1
+        assert len(state.sources) == 1
+
+        source = state.sources[0]
+
+        # Source metadata contains PDF-specific fields
+        assert source.metadata.get("pdf_extraction") is True
+        assert source.metadata.get("extract_source") is True
+        assert source.metadata.get("page_count") == 2
+        assert source.metadata.get("extracted_page_count") == 2
+
+        # Section detection ran — should find standard sections
+        sections = source.metadata.get("sections", [])
+        assert "abstract" in sections
+        assert "methods" in sections
+        assert "results" in sections
+
+        # Page boundaries populated
+        page_boundaries = source.metadata.get("page_boundaries", [])
+        assert len(page_boundaries) == 2
+        assert page_boundaries[0][0] == 1  # page 1
+        assert page_boundaries[1][0] == 2  # page 2
+
+        # Content is section-prioritized text (not empty)
+        assert source.content is not None
+        assert len(source.content) > 0
+        assert "Abstract" in source.content
+
+        # Source type is ACADEMIC
+        from foundry_mcp.core.research.models.sources import SourceType
+
+        assert source.source_type == SourceType.ACADEMIC
+
+        # URL preserved
+        assert source.url == pdf_url
+
+    @pytest.mark.asyncio
+    async def test_pdf_url_mixed_with_web_url_routes_correctly(self) -> None:
+        """Mixed URL list: PDF URLs go to PDFExtractor, web URLs to Tavily."""
+        from foundry_mcp.core.research.pdf_extractor import PDFExtractionResult, PDFExtractor
+
+        pdf_result = PDFExtractionResult(
+            text="Abstract\nSome paper content.\n\n2. Methods\nThe method.",
+            page_offsets=[(0, 50)],
+            warnings=[],
+            page_count=1,
+            extracted_page_count=1,
+        )
+
+        real_extractor = PDFExtractor(max_pages=50, timeout=30.0)
+        real_extractor.extract_from_url = AsyncMock(return_value=pdf_result)
+
+        mixin = StubTopicResearch()
+        mixin.config.deep_research_pdf_max_pages = 50
+        mixin.config.deep_research_pdf_priority_sections = ["methods", "results"]
+        mixin.config.deep_research_enable_content_dedup = False
+        mixin.config.tavily_api_key = "test-key"
+        mixin.config.tavily_extract_depth = "basic"
+
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        web_source = _make_source("web-1", "https://example.com/article", "Web Article")
+
+        with patch(
+            "foundry_mcp.core.research.pdf_extractor.PDFExtractor",
+            return_value=real_extractor,
+        ), patch(
+            "foundry_mcp.core.research.providers.tavily_extract.TavilyExtractProvider"
+        ) as mock_tavily_cls:
+            mock_tavily = MagicMock()
+            mock_tavily.extract = AsyncMock(return_value=[web_source])
+            mock_tavily_cls.return_value = mock_tavily
+
+            added = await mixin._topic_extract(
+                urls=["https://example.com/paper.pdf", "https://example.com/article"],
+                sub_query=sq,
+                state=state,
+                seen_urls=set(),
+                seen_titles={},
+                state_lock=asyncio.Lock(),
+                semaphore=asyncio.Semaphore(3),
+                timeout=30.0,
+            )
+
+        # Both PDF and web sources added
+        assert added == 2
+        assert len(state.sources) == 2
+
+        # One source has PDF metadata, the other doesn't
+        pdf_sources = [s for s in state.sources if s.metadata.get("pdf_extraction")]
+        web_sources = [s for s in state.sources if not s.metadata.get("pdf_extraction")]
+        assert len(pdf_sources) == 1
+        assert len(web_sources) == 1
+
+    @pytest.mark.asyncio
+    async def test_pdf_extraction_failure_non_fatal(self) -> None:
+        """When PDFExtractor fails, _topic_extract continues without crashing."""
+        from foundry_mcp.core.research.pdf_extractor import PDFExtractor
+
+        real_extractor = PDFExtractor(max_pages=50, timeout=30.0)
+        real_extractor.extract_from_url = AsyncMock(side_effect=RuntimeError("Network error"))
+
+        mixin = StubTopicResearch()
+        mixin.config.deep_research_pdf_max_pages = 50
+        mixin.config.deep_research_pdf_priority_sections = ["methods", "results"]
+        mixin.config.deep_research_enable_content_dedup = False
+
+        state = _make_state(num_sub_queries=1)
+        sq = state.sub_queries[0]
+
+        with patch(
+            "foundry_mcp.core.research.pdf_extractor.PDFExtractor",
+            return_value=real_extractor,
+        ):
+            added = await mixin._topic_extract(
+                urls=["https://example.com/paper.pdf"],
+                sub_query=sq,
+                state=state,
+                seen_urls=set(),
+                seen_titles={},
+                state_lock=asyncio.Lock(),
+                semaphore=asyncio.Semaphore(3),
+                timeout=30.0,
+            )
+
+        # Extraction failed gracefully — no sources added, no crash
+        assert added == 0
+        assert len(state.sources) == 0

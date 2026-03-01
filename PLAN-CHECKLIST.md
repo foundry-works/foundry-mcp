@@ -66,7 +66,7 @@
 - [x] Page-aware locators appear in digest output for PDF content
 - [x] Profile gating works — `extract_pdf` tool only in systematic-review/bibliometric
 - [x] Existing PDFExtractor tests pass unchanged (81/81)
-- [ ] Integration test: topic researcher extracts PDF and includes in findings
+- [x] Integration test: topic researcher extracts PDF and includes in findings
 - [x] ~80-120 LOC new tests written (30 tests, ~300 LOC)
 
 ---
@@ -196,7 +196,7 @@
 - [x] Confidence forced to "low" for abstract-only content
 - [x] Assessment context correctly injected into synthesis prompt
 - [x] Sources with < 200 chars content are skipped
-- [ ] Integration test: end-to-end assessment of 5 academic sources
+- [x] Integration test: end-to-end assessment of 5 academic sources
 - [x] ~80-100 LOC new tests written (41 tests, ~370 LOC)
 
 ---
