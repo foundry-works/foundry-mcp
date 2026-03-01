@@ -10,7 +10,9 @@ import pytest
 
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
+    ProvenanceLog,
     ResearchExtensions,
+    ResearchProfile,
 )
 
 
@@ -89,10 +91,11 @@ class TestResearchExtensions:
 
     def test_single_field_populated(self):
         """Extensions with one field set serializes only that field."""
-        ext = ResearchExtensions(research_profile={"name": "test"})
+        profile = ResearchProfile(name="test")
+        ext = ResearchExtensions(research_profile=profile)
         data = ext.model_dump()
         assert "research_profile" in data
-        assert data["research_profile"] == {"name": "test"}
+        assert data["research_profile"]["name"] == "test"
         # None fields excluded
         assert "provenance" not in data
         assert "citation_network" not in data
@@ -109,14 +112,22 @@ class TestResearchExtensions:
 
     def test_round_trip_serialization(self):
         """ResearchExtensions survives model_dump → model_validate."""
+        profile = ResearchProfile(name="academic")
+        provenance = ProvenanceLog(
+            session_id="deepres-test",
+            query="test",
+            started_at="2024-01-01T00:00:00+00:00",
+        )
         ext = ResearchExtensions(
-            research_profile={"type": "academic"},
-            provenance={"log": []},
+            research_profile=profile,
+            provenance=provenance,
         )
         data = ext.model_dump(mode="json")
         restored = ResearchExtensions.model_validate(data)
-        assert restored.research_profile == ext.research_profile
-        assert restored.provenance == ext.provenance
+        assert restored.research_profile is not None
+        assert restored.research_profile.name == "academic"
+        assert restored.provenance is not None
+        assert restored.provenance.session_id == "deepres-test"
         assert restored.structured_output is None
 
 
@@ -154,15 +165,23 @@ class TestDeepResearchStateExtensions:
     def test_convenience_accessor_research_profile(self):
         """state.research_profile delegates to state.extensions.research_profile."""
         state = DeepResearchState(original_query="test")
-        assert state.research_profile is None
+        # Default accessor returns PROFILE_GENERAL (not None)
+        assert state.research_profile.name == "general"
 
-        state.extensions.research_profile = {"name": "academic"}
-        assert state.research_profile == {"name": "academic"}
+        profile = ResearchProfile(name="academic")
+        state.extensions.research_profile = profile
+        assert state.research_profile.name == "academic"
 
     def test_convenience_accessor_provenance(self):
         """state.provenance delegates to state.extensions.provenance."""
         state = DeepResearchState(original_query="test")
         assert state.provenance is None
 
-        state.extensions.provenance = {"entries": []}
-        assert state.provenance == {"entries": []}
+        provenance = ProvenanceLog(
+            session_id=state.id,
+            query="test",
+            started_at="2024-01-01T00:00:00+00:00",
+        )
+        state.extensions.provenance = provenance
+        assert state.provenance is not None
+        assert state.provenance.session_id == state.id

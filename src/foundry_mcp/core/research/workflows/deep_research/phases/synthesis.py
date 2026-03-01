@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Optional
 if TYPE_CHECKING:
     from foundry_mcp.config.research import ResearchConfig
     from foundry_mcp.core.research.memory import ResearchMemory
+    from foundry_mcp.core.research.models.deep_research import ResearchProfile
 
 from foundry_mcp.core.research.context_budget import AllocationResult
 from foundry_mcp.core.research.models.deep_research import (
@@ -113,20 +114,64 @@ _HOWTO_PATTERNS = re.compile(
     r"\b(how to|how do|steps to|guide to|tutorial|setup|install\w*|implement\w*|build\w*)\b",
     re.IGNORECASE,
 )
+_LITERATURE_REVIEW_PATTERNS = re.compile(
+    r"\b("
+    r"literature\s+review"
+    r"|systematic\s+review"
+    r"|meta[\-\s]analysis"
+    r"|survey\s+of\b"
+    r"|state\s+of\s+the\s+art"
+    r"|body\s+of\s+(research|literature|work)"
+    r"|prior\s+(work|research|studies)"
+    r"|existing\s+(research|literature|studies)"
+    r"|review\s+of\s+the\s+(literature|research)"
+    r"|what\s+does\s+the\s+(research|literature|evidence)\s+(say|show|suggest)"
+    r"|research\s+(landscape|overview)"
+    r"|scoping\s+review"
+    r")\b",
+    re.IGNORECASE,
+)
 
 
-def _classify_query_type(query: str) -> str:
+def _classify_query_type(
+    query: str,
+    *,
+    profile: Optional["ResearchProfile"] = None,
+) -> str:
     """Classify a research query into a structural type.
 
-    Returns one of: ``"comparison"``, ``"enumeration"``, ``"howto"``,
-    or ``"explanation"`` (the default).
+    Returns one of: ``"literature_review"``, ``"comparison"``,
+    ``"enumeration"``, ``"howto"``, or ``"explanation"`` (the default).
+
+    Args:
+        query: The original research query string.
+        profile: Optional research profile.  When the profile's
+            ``synthesis_template`` is set, it overrides auto-detection.
+            When ``source_quality_mode`` is ACADEMIC and no specific
+            pattern matches, the classifier biases toward
+            ``"literature_review"``.
     """
+    # Profile synthesis_template override — highest priority
+    if profile is not None and profile.synthesis_template:
+        return profile.synthesis_template
+
+    # Literature review patterns — checked before other types
+    if _LITERATURE_REVIEW_PATTERNS.search(query):
+        return "literature_review"
     if _COMPARISON_PATTERNS.search(query):
         return "comparison"
     if _ENUMERATION_PATTERNS.search(query):
         return "enumeration"
     if _HOWTO_PATTERNS.search(query):
         return "howto"
+
+    # Academic bias: ambiguous queries default to literature_review
+    if (
+        profile is not None
+        and profile.source_quality_mode == ResearchMode.ACADEMIC
+    ):
+        return "literature_review"
+
     return "explanation"
 
 
@@ -164,6 +209,21 @@ For **explanation/overview** queries, use this structure:
 ### [Theme/Category 1]
 ### [Theme/Category 2]
 ## Conclusions""",
+    "literature_review": """\
+For **literature review** queries, use this structure:
+# Literature Review: [Topic]
+## Executive Summary
+## Introduction & Scope
+## Theoretical Foundations
+## Thematic Analysis
+### [Theme 1]
+### [Theme 2]
+### [Theme N]
+## Methodological Approaches
+## Key Debates & Contradictions
+## Research Gaps & Future Directions
+## Conclusions
+Organize findings thematically rather than source-by-source. Group related studies under conceptual themes, tracing how understanding has evolved. The References section will be appended automatically — do NOT generate it.""",
 }
 
 
@@ -832,6 +892,23 @@ class SynthesisPhaseMixin:
             data=synthesis_audit_data,
         )
 
+        # PLAN-1 Item 2: Log synthesis_completed provenance event
+        if state.provenance is not None:
+            state.provenance.append(
+                phase="synthesis",
+                event_type="synthesis_completed",
+                summary=(
+                    f"Synthesis complete: {len(state.report)} char report, "
+                    f"{len(state.sources)} sources cited"
+                ),
+                report_length=len(state.report),
+                source_count=len(state.sources),
+                finding_count=len(state.findings),
+                provider_id=result.provider_id,
+                model_used=result.model_used,
+                degraded_mode=degraded_mode,
+            )
+
         logger.info(
             "Synthesis phase complete: report length %d chars",
             len(state.report),
@@ -964,8 +1041,18 @@ class SynthesisPhaseMixin:
         Returns:
             System prompt string
         """
-        query_type = _classify_query_type(state.original_query)
+        profile = state.research_profile
+        query_type = _classify_query_type(state.original_query, profile=profile)
         structure_guidance = _STRUCTURE_GUIDANCE.get(query_type, _STRUCTURE_GUIDANCE["explanation"])
+
+        # PLAN-1 Item 2: Log synthesis_query_type provenance event
+        if state.provenance is not None:
+            state.provenance.append(
+                phase="synthesis",
+                event_type="synthesis_query_type",
+                summary=f"Query classified as '{query_type}' for synthesis structure",
+                query_type=query_type,
+            )
 
         base_prompt = f"""You are a research synthesizer. Your task is to create a comprehensive, well-structured research report from analyzed findings.
 
@@ -1034,6 +1121,21 @@ For the "Research Gaps & Future Directions" section:
 - Distinguish between completely unexplored areas and partially addressed topics
 - For each gap, suggest specific research questions or methodological approaches
 - Prioritize gaps by their potential impact on the field"""
+
+        # PLAN-1 Item 3: Literature review synthesis instructions
+        if query_type == "literature_review":
+            base_prompt += """
+
+## Literature Review Guidelines
+
+This is a **literature review** synthesis. Follow these additional guidelines:
+
+- **Thematic organization**: Group studies by conceptual themes, not chronologically or source-by-source. Each theme should trace how understanding has evolved across multiple studies.
+- **Per-study notes**: When discussing a study, include author(s), year, methodology, and sample where available. Example: "Smith et al. (2021) conducted a randomized controlled trial (N=450) and found..."
+- **Seminal works**: Identify and highlight foundational/seminal works that established the field or introduced key frameworks. These should be cited early and referenced throughout.
+- **Methodological trends**: Track how research methods have evolved over time. Note shifts from qualitative to quantitative approaches, emerging methodologies, or persistent methodological limitations.
+- **Conflicting findings**: Present contradictory results with balanced weight. Explain possible reasons for disagreement (different populations, methodologies, time periods, operationalizations).
+- **Research gaps**: Explicitly identify what remains unstudied or understudied. Distinguish between gaps where no research exists and areas where evidence is inconclusive."""
 
         return base_prompt
 
@@ -1349,12 +1451,13 @@ For the "Research Gaps & Future Directions" section:
         prompt_parts.append("")
 
         # Add synthesis instructions with query-type structural hint
-        query_type = _classify_query_type(state.original_query)
+        query_type = _classify_query_type(state.original_query, profile=state.research_profile)
         query_type_labels = {
             "comparison": "comparison (side-by-side analysis of alternatives)",
             "enumeration": "list/enumeration (discrete items or options)",
             "howto": "how-to (step-by-step procedural guide)",
             "explanation": "explanation/overview (topical deep-dive)",
+            "literature_review": "literature review (thematic synthesis of research)",
         }
         type_label = query_type_labels.get(query_type, query_type)
 

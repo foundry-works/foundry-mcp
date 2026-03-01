@@ -14,7 +14,7 @@ from filelock import FileLock
 
 from foundry_mcp.core.research.models.consensus import ConsensusState
 from foundry_mcp.core.research.models.conversations import ConversationThread
-from foundry_mcp.core.research.models.deep_research import DeepResearchState
+from foundry_mcp.core.research.models.deep_research import DeepResearchState, ProvenanceLog
 from foundry_mcp.core.research.models.enums import ThreadStatus
 from foundry_mcp.core.research.models.ideation import IdeationState
 from foundry_mcp.core.research.models.thinkdeep import ThinkDeepState
@@ -430,16 +430,83 @@ class ResearchMemory:
     # =========================================================================
 
     def save_deep_research(self, deep_research: DeepResearchState) -> None:
-        """Save a deep research state."""
+        """Save a deep research state.
+
+        Provenance is persisted as a separate sidecar file to keep the
+        main state file compact. The provenance field is temporarily
+        cleared during state serialization and restored afterward.
+        """
+        # Extract provenance before saving state (keep main file compact)
+        provenance = deep_research.extensions.provenance
+        if provenance is not None:
+            self._save_provenance(deep_research.id, provenance)
+            # Temporarily clear provenance from extensions for state save
+            deep_research.extensions.provenance = None
+
         self._deep_research.save(deep_research.id, deep_research)
 
+        # Restore provenance in-memory after state save
+        if provenance is not None:
+            deep_research.extensions.provenance = provenance
+
     def load_deep_research(self, deep_research_id: str) -> Optional[DeepResearchState]:
-        """Load a deep research state by ID."""
-        return self._deep_research.load(deep_research_id)
+        """Load a deep research state by ID.
+
+        Automatically reattaches the provenance sidecar if it exists.
+        """
+        state = self._deep_research.load(deep_research_id)
+        if state is not None:
+            provenance = self._load_provenance(deep_research_id)
+            if provenance is not None:
+                state.extensions.provenance = provenance
+        return state
 
     def delete_deep_research(self, deep_research_id: str) -> bool:
-        """Delete a deep research state."""
+        """Delete a deep research state and its provenance sidecar."""
+        self._delete_provenance(deep_research_id)
         return self._deep_research.delete(deep_research_id)
+
+    # -- Provenance sidecar helpers --
+
+    def _provenance_path(self, research_id: str) -> Path:
+        """Get the sidecar file path for provenance."""
+        safe_id = "".join(c for c in research_id if c.isalnum() or c in "-_")
+        return self._deep_research.storage_path / f"{safe_id}.provenance.json"
+
+    def _save_provenance(self, research_id: str, provenance: ProvenanceLog) -> None:
+        """Save provenance to a sidecar JSON file."""
+        path = self._provenance_path(research_id)
+        lock_path = path.with_suffix(".provenance.lock")
+        try:
+            with FileLock(lock_path, timeout=10):
+                data = provenance.model_dump(mode="json")
+                path.write_text(json.dumps(data, indent=2, default=str))
+        except Exception:
+            logger.warning("Failed to save provenance for %s", research_id, exc_info=True)
+
+    def _load_provenance(self, research_id: str) -> Optional[ProvenanceLog]:
+        """Load provenance from the sidecar JSON file."""
+        path = self._provenance_path(research_id)
+        if not path.exists():
+            return None
+        try:
+            data = json.loads(path.read_text())
+            return ProvenanceLog.model_validate(data)
+        except (json.JSONDecodeError, ValueError) as exc:
+            logger.warning("Failed to load provenance for %s: %s", research_id, exc)
+            return None
+
+    def _delete_provenance(self, research_id: str) -> None:
+        """Delete the provenance sidecar file if it exists."""
+        path = self._provenance_path(research_id)
+        try:
+            if path.exists():
+                path.unlink()
+            lock_path = path.with_suffix(".provenance.lock")
+            if lock_path.exists():
+                lock_path.unlink()
+        except OSError:
+            pass
 
     def list_deep_research(
         self,

@@ -187,6 +187,18 @@ class BriefPhaseMixin:
             },
         )
 
+        # PLAN-1 Item 2: Log brief_generated provenance event
+        if state.provenance is not None and brief_text:
+            state.provenance.append(
+                phase="brief",
+                event_type="brief_generated",
+                summary=f"Research brief generated ({len(brief_text)} chars)",
+                brief_length=len(brief_text),
+                provider_id=result.provider_id,
+                model_used=result.model_used,
+                tokens_used=result.tokens_used,
+            )
+
         finalize_phase(self, state, "brief", phase_start_time)
 
         return WorkflowResult(

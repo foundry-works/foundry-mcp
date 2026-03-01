@@ -67,66 +67,66 @@
 ### 2a. Add provenance models
 > **File**: `models/deep_research.py`
 
-- [ ] Define `ProvenanceEntry(BaseModel)` with fields: timestamp, phase, event_type, summary, details
-- [ ] Define `ProvenanceLog(BaseModel)` with fields: session_id, query, profile, profile_config, started_at, completed_at, entries
-- [ ] Implement `ProvenanceLog.append()` method with auto-timestamp
+- [x] Define `ProvenanceEntry(BaseModel)` with fields: timestamp, phase, event_type, summary, details
+- [x] Define `ProvenanceLog(BaseModel)` with fields: session_id, query, profile, profile_config, started_at, completed_at, entries
+- [x] Implement `ProvenanceLog.append()` method with auto-timestamp
 
 ### 2b. Wire into ResearchExtensions
 > **File**: `models/deep_research.py`
 
-- [ ] Add `provenance: Optional[ProvenanceLog] = None` to `ResearchExtensions`
-- [ ] Add `@property provenance` convenience accessor on `DeepResearchState`
+- [x] Add `provenance: Optional[ProvenanceLog] = None` to `ResearchExtensions`
+- [x] Add `@property provenance` convenience accessor on `DeepResearchState`
 
 ### 2c. Initialize provenance at session creation
 
-- [ ] Populate provenance at session start: session_id, query, profile name, profile_config (frozen), started_at
-- [ ] Set `completed_at` when session finishes
+- [x] Populate provenance at session start: session_id, query, profile name, profile_config (frozen), started_at
+- [x] Set `completed_at` when session finishes (via mark_completed, mark_failed, mark_cancelled)
 
 ### 2d. Log brief generation
 > **File**: `phases/brief.py`
 
-- [ ] Append `brief_generated` event after brief is generated (brief_text, scope_boundaries, source_preferences)
+- [x] Append `brief_generated` event after brief is generated (brief_length, provider_id, model_used, tokens_used)
 
 ### 2e. Log supervision events
 > **Files**: `phases/supervision.py`, `phases/supervision_coverage.py`
 
-- [ ] `decomposition` — after delegation response in `_run_think_delegate_step()` with directives
-- [ ] `provider_query` — after each provider search in topic researcher (provider, query, result_count, source_ids)
-- [ ] `source_discovered` — when sources added to state in `_execute_and_merge_directives()` (source_id, title, provider, source_type, url)
-- [ ] `source_deduplicated` — when deduplication occurs (source_id, duplicate_of, reason)
-- [ ] `coverage_assessment` — after `assess_coverage_heuristic()` (scores, decision)
-- [ ] `gap_identified` — when gaps added (gap_id, description, priority, suggested_queries)
-- [ ] `gap_resolved` — when gaps resolved (gap_id, resolution_notes)
-- [ ] `iteration_complete` — at end of each supervision round in `_post_round_bookkeeping()` (iteration, round, total_sources, total_findings)
+- [x] `decomposition` — after delegation response in `_run_think_delegate_step()` with directives
+- [ ] `provider_query` — deferred (requires threading provenance through topic researcher stack)
+- [x] `source_discovered` — after directive execution with per-directive source counts and IDs
+- [ ] `source_deduplicated` — deferred (requires changes to topic researcher dedup internals)
+- [x] `coverage_assessment` — after `assess_coverage_heuristic()` (confidence, dimensions, decision)
+- [ ] `gap_identified` — deferred (gaps managed by analysis/refinement phases, not supervision)
+- [ ] `gap_resolved` — deferred (gaps managed by analysis/refinement phases, not supervision)
+- [x] `iteration_complete` — at end of each supervision round in `_post_round_bookkeeping()` (round, new_sources, total_sources, total_findings)
 
 ### 2f. Log synthesis events
 > **File**: `phases/synthesis.py`
 
-- [ ] `synthesis_query_type` — after `_classify_query_type()` (query_type, detection_reason)
-- [ ] `synthesis_completed` — after synthesis completes (report_length, source_count, citation_count)
+- [x] `synthesis_query_type` — after `_classify_query_type()` (query_type)
+- [x] `synthesis_completed` — after synthesis completes (report_length, source_count, finding_count, provider_id, model_used)
 
 ### 2g. Persist provenance separately
 > **File**: `memory.py`
 
-- [ ] Save provenance as `deepres-{id}.provenance.json` alongside state file
-- [ ] Load provenance when loading state
-- [ ] Keep main state file compact (provenance excluded from state serialization)
+- [x] Save provenance as `deepres-{id}.provenance.json` alongside state file
+- [x] Load provenance when loading state
+- [x] Keep main state file compact (provenance excluded from state serialization)
 
 ### 2h. Expose provenance in API
 > **File**: `handlers_deep_research.py`
 
-- [ ] Add `include_provenance` to `deep-research-report` response
-- [ ] Add dedicated `deep-research-provenance` action handler
-- [ ] Wire new action into research router
+- [x] Add `provenance_summary` to `deep-research-report` response
+- [x] Add dedicated `deep-research-provenance` action handler
+- [x] Wire new action into research router
 
 ### Item 2 Testing
 
-- [ ] `ProvenanceLog.append()` creates timestamped entries
-- [ ] Provenance populated after brief phase
-- [ ] Provenance populated after supervision round
-- [ ] Provenance persisted and loadable from disk
-- [ ] Provenance included in report response
-- [ ] Serialization roundtrip (model_dump → model_validate)
+- [x] `ProvenanceLog.append()` creates timestamped entries
+- [x] Provenance populated after brief phase
+- [x] Provenance populated after supervision round
+- [x] Provenance persisted and loadable from disk
+- [x] Provenance included in report response
+- [x] Serialization roundtrip (model_dump → model_validate)
 
 ---
 
@@ -136,50 +136,50 @@
 ### 3a. Add detection pattern
 > **File**: `phases/synthesis.py`
 
-- [ ] Add `_LITERATURE_REVIEW_PATTERNS` regex after existing patterns
-  - [ ] Matches: "literature review", "systematic review", "meta-analysis", "survey of", "state of the art", "body of research/literature/work", "prior work/research/studies", "existing research/literature/studies", "review of the literature/research", "what does the research say/show/suggest", etc.
+- [x] Add `_LITERATURE_REVIEW_PATTERNS` regex after existing patterns
+  - [x] Matches: "literature review", "systematic review", "meta-analysis", "survey of", "state of the art", "body of research/literature/work", "prior work/research/studies", "existing research/literature/studies", "review of the literature/research", "what does the research say/show/suggest", etc.
 
 ### 3b. Add classification check
 > **File**: `phases/synthesis.py`
 
-- [ ] Insert `_LITERATURE_REVIEW_PATTERNS` check in `_classify_query_type()` **before** existing comparison/enumeration/howto checks
-- [ ] Honor `profile.synthesis_template == "literature_review"` (direct override)
-- [ ] Bias toward `literature_review` when `source_quality_mode == ACADEMIC` and query is ambiguous
+- [x] Insert `_LITERATURE_REVIEW_PATTERNS` check in `_classify_query_type()` **before** existing comparison/enumeration/howto checks
+- [x] Honor `profile.synthesis_template == "literature_review"` (direct override)
+- [x] Bias toward `literature_review` when `source_quality_mode == ACADEMIC` and query is ambiguous
 
 ### 3c. Add structure guidance
 > **File**: `phases/synthesis.py`
 
-- [ ] Add `"literature_review"` entry to `_STRUCTURE_GUIDANCE` dict with sections:
-  - [ ] Executive Summary
-  - [ ] Introduction & Scope
-  - [ ] Theoretical Foundations
-  - [ ] Thematic Analysis (with sub-themes)
-  - [ ] Methodological Approaches
-  - [ ] Key Debates & Contradictions
-  - [ ] Research Gaps & Future Directions
-  - [ ] Conclusions
-  - [ ] References
+- [x] Add `"literature_review"` entry to `_STRUCTURE_GUIDANCE` dict with sections:
+  - [x] Executive Summary
+  - [x] Introduction & Scope
+  - [x] Theoretical Foundations
+  - [x] Thematic Analysis (with sub-themes)
+  - [x] Methodological Approaches
+  - [x] Key Debates & Contradictions
+  - [x] Research Gaps & Future Directions
+  - [x] Conclusions
+  - [x] References
 
 ### 3d. Add academic synthesis instructions
 > **File**: `phases/synthesis.py`
 
-- [ ] Inject additional instructions into `_build_synthesis_system_prompt()` when `query_type == "literature_review"`:
-  - [ ] Thematic organization over listing
-  - [ ] Author/year/method notes per study
-  - [ ] Seminal works identification
-  - [ ] Methodological trend tracking
-  - [ ] Balanced conflict presentation
-  - [ ] Citation style-formatted References section
+- [x] Inject additional instructions into `_build_synthesis_system_prompt()` when `query_type == "literature_review"`:
+  - [x] Thematic organization over listing
+  - [x] Author/year/method notes per study
+  - [x] Seminal works identification
+  - [x] Methodological trend tracking
+  - [x] Balanced conflict presentation
+  - [x] Citation style-formatted References section
 
 ### Item 3 Testing
 
-- [ ] `"literature review on X"` → `"literature_review"`
-- [ ] `"what does the research say about X"` → `"literature_review"`
-- [ ] `"survey of prior work on X"` → `"literature_review"`
-- [ ] Profile `synthesis_template="literature_review"` forces the type
-- [ ] Generic query → `"explanation"` (no regression)
-- [ ] Comparison query → `"comparison"` (no regression)
-- [ ] Structure guidance correctly injected for literature_review type
+- [x] `"literature review on X"` → `"literature_review"`
+- [x] `"what does the research say about X"` → `"literature_review"`
+- [x] `"survey of prior work on X"` → `"literature_review"`
+- [x] Profile `synthesis_template="literature_review"` forces the type
+- [x] Generic query → `"explanation"` (no regression)
+- [x] Comparison query → `"comparison"` (no regression)
+- [x] Structure guidance correctly injected for literature_review type
 
 ---
 

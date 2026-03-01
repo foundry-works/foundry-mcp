@@ -283,6 +283,20 @@ def _handle_deep_research_report(
         if resolved_path:
             response_data["output_path"] = resolved_path
 
+        # PLAN-1 Item 2: Include provenance summary in report response
+        if research_id:
+            state = memory.load_deep_research(research_id) if not resolved_path else None
+            # Try to load state if we don't already have it
+            if state is None and research_id:
+                state = memory.load_deep_research(research_id)
+            if state and state.provenance is not None:
+                response_data["provenance_summary"] = {
+                    "entry_count": len(state.provenance.entries),
+                    "started_at": state.provenance.started_at,
+                    "completed_at": state.provenance.completed_at,
+                    "profile": state.provenance.profile,
+                }
+
         return asdict(
             success_response(
                 data=response_data,
@@ -395,6 +409,67 @@ def _handle_deep_research_delete(
             data={
                 "deleted": True,
                 "research_id": research_id,
+            }
+        )
+    )
+
+
+# ---------------------------------------------------------------------------
+# PLAN-1 Item 2: Provenance audit trail
+# ---------------------------------------------------------------------------
+
+_DR_PROVENANCE_SCHEMA = {
+    "research_id": Str(required=True),
+}
+
+
+def _handle_deep_research_provenance(
+    *,
+    research_id: Optional[str] = None,
+    **kwargs: Any,
+) -> dict:
+    """Retrieve the provenance audit trail for a deep research session.
+
+    Returns the full provenance log with all events, or a summary if the
+    session has no provenance (pre-PLAN-1 sessions).
+    """
+    payload = {"research_id": research_id}
+    err = validate_payload(
+        payload, _DR_PROVENANCE_SCHEMA, tool_name="research", action="deep-research-provenance"
+    )
+    if err:
+        return err
+
+    memory = _get_memory()
+    assert research_id is not None  # validated by schema
+    state = memory.load_deep_research(research_id)
+
+    if state is None:
+        return asdict(
+            error_response(
+                f"Research session '{research_id}' not found",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Use deep-research-list to find valid research IDs",
+            )
+        )
+
+    if state.provenance is None:
+        return asdict(
+            success_response(
+                data={
+                    "research_id": research_id,
+                    "provenance": None,
+                    "message": "No provenance data available (session predates provenance feature)",
+                }
+            )
+        )
+
+    return asdict(
+        success_response(
+            data={
+                "research_id": research_id,
+                "provenance": state.provenance.model_dump(mode="json"),
             }
         )
     )

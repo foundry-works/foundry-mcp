@@ -30,6 +30,7 @@ _ACTION_SUMMARY = {
     "deep-research-list": "List deep research sessions",
     "deep-research-delete": "Delete a deep research session",
     "deep-research-evaluate": "Evaluate research report quality (LLM-as-judge)",
+    "deep-research-provenance": "Retrieve provenance audit trail for research session",
     "deep-research-export": "Export bibliography (BibTeX/RIS) from research session",
     "thread-list": "List conversation threads",
     "thread-get": "Get full thread details including messages",

@@ -976,6 +976,108 @@ _RESEARCH_MODE_TO_PROFILE: dict[str, str] = {
 }
 
 
+# =========================================================================
+# Provenance audit trail (PLAN-1 Item 2)
+# =========================================================================
+
+# Cap provenance entries to prevent unbounded growth in long sessions.
+MAX_PROVENANCE_ENTRIES: int = 500
+
+
+class ProvenanceEntry(BaseModel):
+    """A single provenance event in the audit trail.
+
+    Records a decision or action taken during a research session with
+    enough context to diagnose methodology issues (e.g., missed papers,
+    narrow sub-queries, premature coverage assessment).
+    """
+
+    timestamp: str = Field(
+        ...,
+        description="ISO 8601 timestamp of the event",
+    )
+    phase: str = Field(
+        ...,
+        description="Research phase: brief, supervision, or synthesis",
+    )
+    event_type: str = Field(
+        ...,
+        description=(
+            "Event type: brief_generated, decomposition, provider_query, "
+            "source_discovered, source_deduplicated, coverage_assessment, "
+            "gap_identified, gap_resolved, iteration_complete, "
+            "synthesis_query_type, synthesis_completed"
+        ),
+    )
+    summary: str = Field(
+        ...,
+        description="Human-readable summary of the event",
+    )
+    details: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Structured event-specific details",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+class ProvenanceLog(BaseModel):
+    """Append-only audit trail for a deep research session.
+
+    Records every significant decision and action during research so that
+    methodology is inspectable and reproducible. Different environments may
+    produce different results — provenance makes the *why* transparent.
+    """
+
+    session_id: str = Field(..., description="Research session ID")
+    query: str = Field(..., description="Original research query")
+    profile: str = Field(default="general", description="Research profile name")
+    profile_config: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Frozen profile configuration at session start",
+    )
+    started_at: str = Field(..., description="ISO 8601 session start timestamp")
+    completed_at: Optional[str] = Field(
+        default=None,
+        description="ISO 8601 session completion timestamp",
+    )
+    entries: list[ProvenanceEntry] = Field(
+        default_factory=list,
+        description="Ordered list of provenance events",
+    )
+
+    model_config = {"extra": "forbid"}
+
+    def append(
+        self,
+        phase: str,
+        event_type: str,
+        summary: str,
+        **details: Any,
+    ) -> None:
+        """Append a new provenance entry with auto-generated timestamp.
+
+        Args:
+            phase: Research phase (brief, supervision, synthesis).
+            event_type: Event type identifier.
+            summary: Human-readable event summary.
+            **details: Event-specific key-value details.
+        """
+        entry = ProvenanceEntry(
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            phase=phase,
+            event_type=event_type,
+            summary=summary,
+            details=details,
+        )
+        self.entries.append(entry)
+
+        # Cap entries to prevent unbounded growth
+        if len(self.entries) > MAX_PROVENANCE_ENTRIES:
+            excess = len(self.entries) - MAX_PROVENANCE_ENTRIES
+            self.entries = self.entries[excess:]
+
+
 class ResearchExtensions(BaseModel):
     """Container for extended research capabilities.
 
@@ -994,9 +1096,9 @@ class ResearchExtensions(BaseModel):
         default=None,
         description="Research profile controlling providers, citation style, and capabilities",
     )
-    provenance: Optional[Any] = Field(
+    provenance: Optional[ProvenanceLog] = Field(
         default=None,
-        description="Provenance log from PLAN-1 (forward reference placeholder)",
+        description="Provenance audit trail for research session (PLAN-1 Item 2)",
     )
     structured_output: Optional[Any] = Field(
         default=None,
@@ -1289,7 +1391,7 @@ class DeepResearchState(BaseModel):
         return self.extensions.research_profile or PROFILE_GENERAL
 
     @property
-    def provenance(self) -> Optional[Any]:
+    def provenance(self) -> Optional[ProvenanceLog]:
         """Convenience accessor for extensions.provenance."""
         return self.extensions.provenance
 
@@ -1642,10 +1744,14 @@ class DeepResearchState(BaseModel):
             report: Optional final report content
         """
         self.phase = DeepResearchPhase.SYNTHESIS
-        self.completed_at = datetime.now(timezone.utc)
-        self.updated_at = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        self.completed_at = now
+        self.updated_at = now
         if report:
             self.report = report
+        # Stamp provenance completion
+        if self.extensions.provenance is not None:
+            self.extensions.provenance.completed_at = now.isoformat()
 
     def mark_failed(self, error: str) -> None:
         """Mark the research session as failed with an error message.
@@ -1656,11 +1762,15 @@ class DeepResearchState(BaseModel):
         Args:
             error: Description of why the research failed
         """
-        self.completed_at = datetime.now(timezone.utc)
-        self.updated_at = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        self.completed_at = now
+        self.updated_at = now
         self.metadata["failed"] = True
         self.metadata["failure_error"] = error
         self.metadata["terminal_status"] = "failed"
+        # Stamp provenance completion
+        if self.extensions.provenance is not None:
+            self.extensions.provenance.completed_at = now.isoformat()
 
     def mark_cancelled(self, *, phase_state: Optional[str] = None) -> None:
         """Mark the research session as cancelled by user request.
@@ -1671,12 +1781,16 @@ class DeepResearchState(BaseModel):
         Args:
             phase_state: Optional description of phase state at cancellation time
         """
-        self.completed_at = datetime.now(timezone.utc)
-        self.updated_at = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        self.completed_at = now
+        self.updated_at = now
         self.metadata["cancelled"] = True
         self.metadata["terminal_status"] = "cancelled"
         if phase_state:
             self.metadata["cancelled_phase_state"] = phase_state
+        # Stamp provenance completion
+        if self.extensions.provenance is not None:
+            self.extensions.provenance.completed_at = now.isoformat()
 
     def mark_interrupted(self, *, reason: str = "SIGTERM") -> None:
         """Mark the research session as interrupted by process signal.

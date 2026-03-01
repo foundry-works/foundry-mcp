@@ -235,6 +235,24 @@ class SupervisionPhaseMixin:
 
             # Heuristic early-exit (round > 0)
             should_exit, heuristic_data = self._should_exit_heuristic(state, min_sources)
+
+            # PLAN-1 Item 2: Log coverage_assessment provenance event
+            if heuristic_data and state.provenance is not None:
+                state.provenance.append(
+                    phase="supervision",
+                    event_type="coverage_assessment",
+                    summary=(
+                        f"Coverage assessment round {state.supervision_round}: "
+                        f"confidence={heuristic_data.get('confidence', 0.0):.2f}, "
+                        f"decision={'sufficient' if should_exit else 'continue'}"
+                    ),
+                    confidence=heuristic_data.get("confidence", 0.0),
+                    confidence_dimensions=heuristic_data.get("confidence_dimensions", {}),
+                    overall_coverage=heuristic_data.get("overall_coverage", "unknown"),
+                    should_continue=not should_exit,
+                    round=state.supervision_round,
+                )
+
             if should_exit:
                 logger.info(
                     "Supervision delegation: confidence %.2f >= threshold at round %d, advancing",
@@ -276,6 +294,17 @@ class SupervisionPhaseMixin:
                 )
                 break
 
+            # PLAN-1 Item 2: Log decomposition provenance event
+            if directives and state.provenance is not None:
+                state.provenance.append(
+                    phase="supervision",
+                    event_type="decomposition",
+                    summary=f"Generated {len(directives)} research directives in round {state.supervision_round}",
+                    directive_count=len(directives),
+                    directive_topics=[d.research_topic[:200] for d in directives],
+                    round=state.supervision_round,
+                )
+
             if not directives:
                 logger.info(
                     "Supervision delegation: no directives at round %d, advancing",
@@ -295,6 +324,23 @@ class SupervisionPhaseMixin:
             )
             total_new_sources += round_new_sources
             total_directives_executed += len(directive_results)
+
+            # PLAN-1 Item 2: Log source_discovered provenance events (per-directive aggregate)
+            if state.provenance is not None and directive_results:
+                for dr_result in directive_results:
+                    if dr_result.sources_found > 0:
+                        state.provenance.append(
+                            phase="supervision",
+                            event_type="source_discovered",
+                            summary=(
+                                f"Discovered {dr_result.sources_found} sources "
+                                f"for directive '{dr_result.sub_query_id}'"
+                            ),
+                            source_count=dr_result.sources_found,
+                            directive_id=dr_result.sub_query_id,
+                            source_ids=dr_result.source_ids[:20],  # Cap to prevent bloat
+                            round=state.supervision_round,
+                        )
 
             # Post-round bookkeeping: think-after-results, history, save
             should_stop = await self._post_round_bookkeeping(
@@ -773,6 +819,25 @@ class SupervisionPhaseMixin:
             state.supervision_messages = truncate_supervision_messages(
                 state.supervision_messages,
                 model=state.supervision_model,
+            )
+
+        # PLAN-1 Item 2: Log iteration_complete provenance event
+        if state.provenance is not None:
+            state.provenance.append(
+                phase="supervision",
+                event_type="iteration_complete",
+                summary=(
+                    f"Supervision round {state.supervision_round} complete: "
+                    f"{round_new_sources} new sources, "
+                    f"{len(state.sources)} total sources, "
+                    f"{len(state.findings)} total findings"
+                ),
+                round=state.supervision_round,
+                new_sources=round_new_sources,
+                total_sources=len(state.sources),
+                total_findings=len(state.findings),
+                directives_generated=len(directives),
+                directives_executed=len(directive_results),
             )
 
         self._advance_supervision_round(state)
