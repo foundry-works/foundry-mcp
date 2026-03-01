@@ -852,7 +852,7 @@ class TestMethodologyAssessmentIntegration:
                 return FakeLLMCallResult(
                     result=WorkflowResult(
                         success=True,
-                        content=_make_llm_json_response(study_design="rct", sample_size=100),
+                        content=_make_llm_json_response(study_design="randomized_controlled_trial", sample_size=100),
                     ),
                 )
             # Second call raises an exception
@@ -875,12 +875,136 @@ class TestMethodologyAssessmentIntegration:
 
         assert len(results) == 2
 
-        # First source: unknown because "rct" is not a valid StudyDesign value
-        # (the valid value is "randomized_controlled_trial")
-        # Actually, _parse_llm_response validates against _VALID_STUDY_DESIGNS
-        # "rct" is not in the enum values, so it falls back to UNKNOWN
+        # First source: succeeds with valid study_design
+        assert results[0].source_id == "src-1"
+        assert results[0].study_design == StudyDesign.RCT
+        assert results[0].sample_size == 100
 
         # Second source: fallback due to exception
         assert results[1].source_id == "src-2"
         assert results[1].study_design == StudyDesign.UNKNOWN
         assert results[1].confidence == "low"
+
+
+# =============================================================================
+# Integration Test: Handler → Assessor → llm_call_fn → Parse Path (FIX-5.4)
+# =============================================================================
+
+
+class TestMethodologyAssessmentHandlerPath:
+    """Integration test verifying the handler → assessor → llm_call_fn path
+    produces real (non-UNKNOWN) assessments, as fixed by FIX-1.1."""
+
+    @pytest.mark.asyncio
+    async def test_assess_via_llm_call_fn_produces_real_assessments(self) -> None:
+        """Assessor with a standalone llm_call_fn returns valid assessments."""
+        sources = [
+            _make_academic_source(
+                "src-1",
+                title="RCT on Intervention X",
+                content="A" * 500,
+            ),
+            _make_academic_source(
+                "src-2",
+                title="Cohort Study on Y",
+                content="B" * 500,
+                snippet="Abstract: cohort study examining Y over 5 years",
+            ),
+        ]
+
+        # Simulate the standalone llm_call_fn that the handler builds
+        call_count = 0
+
+        async def mock_llm_call_fn(system_prompt: str, user_prompt: str) -> str | None:
+            nonlocal call_count
+            call_count += 1
+            if "RCT on Intervention X" in user_prompt:
+                return _make_llm_json_response(
+                    study_design="randomized_controlled_trial",
+                    sample_size=500,
+                    sample_description="Adults 18-65",
+                    effect_size="d=0.45",
+                    statistical_significance="p<0.001",
+                    limitations_noted=["Single-site"],
+                    potential_biases=["Self-report"],
+                )
+            elif "Cohort Study on Y" in user_prompt:
+                return _make_llm_json_response(
+                    study_design="cohort_study",
+                    sample_size=1200,
+                    sample_description="Population-based cohort",
+                    effect_size="HR=1.45",
+                    statistical_significance="p=0.02",
+                    limitations_noted=["Observational design"],
+                    potential_biases=["Selection bias"],
+                )
+            return None
+
+        assessor = MethodologyAssessor()
+        results = await assessor.assess_sources(
+            sources, llm_call_fn=mock_llm_call_fn,
+        )
+
+        assert len(results) == 2
+        assert call_count == 2
+
+        # First source: real RCT assessment
+        rct = results[0]
+        assert rct.source_id == "src-1"
+        assert rct.study_design == StudyDesign.RCT
+        assert rct.sample_size == 500
+        assert rct.effect_size == "d=0.45"
+        assert rct.statistical_significance == "p<0.001"
+        assert rct.limitations_noted == ["Single-site"]
+        assert rct.potential_biases == ["Self-report"]
+
+        # Second source: real cohort assessment
+        cohort = results[1]
+        assert cohort.source_id == "src-2"
+        assert cohort.study_design == StudyDesign.COHORT
+        assert cohort.sample_size == 1200
+        assert cohort.effect_size == "HR=1.45"
+
+    @pytest.mark.asyncio
+    async def test_abstract_only_forces_low_confidence(self) -> None:
+        """Sources with only abstract content get confidence='low' regardless of LLM output."""
+        # Source with only snippet (abstract), no full content
+        source = _make_academic_source(
+            "src-abs",
+            title="Abstract-Only Paper",
+            content=None,
+            snippet="A" * 300,  # Long enough snippet to pass min_content_length
+        )
+
+        async def mock_llm_call_fn(system_prompt: str, user_prompt: str) -> str | None:
+            return _make_llm_json_response(
+                study_design="meta_analysis",
+                sample_size=5000,
+            )
+
+        assessor = MethodologyAssessor(min_content_length=200)
+        results = await assessor.assess_sources(
+            [source], llm_call_fn=mock_llm_call_fn,
+        )
+
+        assert len(results) == 1
+        assert results[0].study_design == StudyDesign.META_ANALYSIS
+        assert results[0].confidence == "low"  # Forced for abstract-only
+        assert results[0].content_basis == "abstract"
+
+    @pytest.mark.asyncio
+    async def test_llm_call_fn_returning_none_gives_unknown(self) -> None:
+        """When llm_call_fn returns None, fallback to UNKNOWN assessment."""
+        source = _make_academic_source("src-fail", content="C" * 500)
+
+        async def failing_llm_call_fn(system_prompt: str, user_prompt: str) -> str | None:
+            return None
+
+        assessor = MethodologyAssessor()
+        results = await assessor.assess_sources(
+            [source], llm_call_fn=failing_llm_call_fn,
+        )
+
+        assert len(results) == 1
+        assert results[0].source_id == "src-fail"
+        assert results[0].study_design == StudyDesign.UNKNOWN

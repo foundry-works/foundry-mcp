@@ -97,7 +97,11 @@ def source_to_ris_entry(source: "ResearchSource") -> str:
     if issue:
         lines.append(f"IS  - {issue}")
     pages = meta.get("pages")
-    if pages:
+    if pages and "-" in str(pages):
+        parts = str(pages).split("-", 1)
+        lines.append(f"SP  - {parts[0].strip()}")
+        lines.append(f"EP  - {parts[1].strip()}")
+    elif pages:
         lines.append(f"SP  - {pages}")
 
     # Keywords / fields of study

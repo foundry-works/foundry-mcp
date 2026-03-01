@@ -445,3 +445,34 @@ class TestRISExport:
         )
         result = sources_to_ris([source])
         assert result.count("AU  - ") == 3
+
+    def test_ris_page_range_split(self):
+        """Page range '123-456' should produce separate SP and EP tags."""
+        from foundry_mcp.core.research.export.ris import source_to_ris_entry
+
+        source = _make_source(title="Page Range Paper", year=2023)
+        source.metadata["pages"] = "123-456"
+        result = source_to_ris_entry(source)
+        assert "SP  - 123" in result
+        assert "EP  - 456" in result
+        # Should NOT have the old combined format
+        assert "SP  - 123-456" not in result
+
+    def test_ris_single_page(self):
+        """Single page '42' should produce SP only, no EP."""
+        from foundry_mcp.core.research.export.ris import source_to_ris_entry
+
+        source = _make_source(title="Single Page Paper", year=2023)
+        source.metadata["pages"] = "42"
+        result = source_to_ris_entry(source)
+        assert "SP  - 42" in result
+        assert "EP  - " not in result
+
+    def test_ris_no_pages(self):
+        """No pages value should produce no SP/EP tags."""
+        from foundry_mcp.core.research.export.ris import source_to_ris_entry
+
+        source = _make_source(title="No Pages Paper", year=2023)
+        result = source_to_ris_entry(source)
+        assert "SP  - " not in result
+        assert "EP  - " not in result

@@ -6,7 +6,10 @@ Tests cover:
 3. Prioritized extraction respecting max_chars and section ordering
 4. PDF URL detection patterns
 5. ExtractPDFTool model validation
+6. extract_from_url() HTTP tests (success, timeout, malformed, SSRF)
 """
+
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -413,3 +416,145 @@ class TestSystemPromptPdfIntegration:
         pdf_pos = prompt.find("### extract_pdf")
         format_pos = prompt.find("## Response Format")
         assert pdf_pos < format_pos, "extract_pdf should appear before Response Format"
+
+
+# =============================================================================
+# extract_from_url() HTTP Tests
+# =============================================================================
+
+
+# Minimal valid PDF bytes (header + empty body)
+_MINIMAL_PDF = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
+
+
+def _make_mock_response(
+    status_code: int = 200,
+    content_type: str = "application/pdf",
+    body: bytes = _MINIMAL_PDF,
+    headers: dict | None = None,
+):
+    """Build a mock httpx streaming response."""
+    resp_headers = {"content-type": content_type}
+    if headers:
+        resp_headers.update(headers)
+
+    response = AsyncMock()
+    response.status_code = status_code
+    response.headers = resp_headers
+    response.raise_for_status = MagicMock()
+
+    async def aiter_bytes(chunk_size=65536):
+        yield body
+
+    response.aiter_bytes = aiter_bytes
+
+    return response
+
+
+class TestExtractFromUrl:
+    """Tests for PDFExtractor.extract_from_url()."""
+
+    @pytest.mark.asyncio
+    async def test_extract_from_url_success(self):
+        """Successful fetch of a valid PDF returns extraction result."""
+        extractor = PDFExtractor()
+
+        mock_response = _make_mock_response()
+
+        # Mock httpx.AsyncClient context manager
+        mock_client = AsyncMock()
+
+        # client.stream() returns an async context manager yielding mock_response
+        stream_cm = AsyncMock()
+        stream_cm.__aenter__ = AsyncMock(return_value=mock_response)
+        stream_cm.__aexit__ = AsyncMock(return_value=False)
+        mock_client.stream = MagicMock(return_value=stream_cm)
+
+        client_cm = AsyncMock()
+        client_cm.__aenter__ = AsyncMock(return_value=mock_client)
+        client_cm.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("foundry_mcp.core.research.pdf_extractor.validate_url_for_ssrf"), \
+             patch("httpx.AsyncClient", return_value=client_cm):
+            # extract() will be called on the downloaded bytes; mock it
+            with patch.object(extractor, "extract", new_callable=AsyncMock) as mock_extract:
+                mock_extract.return_value = PDFExtractionResult(
+                    text="Extracted text from PDF",
+                    page_offsets=[(0, 23)],
+                    page_count=1,
+                    extracted_page_count=1,
+                )
+                result = await extractor.extract_from_url("https://example.com/paper.pdf")
+
+        assert result.text == "Extracted text from PDF"
+        assert result.page_count == 1
+
+    @pytest.mark.asyncio
+    async def test_extract_from_url_timeout(self):
+        """Timeout during fetch raises appropriate error."""
+        import httpx
+
+        extractor = PDFExtractor()
+
+        mock_client = AsyncMock()
+
+        # client.stream() raises a timeout
+        stream_cm = AsyncMock()
+        stream_cm.__aenter__ = AsyncMock(side_effect=httpx.ReadTimeout("Connection timed out"))
+        stream_cm.__aexit__ = AsyncMock(return_value=False)
+        mock_client.stream = MagicMock(return_value=stream_cm)
+
+        client_cm = AsyncMock()
+        client_cm.__aenter__ = AsyncMock(return_value=mock_client)
+        client_cm.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("foundry_mcp.core.research.pdf_extractor.validate_url_for_ssrf"), \
+             patch("httpx.AsyncClient", return_value=client_cm):
+            with pytest.raises(httpx.ReadTimeout):
+                await extractor.extract_from_url("https://example.com/slow.pdf")
+
+    @pytest.mark.asyncio
+    async def test_extract_from_url_malformed_pdf(self):
+        """Fetched content with invalid magic bytes raises InvalidPDFError."""
+        from foundry_mcp.core.errors.research import InvalidPDFError
+
+        extractor = PDFExtractor()
+        bad_bytes = b"This is not a PDF at all"
+
+        mock_response = _make_mock_response(body=bad_bytes)
+        mock_client = AsyncMock()
+
+        stream_cm = AsyncMock()
+        stream_cm.__aenter__ = AsyncMock(return_value=mock_response)
+        stream_cm.__aexit__ = AsyncMock(return_value=False)
+        mock_client.stream = MagicMock(return_value=stream_cm)
+
+        client_cm = AsyncMock()
+        client_cm.__aenter__ = AsyncMock(return_value=mock_client)
+        client_cm.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("foundry_mcp.core.research.pdf_extractor.validate_url_for_ssrf"), \
+             patch("httpx.AsyncClient", return_value=client_cm):
+            with pytest.raises(InvalidPDFError):
+                await extractor.extract_from_url("https://example.com/not-a-pdf.pdf")
+
+    @pytest.mark.asyncio
+    async def test_extract_from_url_ssrf_blocked(self):
+        """Private/internal IP URLs are blocked by SSRF validation."""
+        from foundry_mcp.core.errors.research import SSRFError
+        from foundry_mcp.core.research.pdf_extractor import validate_url_for_ssrf
+
+        # Direct validation check — no mocking needed
+        with pytest.raises(SSRFError):
+            validate_url_for_ssrf("http://127.0.0.1/secret.pdf")
+
+        with pytest.raises(SSRFError):
+            validate_url_for_ssrf("http://localhost/secret.pdf")
+
+        with pytest.raises(SSRFError):
+            validate_url_for_ssrf("http://169.254.169.254/latest/meta-data/")
+
+        # Also test the full extract_from_url path
+        extractor = PDFExtractor()
+        with pytest.raises(SSRFError):
+            await extractor.extract_from_url("http://192.168.1.1/internal.pdf")
