@@ -228,32 +228,32 @@
 ### 5a. Profile-aware brief system prompt
 > **File**: `phases/brief.py`
 
-- [ ] Modify `_build_brief_system_prompt()` to accept research profile
-- [ ] When `source_quality_mode == ACADEMIC`, append instructions for:
-  - [ ] Disciplinary scope (primary + interdisciplinary)
-  - [ ] Time period (foundational + recent literature)
-  - [ ] Methodology preferences (quantitative, qualitative, mixed, meta-analysis, theoretical)
-  - [ ] Education level / population (if applicable)
-  - [ ] Source type hierarchy (peer-reviewed > meta-analyses > books > preprints > reports; deprioritize blogs, news, Wikipedia)
-- [ ] Inject profile-specified constraints (source_type_hierarchy, disciplinary_scope, time_period, methodology_preferences) as pre-filled values
+- [x] Modify `_build_brief_system_prompt()` to accept research profile
+- [x] When `source_quality_mode == ACADEMIC`, append instructions for:
+  - [x] Disciplinary scope (primary + interdisciplinary)
+  - [x] Time period (foundational + recent literature)
+  - [x] Methodology preferences (quantitative, qualitative, mixed, meta-analysis, theoretical)
+  - [x] Education level / population (if applicable)
+  - [x] Source type hierarchy (peer-reviewed > meta-analyses > books > preprints > reports; deprioritize blogs, news, Wikipedia)
+- [x] Inject profile-specified constraints (source_type_hierarchy, disciplinary_scope, time_period, methodology_preferences) as pre-filled values
 
 ### 5b. Profile-aware decomposition
 > **File**: `phases/supervision_prompts.py`
 
-- [ ] Append academic decomposition guidelines to `build_first_round_delegation_system_prompt()` when academic:
-  - [ ] Foundational/seminal works directive (sorted by citation count)
-  - [ ] Recent empirical studies directive (last 3-5 years)
-  - [ ] Per-discipline directives for cross-disciplinary topics
-  - [ ] Map directives to literature review sections
-  - [ ] Evidence needed: peer-reviewed articles, sample sizes, effect sizes, theoretical frameworks
+- [x] Append academic decomposition guidelines to `build_first_round_delegation_system_prompt()` when academic:
+  - [x] Foundational/seminal works directive (sorted by citation count)
+  - [x] Recent empirical studies directive (last 3-5 years)
+  - [x] Per-discipline directives for cross-disciplinary topics
+  - [x] Map directives to literature review sections
+  - [x] Evidence needed: peer-reviewed articles, sample sizes, effect sizes, theoretical frameworks
 
 ### Item 5 Testing
 
-- [ ] Brief prompt includes academic dimensions when profile is academic
-- [ ] Brief prompt unchanged when profile is general
-- [ ] Profile-specified constraints injected into brief prompt
-- [ ] Supervision prompt includes academic guidelines when profile is academic
-- [ ] Supervision prompt unchanged when profile is general
+- [x] Brief prompt includes academic dimensions when profile is academic
+- [x] Brief prompt unchanged when profile is general
+- [x] Profile-specified constraints injected into brief prompt
+- [x] Supervision prompt includes academic guidelines when profile is academic
+- [x] Supervision prompt unchanged when profile is general
 
 ---
 

@@ -414,3 +414,101 @@ class TestResearchBriefOutputModel:
 
         with pytest.raises(ValidationError):
             ResearchBriefOutput.model_validate({"scope_boundaries": "No brief"})
+
+
+# ===========================================================================
+# PLAN-1 Item 5: Academic Brief Enrichment tests
+# ===========================================================================
+
+
+class TestAcademicBriefEnrichment:
+    """Tests for profile-aware brief system prompt (PLAN-1 Item 5a)."""
+
+    def test_brief_prompt_includes_academic_dimensions_for_academic_profile(self):
+        """Brief prompt includes academic dimensions when profile is academic."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_ACADEMIC
+
+        stub = StubBrief()
+        prompt = stub._build_brief_system_prompt(profile=PROFILE_ACADEMIC)
+
+        assert "ACADEMIC RESEARCH MODE" in prompt
+        assert "Disciplinary scope" in prompt
+        assert "Time period" in prompt
+        assert "Methodology preferences" in prompt
+        assert "Education level" in prompt
+        assert "Source type hierarchy" in prompt
+        # Should still include base JSON schema
+        assert "research_brief" in prompt
+        assert "JSON" in prompt
+
+    def test_brief_prompt_unchanged_for_general_profile(self):
+        """Brief prompt unchanged when profile is general."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
+
+        stub = StubBrief()
+        prompt_general = stub._build_brief_system_prompt(profile=PROFILE_GENERAL)
+        prompt_none = stub._build_brief_system_prompt()
+
+        assert "ACADEMIC RESEARCH MODE" not in prompt_general
+        assert "ACADEMIC RESEARCH MODE" not in prompt_none
+        # Base content is the same
+        assert "research_brief" in prompt_general
+        assert "research_brief" in prompt_none
+
+    def test_brief_prompt_unchanged_for_technical_profile(self):
+        """Brief prompt unchanged when profile is technical."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_TECHNICAL
+
+        stub = StubBrief()
+        prompt = stub._build_brief_system_prompt(profile=PROFILE_TECHNICAL)
+        assert "ACADEMIC RESEARCH MODE" not in prompt
+
+    def test_profile_specified_constraints_injected_into_brief_prompt(self):
+        """Profile-specified constraints injected into brief prompt."""
+        from foundry_mcp.core.research.models.deep_research import ResearchProfile
+        from foundry_mcp.core.research.models.sources import ResearchMode
+
+        profile = ResearchProfile(
+            name="custom-academic",
+            source_quality_mode=ResearchMode.ACADEMIC,
+            disciplinary_scope=["psychology", "education"],
+            time_period="2015-2024",
+            methodology_preferences=["RCT", "meta-analysis"],
+            source_type_hierarchy=["peer-reviewed", "meta-analysis", "preprint"],
+        )
+        stub = StubBrief()
+        prompt = stub._build_brief_system_prompt(profile=profile)
+
+        assert "pre-specified" in prompt
+        assert "psychology, education" in prompt
+        assert "2015-2024" in prompt
+        assert "RCT, meta-analysis" in prompt
+        assert "peer-reviewed > meta-analysis > preprint" in prompt
+
+    def test_academic_profile_without_constraints_has_no_prefilled_section(self):
+        """Academic profile without optional constraints has no pre-filled section."""
+        from foundry_mcp.core.research.models.deep_research import ResearchProfile
+        from foundry_mcp.core.research.models.sources import ResearchMode
+
+        profile = ResearchProfile(
+            name="minimal-academic",
+            source_quality_mode=ResearchMode.ACADEMIC,
+        )
+        stub = StubBrief()
+        prompt = stub._build_brief_system_prompt(profile=profile)
+
+        assert "ACADEMIC RESEARCH MODE" in prompt
+        # No pre-filled section since no constraints specified
+        assert "pre-specified" not in prompt
+
+    def test_systematic_review_profile_triggers_academic_enrichment(self):
+        """Systematic review profile triggers academic enrichment."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_SYSTEMATIC_REVIEW
+
+        stub = StubBrief()
+        prompt = stub._build_brief_system_prompt(profile=PROFILE_SYSTEMATIC_REVIEW)
+
+        assert "ACADEMIC RESEARCH MODE" in prompt
+        # Systematic review has source_type_hierarchy pre-specified
+        assert "pre-specified" in prompt
+        assert "peer-reviewed" in prompt

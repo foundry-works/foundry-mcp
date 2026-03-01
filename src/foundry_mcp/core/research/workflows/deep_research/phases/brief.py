@@ -22,8 +22,10 @@ if TYPE_CHECKING:
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
     ResearchBriefOutput,
+    ResearchProfile,
     parse_brief_output,
 )
+from foundry_mcp.core.research.models.sources import ResearchMode
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
     build_sanitized_context,
@@ -97,7 +99,7 @@ class BriefPhaseMixin:
             },
         )
 
-        system_prompt = self._build_brief_system_prompt()
+        system_prompt = self._build_brief_system_prompt(state.research_profile)
         user_prompt = self._build_brief_user_prompt(state)
 
         self._check_cancellation(state)
@@ -215,17 +217,27 @@ class BriefPhaseMixin:
             },
         )
 
-    def _build_brief_system_prompt(self) -> str:
+    def _build_brief_system_prompt(
+        self,
+        profile: Optional[ResearchProfile] = None,
+    ) -> str:
         """Build system prompt for research brief generation.
 
         Adapts open_deep_research's ``transform_messages_into_research_topic_prompt``
         approach: maximise specificity, prefer primary sources, fill unstated
         dimensions as open-ended, avoid unwarranted assumptions.
 
+        When an academic profile is active, appends instructions to probe for
+        discipline, education level, time period, and methodology preferences —
+        dimensions that fundamentally shape a literature review.
+
+        Args:
+            profile: Active research profile (used to inject academic dimensions)
+
         Returns:
             System prompt string
         """
-        return (
+        base = (
             "You are a research brief writer. Your task is to transform a "
             "user's research request into a detailed, structured research "
             "brief that will drive a multi-phase deep research workflow.\n\n"
@@ -260,6 +272,13 @@ class BriefPhaseMixin:
             "than 'Research the following topic…'). This preserves the "
             "user's voice and helps downstream researchers understand "
             "intent.\n\n"
+        )
+
+        # PLAN-1 Item 5a: Academic brief enrichment
+        if profile is not None and profile.source_quality_mode == ResearchMode.ACADEMIC:
+            base += self._build_academic_brief_instructions(profile)
+
+        base += (
             "Output your response as a JSON object with this schema:\n"
             "{\n"
             '  "research_brief": "Complete brief as one or two well-structured paragraphs",\n'
@@ -268,6 +287,82 @@ class BriefPhaseMixin:
             "}\n\n"
             "IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."
         )
+        return base
+
+    @staticmethod
+    def _build_academic_brief_instructions(profile: ResearchProfile) -> str:
+        """Build academic enrichment instructions for the brief system prompt.
+
+        Appends dimensions that fundamentally shape a literature review:
+        disciplinary scope, time period, methodology preferences, education
+        level/population, and source type hierarchy.
+
+        When the profile has pre-specified constraints (e.g. disciplinary_scope,
+        time_period), they are injected as pre-filled values so the brief
+        writer incorporates them rather than leaving them open-ended.
+
+        Args:
+            profile: Active academic research profile
+
+        Returns:
+            Instruction block to append to the base system prompt
+        """
+        parts: list[str] = [
+            "**ACADEMIC RESEARCH MODE**: This is an academic research request. "
+            "In addition to the general requirements above, your brief MUST "
+            "address the following dimensions:\n\n"
+            "6. **Disciplinary scope**: Identify the primary discipline(s) and "
+            "any relevant interdisciplinary connections. If the topic spans "
+            "multiple fields, note which disciplinary perspective should be "
+            "primary and which are secondary.\n"
+            "7. **Time period**: Specify the temporal scope — both foundational "
+            "works (seminal papers that established the field) and the recency "
+            "window for current literature (e.g. last 5-10 years). If the user "
+            "does not specify a time period, default to covering both foundational "
+            "and recent work.\n"
+            "8. **Methodology preferences**: Note preferred research methodologies "
+            "(quantitative, qualitative, mixed methods, meta-analysis, theoretical/"
+            "conceptual, case study, experimental). If not specified by the user, "
+            "leave this as an open dimension.\n"
+            "9. **Education level / population**: If the research concerns a specific "
+            "population (e.g. K-12 students, clinical patients, organizational "
+            "employees), specify it. If not applicable, omit.\n"
+            "10. **Source type hierarchy**: Prioritize sources in this order: "
+            "peer-reviewed journal articles > systematic reviews and meta-analyses > "
+            "academic books and monographs > preprints and working papers > "
+            "institutional reports. Deprioritize blogs, news articles, and "
+            "Wikipedia.\n\n"
+        ]
+
+        # Inject profile-specified constraints as pre-filled values
+        constraints: list[str] = []
+        if profile.disciplinary_scope:
+            constraints.append(
+                f"- **Disciplinary scope (pre-specified)**: {', '.join(profile.disciplinary_scope)}"
+            )
+        if profile.time_period:
+            constraints.append(
+                f"- **Time period (pre-specified)**: {profile.time_period}"
+            )
+        if profile.methodology_preferences:
+            constraints.append(
+                f"- **Methodology preferences (pre-specified)**: {', '.join(profile.methodology_preferences)}"
+            )
+        if profile.source_type_hierarchy:
+            constraints.append(
+                f"- **Source type hierarchy (pre-specified)**: {' > '.join(profile.source_type_hierarchy)}"
+            )
+
+        if constraints:
+            parts.append(
+                "The following constraints have been pre-specified by the research "
+                "profile. Incorporate them into the brief as fixed parameters rather "
+                "than open questions:\n"
+            )
+            parts.extend(constraints)
+            parts.append("\n")
+
+        return "\n".join(parts)
 
     def _build_brief_user_prompt(self, state: DeepResearchState) -> str:
         """Build user prompt for research brief generation.

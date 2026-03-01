@@ -12,7 +12,9 @@ from typing import Any, Optional
 
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
+    ResearchProfile,
 )
+from foundry_mcp.core.research.models.sources import ResearchMode
 from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
     build_sanitized_context,
     sanitize_external_content,
@@ -516,12 +518,21 @@ def build_first_round_think_prompt(state: DeepResearchState) -> str:
     return "\n".join(parts)
 
 
-def build_first_round_delegation_system_prompt() -> str:
+def build_first_round_delegation_system_prompt(
+    profile: Optional[ResearchProfile] = None,
+) -> str:
     """Build system prompt for first-round decomposition delegation.
 
     Combines the standard delegation format with planning-quality
     decomposition guidance. This replaces the PLANNING phase's
     decomposition rules.
+
+    When an academic profile is active, appends guidelines for targeting
+    foundational/seminal works, recent empirical studies, per-discipline
+    directives, and literature-review-section mapping.
+
+    Args:
+        profile: Active research profile (used to inject academic guidelines)
 
     Returns:
         System prompt instructing initial query decomposition via directives
@@ -535,8 +546,62 @@ def build_first_round_delegation_system_prompt() -> str:
 - Directives should be SPECIFIC enough to yield targeted search results
 - Directives must cover DISTINCT aspects — no two should investigate substantially the same ground"""
 
+    # PLAN-1 Item 5b: Academic decomposition guidelines
+    if profile is not None and profile.source_quality_mode == ResearchMode.ACADEMIC:
+        guidelines += _build_academic_decomposition_guidelines(profile)
+
     preamble = "You are a research lead performing initial query decomposition. Your task is to break down a research query into focused, parallel research directives — each assigned to a specialized researcher.\n\n"
     return preamble + _build_delegation_core_prompt().replace("%GUIDELINES%", guidelines)
+
+
+def _build_academic_decomposition_guidelines(profile: ResearchProfile) -> str:
+    """Build academic-specific decomposition guidelines.
+
+    Appended to the first-round delegation system prompt when the active
+    profile has ``source_quality_mode == ACADEMIC``.  Guides the supervisor
+    to produce directives that map to literature review sections and target
+    the evidence types academic research demands.
+
+    Args:
+        profile: Active academic research profile
+
+    Returns:
+        Guidelines text block to append to the base guidelines
+    """
+    parts: list[str] = [
+        "\n\n**Academic Research Decomposition:**",
+        "This is an academic research query. Apply these additional guidelines:",
+        "",
+        "- **Foundational/seminal works directive**: Include at least one directive "
+        "targeting foundational and seminal works in the field. These are highly-cited "
+        "papers that established key theories, frameworks, or findings. Sort results "
+        "by citation count when possible.",
+        "- **Recent empirical studies directive**: Include at least one directive "
+        "targeting recent empirical studies (last 3-5 years) to capture the current "
+        "state of knowledge. Focus on peer-reviewed journal articles with clear "
+        "methodology sections.",
+    ]
+
+    # Per-discipline directives for cross-disciplinary topics
+    if profile.disciplinary_scope and len(profile.disciplinary_scope) > 1:
+        disciplines = ", ".join(profile.disciplinary_scope)
+        parts.append(
+            f"- **Cross-disciplinary coverage**: The research spans multiple disciplines "
+            f"({disciplines}). Consider dedicating separate directives to each major "
+            f"disciplinary perspective to ensure balanced coverage."
+        )
+
+    parts.extend([
+        "- **Literature review section mapping**: Structure directives so they "
+        "naturally map to literature review sections — theoretical foundations, "
+        "thematic analysis, methodological approaches, and key debates/contradictions.",
+        "- **Evidence types**: Each directive's \"evidence_needed\" should specify "
+        "academic evidence types: peer-reviewed articles, sample sizes, effect sizes, "
+        "confidence intervals, theoretical frameworks, replication status, and "
+        "methodological quality indicators.",
+    ])
+
+    return "\n".join(parts)
 
 
 def build_first_round_delegation_user_prompt(

@@ -185,7 +185,7 @@ async def run_first_round_generate(
         workflow=workflow,
         state=state,
         phase_name="supervision_delegate_generate",
-        system_prompt=build_first_round_delegation_system_prompt(),
+        system_prompt=build_first_round_delegation_system_prompt(state.research_profile),
         user_prompt=build_first_round_delegation_user_prompt(
             state,
             think_output,

@@ -1600,6 +1600,122 @@ class TestFirstRoundDecompositionPrompts:
         assert "Decompose the research query" in prompt
 
 
+# ===========================================================================
+# PLAN-1 Item 5b: Academic decomposition prompt tests
+# ===========================================================================
+
+
+class TestAcademicDecompositionPrompts:
+    """Tests for profile-aware decomposition prompts (PLAN-1 Item 5b)."""
+
+    def test_supervision_prompt_includes_academic_guidelines_for_academic_profile(self):
+        """Supervision prompt includes academic guidelines when profile is academic."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_ACADEMIC
+
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_first_round_delegation_system_prompt,
+        )
+
+        prompt = build_first_round_delegation_system_prompt(profile=PROFILE_ACADEMIC)
+
+        assert "Academic Research Decomposition" in prompt
+        assert "Foundational/seminal works" in prompt
+        assert "Recent empirical studies" in prompt
+        assert "Literature review section mapping" in prompt
+        assert "Evidence types" in prompt
+        assert "peer-reviewed" in prompt.lower()
+        # Still has base decomposition rules
+        assert "2-5 directives" in prompt
+
+    def test_supervision_prompt_unchanged_for_general_profile(self):
+        """Supervision prompt unchanged when profile is general."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
+
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_first_round_delegation_system_prompt,
+        )
+
+        prompt_general = build_first_round_delegation_system_prompt(profile=PROFILE_GENERAL)
+        prompt_none = build_first_round_delegation_system_prompt()
+
+        assert "Academic Research Decomposition" not in prompt_general
+        assert "Academic Research Decomposition" not in prompt_none
+        # Base rules still present
+        assert "2-5 directives" in prompt_general
+        assert "2-5 directives" in prompt_none
+
+    def test_supervision_prompt_unchanged_for_no_profile(self):
+        """Supervision prompt unchanged when no profile is provided."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_first_round_delegation_system_prompt,
+        )
+
+        prompt = build_first_round_delegation_system_prompt()
+        assert "Academic Research Decomposition" not in prompt
+        assert "2-5 directives" in prompt
+
+    def test_cross_disciplinary_directive_for_multi_discipline_profile(self):
+        """Cross-disciplinary coverage note when profile has multiple disciplines."""
+        from foundry_mcp.core.research.models.deep_research import ResearchProfile
+        from foundry_mcp.core.research.models.sources import ResearchMode
+
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_first_round_delegation_system_prompt,
+        )
+
+        profile = ResearchProfile(
+            name="cross-discipline",
+            source_quality_mode=ResearchMode.ACADEMIC,
+            disciplinary_scope=["psychology", "neuroscience", "education"],
+        )
+        prompt = build_first_round_delegation_system_prompt(profile=profile)
+
+        assert "Cross-disciplinary" in prompt
+        assert "psychology" in prompt
+        assert "neuroscience" in prompt
+        assert "education" in prompt
+
+    def test_no_cross_disciplinary_for_single_discipline(self):
+        """No cross-disciplinary note when profile has a single discipline."""
+        from foundry_mcp.core.research.models.deep_research import ResearchProfile
+        from foundry_mcp.core.research.models.sources import ResearchMode
+
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_first_round_delegation_system_prompt,
+        )
+
+        profile = ResearchProfile(
+            name="single-discipline",
+            source_quality_mode=ResearchMode.ACADEMIC,
+            disciplinary_scope=["biology"],
+        )
+        prompt = build_first_round_delegation_system_prompt(profile=profile)
+
+        assert "Academic Research Decomposition" in prompt
+        assert "Cross-disciplinary" not in prompt
+
+    def test_wrapper_method_with_state(self):
+        """Wrapper method on SupervisionPhaseMixin passes profile from state."""
+        from foundry_mcp.core.research.models.deep_research import (
+            PROFILE_ACADEMIC,
+            ResearchExtensions,
+        )
+
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=0, supervision_round=0)
+        state.extensions = ResearchExtensions(research_profile=PROFILE_ACADEMIC)
+
+        prompt = stub._build_first_round_delegation_system_prompt(state)
+        assert "Academic Research Decomposition" in prompt
+
+    def test_wrapper_method_without_state_backward_compat(self):
+        """Wrapper method works without state (backward compat)."""
+        stub = StubSupervision(delegation_model=True)
+        prompt = stub._build_first_round_delegation_system_prompt()
+        assert "Academic Research Decomposition" not in prompt
+        assert "2-5 directives" in prompt
+
+
 class TestFirstRoundDecompositionIntegration:
     """Integration tests for supervisor-owned decomposition flow."""
 

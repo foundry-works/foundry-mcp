@@ -1770,8 +1770,11 @@ class SupervisionPhaseMixin:
     def _build_first_round_think_prompt(self, state: DeepResearchState) -> str:
         return build_first_round_think_prompt(state)
 
-    def _build_first_round_delegation_system_prompt(self) -> str:
-        return build_first_round_delegation_system_prompt()
+    def _build_first_round_delegation_system_prompt(
+        self, state: Optional[DeepResearchState] = None
+    ) -> str:
+        profile = state.research_profile if state is not None else None
+        return build_first_round_delegation_system_prompt(profile)
 
     def _build_first_round_delegation_user_prompt(
         self,
