@@ -24,6 +24,7 @@ from foundry_mcp.tools.unified.research_handlers.handlers_deep_research import (
     _handle_deep_research_evaluate,
     _handle_deep_research_export,
     _handle_deep_research_list,
+    _handle_deep_research_network,
     _handle_deep_research_provenance,
     _handle_deep_research_report,
     _handle_deep_research_status,
@@ -113,6 +114,11 @@ _ACTION_DEFINITIONS = [
         name="deep-research-export",
         handler=_handle_deep_research_export,
         summary=_ACTION_SUMMARY["deep-research-export"],
+    ),
+    ActionDefinition(
+        name="deep-research-network",
+        handler=_handle_deep_research_network,
+        summary=_ACTION_SUMMARY["deep-research-network"],
     ),
     ActionDefinition(
         name="thread-list",
@@ -238,6 +244,8 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
         wait_timeout: float = 90,
         research_profile: Optional[str] = None,
         profile_overrides: Optional[dict] = None,
+        max_references_per_paper: int = 20,
+        max_citations_per_paper: int = 20,
     ) -> dict:
         """Execute research workflows via the action router.
 
@@ -252,6 +260,7 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
         - deep-research-list: List deep research sessions
         - deep-research-delete: Delete a deep research session
         - deep-research-evaluate: Evaluate research report quality (LLM-as-judge)
+        - deep-research-network: Build citation network graph from research session sources
         - thread-list: List conversation threads
         - thread-get: Get thread details including messages
         - thread-delete: Delete a conversation thread
@@ -299,6 +308,8 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
             wait_timeout: Max seconds to wait (clamped to 90) for deep-research-status
             research_profile: Named profile for deep-research (general, academic, systematic-review, bibliometric, technical)
             profile_overrides: Per-request overrides applied on top of the resolved profile
+            max_references_per_paper: Max backward references per paper (deep-research-network)
+            max_citations_per_paper: Max forward citations per paper (deep-research-network)
 
         Returns:
             Response envelope with action results

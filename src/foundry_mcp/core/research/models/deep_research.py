@@ -1182,6 +1182,79 @@ class StructuredResearchOutput(BaseModel):
     )
 
 
+# ---------------------------------------------------------------------------
+# PLAN-4 Item 2: Citation Network Models
+# ---------------------------------------------------------------------------
+
+
+class CitationNode(BaseModel):
+    """A node in the citation network representing a paper."""
+
+    paper_id: str = Field(description="Provider-specific paper ID (OpenAlex or Semantic Scholar)")
+    title: str = Field(description="Paper title")
+    authors: str = Field(default="", description="Formatted author string")
+    year: Optional[int] = Field(default=None, description="Publication year")
+    citation_count: Optional[int] = Field(default=None, description="Total citation count")
+    is_discovered: bool = Field(
+        default=False,
+        description="True if this paper was a source in the original research session",
+    )
+    source_id: Optional[str] = Field(
+        default=None,
+        description="ID of the ResearchSource if is_discovered is True",
+    )
+    role: str = Field(
+        default="peripheral",
+        description="Role in the network: foundational, discovered, extension, or peripheral",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+class CitationEdge(BaseModel):
+    """A directed edge in the citation network."""
+
+    citing_paper_id: str = Field(description="Paper ID of the citing paper")
+    cited_paper_id: str = Field(description="Paper ID of the cited paper")
+
+    model_config = {"extra": "forbid"}
+
+
+class ResearchThread(BaseModel):
+    """A connected component in the citation network with 3+ nodes."""
+
+    name: str = Field(description="Auto-generated thread label")
+    paper_ids: list[str] = Field(default_factory=list, description="Paper IDs in this thread")
+    description: str = Field(default="", description="Brief description of the thread")
+
+    model_config = {"extra": "forbid"}
+
+
+class CitationNetwork(BaseModel):
+    """Citation network built from a completed research session's sources.
+
+    Nodes are papers (both discovered sources and their references/citations).
+    Edges are directed citation relationships.
+    """
+
+    nodes: list[CitationNode] = Field(default_factory=list)
+    edges: list[CitationEdge] = Field(default_factory=list)
+    foundational_papers: list[str] = Field(
+        default_factory=list,
+        description="Paper IDs cited by many discovered papers",
+    )
+    research_threads: list[ResearchThread] = Field(
+        default_factory=list,
+        description="Connected components with 3+ nodes",
+    )
+    stats: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Network statistics (total_nodes, total_edges, etc.)",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
 class ResearchExtensions(BaseModel):
     """Container for extended research capabilities.
 
@@ -1216,9 +1289,9 @@ class ResearchExtensions(BaseModel):
     )
 
     # PLAN-4: Deep Analysis
-    citation_network: Optional[Any] = Field(
+    citation_network: Optional[CitationNetwork] = Field(
         default=None,
-        description="Citation network from PLAN-4 (forward reference placeholder)",
+        description="Citation network graph from PLAN-4 Item 2",
     )
     methodology_assessments: list[Any] = Field(
         default_factory=list,
@@ -1503,6 +1576,11 @@ class DeepResearchState(BaseModel):
     def research_landscape(self) -> Optional[ResearchLandscape]:
         """Convenience accessor for extensions.research_landscape."""
         return self.extensions.research_landscape
+
+    @property
+    def citation_network(self) -> Optional[CitationNetwork]:
+        """Convenience accessor for extensions.citation_network."""
+        return self.extensions.citation_network
 
     # =========================================================================
     # Collection Management Methods

@@ -566,3 +566,150 @@ def _handle_deep_research_export(
             }
         )
     )
+
+
+# ---------------------------------------------------------------------------
+# PLAN-4 Item 2: Citation Network
+# ---------------------------------------------------------------------------
+
+_DR_NETWORK_SCHEMA = {
+    "research_id": Str(required=True),
+}
+
+
+def _handle_deep_research_network(
+    *,
+    research_id: Optional[str] = None,
+    max_references_per_paper: int = 20,
+    max_citations_per_paper: int = 20,
+    **kwargs: Any,
+) -> dict:
+    """Build citation network for a completed research session.
+
+    User-triggered. Requires a completed session with 3+ academic sources
+    that have paper IDs. Uses OpenAlex (primary) and Semantic Scholar
+    (fallback) to fetch references and forward citations.
+
+    Args:
+        research_id: ID of the deep research session.
+        max_references_per_paper: Max backward references per source (default: 20).
+        max_citations_per_paper: Max forward citations per source (default: 20).
+    """
+    import asyncio
+
+    payload = {"research_id": research_id}
+    err = validate_payload(
+        payload, _DR_NETWORK_SCHEMA, tool_name="research", action="deep-research-network"
+    )
+    if err:
+        return err
+
+    memory = _get_memory()
+    config = _get_config()
+    assert research_id is not None  # validated by schema
+
+    state = memory.load_deep_research(research_id)
+    if state is None:
+        return asdict(
+            error_response(
+                f"Research session '{research_id}' not found",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Use deep-research-list to find valid research IDs",
+            )
+        )
+
+    # Use config defaults if parameters match the defaults (user didn't override)
+    effective_max_refs = max_references_per_paper
+    effective_max_cites = max_citations_per_paper
+    if effective_max_refs == 20:
+        effective_max_refs = config.research.deep_research_citation_network_max_refs_per_paper
+    if effective_max_cites == 20:
+        effective_max_cites = config.research.deep_research_citation_network_max_cites_per_paper
+
+    # Build providers
+    openalex_provider = None
+    semantic_scholar_provider = None
+
+    try:
+        from foundry_mcp.core.research.providers.openalex import OpenAlexProvider
+
+        api_key = config.research.openalex_api_key or None
+        if config.research.openalex_enabled:
+            openalex_provider = OpenAlexProvider(api_key=api_key)
+    except Exception:
+        logger.debug("Could not initialize OpenAlex provider for citation network")
+
+    try:
+        from foundry_mcp.core.research.providers.semantic_scholar import (
+            SemanticScholarProvider,
+        )
+
+        api_key = config.research.semantic_scholar_api_key or None
+        if api_key or True:  # S2 works without key at lower rate
+            semantic_scholar_provider = SemanticScholarProvider(api_key=api_key)
+    except Exception:
+        logger.debug("Could not initialize Semantic Scholar provider for citation network")
+
+    if openalex_provider is None and semantic_scholar_provider is None:
+        return asdict(
+            error_response(
+                "No academic providers available for citation network construction",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+                remediation="Ensure OpenAlex or Semantic Scholar is configured",
+            )
+        )
+
+    from foundry_mcp.core.research.workflows.deep_research.phases.citation_network import (
+        CitationNetworkBuilder,
+    )
+
+    builder = CitationNetworkBuilder(
+        openalex_provider=openalex_provider,
+        semantic_scholar_provider=semantic_scholar_provider,
+        max_references_per_paper=effective_max_refs,
+        max_citations_per_paper=effective_max_cites,
+    )
+
+    # Run async builder in event loop
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                network = pool.submit(
+                    asyncio.run, builder.build_network(state.sources)
+                ).result(timeout=120)
+        else:
+            network = loop.run_until_complete(builder.build_network(state.sources))
+    except RuntimeError:
+        network = asyncio.run(builder.build_network(state.sources))
+
+    # Save to state
+    state.extensions.citation_network = network
+    memory.save_deep_research(state)
+
+    # Check if skipped
+    if network.stats.get("status") == "skipped":
+        return asdict(
+            success_response(
+                data={
+                    "research_id": research_id,
+                    "status": "skipped",
+                    "reason": network.stats.get("reason", "insufficient academic sources"),
+                    "academic_source_count": network.stats.get("academic_source_count", 0),
+                }
+            )
+        )
+
+    return asdict(
+        success_response(
+            data={
+                "research_id": research_id,
+                "status": "completed",
+                "network": network.model_dump(mode="json"),
+            }
+        )
+    )

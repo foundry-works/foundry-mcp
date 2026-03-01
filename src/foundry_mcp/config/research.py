@@ -318,6 +318,10 @@ class ResearchConfig:
         default_factory=lambda: ["methods", "results", "discussion"]
     )  # Sections to prioritize when truncating PDF content
 
+    # Citation network settings (PLAN-4 Item 2, user-triggered)
+    deep_research_citation_network_max_refs_per_paper: int = 20  # Max backward references per source
+    deep_research_citation_network_max_cites_per_paper: int = 20  # Max forward citations per source
+
     deep_research_archive_content: bool = False  # Archive canonical text for digested sources
     deep_research_archive_retention_days: int = 30  # Days to retain archived digest content (0 = keep indefinitely)
     # Digest LLM provider configuration (uses default provider if not set)

@@ -76,63 +76,63 @@
 ### 2a. Citation network model
 > **File**: `src/foundry_mcp/core/research/models/deep_research.py`
 
-- [ ] Add `CitationNode` model (paper_id, title, authors, year, citation_count, is_discovered, source_id, role)
-- [ ] Add `CitationEdge` model (citing_paper_id, cited_paper_id)
-- [ ] Add `CitationNetwork` model (nodes, edges, foundational_papers, research_threads, stats)
+- [x] Add `CitationNode` model (paper_id, title, authors, year, citation_count, is_discovered, source_id, role)
+- [x] Add `CitationEdge` model (citing_paper_id, cited_paper_id)
+- [x] Add `CitationNetwork` model (nodes, edges, foundational_papers, research_threads, stats)
 
 ### 2b. Add to ResearchExtensions
 > **File**: `src/foundry_mcp/core/research/models/deep_research.py`
 
-- [ ] Add `citation_network: Optional[CitationNetwork] = None` to `ResearchExtensions`
-- [ ] Add convenience accessor `@property citation_network` on `DeepResearchState`
+- [x] Add `citation_network: Optional[CitationNetwork] = None` to `ResearchExtensions`
+- [x] Add convenience accessor `@property citation_network` on `DeepResearchState`
 
 ### 2c. Network builder
 > **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/citation_network.py` (NEW)
 
-- [ ] Create `CitationNetworkBuilder` class
-- [ ] Implement `build_network()` — fetch refs/cites, build graph, classify
-  - [ ] Fetch references for each source via OpenAlex (primary) / Semantic Scholar (fallback)
-  - [ ] Fetch citations for each source
-  - [ ] Build node and edge lists
-  - [ ] Respect `max_references_per_paper` and `max_citations_per_paper` caps
-  - [ ] Concurrency control (`max_concurrent` parameter)
-- [ ] Implement `_identify_foundational_papers()` — cited by 3+ discovered papers (or 30%)
-- [ ] Implement `_identify_research_threads()` — connected components via BFS/union-find (3+ nodes)
-- [ ] Implement `_classify_roles()` — foundational, discovered, extension, peripheral
-- [ ] Add unit test: network builder with mocked provider responses
-- [ ] Add unit test: foundational paper identification
-- [ ] Add unit test: research thread detection with known graph
-- [ ] Add unit test: role classification
+- [x] Create `CitationNetworkBuilder` class
+- [x] Implement `build_network()` — fetch refs/cites, build graph, classify
+  - [x] Fetch references for each source via OpenAlex (primary) / Semantic Scholar (fallback)
+  - [x] Fetch citations for each source
+  - [x] Build node and edge lists
+  - [x] Respect `max_references_per_paper` and `max_citations_per_paper` caps
+  - [x] Concurrency control (`max_concurrent` parameter)
+- [x] Implement `_identify_foundational_papers()` — cited by 3+ discovered papers (or 30%)
+- [x] Implement `_identify_research_threads()` — connected components via BFS/union-find (3+ nodes)
+- [x] Implement `_classify_roles()` — foundational, discovered, extension, peripheral
+- [x] Add unit test: network builder with mocked provider responses
+- [x] Add unit test: foundational paper identification
+- [x] Add unit test: research thread detection with known graph
+- [x] Add unit test: role classification
 
 ### 2d. Dedicated action handler
 > **File**: `src/foundry_mcp/tools/unified/research_handlers/handlers_deep_research.py`
 
-- [ ] Add `_handle_deep_research_network()` handler
-  - [ ] Load completed research state
-  - [ ] Filter to academic sources with paper IDs
-  - [ ] Return `{"status": "skipped", "reason": "fewer than 3 academic sources"}` if < 3
-  - [ ] Build network and save to `state.extensions.citation_network`
-  - [ ] Return network data
-- [ ] Wire up `"deep-research-network"` action in the research router
-- [ ] Add unit test: action handler wiring and response format
-- [ ] Add unit test: graceful handling when < 3 academic sources
+- [x] Add `_handle_deep_research_network()` handler
+  - [x] Load completed research state
+  - [x] Filter to academic sources with paper IDs
+  - [x] Return `{"status": "skipped", "reason": "fewer than 3 academic sources"}` if < 3
+  - [x] Build network and save to `state.extensions.citation_network`
+  - [x] Return network data
+- [x] Wire up `"deep-research-network"` action in the research router
+- [x] Add unit test: action handler wiring and response format
+- [x] Add unit test: graceful handling when < 3 academic sources
 
 ### 2e. Configuration
-> **File**: `src/foundry_mcp/core/research/config` (or relevant config module)
+> **File**: `src/foundry_mcp/config/research.py`
 
-- [ ] Add `deep_research_citation_network_max_refs_per_paper: int = 20`
-- [ ] Add `deep_research_citation_network_max_cites_per_paper: int = 20`
+- [x] Add `deep_research_citation_network_max_refs_per_paper: int = 20`
+- [x] Add `deep_research_citation_network_max_cites_per_paper: int = 20`
 
 ### Item 2 Validation
 
-- [ ] Citation network models serialize/deserialize correctly
-- [ ] Network builder produces correct graph from mocked API responses
-- [ ] Foundational papers identified correctly (cited by 3+ discovered)
-- [ ] Research threads detected via connected components
-- [ ] Action handler returns correct response format
-- [ ] Graceful skip when < 3 academic sources
-- [ ] Integration test: 5 academic sources -> network with edges
-- [ ] ~100-140 LOC new tests written
+- [x] Citation network models serialize/deserialize correctly
+- [x] Network builder produces correct graph from mocked API responses
+- [x] Foundational papers identified correctly (cited by 3+ discovered)
+- [x] Research threads detected via connected components
+- [x] Action handler returns correct response format
+- [x] Graceful skip when < 3 academic sources
+- [x] Integration test: 5 academic sources -> network with edges
+- [x] ~100-140 LOC new tests written (35 tests, ~220 LOC)
 
 ---
 
