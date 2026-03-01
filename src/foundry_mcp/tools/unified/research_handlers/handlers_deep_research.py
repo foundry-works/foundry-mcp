@@ -713,3 +713,141 @@ def _handle_deep_research_network(
             }
         )
     )
+
+
+# ---------------------------------------------------------------------------
+# PLAN-4 Item 3: Methodology Assessment (user-triggered)
+# ---------------------------------------------------------------------------
+
+_DR_ASSESS_SCHEMA = {
+    "research_id": Str(required=True),
+}
+
+
+def _handle_deep_research_assess(
+    *,
+    research_id: Optional[str] = None,
+    **kwargs: Any,
+) -> dict:
+    """Run methodology quality assessment on a completed research session.
+
+    User-triggered post-hoc action. Filters to academic sources with
+    sufficient content, then uses LLM extraction to assess study design,
+    sample size, effect size, limitations, and biases.
+
+    Args:
+        research_id: ID of the deep research session.
+    """
+    import asyncio
+
+    payload = {"research_id": research_id}
+    err = validate_payload(
+        payload, _DR_ASSESS_SCHEMA, tool_name="research", action="deep-research-assess"
+    )
+    if err:
+        return err
+
+    memory = _get_memory()
+    config = _get_config()
+    assert research_id is not None  # validated by schema
+
+    state = memory.load_deep_research(research_id)
+    if state is None:
+        return asdict(
+            error_response(
+                f"Research session '{research_id}' not found",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Use deep-research-list to find valid research IDs",
+            )
+        )
+
+    # Validate session has sources
+    if not state.sources:
+        return asdict(
+            error_response(
+                "Research session has no sources to assess",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
+                remediation="Run deep-research first to gather sources",
+            )
+        )
+
+    from foundry_mcp.core.research.workflows.deep_research.phases.methodology_assessment import (
+        MethodologyAssessor,
+    )
+
+    # Use config for assessment parameters
+    assessor = MethodologyAssessor(
+        provider_id=config.research.deep_research_methodology_assessment_provider,
+        timeout=config.research.deep_research_methodology_assessment_timeout,
+        min_content_length=config.research.deep_research_methodology_assessment_min_content_length,
+    )
+
+    # Check eligibility before running expensive LLM calls
+    eligible = assessor.filter_assessable_sources(state.sources)
+    if len(eligible) < 2:
+        return asdict(
+            error_response(
+                f"Only {len(eligible)} eligible academic source(s) found (need at least 2)",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
+                remediation="Session needs 2+ academic sources with sufficient content for methodology assessment",
+                details={
+                    "research_id": research_id,
+                    "eligible_count": len(eligible),
+                    "total_sources": len(state.sources),
+                },
+            )
+        )
+
+    # Run async assessor
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                assessments = pool.submit(
+                    asyncio.run, assessor.assess_sources(state.sources)
+                ).result(timeout=config.research.deep_research_methodology_assessment_timeout * len(eligible) + 30)
+        else:
+            assessments = loop.run_until_complete(assessor.assess_sources(state.sources))
+    except RuntimeError:
+        assessments = asyncio.run(assessor.assess_sources(state.sources))
+
+    # Save assessments to state
+    state.extensions.methodology_assessments = assessments
+    memory.save_deep_research(state)
+
+    # Build response
+    assessment_summaries = []
+    for a in assessments:
+        summary: dict[str, Any] = {
+            "source_id": a.source_id,
+            "study_design": a.study_design.value,
+            "confidence": a.confidence,
+            "content_basis": a.content_basis,
+        }
+        if a.sample_size is not None:
+            summary["sample_size"] = a.sample_size
+        if a.effect_size:
+            summary["effect_size"] = a.effect_size
+        if a.limitations_noted:
+            summary["limitations_count"] = len(a.limitations_noted)
+        if a.potential_biases:
+            summary["biases_count"] = len(a.potential_biases)
+        assessment_summaries.append(summary)
+
+    return asdict(
+        success_response(
+            data={
+                "research_id": research_id,
+                "status": "completed",
+                "assessment_count": len(assessments),
+                "eligible_sources": len(eligible),
+                "total_sources": len(state.sources),
+                "assessments": assessment_summaries,
+            }
+        )
+    )

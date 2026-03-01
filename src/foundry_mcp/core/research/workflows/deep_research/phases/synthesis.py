@@ -1137,7 +1137,7 @@ class SynthesisPhaseMixin:
             gaps=structured_gaps,
             contradictions=structured_contradictions,
             query_type=query_type,
-            profile=state.research_profile.name,
+            profile=state.research_profile.name if state.research_profile else "general",
         )
 
     def _build_synthesis_system_prompt(self, state: DeepResearchState) -> str:

@@ -247,7 +247,7 @@ def _resolve_format_style(
     if query_type == "literature_review":
         return "apa"
 
-    style = state.research_profile.citation_style
+    style = state.research_profile.citation_style if state.research_profile else None
     if style and style != "default":
         return style
 

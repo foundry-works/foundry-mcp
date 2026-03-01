@@ -33,6 +33,7 @@ _ACTION_SUMMARY = {
     "deep-research-provenance": "Retrieve provenance audit trail for research session",
     "deep-research-export": "Export bibliography (BibTeX/RIS) from research session",
     "deep-research-network": "Build citation network graph from research session sources",
+    "deep-research-assess": "Run methodology quality assessment on research session sources",
     "thread-list": "List conversation threads",
     "thread-get": "Get full thread details including messages",
     "thread-delete": "Delete a conversation thread",

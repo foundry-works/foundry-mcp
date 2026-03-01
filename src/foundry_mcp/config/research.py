@@ -775,6 +775,40 @@ class ResearchConfig:
             deep_research_archive_retention_days=int(data.get("deep_research_archive_retention_days", 30)),
             deep_research_digest_provider=data.get("deep_research_digest_provider"),
             deep_research_digest_providers=_parse_provider_list("deep_research_digest_providers"),
+            # PDF extraction settings (PLAN-4 Item 1)
+            deep_research_pdf_max_pages=int(data.get("deep_research_pdf_max_pages", 50)),
+            deep_research_pdf_priority_sections=data.get(
+                "deep_research_pdf_priority_sections", ["methods", "results", "discussion"]
+            ),
+            # Citation network settings (PLAN-4 Item 2)
+            deep_research_citation_network_max_refs_per_paper=int(
+                data.get("deep_research_citation_network_max_refs_per_paper", 20)
+            ),
+            deep_research_citation_network_max_cites_per_paper=int(
+                data.get("deep_research_citation_network_max_cites_per_paper", 20)
+            ),
+            # Methodology assessment settings (PLAN-4 Item 3)
+            deep_research_methodology_assessment_provider=data.get(
+                "deep_research_methodology_assessment_provider"
+            ),
+            deep_research_methodology_assessment_timeout=float(
+                data.get("deep_research_methodology_assessment_timeout", 60.0)
+            ),
+            deep_research_methodology_assessment_min_content_length=int(
+                data.get("deep_research_methodology_assessment_min_content_length", 200)
+            ),
+            # Academic coverage weights (PLAN-3)
+            deep_research_academic_coverage_weights=data.get("deep_research_academic_coverage_weights"),
+            # Influence scoring thresholds (PLAN-3)
+            deep_research_influence_high_citation_threshold=int(
+                data.get("deep_research_influence_high_citation_threshold", 100)
+            ),
+            deep_research_influence_medium_citation_threshold=int(
+                data.get("deep_research_influence_medium_citation_threshold", 20)
+            ),
+            deep_research_influence_low_citation_threshold=int(
+                data.get("deep_research_influence_low_citation_threshold", 5)
+            ),
             # Model tier configuration
             _tier_config=data.get("model_tiers"),
         )

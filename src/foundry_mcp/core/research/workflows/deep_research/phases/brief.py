@@ -175,8 +175,11 @@ class BriefPhaseMixin:
 
         # PLAN-2 Item 5: Adaptive provider selection from brief signals
         effective_brief = brief_text or state.original_query
-        provider_hints = self._extract_provider_hints(effective_brief, state.research_profile)
-        active_providers = self._apply_provider_hints(state, provider_hints)
+        provider_hints: list[str] = []
+        active_providers: list[str] = []
+        if state.research_profile is not None:
+            provider_hints = self._extract_provider_hints(effective_brief, state.research_profile)
+            active_providers = self._apply_provider_hints(state, provider_hints)
         if provider_hints:
             logger.info(
                 "Adaptive provider selection: hints=%s, active=%s (research %s)",
@@ -212,7 +215,7 @@ class BriefPhaseMixin:
                 summary=f"Adaptive provider selection: {len(provider_hints)} hint(s) extracted from brief",
                 provider_hints=provider_hints,
                 active_providers=active_providers,
-                profile_name=state.research_profile.name,
+                profile_name=state.research_profile.name if state.research_profile else "general",
             )
 
         # PLAN-1 Item 2: Log brief_generated provenance event
@@ -399,8 +402,10 @@ class BriefPhaseMixin:
     # of discipline signals to a recommended search provider.
     _DISCIPLINE_PROVIDER_MAP: list[tuple[list[str], str]] = [
         (
+            # No PubMed MCP integration — route biomedical queries to
+            # Semantic Scholar which covers biomedical literature via PubMed IDs.
             ["biomedical", "clinical", "health", "medical", "medicine", "epidemiology", "pharmaceutical"],
-            "pubmed",
+            "semantic_scholar",
         ),
         (
             ["computer science", "machine learning", "artificial intelligence", "deep learning", "natural language processing"],
@@ -490,11 +495,16 @@ class BriefPhaseMixin:
 
         profile = state.research_profile
 
-        # Start with the profile's current provider list
-        active: list[str] = list(profile.providers)
-
         # Store raw hints in metadata regardless of application
         state.metadata["provider_hints"] = hints
+
+        # Guard: legacy sessions (pre-PLAN-1) may have research_profile=None
+        if profile is None:
+            state.metadata["active_providers"] = []
+            return []
+
+        # Start with the profile's current provider list
+        active: list[str] = list(profile.providers)
 
         # Only augment built-in profiles — custom profiles have explicit
         # provider choices that should not be overridden.

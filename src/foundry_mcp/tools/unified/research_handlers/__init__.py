@@ -20,6 +20,7 @@ from foundry_mcp.tools.unified.research_handlers._helpers import (
 )
 from foundry_mcp.tools.unified.research_handlers.handlers_deep_research import (
     _handle_deep_research,
+    _handle_deep_research_assess,
     _handle_deep_research_delete,
     _handle_deep_research_evaluate,
     _handle_deep_research_export,
@@ -119,6 +120,11 @@ _ACTION_DEFINITIONS = [
         name="deep-research-network",
         handler=_handle_deep_research_network,
         summary=_ACTION_SUMMARY["deep-research-network"],
+    ),
+    ActionDefinition(
+        name="deep-research-assess",
+        handler=_handle_deep_research_assess,
+        summary=_ACTION_SUMMARY["deep-research-assess"],
     ),
     ActionDefinition(
         name="thread-list",
@@ -261,6 +267,7 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
         - deep-research-delete: Delete a deep research session
         - deep-research-evaluate: Evaluate research report quality (LLM-as-judge)
         - deep-research-network: Build citation network graph from research session sources
+        - deep-research-assess: Run methodology quality assessment on research session sources
         - thread-list: List conversation threads
         - thread-get: Get thread details including messages
         - thread-delete: Delete a conversation thread

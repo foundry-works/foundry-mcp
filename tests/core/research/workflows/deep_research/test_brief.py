@@ -522,8 +522,8 @@ class TestAcademicBriefEnrichment:
 class TestExtractProviderHints:
     """Tests for _extract_provider_hints() — discipline keyword mapping."""
 
-    def test_biomedical_brief_triggers_pubmed_hint(self):
-        """Biomedical keywords in brief text trigger PubMed hint."""
+    def test_biomedical_brief_triggers_semantic_scholar_hint(self):
+        """Biomedical keywords in brief text trigger Semantic Scholar hint."""
         from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
 
         brief = (
@@ -531,23 +531,23 @@ class TestExtractProviderHints:
             "the efficacy of mRNA vaccines in immunocompromised populations."
         )
         hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
-        assert "pubmed" in hints
+        assert "semantic_scholar" in hints
 
-    def test_clinical_keyword_triggers_pubmed(self):
-        """The keyword 'clinical' triggers PubMed hint."""
+    def test_clinical_keyword_triggers_semantic_scholar(self):
+        """The keyword 'clinical' triggers Semantic Scholar hint (biomedical route)."""
         from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
 
         brief = "Investigate clinical outcomes of cognitive behavioral therapy."
         hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
-        assert "pubmed" in hints
+        assert "semantic_scholar" in hints
 
-    def test_health_keyword_triggers_pubmed(self):
-        """The keyword 'health' triggers PubMed hint."""
+    def test_health_keyword_triggers_semantic_scholar(self):
+        """The keyword 'health' triggers Semantic Scholar hint (biomedical route)."""
         from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
 
         brief = "Public health interventions for childhood obesity prevention."
         hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
-        assert "pubmed" in hints
+        assert "semantic_scholar" in hints
 
     def test_cs_brief_triggers_semantic_scholar_hint(self):
         """Computer science keywords trigger Semantic Scholar hint."""
@@ -592,11 +592,12 @@ class TestExtractProviderHints:
         from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
 
         brief = (
-            "Investigating the intersection of clinical medicine and "
+            "Investigating the intersection of sociology and "
             "machine learning for diagnostic imaging."
         )
         hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
-        assert "pubmed" in hints
+        # sociology -> openalex, machine learning -> semantic_scholar
+        assert "openalex" in hints
         assert "semantic_scholar" in hints
         assert len(hints) == 2
 
@@ -630,7 +631,7 @@ class TestExtractProviderHints:
 
         brief = "BIOMEDICAL research on CLINICAL trials."
         hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
-        assert "pubmed" in hints
+        assert "semantic_scholar" in hints
 
 
 class TestApplyProviderHints:
@@ -770,7 +771,7 @@ class TestAdaptiveProviderSelectionIntegration:
 
         assert result.success
         assert "provider_hints" in state.metadata
-        assert "pubmed" in state.metadata["provider_hints"]
+        assert "semantic_scholar" in state.metadata["provider_hints"]
         assert "active_providers" in state.metadata
 
     @pytest.mark.asyncio

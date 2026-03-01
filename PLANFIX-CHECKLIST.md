@@ -63,24 +63,24 @@
 ### Item 1.1: Wire Methodology Assessment as User-Triggered Action
 > **Files**: `src/foundry_mcp/tools/unified/research_handlers/handlers_deep_research.py`, `src/foundry_mcp/tools/unified/research_handlers/__init__.py`
 
-- [ ] Add `_handle_deep_research_assess()` handler function
-  - [ ] Load completed research state by `research_id`
-  - [ ] Validate session is completed (or has sources)
-  - [ ] Filter to academic sources with content > min_content_length
-  - [ ] Skip if fewer than 2 eligible sources
-  - [ ] Instantiate `MethodologyAssessor` and call `assess_sources()`
-  - [ ] Save assessments to `state.extensions.methodology_assessments`
-  - [ ] Persist updated state
-  - [ ] Return assessments in success response
-- [ ] Register `"deep-research-assess"` action in `ACTION_REGISTRY` in `__init__.py`
-- [ ] Add `ActionDefinition` with appropriate summary and validation schema
+- [x] Add `_handle_deep_research_assess()` handler function
+  - [x] Load completed research state by `research_id`
+  - [x] Validate session is completed (or has sources)
+  - [x] Filter to academic sources with content > min_content_length
+  - [x] Skip if fewer than 2 eligible sources
+  - [x] Instantiate `MethodologyAssessor` and call `assess_sources()`
+  - [x] Save assessments to `state.extensions.methodology_assessments`
+  - [x] Persist updated state
+  - [x] Return assessments in success response
+- [x] Register `"deep-research-assess"` action in `ACTION_REGISTRY` in `__init__.py`
+- [x] Add `ActionDefinition` with appropriate summary and validation schema
 
 #### Item 1.1 Validation
 
-- [ ] `deep-research-assess` action callable on completed research session
-- [ ] Returns methodology assessments for eligible academic sources
-- [ ] Handles missing/incomplete session gracefully
-- [ ] Assessments persisted and visible in subsequent `deep-research-report` calls
+- [x] `deep-research-assess` action callable on completed research session
+- [x] Returns methodology assessments for eligible academic sources
+- [x] Handles missing/incomplete session gracefully
+- [x] Assessments persisted and visible in subsequent `deep-research-report` calls
 - [ ] Add integration test: assess action on session with academic sources
 
 ---
@@ -88,55 +88,55 @@
 ### Item 1.2: Add Missing Config Fields to `from_toml_dict()`
 > **File**: `src/foundry_mcp/config/research.py`
 
-- [ ] Add `deep_research_pdf_max_pages=data.get("deep_research_pdf_max_pages", 50)` to `cls()` call
-- [ ] Add `deep_research_pdf_priority_sections=data.get("deep_research_pdf_priority_sections", ["methods", "results", "discussion"])` to `cls()` call
-- [ ] Add `deep_research_citation_network_max_refs_per_paper=data.get("deep_research_citation_network_max_refs_per_paper", 20)` to `cls()` call
-- [ ] Add `deep_research_citation_network_max_cites_per_paper=data.get("deep_research_citation_network_max_cites_per_paper", 20)` to `cls()` call
-- [ ] Add `deep_research_methodology_assessment_provider=data.get("deep_research_methodology_assessment_provider", None)` to `cls()` call
-- [ ] Add `deep_research_methodology_assessment_timeout=data.get("deep_research_methodology_assessment_timeout", 60.0)` to `cls()` call
-- [ ] Add `deep_research_methodology_assessment_min_content_length=data.get("deep_research_methodology_assessment_min_content_length", 200)` to `cls()` call
-- [ ] Add `deep_research_academic_coverage_weights=data.get("deep_research_academic_coverage_weights", ...)` to `cls()` call
-- [ ] Add `deep_research_influence_high_citation_threshold=data.get("deep_research_influence_high_citation_threshold", 100)` to `cls()` call
-- [ ] Add `deep_research_influence_medium_citation_threshold=data.get("deep_research_influence_medium_citation_threshold", 20)` to `cls()` call
-- [ ] Add `deep_research_influence_low_citation_threshold=data.get("deep_research_influence_low_citation_threshold", 5)` to `cls()` call
+- [x] Add `deep_research_pdf_max_pages=data.get("deep_research_pdf_max_pages", 50)` to `cls()` call
+- [x] Add `deep_research_pdf_priority_sections=data.get("deep_research_pdf_priority_sections", ["methods", "results", "discussion"])` to `cls()` call
+- [x] Add `deep_research_citation_network_max_refs_per_paper=data.get("deep_research_citation_network_max_refs_per_paper", 20)` to `cls()` call
+- [x] Add `deep_research_citation_network_max_cites_per_paper=data.get("deep_research_citation_network_max_cites_per_paper", 20)` to `cls()` call
+- [x] Add `deep_research_methodology_assessment_provider=data.get("deep_research_methodology_assessment_provider", None)` to `cls()` call
+- [x] Add `deep_research_methodology_assessment_timeout=data.get("deep_research_methodology_assessment_timeout", 60.0)` to `cls()` call
+- [x] Add `deep_research_methodology_assessment_min_content_length=data.get("deep_research_methodology_assessment_min_content_length", 200)` to `cls()` call
+- [x] Add `deep_research_academic_coverage_weights=data.get("deep_research_academic_coverage_weights", ...)` to `cls()` call
+- [x] Add `deep_research_influence_high_citation_threshold=data.get("deep_research_influence_high_citation_threshold", 100)` to `cls()` call
+- [x] Add `deep_research_influence_medium_citation_threshold=data.get("deep_research_influence_medium_citation_threshold", 20)` to `cls()` call
+- [x] Add `deep_research_influence_low_citation_threshold=data.get("deep_research_influence_low_citation_threshold", 5)` to `cls()` call
 
 #### Item 1.2 Validation
 
 - [ ] Add unit test: `from_toml_dict` with each new field set to non-default value
-- [ ] Verify defaults match class field declarations
-- [ ] Existing config tests pass unchanged
+- [x] Verify defaults match class field declarations
+- [x] Existing config tests pass unchanged
 
 ---
 
 ### Item 1.3: Guard Against Legacy Session `AttributeError`
 > **Files**: Multiple phase files
 
-- [ ] `synthesis.py:1140` — Guard `state.research_profile.name` with None check
-- [ ] Audit `synthesis.py` for all other `state.research_profile.X` accesses without guards
-- [ ] Audit `brief.py` for unguarded `state.research_profile` accesses
-- [ ] Audit `supervision_prompts.py` for unguarded `state.research_profile` accesses
-- [ ] Audit `topic_research.py` for unguarded `state.research_profile` accesses
-- [ ] Audit `_citation_postprocess.py` for unguarded `state.research_profile` accesses
+- [x] `synthesis.py:1140` — Guard `state.research_profile.name` with None check
+- [x] Audit `synthesis.py` for all other `state.research_profile.X` accesses without guards
+- [x] Audit `brief.py` for unguarded `state.research_profile` accesses
+- [x] Audit `supervision_prompts.py` for unguarded `state.research_profile` accesses
+- [x] Audit `topic_research.py` for unguarded `state.research_profile` accesses
+- [x] Audit `_citation_postprocess.py` for unguarded `state.research_profile` accesses
 
 #### Item 1.3 Validation
 
 - [ ] Add unit test: synthesis with `state.research_profile = None` does not raise
 - [ ] Add unit test: brief with `state.research_profile = None` does not raise
-- [ ] Existing tests pass unchanged
+- [x] Existing tests pass unchanged
 
 ---
 
 ### Item 1.4: Fix `pubmed` Provider Hint Always Dropped
 > **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/brief.py`
 
-- [ ] Decision: add `pubmed` to `known_providers` OR replace with `semantic_scholar` in `_DISCIPLINE_PROVIDER_MAP`
-- [ ] Implement chosen fix
-- [ ] Document rationale in code comment
+- [x] Decision: replace `pubmed` with `semantic_scholar` in `_DISCIPLINE_PROVIDER_MAP` (no PubMed MCP integration exists)
+- [x] Implement chosen fix
+- [x] Document rationale in code comment
 
 #### Item 1.4 Validation
 
-- [ ] Biomedical query brief produces a working provider hint (not silently dropped)
-- [ ] Existing brief tests pass (update assertions if hint target changed)
+- [x] Biomedical query brief produces a working provider hint (not silently dropped)
+- [x] Existing brief tests pass (updated assertions for semantic_scholar)
 
 ---
 
