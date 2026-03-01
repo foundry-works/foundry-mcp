@@ -24,8 +24,10 @@ if TYPE_CHECKING:
 
 from foundry_mcp.core.errors.provider import ContextWindowError
 from foundry_mcp.core.research.models.deep_research import (
+    CitationSearchTool,
     DeepResearchState,
     ExtractContentTool,
+    RelatedPapersTool,
     ResearcherToolCall,
     ThinkTool,
     TopicResearchResult,
@@ -244,6 +246,19 @@ You have {remaining} of {total} tool calls remaining (web_search and extract_con
 Today's date is {date}.
 """
 
+# Additional tool documentation injected when citation tools are enabled
+_CITATION_TOOLS_PROMPT = """
+### citation_search
+Search for papers that cite a given paper (forward citation search / snowball sampling).
+Arguments: {{"paper_id": "DOI or Semantic Scholar paper ID", "max_results": 10}}
+Returns: List of citing papers with metadata. Use this for forward snowball sampling — start from a seminal paper and trace who built on it.
+
+### related_papers
+Find papers similar to a given paper (lateral discovery).
+Arguments: {{"paper_id": "DOI or Semantic Scholar paper ID", "max_results": 5}}
+Returns: List of related papers based on content similarity. Use this to discover work the initial search may have missed — especially useful for finding papers that use different terminology for the same concept.
+"""
+
 
 # ------------------------------------------------------------------
 # Shared dedup helper for _topic_search and _topic_extract
@@ -332,6 +347,7 @@ def _build_researcher_system_prompt(
     budget_total: int,
     budget_remaining: int,
     extract_enabled: bool,
+    citation_tools_enabled: bool = False,
     date_str: str | None = None,
 ) -> str:
     """Build the researcher system prompt with budget and context.
@@ -340,6 +356,8 @@ def _build_researcher_system_prompt(
         budget_total: Total tool call budget for this researcher.
         budget_remaining: Remaining tool calls.
         extract_enabled: Whether extract_content tool is available.
+        citation_tools_enabled: Whether citation_search and related_papers
+            tools are available (gated by research profile).
         date_str: Today's date string. Defaults to UTC today.
 
     Returns:
@@ -363,6 +381,13 @@ def _build_researcher_system_prompt(
             "Returns: Full page content in markdown format.\n"
             "Only available when extraction is enabled. If unavailable, focus on web_search.\n\n",
             "",
+        )
+
+    if citation_tools_enabled:
+        # Insert citation tool documentation before the Response Format section
+        prompt = prompt.replace(
+            "## Response Format",
+            f"{_CITATION_TOOLS_PROMPT}\n## Response Format",
         )
 
     return prompt
@@ -572,6 +597,10 @@ class TopicResearchMixin:
 
         extract_enabled, extract_max_per_iter, provider_id, researcher_model = self._resolve_topic_research_config()
 
+        # Resolve citation tools flag from research profile
+        profile = state.research_profile
+        citation_tools_enabled = getattr(profile, "enable_citation_tools", False) if profile else False
+
         message_history: list[dict[str, str]] = []
         max_turns = max_searches * 3  # generous: 3x budget allows think steps
 
@@ -601,6 +630,7 @@ class TopicResearchMixin:
                 budget_remaining=budget_remaining,
                 max_searches=max_searches,
                 extract_enabled=extract_enabled,
+                citation_tools_enabled=citation_tools_enabled,
                 turn=turn,
             )
             if llm_result is None:
@@ -613,6 +643,7 @@ class TopicResearchMixin:
                 budget_total=max_searches,
                 budget_remaining=budget_remaining,
                 extract_enabled=extract_enabled,
+                citation_tools_enabled=citation_tools_enabled,
             )
             response, tokens_delta = await self._parse_with_retry_async(
                 raw_content=raw_content,
@@ -673,6 +704,7 @@ class TopicResearchMixin:
                 budget_remaining=budget_remaining,
                 extract_enabled=extract_enabled,
                 extract_max_per_iter=extract_max_per_iter,
+                citation_tools_enabled=citation_tools_enabled,
             )
             tool_calls_used += calls_delta
             budget_remaining -= budget_delta
@@ -738,6 +770,7 @@ class TopicResearchMixin:
         max_searches: int,
         extract_enabled: bool,
         turn: int,
+        citation_tools_enabled: bool = False,
     ) -> Any | None:
         """Execute a single researcher LLM call for one ReAct turn.
 
@@ -754,6 +787,8 @@ class TopicResearchMixin:
             max_searches: Total tool call budget.
             extract_enabled: Whether extract_content is available.
             turn: Current turn index (for logging).
+            citation_tools_enabled: Whether citation_search and related_papers
+                tools are available.
 
         Returns:
             LLM result object on success, None on failure.
@@ -762,6 +797,7 @@ class TopicResearchMixin:
             budget_total=max_searches,
             budget_remaining=budget_remaining,
             extract_enabled=extract_enabled,
+            citation_tools_enabled=citation_tools_enabled,
         )
         truncated_history = _truncate_researcher_history(message_history, researcher_model)
         user_prompt = _build_react_user_prompt(
@@ -1056,6 +1092,7 @@ class TopicResearchMixin:
         budget_remaining: int,
         extract_enabled: bool,
         extract_max_per_iter: int,
+        citation_tools_enabled: bool = False,
     ) -> tuple[bool, int, int]:
         """Dispatch all tool calls from a single researcher turn.
 
@@ -1164,6 +1201,92 @@ class TopicResearchMixin:
                     {
                         "role": "tool",
                         "tool": "extract_content",
+                        "content": tool_result_text,
+                    }
+                )
+
+            elif tool_call.tool == "citation_search":
+                if not citation_tools_enabled:
+                    message_history.append(
+                        {
+                            "role": "tool",
+                            "tool": "citation_search",
+                            "content": "Citation search is not available for this research profile.",
+                        }
+                    )
+                    continue
+
+                if budget_remaining - budget_delta <= 0:
+                    message_history.append(
+                        {
+                            "role": "tool",
+                            "tool": "citation_search",
+                            "content": "Budget exhausted. No more searches allowed.",
+                        }
+                    )
+                    continue
+
+                tool_result_text = await self._handle_citation_search_tool(
+                    tool_call=tool_call,
+                    sub_query=sub_query,
+                    state=state,
+                    result=result,
+                    seen_urls=seen_urls,
+                    seen_titles=seen_titles,
+                    state_lock=state_lock,
+                    semaphore=semaphore,
+                    timeout=timeout,
+                )
+                tool_calls_delta += 1
+                budget_delta += 1
+                result.searches_performed += 1
+                message_history.append(
+                    {
+                        "role": "tool",
+                        "tool": "citation_search",
+                        "content": tool_result_text,
+                    }
+                )
+
+            elif tool_call.tool == "related_papers":
+                if not citation_tools_enabled:
+                    message_history.append(
+                        {
+                            "role": "tool",
+                            "tool": "related_papers",
+                            "content": "Related papers search is not available for this research profile.",
+                        }
+                    )
+                    continue
+
+                if budget_remaining - budget_delta <= 0:
+                    message_history.append(
+                        {
+                            "role": "tool",
+                            "tool": "related_papers",
+                            "content": "Budget exhausted. No more searches allowed.",
+                        }
+                    )
+                    continue
+
+                tool_result_text = await self._handle_related_papers_tool(
+                    tool_call=tool_call,
+                    sub_query=sub_query,
+                    state=state,
+                    result=result,
+                    seen_urls=seen_urls,
+                    seen_titles=seen_titles,
+                    state_lock=state_lock,
+                    semaphore=semaphore,
+                    timeout=timeout,
+                )
+                tool_calls_delta += 1
+                budget_delta += 1
+                result.searches_performed += 1
+                message_history.append(
+                    {
+                        "role": "tool",
+                        "tool": "related_papers",
                         "content": tool_result_text,
                     }
                 )
@@ -1813,6 +1936,312 @@ class TopicResearchMixin:
             blocks.append(_format_source_block(idx, src, ntag))
 
         return "\n\n".join(blocks)
+
+    # ------------------------------------------------------------------
+    # Citation and related papers handlers
+    # ------------------------------------------------------------------
+
+    async def _handle_citation_search_tool(
+        self,
+        tool_call: ResearcherToolCall,
+        sub_query: SubQuery,
+        state: DeepResearchState,
+        result: TopicResearchResult,
+        seen_urls: set[str],
+        seen_titles: dict[str, str],
+        state_lock: asyncio.Lock,
+        semaphore: asyncio.Semaphore,
+        timeout: float,
+    ) -> str:
+        """Handle a citation_search tool call: find papers citing a given paper.
+
+        Tries Semantic Scholar first, falls back to OpenAlex. Runs dedup
+        and novelty scoring on results following the web_search handler pattern.
+
+        Args:
+            tool_call: The citation_search tool call with paper_id argument.
+            sub_query: The sub-query being researched.
+            state: Current research state.
+            result: TopicResearchResult to update.
+            seen_urls: Shared URL dedup set.
+            seen_titles: Shared title dedup dict.
+            state_lock: Lock for thread-safe state mutations.
+            semaphore: Semaphore for concurrency control.
+            timeout: Request timeout.
+
+        Returns:
+            Formatted tool result string.
+        """
+        # Parse arguments
+        try:
+            args = CitationSearchTool.model_validate(tool_call.arguments)
+            paper_id = args.paper_id
+            max_results = args.max_results
+        except Exception:
+            paper_id = tool_call.arguments.get("paper_id", "")
+            max_results = int(tool_call.arguments.get("max_results", 10))
+
+        if not paper_id:
+            return "Error: paper_id is required for citation_search."
+
+        # Try Semantic Scholar first, then OpenAlex as fallback
+        sources: list[Any] = []
+        provider_name = "unknown"
+        async with semaphore:
+            for name in ("semantic_scholar", "openalex"):
+                provider = self._get_search_provider(name)
+                if provider is None:
+                    continue
+                try:
+                    self._check_cancellation(state)
+                    provider_name = name
+                    sources = await asyncio.wait_for(
+                        provider.get_citations(paper_id, max_results),
+                        timeout=timeout,
+                    )
+                    break
+                except Exception as e:
+                    logger.warning(
+                        "Citation search via %s failed for %r: %s",
+                        name,
+                        paper_id[:50],
+                        e,
+                    )
+                    continue
+
+        return await self._process_academic_tool_results(
+            sources=sources,
+            provider_name=provider_name,
+            tool_name="citation_search",
+            paper_id=paper_id,
+            sub_query=sub_query,
+            state=state,
+            result=result,
+            seen_urls=seen_urls,
+            seen_titles=seen_titles,
+            state_lock=state_lock,
+        )
+
+    async def _handle_related_papers_tool(
+        self,
+        tool_call: ResearcherToolCall,
+        sub_query: SubQuery,
+        state: DeepResearchState,
+        result: TopicResearchResult,
+        seen_urls: set[str],
+        seen_titles: dict[str, str],
+        state_lock: asyncio.Lock,
+        semaphore: asyncio.Semaphore,
+        timeout: float,
+    ) -> str:
+        """Handle a related_papers tool call: find papers similar to a given paper.
+
+        Tries Semantic Scholar recommendations first, falls back to OpenAlex
+        get_related. Runs dedup and novelty scoring on results.
+
+        Args:
+            tool_call: The related_papers tool call with paper_id argument.
+            sub_query: The sub-query being researched.
+            state: Current research state.
+            result: TopicResearchResult to update.
+            seen_urls: Shared URL dedup set.
+            seen_titles: Shared title dedup dict.
+            state_lock: Lock for thread-safe state mutations.
+            semaphore: Semaphore for concurrency control.
+            timeout: Request timeout.
+
+        Returns:
+            Formatted tool result string.
+        """
+        # Parse arguments
+        try:
+            args = RelatedPapersTool.model_validate(tool_call.arguments)
+            paper_id = args.paper_id
+            max_results = args.max_results
+        except Exception:
+            paper_id = tool_call.arguments.get("paper_id", "")
+            max_results = int(tool_call.arguments.get("max_results", 5))
+
+        if not paper_id:
+            return "Error: paper_id is required for related_papers."
+
+        # Try Semantic Scholar recommendations first, then OpenAlex related
+        sources: list[Any] = []
+        provider_name = "unknown"
+        async with semaphore:
+            # Semantic Scholar recommendations
+            s2_provider = self._get_search_provider("semantic_scholar")
+            if s2_provider is not None:
+                try:
+                    self._check_cancellation(state)
+                    provider_name = "semantic_scholar"
+                    sources = await asyncio.wait_for(
+                        s2_provider.get_recommendations(paper_id, max_results),
+                        timeout=timeout,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Related papers via semantic_scholar failed for %r: %s",
+                        paper_id[:50],
+                        e,
+                    )
+
+            # Fallback to OpenAlex if S2 failed or returned nothing
+            if not sources:
+                oa_provider = self._get_search_provider("openalex")
+                if oa_provider is not None:
+                    try:
+                        self._check_cancellation(state)
+                        provider_name = "openalex"
+                        sources = await asyncio.wait_for(
+                            oa_provider.get_related(paper_id, max_results),
+                            timeout=timeout,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "Related papers via openalex failed for %r: %s",
+                            paper_id[:50],
+                            e,
+                        )
+
+        return await self._process_academic_tool_results(
+            sources=sources,
+            provider_name=provider_name,
+            tool_name="related_papers",
+            paper_id=paper_id,
+            sub_query=sub_query,
+            state=state,
+            result=result,
+            seen_urls=seen_urls,
+            seen_titles=seen_titles,
+            state_lock=state_lock,
+        )
+
+    async def _process_academic_tool_results(
+        self,
+        sources: list[Any],
+        provider_name: str,
+        tool_name: str,
+        paper_id: str,
+        sub_query: SubQuery,
+        state: DeepResearchState,
+        result: TopicResearchResult,
+        seen_urls: set[str],
+        seen_titles: dict[str, str],
+        state_lock: asyncio.Lock,
+    ) -> str:
+        """Process results from citation_search or related_papers tools.
+
+        Handles dedup, novelty scoring, provenance logging, and formatting —
+        shared logic for both academic tool handlers.
+
+        Args:
+            sources: ResearchSource objects from the provider.
+            provider_name: Which provider returned the results.
+            tool_name: Tool name for provenance logging.
+            paper_id: The seed paper ID.
+            sub_query: The sub-query being researched.
+            state: Current research state.
+            result: TopicResearchResult to update.
+            seen_urls: Shared URL dedup set.
+            seen_titles: Shared title dedup dict.
+            state_lock: Lock for thread-safe state mutations.
+
+        Returns:
+            Formatted tool result string.
+        """
+        if not sources:
+            return f"No results found for {tool_name} with paper_id={paper_id!r}."
+
+        # Dedup sources
+        content_dedup_enabled = getattr(self.config, "deep_research_enable_content_dedup", True)
+        dedup_threshold = getattr(self.config, "deep_research_content_dedup_threshold", 0.8)
+
+        added = 0
+        added_source_ids: list[str] = []
+        for source in sources:
+            was_added, dedup_reason = await _dedup_and_add_source(
+                source=source,
+                sub_query=sub_query,
+                state=state,
+                seen_urls=seen_urls,
+                seen_titles=seen_titles,
+                state_lock=state_lock,
+                content_dedup_enabled=content_dedup_enabled,
+                dedup_threshold=dedup_threshold,
+            )
+            if was_added:
+                added += 1
+                added_source_ids.append(source.id)
+            elif dedup_reason and state.provenance is not None:
+                state.provenance.append(
+                    phase="supervision",
+                    event_type="source_deduplicated",
+                    summary=f"Source deduplicated ({dedup_reason}): {(source.title or '')[:80]}",
+                    source_url=source.url or "",
+                    source_title=(source.title or "")[:120],
+                    reason=dedup_reason,
+                )
+
+        # Log provenance
+        if state.provenance is not None:
+            state.provenance.append(
+                phase="supervision",
+                event_type="provider_query",
+                summary=f"{tool_name} via {provider_name}: {len(sources)} results for paper_id={paper_id!r}",
+                provider=provider_name,
+                query=f"{tool_name}:{paper_id}",
+                result_count=len(sources),
+                source_ids=added_source_ids,
+            )
+
+        # Track provider stats
+        async with state_lock:
+            state.search_provider_stats[provider_name] = (
+                state.search_provider_stats.get(provider_name, 0) + 1
+            )
+
+        result.sources_found += added
+
+        if added == 0:
+            return f"{tool_name} for paper_id={paper_id!r} returned {len(sources)} result(s), but all were duplicates of existing sources."
+
+        # Novelty scoring
+        from foundry_mcp.core.research.workflows.deep_research._content_dedup import (
+            NoveltyTag,
+            compute_novelty_tag,
+        )
+        from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
+            build_novelty_summary,
+        )
+
+        topic_source_ids = set(sub_query.source_ids)
+        topic_sources = [s for s in state.sources if s.id in topic_source_ids]
+        recent_sources = topic_sources[-added:]
+
+        pre_existing_ids = {s.id for s in recent_sources}
+        pre_existing_sources: list[tuple[str, str, str | None]] = []
+        for s in topic_sources:
+            if s.id not in pre_existing_ids:
+                pre_existing_sources.append((s.content or s.snippet or "", s.title, s.url))
+
+        novelty_tags: list[NoveltyTag] = []
+        for src in recent_sources:
+            tag = compute_novelty_tag(
+                new_content=src.content or src.snippet or "",
+                new_url=src.url,
+                existing_sources=pre_existing_sources,
+            )
+            novelty_tags.append(tag)
+            src.metadata["novelty_tag"] = tag.category
+            src.metadata["novelty_similarity"] = tag.similarity
+
+        novelty_header = build_novelty_summary(novelty_tags)
+        return _format_search_results_batch(
+            sources=recent_sources,
+            novelty_tags=novelty_tags,
+            novelty_header=novelty_header,
+        )
 
     # ------------------------------------------------------------------
     # Search step (scoped to one sub-query)

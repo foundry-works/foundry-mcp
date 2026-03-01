@@ -89,40 +89,40 @@
 ### 3a. Semantic Scholar methods
 > **File**: `providers/semantic_scholar.py`
 
-- [ ] Add `get_citations(paper_id, max_results, fields)` — `GET /paper/{paper_id}/citations`
-- [ ] Add `get_recommendations(paper_id, max_results)` — `POST /recommendations/v1/papers/`
-- [ ] Add `get_paper(paper_id, fields)` — `GET /paper/{paper_id}` (supports DOI, ArXiv, PMID formats)
+- [x] Add `get_citations(paper_id, max_results, fields)` — `GET /paper/{paper_id}/citations`
+- [x] Add `get_recommendations(paper_id, max_results)` — `POST /recommendations/v1/papers/`
+- [x] Add `get_paper(paper_id, fields)` — `GET /paper/{paper_id}` (supports DOI, ArXiv, PMID formats)
 
 ### 3b. Tool models
 > **File**: `models/deep_research.py`
 
-- [ ] Add `CitationSearchTool(BaseModel)` with `paper_id`, `max_results`
-- [ ] Add `RelatedPapersTool(BaseModel)` with `paper_id`, `max_results`
-- [ ] Register both in `RESEARCHER_TOOL_SCHEMAS`
+- [x] Add `CitationSearchTool(BaseModel)` with `paper_id`, `max_results`
+- [x] Add `RelatedPapersTool(BaseModel)` with `paper_id`, `max_results`
+- [x] Register both in `RESEARCHER_TOOL_SCHEMAS`
 
 ### 3c. Conditional tool injection
 > **File**: `phases/topic_research.py`
 
-- [ ] Add `citation_search` and `related_papers` tool descriptions to system prompt
-- [ ] Gate on `profile.enable_citation_tools == True`
-- [ ] Include tool usage guidance (forward snowball sampling, lateral discovery)
+- [x] Add `citation_search` and `related_papers` tool descriptions to system prompt
+- [x] Gate on `profile.enable_citation_tools == True`
+- [x] Include tool usage guidance (forward snowball sampling, lateral discovery)
 
 ### 3d. Dispatch handlers
 > **File**: `phases/topic_research.py`
 
-- [ ] Add `_handle_citation_search_tool()` following `_handle_web_search_tool()` pattern
-- [ ] Add `_handle_related_papers_tool()` following same pattern
-- [ ] Provider fallback: Semantic Scholar first, OpenAlex if available
-- [ ] Integrate with novelty tracking (reuse existing dedup logic)
-- [ ] Count against tool call budget
-- [ ] Log `provider_query` provenance event
+- [x] Add `_handle_citation_search_tool()` following `_handle_web_search_tool()` pattern
+- [x] Add `_handle_related_papers_tool()` following same pattern
+- [x] Provider fallback: Semantic Scholar first, OpenAlex if available
+- [x] Integrate with novelty tracking (reuse existing dedup logic)
+- [x] Count against tool call budget
+- [x] Log `provider_query` provenance event
 
 ### Item 3 Testing
-- [ ] Unit test: each new Semantic Scholar method with mocked HTTP responses
-- [ ] Unit test: tool dispatch routes correctly for `citation_search`
-- [ ] Unit test: tool dispatch routes correctly for `related_papers`
-- [ ] Unit test: tools NOT available when `enable_citation_tools == False`
-- [ ] Unit test: novelty tracking deduplicates sources across tools
+- [x] Unit test: each new Semantic Scholar method with mocked HTTP responses
+- [x] Unit test: tool dispatch routes correctly for `citation_search`
+- [x] Unit test: tool dispatch routes correctly for `related_papers`
+- [x] Unit test: tools NOT available when `enable_citation_tools == False`
+- [x] Unit test: novelty tracking deduplicates sources across tools
 
 ---
 

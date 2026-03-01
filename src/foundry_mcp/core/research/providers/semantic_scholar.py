@@ -60,6 +60,8 @@ logger = logging.getLogger(__name__)
 # Semantic Scholar API constants
 SEMANTIC_SCHOLAR_BASE_URL = "https://api.semanticscholar.org/graph/v1"
 PAPER_SEARCH_ENDPOINT = "/paper/search"
+PAPER_ENDPOINT = "/paper"
+RECOMMENDATIONS_BASE_URL = "https://api.semanticscholar.org/recommendations/v1/papers"
 DEFAULT_TIMEOUT = 30.0
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_RATE_LIMIT = 0.9  # requests per second (slightly under 1 RPS across endpoints)
@@ -322,15 +324,41 @@ class SemanticScholarProvider(SearchProvider):
         self,
         params: dict[str, Any],
     ) -> dict[str, Any]:
-        """Execute API request with shared resilience executor."""
-        url = f"{self._base_url}{PAPER_SEARCH_ENDPOINT}"
+        """Execute API search request with shared resilience executor."""
+        return await self._execute_request("GET", PAPER_SEARCH_ENDPOINT, params=params)
+
+    async def _execute_request(
+        self,
+        method: str,
+        endpoint: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json_body: dict[str, Any] | None = None,
+        base_url: str | None = None,
+    ) -> dict[str, Any]:
+        """Execute an API request with shared resilience executor.
+
+        Args:
+            method: HTTP method ("GET" or "POST").
+            endpoint: API endpoint path (e.g. "/paper/search").
+            params: Query parameters.
+            json_body: JSON request body (for POST).
+            base_url: Override base URL (e.g. for recommendations endpoint).
+
+        Returns:
+            Parsed JSON response.
+        """
+        url = f"{base_url or self._base_url}{endpoint}"
         headers: dict[str, str] = {}
         if self._api_key:
             headers["x-api-key"] = self._api_key
 
         async def make_request() -> dict[str, Any]:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
-                response = await client.get(url, params=params, headers=headers)
+                if method.upper() == "POST":
+                    response = await client.post(url, params=params, json=json_body, headers=headers)
+                else:
+                    response = await client.get(url, params=params, headers=headers)
                 if response.status_code == 401:
                     raise AuthenticationError(provider="semantic_scholar", message="Invalid API key")
                 if response.status_code == 403:
@@ -352,6 +380,96 @@ class SemanticScholarProvider(SearchProvider):
             self.classify_error,
         )
         return await executor(make_request, timeout=self._timeout)
+
+    async def get_paper(
+        self,
+        paper_id: str,
+        fields: str | None = None,
+    ) -> Optional[ResearchSource]:
+        """Look up a single paper by ID.
+
+        Supports Semantic Scholar paper ID, DOI (e.g. "DOI:10.1234/..."),
+        ArXiv ID (e.g. "ArXiv:2301.12345"), PubMed ID (e.g. "PMID:12345"),
+        and CorpusId (e.g. "CorpusId:12345").
+
+        Args:
+            paper_id: Paper identifier in any supported format.
+            fields: Comma-separated field list. Defaults to EXTENDED_FIELDS.
+
+        Returns:
+            ResearchSource if found, None if not found.
+        """
+        endpoint = f"{PAPER_ENDPOINT}/{paper_id}"
+        params: dict[str, Any] = {
+            "fields": fields or EXTENDED_FIELDS,
+        }
+        try:
+            response_data = await self._execute_request("GET", endpoint, params=params)
+        except SearchProviderError as e:
+            if "404" in str(e):
+                return None
+            raise
+        sources = self._parse_response({"data": [response_data]})
+        return sources[0] if sources else None
+
+    async def get_citations(
+        self,
+        paper_id: str,
+        max_results: int = 20,
+        fields: str | None = None,
+    ) -> list[ResearchSource]:
+        """Get papers that cite the given paper (forward citations).
+
+        Args:
+            paper_id: Semantic Scholar paper ID or external ID format.
+            max_results: Maximum number of citations to return (default: 20, max: 1000).
+            fields: Fields to request for each citing paper.
+
+        Returns:
+            List of ResearchSource objects for citing papers.
+        """
+        endpoint = f"{PAPER_ENDPOINT}/{paper_id}/citations"
+        params: dict[str, Any] = {
+            "fields": fields or EXTENDED_FIELDS,
+            "limit": min(max_results, 1000),
+        }
+        response_data = await self._execute_request("GET", endpoint, params=params)
+        # Citations endpoint wraps each paper in {"citingPaper": {...}}
+        papers = response_data.get("data", [])
+        unwrapped = [item.get("citingPaper", item) for item in papers if item]
+        return self._parse_response({"data": unwrapped})
+
+    async def get_recommendations(
+        self,
+        paper_id: str,
+        max_results: int = 10,
+    ) -> list[ResearchSource]:
+        """Get recommended papers based on a seed paper.
+
+        Uses the Semantic Scholar Recommendations API (v1) which returns
+        papers related to the given seed paper.
+
+        Args:
+            paper_id: Semantic Scholar paper ID or external ID format.
+            max_results: Maximum number of recommendations (default: 10, max: 500).
+
+        Returns:
+            List of ResearchSource objects for recommended papers.
+        """
+        json_body = {"positivePaperIds": [paper_id]}
+        params: dict[str, Any] = {
+            "fields": EXTENDED_FIELDS,
+            "limit": min(max_results, 500),
+        }
+        response_data = await self._execute_request(
+            "POST",
+            "",
+            params=params,
+            json_body=json_body,
+            base_url=RECOMMENDATIONS_BASE_URL,
+        )
+        papers = response_data.get("recommendedPapers", [])
+        return self._parse_response({"data": papers})
 
     def _parse_response(
         self,

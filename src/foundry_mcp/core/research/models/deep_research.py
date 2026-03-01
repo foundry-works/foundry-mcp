@@ -545,6 +545,50 @@ class ResearchCompleteTool(BaseModel):
     )
 
 
+class CitationSearchTool(BaseModel):
+    """Tool schema for forward citation search.
+
+    The researcher calls this to find papers that cite a given paper,
+    enabling forward snowball sampling in academic research.
+    """
+
+    paper_id: str = Field(
+        ...,
+        description=(
+            "Paper identifier: Semantic Scholar ID, DOI (e.g. '10.1234/...'), "
+            "ArXiv ID (e.g. 'ArXiv:2301.12345'), or URL of a known paper"
+        ),
+    )
+    max_results: int = Field(
+        default=10,
+        ge=1,
+        le=50,
+        description="Maximum number of citing papers to return",
+    )
+
+
+class RelatedPapersTool(BaseModel):
+    """Tool schema for related papers discovery.
+
+    The researcher calls this to find papers similar to a given paper,
+    enabling lateral discovery of relevant work the initial search may have missed.
+    """
+
+    paper_id: str = Field(
+        ...,
+        description=(
+            "Paper identifier: Semantic Scholar ID, DOI (e.g. '10.1234/...'), "
+            "ArXiv ID (e.g. 'ArXiv:2301.12345'), or URL of a known paper"
+        ),
+    )
+    max_results: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maximum number of related papers to return",
+    )
+
+
 class ResearcherToolCall(BaseModel):
     """A single tool call from the researcher LLM.
 
@@ -554,7 +598,7 @@ class ResearcherToolCall(BaseModel):
 
     tool: str = Field(
         ...,
-        description="Tool name: web_search, extract_content, think, research_complete",
+        description="Tool name: web_search, extract_content, think, research_complete, citation_search, related_papers",
     )
     arguments: dict[str, Any] = Field(
         default_factory=dict,
@@ -593,6 +637,8 @@ RESEARCHER_TOOL_SCHEMAS: dict[str, type[BaseModel]] = {
     "extract_content": ExtractContentTool,
     "think": ThinkTool,
     "research_complete": ResearchCompleteTool,
+    "citation_search": CitationSearchTool,
+    "related_papers": RelatedPapersTool,
 }
 
 #: Tools that do NOT count against the researcher's budget.
