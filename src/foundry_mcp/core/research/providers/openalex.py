@@ -28,6 +28,7 @@ import logging
 import os
 from dataclasses import replace
 from typing import Any, ClassVar, Optional
+from urllib.parse import quote as _url_quote
 
 import httpx
 
@@ -67,6 +68,44 @@ DEFAULT_RATE_LIMIT = 50.0  # requests per second (conservative; 100 hard cap)
 
 # Maximum results per API page
 MAX_PER_PAGE = 200
+
+# ------------------------------------------------------------------
+# Filter sanitization (PLANFIX FIX-3 Item 3.3)
+# ------------------------------------------------------------------
+
+_ALLOWED_FILTER_KEYS = frozenset({
+    "publication_year",
+    "type",
+    "is_oa",
+    "open_access.is_oa",
+    "primary_topic.id",
+    "topics.id",
+    "authorships.institutions.id",
+    "from_publication_date",
+    "to_publication_date",
+    "cited_by_count",
+    "primary_location.source.id",
+    "language",
+})
+
+
+def _build_filter_string(filters: dict[str, Any]) -> str:
+    """Build a sanitized OpenAlex filter string from a dict.
+
+    Validates keys against an allowlist and strips operator characters
+    (``,``, ``|``, ``:``) from values to prevent filter injection.
+    """
+    parts: list[str] = []
+    for key, value in filters.items():
+        if key not in _ALLOWED_FILTER_KEYS:
+            logger.warning("Ignoring unknown OpenAlex filter key: %s", key)
+            continue
+        if isinstance(value, bool):
+            safe_value = str(value).lower()
+        else:
+            safe_value = str(value).replace(",", "").replace("|", "").replace(":", "")
+        parts.append(f"{key}:{safe_value}")
+    return ",".join(parts)
 
 
 def _reconstruct_abstract(abstract_inverted_index: Optional[dict[str, list[int]]]) -> Optional[str]:
@@ -222,15 +261,10 @@ class OpenAlexProvider(SearchProvider):
             "per_page": min(max_results, MAX_PER_PAGE),
         }
 
-        # Build filter string
-        filter_parts = []
-        for key, value in filters.items():
-            if isinstance(value, bool):
-                filter_parts.append(f"{key}:{str(value).lower()}")
-            else:
-                filter_parts.append(f"{key}:{value}")
-        if filter_parts:
-            params["filter"] = ",".join(filter_parts)
+        # Build sanitized filter string (FIX-3 Item 3.3)
+        filter_string = _build_filter_string(filters)
+        if filter_string:
+            params["filter"] = filter_string
 
         if sort:
             params["sort"] = sort
@@ -254,7 +288,7 @@ class OpenAlexProvider(SearchProvider):
         if work_id.startswith("10."):
             work_id = f"https://doi.org/{work_id}"
 
-        endpoint = f"{WORKS_ENDPOINT}/{work_id}"
+        endpoint = f"{WORKS_ENDPOINT}/{_url_quote(work_id, safe='')}"
         try:
             response_data = await self._execute_request("GET", endpoint)
         except SearchProviderError as e:
@@ -296,7 +330,7 @@ class OpenAlexProvider(SearchProvider):
             List of ResearchSource objects for referenced works.
         """
         # First get the work to extract referenced_works
-        endpoint = f"{WORKS_ENDPOINT}/{work_id}"
+        endpoint = f"{WORKS_ENDPOINT}/{_url_quote(work_id, safe='')}"
         try:
             work_data = await self._execute_request("GET", endpoint)
         except SearchProviderError as e:
@@ -331,7 +365,7 @@ class OpenAlexProvider(SearchProvider):
         Returns:
             List of ResearchSource objects for related works.
         """
-        endpoint = f"{WORKS_ENDPOINT}/{work_id}"
+        endpoint = f"{WORKS_ENDPOINT}/{_url_quote(work_id, safe='')}"
         try:
             work_data = await self._execute_request("GET", endpoint)
         except SearchProviderError as e:

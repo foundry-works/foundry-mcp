@@ -459,9 +459,9 @@ class TestOpenAlexGetWork:
             source = await provider.get_work("10.1234/test.2024")
 
         assert source is not None
-        # Verify the DOI was prefixed in the URL
+        # Verify the DOI was prefixed and URL-encoded in the path
         call_args = mock_client.get.call_args
-        assert "https://doi.org/10.1234/test.2024" in call_args.args[0]
+        assert "https%3A%2F%2Fdoi.org%2F10.1234%2Ftest.2024" in call_args.args[0]
 
     @pytest.mark.asyncio
     async def test_get_work_not_found(self, provider):

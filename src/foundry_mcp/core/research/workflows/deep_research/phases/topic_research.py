@@ -80,6 +80,22 @@ def _is_pdf_url(url: str) -> bool:
 
 
 # ------------------------------------------------------------------
+# Paper ID validation (PLANFIX FIX-3 Item 3.1)
+# ------------------------------------------------------------------
+
+# Covers DOIs (10.xxxx/...), Semantic Scholar hex IDs, ArXiv IDs,
+# OpenAlex IDs (W/A prefixed), and PubMed numeric IDs.
+_PAPER_ID_RE = re.compile(r"^[a-zA-Z0-9._/:\-]{1,256}$")
+
+
+def _validate_paper_id(paper_id: str) -> str | None:
+    """Return an error message if ``paper_id`` is invalid, else ``None``."""
+    if not paper_id or not _PAPER_ID_RE.match(paper_id):
+        return f"Invalid paper_id format: {paper_id!r:.80}"
+    return None
+
+
+# ------------------------------------------------------------------
 # Search result formatting helpers (Phase 4 ODR alignment)
 # ------------------------------------------------------------------
 
@@ -2293,6 +2309,10 @@ class TopicResearchMixin:
         if not paper_id:
             return "Error: paper_id is required for citation_search."
 
+        id_err = _validate_paper_id(paper_id)
+        if id_err:
+            return f"Error: {id_err}"
+
         # Try Semantic Scholar first, then OpenAlex as fallback
         sources: list[Any] = []
         provider_name = "unknown"
@@ -2373,6 +2393,10 @@ class TopicResearchMixin:
 
         if not paper_id:
             return "Error: paper_id is required for related_papers."
+
+        id_err = _validate_paper_id(paper_id)
+        if id_err:
+            return f"Error: {id_err}"
 
         # Try Semantic Scholar recommendations first, then OpenAlex related
         sources: list[Any] = []

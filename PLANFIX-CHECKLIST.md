@@ -220,36 +220,37 @@
 ### Item 3.1: Validate `paper_id` from LLM Tool Calls
 > **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py`
 
-- [ ] Add `_PAPER_ID_RE = re.compile(r"^[a-zA-Z0-9._/:\-]{1,256}$")` constant
-- [ ] Add `_validate_paper_id(paper_id: str) -> str | None` helper (returns error message or None)
-- [ ] Call `_validate_paper_id` in `_handle_citation_search_tool` before provider call (line ~2280)
-- [ ] Call `_validate_paper_id` in `_handle_related_papers_tool` before provider call (line ~2362)
-- [ ] Return validation error message to researcher LLM on failure
+- [x] Add `_PAPER_ID_RE = re.compile(r"^[a-zA-Z0-9._/:\-]{1,256}$")` constant
+- [x] Add `_validate_paper_id(paper_id: str) -> str | None` helper (returns error message or None)
+- [x] Call `_validate_paper_id` in `_handle_citation_search_tool` before provider call (line ~2280)
+- [x] Call `_validate_paper_id` in `_handle_related_papers_tool` before provider call (line ~2362)
+- [x] Return validation error message to researcher LLM on failure
 
 #### Item 3.1 Validation
 
-- [ ] Valid DOI `"10.1038/nature12373"` passes validation
-- [ ] Valid S2 ID `"649def34f8be52c8b66281af98ae884c09aef38b"` passes validation
-- [ ] Valid ArXiv ID `"2301.07041"` passes validation
-- [ ] Empty string is rejected
-- [ ] String > 256 chars is rejected
-- [ ] String with shell metacharacters is rejected
-- [ ] Existing citation search tests pass unchanged
+- [x] Valid DOI `"10.1038/nature12373"` passes validation
+- [x] Valid S2 ID `"649def34f8be52c8b66281af98ae884c09aef38b"` passes validation
+- [x] Valid ArXiv ID `"2301.07041"` passes validation
+- [x] Empty string is rejected
+- [x] String > 256 chars is rejected
+- [x] String with shell metacharacters is rejected
+- [x] Existing citation search tests pass unchanged
 
 ---
 
 ### Item 3.2: URL-Encode DOI Values in Provider API Paths
 > **Files**: `src/foundry_mcp/core/research/providers/openalex.py`, `src/foundry_mcp/core/research/providers/crossref.py`
 
-- [ ] Import `urllib.parse.quote` in both files
-- [ ] In `openalex.py:257`: apply `quote(work_id, safe="")` before f-string interpolation
-- [ ] In `crossref.py:213`: apply `quote(doi, safe="")` before f-string interpolation
+- [x] Import `urllib.parse.quote` in both files
+- [x] In `openalex.py:258`: apply `quote(work_id, safe="")` before f-string interpolation
+- [x] In `crossref.py:214`: apply `quote(doi, safe="")` before f-string interpolation
+- [x] Also applied to `get_references` (line 300) and `get_related` (line 335) path interpolations in openalex.py
 
 #### Item 3.2 Validation
 
-- [ ] DOI with special chars `"10.1000/foo_bar#baz"` is URL-encoded in request path
-- [ ] Standard DOI `"10.1038/nature12373"` still resolves correctly (encoding is transparent)
-- [ ] Existing provider tests pass unchanged
+- [x] DOI with special chars `"10.1000/foo_bar#baz"` is URL-encoded in request path
+- [x] Standard DOI `"10.1038/nature12373"` still resolves correctly (encoding is transparent)
+- [x] Existing provider tests pass (updated assertions to expect encoded form)
 - [ ] Add unit test: DOI with path traversal chars is safely encoded
 
 ---
@@ -257,19 +258,19 @@
 ### Item 3.3: Sanitize OpenAlex Filter Values
 > **File**: `src/foundry_mcp/core/research/providers/openalex.py`
 
-- [ ] Add `_ALLOWED_FILTER_KEYS` frozenset with known OpenAlex filter field names
-- [ ] Add `_build_filter_string(filters: dict) -> str` helper
-- [ ] Validate filter keys against allowlist (warn and skip unknown keys)
-- [ ] Strip commas, pipes, and colons from filter values (operator characters)
-- [ ] Replace inline filter construction (lines ~227-232) with helper call
+- [x] Add `_ALLOWED_FILTER_KEYS` frozenset with known OpenAlex filter field names
+- [x] Add `_build_filter_string(filters: dict) -> str` helper
+- [x] Validate filter keys against allowlist (warn and skip unknown keys)
+- [x] Strip commas, pipes, and colons from filter values (operator characters)
+- [x] Replace inline filter construction (lines ~227-232) with helper call
 
 #### Item 3.3 Validation
 
-- [ ] Known filter key passes through: `{"publication_year": "2024"}` → `"publication_year:2024"`
-- [ ] Unknown filter key is skipped with warning: `{"evil_key": "value"}` → dropped
-- [ ] Malicious filter value stripped: `{"publication_year": "2024,type:dataset"}` → `"publication_year:2024typedataset"`
-- [ ] Boolean filter values still handled correctly: `{"is_oa": True}` → `"is_oa:true"`
-- [ ] Existing provider tests pass unchanged
+- [x] Known filter key passes through: `{"publication_year": "2024"}` → `"publication_year:2024"`
+- [x] Unknown filter key is skipped with warning: `{"evil_key": "value"}` → dropped
+- [x] Malicious filter value stripped: `{"publication_year": "2024,type:dataset"}` → `"publication_year:2024typedataset"`
+- [x] Boolean filter values still handled correctly: `{"is_oa": True}` → `"is_oa:true"`
+- [x] Existing provider tests pass unchanged
 
 ---
 

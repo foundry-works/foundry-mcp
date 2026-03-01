@@ -32,6 +32,7 @@ import os
 import re
 from dataclasses import replace
 from typing import Any, ClassVar, Optional
+from urllib.parse import quote as _url_quote
 
 import httpx
 
@@ -210,7 +211,7 @@ class CrossrefProvider:
         elif doi.startswith("http://doi.org/"):
             doi = doi[len("http://doi.org/"):]
 
-        endpoint = f"{WORKS_ENDPOINT}/{doi}"
+        endpoint = f"{WORKS_ENDPOINT}/{_url_quote(doi, safe='')}"
         try:
             response_data = await self._execute_request(endpoint)
         except SearchProviderError as e:

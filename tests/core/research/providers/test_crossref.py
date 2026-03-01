@@ -278,8 +278,9 @@ class TestCrossrefGetWork:
             await provider.get_work("https://doi.org/10.1234/test.2024")
 
         call_url = mock_client.get.call_args.args[0]
-        assert "/works/10.1234/test.2024" in call_url
-        assert "https://doi.org/" not in call_url.split("/works/")[1]
+        # DOI should be URL-encoded in the path (FIX-3 Item 3.2)
+        assert "/works/10.1234%2Ftest.2024" in call_url
+        assert "https://doi.org/" not in call_url
 
     @pytest.mark.asyncio
     async def test_get_work_not_found(self, provider):
