@@ -248,6 +248,10 @@ def _handle_deep_research_report(
         metadata = result.metadata or {}
         warnings = metadata.pop("warnings", None)
 
+        # Load state once for path resolution, provenance, and structured output
+        assert research_id is not None  # validated by _DR_REPORT_SCHEMA
+        state = memory.load_deep_research(research_id)
+
         # Determine report file path
         resolved_path: Optional[str] = None
 
@@ -260,8 +264,6 @@ def _handle_deep_research_report(
                 resolved_path = str(p)
 
                 # Update state so future calls reflect the new path
-                assert research_id is not None
-                state = memory.load_deep_research(research_id)
                 if state:
                     state.report_output_path = resolved_path
                     memory.save_deep_research(state)
@@ -270,10 +272,8 @@ def _handle_deep_research_report(
         else:
             # Fall back to the auto-saved path from synthesis
             resolved_path = metadata.pop("report_output_path", None)
-            if not resolved_path and research_id:
-                state = memory.load_deep_research(research_id)
-                if state and state.report_output_path:
-                    resolved_path = state.report_output_path
+            if not resolved_path and state and state.report_output_path:
+                resolved_path = state.report_output_path
 
         # Build response data with all fields
         response_data: dict[str, Any] = {
@@ -284,23 +284,18 @@ def _handle_deep_research_report(
             response_data["output_path"] = resolved_path
 
         # PLAN-1 Items 2 & 6: Include provenance summary and structured output
-        if research_id:
-            state = memory.load_deep_research(research_id) if not resolved_path else None
-            # Try to load state if we don't already have it
-            if state is None and research_id:
-                state = memory.load_deep_research(research_id)
-            if state is not None:
-                if state.provenance is not None:
-                    response_data["provenance_summary"] = {
-                        "entry_count": len(state.provenance.entries),
-                        "started_at": state.provenance.started_at,
-                        "completed_at": state.provenance.completed_at,
-                        "profile": state.provenance.profile,
-                    }
-                if state.extensions.structured_output is not None:
-                    response_data["structured"] = state.extensions.structured_output.model_dump(
-                        mode="json",
-                    )
+        if state is not None:
+            if state.provenance is not None:
+                response_data["provenance_summary"] = {
+                    "entry_count": len(state.provenance.entries),
+                    "started_at": state.provenance.started_at,
+                    "completed_at": state.provenance.completed_at,
+                    "profile": state.provenance.profile,
+                }
+            if state.extensions.structured_output is not None:
+                response_data["structured"] = state.extensions.structured_output.model_dump(
+                    mode="json",
+                )
 
         return asdict(
             success_response(
@@ -580,8 +575,8 @@ _DR_NETWORK_SCHEMA = {
 def _handle_deep_research_network(
     *,
     research_id: Optional[str] = None,
-    max_references_per_paper: int = 20,
-    max_citations_per_paper: int = 20,
+    max_references_per_paper: Optional[int] = None,
+    max_citations_per_paper: Optional[int] = None,
     **kwargs: Any,
 ) -> dict:
     """Build citation network for a completed research session.
@@ -592,8 +587,8 @@ def _handle_deep_research_network(
 
     Args:
         research_id: ID of the deep research session.
-        max_references_per_paper: Max backward references per source (default: 20).
-        max_citations_per_paper: Max forward citations per source (default: 20).
+        max_references_per_paper: Max backward references per source (default from config).
+        max_citations_per_paper: Max forward citations per source (default from config).
     """
     import asyncio
 
@@ -619,13 +614,17 @@ def _handle_deep_research_network(
             )
         )
 
-    # Use config defaults if parameters match the defaults (user didn't override)
-    effective_max_refs = max_references_per_paper
-    effective_max_cites = max_citations_per_paper
-    if effective_max_refs == 20:
-        effective_max_refs = config.research.deep_research_citation_network_max_refs_per_paper
-    if effective_max_cites == 20:
-        effective_max_cites = config.research.deep_research_citation_network_max_cites_per_paper
+    # Use explicit parameter if provided, otherwise fall back to config
+    effective_max_refs = (
+        max_references_per_paper
+        if max_references_per_paper is not None
+        else config.research.deep_research_citation_network_max_refs_per_paper
+    )
+    effective_max_cites = (
+        max_citations_per_paper
+        if max_citations_per_paper is not None
+        else config.research.deep_research_citation_network_max_cites_per_paper
+    )
 
     # Build providers
     openalex_provider = None
@@ -645,9 +644,9 @@ def _handle_deep_research_network(
             SemanticScholarProvider,
         )
 
+        # S2 works without a key at lower rate limits
         api_key = config.research.semantic_scholar_api_key or None
-        if api_key or True:  # S2 works without key at lower rate
-            semantic_scholar_provider = SemanticScholarProvider(api_key=api_key)
+        semantic_scholar_provider = SemanticScholarProvider(api_key=api_key)
     except Exception:
         logger.debug("Could not initialize Semantic Scholar provider for citation network")
 
@@ -674,18 +673,17 @@ def _handle_deep_research_network(
 
     # Run async builder in event loop
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                network = pool.submit(
-                    asyncio.run, builder.build_network(state.sources)
-                ).result(timeout=120)
-        else:
-            network = loop.run_until_complete(builder.build_network(state.sources))
+        asyncio.get_running_loop()
     except RuntimeError:
         network = asyncio.run(builder.build_network(state.sources))
+    else:
+        # Avoid blocking a running loop by executing in a worker thread.
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            network = pool.submit(
+                asyncio.run, builder.build_network(state.sources)
+            ).result(timeout=120)
 
     # Save to state
     state.extensions.citation_network = network
@@ -803,18 +801,18 @@ def _handle_deep_research_assess(
 
     # Run async assessor
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                assessments = pool.submit(
-                    asyncio.run, assessor.assess_sources(state.sources)
-                ).result(timeout=config.research.deep_research_methodology_assessment_timeout * len(eligible) + 30)
-        else:
-            assessments = loop.run_until_complete(assessor.assess_sources(state.sources))
+        asyncio.get_running_loop()
     except RuntimeError:
         assessments = asyncio.run(assessor.assess_sources(state.sources))
+    else:
+        # Avoid blocking a running loop by executing in a worker thread.
+        import concurrent.futures
+
+        assess_timeout = config.research.deep_research_methodology_assessment_timeout * len(eligible) + 30
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            assessments = pool.submit(
+                asyncio.run, assessor.assess_sources(state.sources)
+            ).result(timeout=assess_timeout)
 
     # Save assessments to state
     state.extensions.methodology_assessments = assessments

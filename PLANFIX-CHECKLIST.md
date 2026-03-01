@@ -232,57 +232,57 @@
 ### Item 3.1: Remove `if api_key or True:` Debug Artifact
 > **File**: `src/foundry_mcp/tools/unified/research_handlers/handlers_deep_research.py`
 
-- [ ] Remove the `if api_key or True:` conditional
-- [ ] Unconditionally create `SemanticScholarProvider`
-- [ ] Keep the comment explaining S2 works without a key at lower rate
+- [x] Remove the `if api_key or True:` conditional
+- [x] Unconditionally create `SemanticScholarProvider`
+- [x] Keep the comment explaining S2 works without a key at lower rate
 
 #### Item 3.1 Validation
 
-- [ ] Provider creation is unconditional
-- [ ] Existing tests pass unchanged
+- [x] Provider creation is unconditional
+- [x] Existing tests pass unchanged
 
 ---
 
 ### Item 3.2: Replace Deprecated `asyncio.get_event_loop()`
 > **File**: `src/foundry_mcp/tools/unified/research_handlers/handlers_deep_research.py`
 
-- [ ] Replace `asyncio.get_event_loop()` with try/except `asyncio.get_running_loop()` pattern
-- [ ] Match the pattern used in `action_handlers.py:663-673`
+- [x] Replace `asyncio.get_event_loop()` with try/except `asyncio.get_running_loop()` pattern
+- [x] Match the pattern used in `handlers_extract.py:101-109`
 
 #### Item 3.2 Validation
 
-- [ ] No `DeprecationWarning` on Python 3.12+
-- [ ] Existing tests pass unchanged
+- [x] No `DeprecationWarning` on Python 3.12+
+- [x] Existing tests pass unchanged
 
 ---
 
 ### Item 3.3: Consolidate Report Handler State Loading
 > **File**: `src/foundry_mcp/tools/unified/research_handlers/handlers_deep_research.py`
 
-- [ ] Load state once early in the success branch of `_handle_deep_research_report`
-- [ ] Remove duplicate `memory.load_deep_research()` calls (lines ~264, 274, 288, 291)
-- [ ] Reuse single `state` variable throughout
+- [x] Load state once early in the success branch of `_handle_deep_research_report`
+- [x] Remove duplicate `memory.load_deep_research()` calls (lines ~264, 274, 288, 291)
+- [x] Reuse single `state` variable throughout
 
 #### Item 3.3 Validation
 
-- [ ] State loaded exactly once per report request
-- [ ] Report response still includes provenance when `include_provenance=True`
-- [ ] Existing tests pass unchanged
+- [x] State loaded exactly once per report request
+- [x] Report response still includes provenance when `include_provenance=True`
+- [x] Existing tests pass unchanged
 
 ---
 
 ### Item 3.4: Fix Magic-Number Default Comparison for Network Config
 > **File**: `src/foundry_mcp/tools/unified/research_handlers/handlers_deep_research.py`
 
-- [ ] Change `max_refs` and `max_cites` parameter types to `Optional[int] = None`
-- [ ] Replace `if effective_max_refs == 20:` with `if effective_max_refs is None:`
-- [ ] Replace `if effective_max_cites == 20:` with `if effective_max_cites is None:`
+- [x] Change `max_refs` and `max_cites` parameter types to `Optional[int] = None`
+- [x] Replace `if effective_max_refs == 20:` with `if effective_max_refs is None:`
+- [x] Replace `if effective_max_cites == 20:` with `if effective_max_cites is None:`
 
 #### Item 3.4 Validation
 
-- [ ] User passing `max_refs=20` explicitly is not overridden by config
-- [ ] User passing no value correctly falls back to config
-- [ ] Existing tests pass unchanged
+- [x] User passing `max_refs=20` explicitly is not overridden by config
+- [x] User passing no value correctly falls back to config
+- [x] Existing tests pass unchanged
 
 ---
 
