@@ -919,11 +919,8 @@ class SynthesisPhaseMixin:
         except Exception:
             logger.warning("Failed to build structured output", exc_info=True)
 
-        # Auto-save report as markdown file — prefer memory workspace over cwd
-        report_dir: Optional[Path] = None
-        if hasattr(self, "memory") and hasattr(self.memory, "base_path"):
-            report_dir = Path(self.memory.base_path)
-        output_path = _save_report_markdown(state, output_dir=report_dir)
+        # Auto-save report as markdown file to working directory
+        output_path = _save_report_markdown(state, output_dir=None)
         if output_path:
             state.report_output_path = output_path
 
