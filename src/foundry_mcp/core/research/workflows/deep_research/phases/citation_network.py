@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import defaultdict
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from foundry_mcp.core.research.models.deep_research import (
@@ -229,6 +230,7 @@ class CitationNetworkBuilder:
                 "foundational_count": len(foundational),
                 "thread_count": len(threads),
             },
+            generated_at=datetime.now(timezone.utc).isoformat(),
         )
 
     async def _fetch_references(self, paper_id: str) -> list[ResearchSource]:

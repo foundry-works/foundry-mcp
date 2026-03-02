@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
@@ -1177,6 +1178,7 @@ class SynthesisPhaseMixin:
             contradictions=structured_contradictions,
             query_type=query_type,
             profile=state.research_profile.name if state.research_profile else "general",
+            generated_at=datetime.now(timezone.utc).isoformat(),
         )
 
     def _build_synthesis_system_prompt(

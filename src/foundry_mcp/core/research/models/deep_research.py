@@ -1166,19 +1166,32 @@ class StructuredResearchOutput(BaseModel):
 
     sources: list[dict[str, Any]] = Field(
         default_factory=list,
-        description="Full denormalized source metadata, reference-manager ready",
+        description=(
+            "Denormalized source catalog. Keys: id, title, url, source_type, "
+            "quality, citation_number, authors, year, venue, doi, citation_count, "
+            "plus any additional provider-specific metadata"
+        ),
     )
     findings: list[dict[str, Any]] = Field(
         default_factory=list,
-        description="Key findings with confidence level and supporting source IDs",
+        description=(
+            "Key findings extracted from sources. Keys: id, content, confidence, "
+            "source_ids, category"
+        ),
     )
     gaps: list[dict[str, Any]] = Field(
         default_factory=list,
-        description="Unresolved research gaps only (resolved gaps excluded)",
+        description=(
+            "Unresolved research gaps only (resolved gaps excluded). Keys: id, "
+            "description, priority, suggested_queries"
+        ),
     )
     contradictions: list[dict[str, Any]] = Field(
         default_factory=list,
-        description="Cross-source conflicts with involved source/finding IDs",
+        description=(
+            "Cross-source conflicts. Keys: id, description, finding_ids, "
+            "severity, resolution"
+        ),
     )
     query_type: str = Field(
         default="explanation",
@@ -1187,6 +1200,10 @@ class StructuredResearchOutput(BaseModel):
     profile: str = Field(
         default="general",
         description="Research profile name used for the session",
+    )
+    generated_at: Optional[str] = Field(
+        default=None,
+        description="ISO 8601 timestamp of when this output was generated",
     )
 
 
@@ -1258,6 +1275,10 @@ class CitationNetwork(BaseModel):
     stats: dict[str, Any] = Field(
         default_factory=dict,
         description="Network statistics (total_nodes, total_edges, etc.)",
+    )
+    generated_at: Optional[str] = Field(
+        default=None,
+        description="ISO 8601 timestamp of when this network was built",
     )
 
     model_config = {"extra": "forbid"}

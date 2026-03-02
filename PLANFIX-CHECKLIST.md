@@ -186,70 +186,70 @@
 ### Item 3.1: Update PLAN-CHECKLIST.md Completion Status
 > **File**: `PLAN-CHECKLIST.md`
 
-- [ ] Audit Phase 0 items against codebase — mark completed items `[x]`
-  - [ ] Item 0.1a: supervision_first_round.py exists with extracted functions
-  - [ ] Item 0.1b: Evaluate helper extraction (document decision)
-  - [ ] Item 0.1c: Thin wrapper methods (check current line count)
-  - [ ] Item 0.2: ResearchExtensions container implemented
-- [ ] Audit Phase 1 items — mark completed items `[x]`
-- [ ] Audit Phase 2 items — mark completed items `[x]`
-- [ ] Audit Phase 3 items — mark completed items `[x]`
-- [ ] Audit Phase 4 items — mark completed items `[x]`
-- [ ] Mark Final Validation items as appropriate
+- [x] Audit Phase 0 items against codebase — mark completed items `[x]`
+  - [x] Item 0.1a: supervision_first_round.py exists with extracted functions
+  - [x] Item 0.1b: Evaluate helper extraction (document decision: skip)
+  - [x] Item 0.1c: Thin wrapper methods (check current line count — still ~1,880, left unchecked)
+  - [x] Item 0.2: ResearchExtensions container implemented
+- [x] Audit Phase 1 items — mark completed items `[x]`
+- [x] Audit Phase 2 items — mark completed items `[x]`
+- [x] Audit Phase 3 items — mark completed items `[x]`
+- [x] Audit Phase 4 items — mark completed items `[x]`
+- [x] Mark Final Validation items as appropriate
 
 #### Item 3.1 Validation
 
-- [ ] PLAN-CHECKLIST.md accurately reflects implementation state
-- [ ] No items marked complete that aren't actually implemented
-- [ ] No items left unchecked that are implemented in code
+- [x] PLAN-CHECKLIST.md accurately reflects implementation state
+- [x] No items marked complete that aren't actually implemented
+- [x] No items left unchecked that are implemented in code
 
 ---
 
 ### Item 3.2: Remove Orphan Research Output Files from Repo Root
 
-- [ ] Delete or `.gitignore` these untracked files:
-  - [ ] `compare-postgresql-vs-mysql-for-oltp-workloads-in-2024*.md` (3 files)
-  - [ ] `test-progress-heartbeat*.md` (2 files)
-  - [ ] `test-synthesis-heartbeat*.md` (2 files)
-  - [ ] `what-are-the-benefits-of-renewable-energy*.md` (2 files)
-- [ ] Add `*.md` pattern to root `.gitignore` for deep research outputs, OR add specific patterns
+- [x] Delete or `.gitignore` these untracked files:
+  - [x] `compare-postgresql-vs-mysql-for-oltp-workloads-in-2024*.md` (3 files)
+  - [x] `test-progress-heartbeat*.md` (2 files)
+  - [x] `test-synthesis-heartbeat*.md` (2 files)
+  - [x] `what-are-the-benefits-of-renewable-energy*.md` (2 files)
+- [x] Add specific patterns to `.gitignore` for deep research outputs
 
 #### Item 3.2 Validation
 
-- [ ] `git status` no longer shows these as untracked
-- [ ] Legitimate markdown files (README.md, PLAN.md, CHANGELOG.md, etc.) are NOT ignored
+- [x] `git status` no longer shows these as untracked
+- [x] Legitimate markdown files (README.md, PLAN.md, CHANGELOG.md, etc.) are NOT ignored
 
 ---
 
 ### Item 3.3: Document StructuredResearchOutput Dict Schemas
 > **File**: `src/foundry_mcp/core/research/models/deep_research.py`
 
-- [ ] Add field descriptions to `StructuredResearchOutput.sources` documenting expected keys
-- [ ] Add field descriptions to `StructuredResearchOutput.findings` documenting expected keys
-- [ ] Add field descriptions to `StructuredResearchOutput.gaps` documenting expected keys
-- [ ] Add field descriptions to `StructuredResearchOutput.contradictions` documenting expected keys
+- [x] Add field descriptions to `StructuredResearchOutput.sources` documenting expected keys
+- [x] Add field descriptions to `StructuredResearchOutput.findings` documenting expected keys
+- [x] Add field descriptions to `StructuredResearchOutput.gaps` documenting expected keys
+- [x] Add field descriptions to `StructuredResearchOutput.contradictions` documenting expected keys
 
 #### Item 3.3 Validation
 
-- [ ] Each list[dict] field has documented key schema in Field description
-- [ ] Documentation matches actual keys produced by `_build_structured_output()`
+- [x] Each list[dict] field has documented key schema in Field description
+- [x] Documentation matches actual keys produced by `_build_structured_output()`
 
 ---
 
 ### Item 3.4: Add `generated_at` Timestamps to Output Models
 > **File**: `src/foundry_mcp/core/research/models/deep_research.py`
 
-- [ ] Add `generated_at: Optional[str] = None` to `StructuredResearchOutput`
-- [ ] Add `generated_at: Optional[str] = None` to `CitationNetwork`
-- [ ] Populate `generated_at` in `_build_structured_output()` with ISO 8601 timestamp
-- [ ] Populate `generated_at` in `CitationNetworkBuilder.build_network()` with ISO 8601 timestamp
+- [x] Add `generated_at: Optional[str] = None` to `StructuredResearchOutput`
+- [x] Add `generated_at: Optional[str] = None` to `CitationNetwork`
+- [x] Populate `generated_at` in `_build_structured_output()` with ISO 8601 timestamp
+- [x] Populate `generated_at` in `CitationNetworkBuilder.build_network()` with ISO 8601 timestamp
 
 #### Item 3.4 Validation
 
-- [ ] `StructuredResearchOutput.generated_at` is populated after synthesis
-- [ ] `CitationNetwork.generated_at` is populated after network build
-- [ ] Timestamp is valid ISO 8601 format
-- [ ] Existing serialization tests pass (field is Optional, backward compatible)
+- [x] `StructuredResearchOutput.generated_at` is populated after synthesis
+- [x] `CitationNetwork.generated_at` is populated after network build
+- [x] Timestamp is valid ISO 8601 format
+- [x] Existing serialization tests pass (field is Optional, backward compatible)
 
 ---
 
