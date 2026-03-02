@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0a3] - 2026-03-02
+
+### Fixed
+
+- **Structured output now opt-in for deep-research-report**: Previously, structured JSON output was always included in report responses when available, adding significant token overhead. Now gated behind `include_structured=False` by default — callers must explicitly request it.
+- **`output_path` parameter exposed in research tool signature**: The `output_path` kwarg was accepted by the handler but not listed in the tool function signature, making it unreachable via MCP tool calls. Now properly surfaced.
+
 ## [0.18.0a2] - 2026-03-02
 
 ### Fixed
