@@ -26,6 +26,7 @@ Example usage:
 
 import logging
 import os
+import re
 from dataclasses import replace
 from typing import Any, ClassVar, Optional
 from urllib.parse import quote as _url_quote
@@ -68,6 +69,10 @@ DEFAULT_RATE_LIMIT = 50.0  # requests per second (conservative; 100 hard cap)
 
 # Maximum results per API page
 MAX_PER_PAGE = 200
+
+# Validation patterns for identifiers used in filter interpolation (FIX-0 Item 0.3)
+_OPENALEX_WORK_ID_RE = re.compile(r"^(W\d+|https://openalex\.org/W\d+)$")
+_OPENALEX_TOPIC_ID_RE = re.compile(r"^T\d+$")
 
 # ------------------------------------------------------------------
 # Filter sanitization (PLANFIX FIX-3 Item 3.3)
@@ -307,7 +312,15 @@ class OpenAlexProvider(SearchProvider):
 
         Returns:
             List of ResearchSource objects for citing works.
+
+        Raises:
+            ValueError: If work_id doesn't match expected format.
         """
+        if not _OPENALEX_WORK_ID_RE.match(work_id):
+            raise ValueError(
+                f"Invalid OpenAlex work_id: {work_id!r}. "
+                "Expected format: 'W<digits>' or 'https://openalex.org/W<digits>'"
+            )
         params: dict[str, Any] = {
             "filter": f"cites:{work_id}",
             "per_page": min(max_results, MAX_PER_PAGE),
@@ -430,7 +443,14 @@ class OpenAlexProvider(SearchProvider):
 
         Returns:
             List of ResearchSource objects.
+
+        Raises:
+            ValueError: If topic_id doesn't match expected format.
         """
+        if not _OPENALEX_TOPIC_ID_RE.match(topic_id):
+            raise ValueError(
+                f"Invalid OpenAlex topic_id: {topic_id!r}. Expected format: 'T<digits>'"
+            )
         sort = kwargs.get("sort", "cited_by_count:desc")
         sub_query_id = kwargs.get("sub_query_id")
 

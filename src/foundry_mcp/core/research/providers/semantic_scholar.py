@@ -29,6 +29,7 @@ import logging
 import os
 from dataclasses import replace
 from typing import Any, ClassVar, Optional
+from urllib.parse import quote as _url_quote
 
 import httpx
 
@@ -400,7 +401,8 @@ class SemanticScholarProvider(SearchProvider):
         Returns:
             ResearchSource if found, None if not found.
         """
-        endpoint = f"{PAPER_ENDPOINT}/{paper_id}"
+        # URL-encode paper_id to prevent path traversal / query injection
+        endpoint = f"{PAPER_ENDPOINT}/{_url_quote(paper_id, safe='')}"
         params: dict[str, Any] = {
             "fields": fields or EXTENDED_FIELDS,
         }
@@ -429,7 +431,8 @@ class SemanticScholarProvider(SearchProvider):
         Returns:
             List of ResearchSource objects for citing papers.
         """
-        endpoint = f"{PAPER_ENDPOINT}/{paper_id}/citations"
+        # URL-encode paper_id to prevent path traversal / query injection
+        endpoint = f"{PAPER_ENDPOINT}/{_url_quote(paper_id, safe='')}/citations"
         params: dict[str, Any] = {
             "fields": fields or EXTENDED_FIELDS,
             "limit": min(max_results, 1000),

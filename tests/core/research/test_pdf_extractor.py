@@ -318,6 +318,29 @@ class TestSSRFProtection:
         """Test URL with query parameters is accepted."""
         validate_url_for_ssrf("https://example.com/doc.pdf?token=abc&version=1")
 
+    def test_dns_resolution_failure_raises_ssrf_error(self, monkeypatch):
+        """FIX-0 Item 0.1: DNS resolution failure must fail closed (raise SSRFError)."""
+        import socket as _socket
+
+        def fake_getaddrinfo(host, port, *args, **kwargs):
+            raise _socket.gaierror("[Errno -5] No address associated with hostname")
+
+        monkeypatch.setattr(_socket, "getaddrinfo", fake_getaddrinfo)
+
+        with pytest.raises(SSRFError, match="DNS resolution failed"):
+            validate_url_for_ssrf("https://unresolvable-host.test/doc.pdf")
+
+    def test_valid_hostname_still_resolves(self, monkeypatch):
+        """FIX-0 Item 0.1: Valid hostnames with public IPs should still pass."""
+        import socket as _socket
+
+        def fake_getaddrinfo(host, port, *args, **kwargs):
+            return [(_socket.AF_INET, _socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))]
+
+        monkeypatch.setattr(_socket, "getaddrinfo", fake_getaddrinfo)
+        # Should not raise
+        validate_url_for_ssrf("https://example.com/doc.pdf")
+
 
 class TestRedirectSSRFProtection:
     """Tests for SSRF protection across redirect chains."""
@@ -414,6 +437,8 @@ startxref
     @pytest.mark.asyncio
     async def test_valid_redirect_succeeds(self, monkeypatch):
         """Redirects to valid external hosts should succeed."""
+        import socket as _socket
+
         httpx = pytest.importorskip("httpx")
         extractor = PDFExtractor()
 
@@ -428,6 +453,12 @@ startxref
                     headers={"Content-Type": "application/pdf"},
                 )
             return httpx.Response(404)
+
+        # Mock DNS to return a valid external IP for test hostnames
+        def fake_getaddrinfo(host, port, *args, **kwargs):
+            return [(_socket.AF_INET, _socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))]
+
+        monkeypatch.setattr(_socket, "getaddrinfo", fake_getaddrinfo)
 
         transport = httpx.MockTransport(handler)
         real_async_client = httpx.AsyncClient
@@ -577,9 +608,10 @@ class TestContentTypeValidation:
         """Test application/x-pdf content-type is accepted."""
         validate_content_type("application/x-pdf")
 
-    def test_octet_stream_accepted(self):
-        """Test application/octet-stream is accepted (common for downloads)."""
-        validate_content_type("application/octet-stream")
+    def test_octet_stream_rejected(self):
+        """Test application/octet-stream is rejected (FIX-0 Item 0.4: tighten content-type gate)."""
+        with pytest.raises(InvalidPDFError):
+            validate_content_type("application/octet-stream")
 
     def test_content_type_with_charset_accepted(self):
         """Test content-type with charset parameter is accepted."""

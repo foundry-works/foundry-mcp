@@ -10,70 +10,70 @@
 ### Item 0.1: Fail Closed on DNS Resolution Failure in `pdf_extractor.py`
 > **File**: `src/foundry_mcp/core/research/pdf_extractor.py`
 
-- [ ] Change `except socket.gaierror` handler (line ~289) to raise `SSRFError` instead of logging and continuing
-- [ ] Match the pattern from `_injection_protection.py:131-132` which correctly returns `False`
-- [ ] Log at WARNING level before raising (for operator visibility)
+- [x] Change `except socket.gaierror` handler (line ~289) to raise `SSRFError` instead of logging and continuing
+- [x] Match the pattern from `_injection_protection.py:131-132` which correctly returns `False`
+- [x] Log at WARNING level before raising (for operator visibility)
 
 #### Item 0.1 Validation
 
-- [ ] DNS resolution failure for a hostname raises `SSRFError`
-- [ ] Valid hostnames still resolve and proceed normally
-- [ ] Add unit test: `validate_url_for_ssrf` with unresolvable hostname raises `SSRFError`
-- [ ] Existing PDF extraction tests pass unchanged
+- [x] DNS resolution failure for a hostname raises `SSRFError`
+- [x] Valid hostnames still resolve and proceed normally
+- [x] Add unit test: `validate_url_for_ssrf` with unresolvable hostname raises `SSRFError`
+- [x] Existing PDF extraction tests pass unchanged
 
 ---
 
 ### Item 0.2: URL-Encode `paper_id` in Semantic Scholar URL Paths
 > **File**: `src/foundry_mcp/core/research/providers/semantic_scholar.py`
 
-- [ ] Import `urllib.parse.quote` at module level
-- [ ] Apply `quote(paper_id, safe='')` in `get_paper()` URL construction (line ~403)
-- [ ] Apply `quote(paper_id, safe='')` in `get_citations()` URL construction (line ~432)
-- [ ] Apply `quote(paper_id, safe='')` in `get_recommendations()` URL construction
-- [ ] Add comment explaining why URL encoding is needed (unlike the prefix formats like `DOI:` which httpx handles)
+- [x] Import `urllib.parse.quote` at module level
+- [x] Apply `quote(paper_id, safe='')` in `get_paper()` URL construction (line ~403)
+- [x] Apply `quote(paper_id, safe='')` in `get_citations()` URL construction (line ~432)
+- [x] Apply `quote(paper_id, safe='')` in `get_recommendations()` URL construction — N/A: uses POST body, not URL path
+- [x] Add comment explaining why URL encoding is needed (unlike the prefix formats like `DOI:` which httpx handles)
 
 #### Item 0.2 Validation
 
-- [ ] `paper_id` with path traversal chars `"../admin"` is safely encoded in URL
-- [ ] Standard paper IDs still resolve correctly
-- [ ] Add unit test: paper_id with special characters is URL-encoded in request
-- [ ] Existing Semantic Scholar tests pass unchanged
+- [x] `paper_id` with path traversal chars `"../admin"` is safely encoded in URL
+- [x] Standard paper IDs still resolve correctly
+- [x] Add unit test: paper_id with special characters is URL-encoded in request
+- [x] Existing Semantic Scholar tests pass unchanged
 
 ---
 
 ### Item 0.3: Validate `work_id` in OpenAlex Filter String Construction
 > **File**: `src/foundry_mcp/core/research/providers/openalex.py`
 
-- [ ] Add `_OPENALEX_WORK_ID_RE = re.compile(r"^(W\d+|https://openalex\.org/W\d+)$")` constant
-- [ ] Add `_OPENALEX_TOPIC_ID_RE = re.compile(r"^T\d+$")` constant
-- [ ] Validate `work_id` in `get_citations()` (line ~312) before filter interpolation
-- [ ] Validate `topic_id` in `search_by_topic()` (line ~438) before filter interpolation
-- [ ] Raise `ValueError` with descriptive message on mismatch
+- [x] Add `_OPENALEX_WORK_ID_RE = re.compile(r"^(W\d+|https://openalex\.org/W\d+)$")` constant
+- [x] Add `_OPENALEX_TOPIC_ID_RE = re.compile(r"^T\d+$")` constant
+- [x] Validate `work_id` in `get_citations()` (line ~312) before filter interpolation
+- [x] Validate `topic_id` in `search_by_topic()` (line ~438) before filter interpolation
+- [x] Raise `ValueError` with descriptive message on mismatch
 
 #### Item 0.3 Validation
 
-- [ ] Valid `work_id` `"W2741809807"` passes validation
-- [ ] Valid `work_id` `"https://openalex.org/W2741809807"` passes validation
-- [ ] Malicious `work_id` `"W123,publication_year:2024"` raises `ValueError`
-- [ ] Valid `topic_id` `"T12345"` passes validation
-- [ ] Malicious `topic_id` `"T123,type:dataset"` raises `ValueError`
-- [ ] Existing OpenAlex tests pass unchanged
+- [x] Valid `work_id` `"W2741809807"` passes validation
+- [x] Valid `work_id` `"https://openalex.org/W2741809807"` passes validation
+- [x] Malicious `work_id` `"W123,publication_year:2024"` raises `ValueError`
+- [x] Valid `topic_id` `"T12345"` passes validation
+- [x] Malicious `topic_id` `"T123,type:dataset"` raises `ValueError`
+- [x] Existing OpenAlex tests pass unchanged
 
 ---
 
 ### Item 0.4: Remove `application/octet-stream` from Valid PDF Content Types
 > **File**: `src/foundry_mcp/core/research/pdf_extractor.py`
 
-- [ ] Remove `"application/octet-stream"` from `VALID_PDF_CONTENT_TYPES` frozenset (line ~167)
-- [ ] Add WARNING log when `application/octet-stream` content type is encountered (before magic byte check)
-- [ ] Ensure magic byte check (`%PDF`) still handles ambiguous content types downstream
+- [x] Remove `"application/octet-stream"` from `VALID_PDF_CONTENT_TYPES` frozenset (line ~167)
+- [x] Add WARNING log when `application/octet-stream` content type is encountered (before magic byte check)
+- [x] Ensure magic byte check (`%PDF`) still handles ambiguous content types downstream
 
 #### Item 0.4 Validation
 
-- [ ] PDF served with `application/pdf` content type is accepted
-- [ ] PDF served with `application/octet-stream` is rejected at content-type gate
-- [ ] Magic byte check still catches real PDFs served with unexpected content types (if applicable)
-- [ ] Existing PDF extraction tests pass unchanged
+- [x] PDF served with `application/pdf` content type is accepted
+- [x] PDF served with `application/octet-stream` is rejected at content-type gate
+- [x] Magic byte check still catches real PDFs served with unexpected content types (if applicable)
+- [x] Existing PDF extraction tests pass unchanged
 
 ---
 

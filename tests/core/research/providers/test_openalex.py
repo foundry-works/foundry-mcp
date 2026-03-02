@@ -798,6 +798,45 @@ class TestOpenAlexResponseParsing:
 # ---------------------------------------------------------------------------
 
 
+class TestOpenAlexFilterValidation:
+    """FIX-0 Item 0.3: work_id and topic_id must be validated before filter interpolation."""
+
+    @pytest.mark.asyncio
+    async def test_valid_work_id_accepted(self):
+        """Valid work_id 'W2741809807' passes validation."""
+        from foundry_mcp.core.research.providers.openalex import _OPENALEX_WORK_ID_RE
+
+        assert _OPENALEX_WORK_ID_RE.match("W2741809807")
+
+    @pytest.mark.asyncio
+    async def test_valid_work_id_url_accepted(self):
+        """Valid work_id as URL passes validation."""
+        from foundry_mcp.core.research.providers.openalex import _OPENALEX_WORK_ID_RE
+
+        assert _OPENALEX_WORK_ID_RE.match("https://openalex.org/W2741809807")
+
+    @pytest.mark.asyncio
+    async def test_malicious_work_id_rejected(self):
+        """Malicious work_id with filter injection raises ValueError."""
+        provider = OpenAlexProvider(api_key="test-key")
+        with pytest.raises(ValueError, match="Invalid OpenAlex work_id"):
+            await provider.get_citations("W123,publication_year:2024")
+
+    @pytest.mark.asyncio
+    async def test_valid_topic_id_accepted(self):
+        """Valid topic_id 'T12345' passes validation."""
+        from foundry_mcp.core.research.providers.openalex import _OPENALEX_TOPIC_ID_RE
+
+        assert _OPENALEX_TOPIC_ID_RE.match("T12345")
+
+    @pytest.mark.asyncio
+    async def test_malicious_topic_id_rejected(self):
+        """Malicious topic_id with filter injection raises ValueError."""
+        provider = OpenAlexProvider(api_key="test-key")
+        with pytest.raises(ValueError, match="Invalid OpenAlex topic_id"):
+            await provider.search_by_topic("T123,type:dataset")
+
+
 class TestOpenAlexRateLimitConfig:
     """Tests for rate limiting configuration."""
 

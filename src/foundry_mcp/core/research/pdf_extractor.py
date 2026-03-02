@@ -164,7 +164,6 @@ VALID_PDF_CONTENT_TYPES = frozenset(
     [
         "application/pdf",
         "application/x-pdf",
-        "application/octet-stream",  # Some servers serve PDFs with this
     ]
 )
 """Content-types that are acceptable for PDF responses."""
@@ -287,8 +286,10 @@ def validate_url_for_ssrf(url: str) -> None:
             if is_internal_ip(ip):
                 raise SSRFError(f"Hostname {hostname} resolves to internal IP: {ip}")
     except socket.gaierror:
-        # DNS resolution failed - allow the request to fail naturally later
-        logger.debug(f"DNS resolution failed for {hostname}, allowing request")
+        # Fail closed: DNS resolution failure must block the request.
+        # Matches _injection_protection.py behavior (returns False on gaierror).
+        logger.warning("DNS resolution failed for %s — blocking request (fail closed)", hostname)
+        raise SSRFError(f"DNS resolution failed for hostname: {hostname}")
 
 
 def validate_pdf_magic_bytes(data: bytes) -> None:
@@ -323,6 +324,12 @@ def validate_content_type(content_type: Optional[str]) -> None:
 
     # Extract base content type (ignore parameters like charset)
     base_type = content_type.split(";")[0].strip().lower()
+
+    if base_type == "application/octet-stream":
+        logger.warning(
+            "Server returned application/octet-stream for PDF URL — "
+            "rejecting at content-type gate (rely on magic byte check for ambiguous types)"
+        )
 
     if base_type not in VALID_PDF_CONTENT_TYPES:
         raise InvalidPDFError(
