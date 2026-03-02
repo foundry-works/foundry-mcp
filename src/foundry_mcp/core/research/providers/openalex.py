@@ -309,7 +309,7 @@ class OpenAlexProvider(SearchProvider):
         try:
             response_data = await self._execute_request("GET", endpoint)
         except SearchProviderError as e:
-            if "404" in str(e):
+            if getattr(e, "status_code", None) == 404:
                 return None
             raise
         sources = self._parse_works_response({"results": [response_data]})
@@ -359,7 +359,7 @@ class OpenAlexProvider(SearchProvider):
         try:
             work_data = await self._execute_request("GET", endpoint)
         except SearchProviderError as e:
-            if "404" in str(e):
+            if getattr(e, "status_code", None) == 404:
                 return []
             raise
 
@@ -394,7 +394,7 @@ class OpenAlexProvider(SearchProvider):
         try:
             work_data = await self._execute_request("GET", endpoint)
         except SearchProviderError as e:
-            if "404" in str(e):
+            if getattr(e, "status_code", None) == 404:
                 return []
             raise
 
@@ -524,6 +524,7 @@ class OpenAlexProvider(SearchProvider):
                         provider="openalex",
                         message=f"API error {response.status_code}: {error_msg}",
                         retryable=response.status_code >= 500,
+                        status_code=response.status_code,
                     )
                 return response.json()
 

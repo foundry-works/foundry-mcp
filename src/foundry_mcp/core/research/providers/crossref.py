@@ -49,12 +49,11 @@ from foundry_mcp.core.research.providers.resilience import (
     get_provider_config,
 )
 from foundry_mcp.core.research.providers.shared import (
-    _ERROR_TYPE_DEFAULTS,
     check_provider_health,
     classify_http_error,
+    classify_with_registry,
     create_resilience_executor,
     extract_error_message,
-    extract_status_code,
     parse_retry_after,
     truncate_abstract,
 )
@@ -215,7 +214,7 @@ class CrossrefProvider:
         try:
             response_data = await self._execute_request(endpoint)
         except SearchProviderError as e:
-            if "404" in str(e):
+            if getattr(e, "status_code", None) == 404:
                 return None
             raise
 
@@ -309,21 +308,12 @@ class CrossrefProvider:
     def classify_error(self, error: Exception) -> "ErrorClassification":
         """Classify an error for resilience decisions.
 
-        Follows the same pattern as SearchProvider.classify_error but
-        without requiring the base class.
+        Delegates to the shared ``classify_with_registry`` helper (same
+        logic as ``SearchProvider.classify_error``) to avoid duplication.
         """
-        if self.ERROR_CLASSIFIERS and isinstance(error, SearchProviderError):
-            code = extract_status_code(str(error))
-            if code is not None and code in self.ERROR_CLASSIFIERS:
-                error_type = self.ERROR_CLASSIFIERS[code]
-                retryable, trips_breaker = _ERROR_TYPE_DEFAULTS.get(
-                    error_type.value, (False, True)
-                )
-                return ErrorClassification(
-                    retryable=retryable,
-                    trips_breaker=trips_breaker,
-                    error_type=error_type,
-                )
+        result = classify_with_registry(error, self.ERROR_CLASSIFIERS, self.get_provider_name())
+        if result is not None:
+            return result
         return classify_http_error(error, self.get_provider_name())
 
     async def _execute_request(
@@ -368,6 +358,7 @@ class CrossrefProvider:
                         provider="crossref",
                         message=f"API error {response.status_code}: {error_msg}",
                         retryable=response.status_code >= 500,
+                        status_code=response.status_code,
                     )
                 return response.json()
 

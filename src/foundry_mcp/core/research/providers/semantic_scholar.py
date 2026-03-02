@@ -373,6 +373,7 @@ class SemanticScholarProvider(SearchProvider):
                         provider="semantic_scholar",
                         message=f"API error {response.status_code}: {error_msg}",
                         retryable=response.status_code >= 500,
+                        status_code=response.status_code,
                     )
                 return response.json()
 
@@ -409,7 +410,7 @@ class SemanticScholarProvider(SearchProvider):
         try:
             response_data = await self._execute_request("GET", endpoint, params=params)
         except SearchProviderError as e:
-            if "404" in str(e):
+            if getattr(e, "status_code", None) == 404:
                 return None
             raise
         sources = self._parse_response({"data": [response_data]})

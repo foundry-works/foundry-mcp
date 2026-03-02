@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     import httpx
 
     from foundry_mcp.core.research.models.sources import ResearchSource
-    from foundry_mcp.core.research.providers.resilience.models import ErrorClassification
+    from foundry_mcp.core.research.providers.resilience.models import ErrorClassification, ErrorType
 
 logger = logging.getLogger(__name__)
 
@@ -359,6 +359,45 @@ _ERROR_TYPE_DEFAULTS: dict[str, tuple[bool, bool]] = {
 }
 
 
+def classify_with_registry(
+    error: Exception,
+    error_classifiers: dict[int, "ErrorType"],
+    provider_name: str,
+) -> Optional["ErrorClassification"]:
+    """Check ERROR_CLASSIFIERS registry for a matching status code.
+
+    Shared implementation used by both ``SearchProvider.classify_error``
+    and ``CrossrefProvider.classify_error`` to avoid code duplication.
+
+    Args:
+        error: The exception to classify.
+        error_classifiers: Mapping of HTTP status codes to ``ErrorType``.
+        provider_name: Provider name (unused, reserved for future logging).
+
+    Returns:
+        An ``ErrorClassification`` if the error matches a registry entry,
+        or ``None`` to fall through to generic classification.
+    """
+    from foundry_mcp.core.research.providers.base import SearchProviderError
+    from foundry_mcp.core.research.providers.resilience import (
+        ErrorClassification,
+    )
+
+    if error_classifiers and isinstance(error, SearchProviderError):
+        code = getattr(error, "status_code", None) or extract_status_code(str(error))
+        if code is not None and code in error_classifiers:
+            error_type = error_classifiers[code]
+            retryable, trips_breaker = _ERROR_TYPE_DEFAULTS.get(
+                error_type.value, (False, True)
+            )
+            return ErrorClassification(
+                retryable=retryable,
+                trips_breaker=trips_breaker,
+                error_type=error_type,
+            )
+    return None
+
+
 def classify_http_error(
     error: Exception,
     provider_name: str,
@@ -427,14 +466,14 @@ def classify_http_error(
 
     # 4-6. SearchProviderError
     if isinstance(error, SearchProviderError):
-        error_str = str(error).lower()
-        if any(code in error_str for code in ("500", "502", "503", "504")):
+        code = getattr(error, "status_code", None) or extract_status_code(str(error))
+        if code is not None and code >= 500:
             return ErrorClassification(
                 retryable=True,
                 trips_breaker=True,
                 error_type=ErrorType.SERVER_ERROR,
             )
-        if "400" in error_str:
+        if code == 400:
             return ErrorClassification(
                 retryable=False,
                 trips_breaker=False,

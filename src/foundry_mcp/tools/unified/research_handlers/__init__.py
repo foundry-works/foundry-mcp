@@ -271,6 +271,7 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
         - deep-research-network: Build citation network graph from research session sources
         - deep-research-assess: Run methodology quality assessment on research session sources
         - deep-research-export: Export bibliography from research session (bibtex or ris format)
+        - deep-research-provenance: Get provenance/audit trail from research session
         - thread-list: List conversation threads
         - thread-get: Get thread details including messages
         - thread-delete: Delete a conversation thread

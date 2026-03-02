@@ -14,6 +14,7 @@ class SearchProviderError(Exception):
         message: Human-readable error description
         retryable: Whether the error is potentially transient
         original_error: The underlying exception if available
+        status_code: HTTP status code if the error originated from an HTTP response
     """
 
     def __init__(
@@ -22,11 +23,13 @@ class SearchProviderError(Exception):
         message: str,
         retryable: bool = False,
         original_error: Optional[Exception] = None,
+        status_code: Optional[int] = None,
     ):
         self.provider = provider
         self.message = message
         self.retryable = retryable
         self.original_error = original_error
+        self.status_code = status_code
         super().__init__(f"[{provider}] {message}")
 
 

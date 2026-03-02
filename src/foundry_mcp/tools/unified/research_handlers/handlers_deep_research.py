@@ -267,8 +267,15 @@ def _handle_deep_research_report(
                 if state:
                     state.report_output_path = resolved_path
                     memory.save_deep_research(state)
-            except Exception:
+            except Exception as exc:
                 logger.warning("Failed to save report to %s", output_path, exc_info=True)
+                # Surface the save failure to the caller so they know their
+                # requested output_path was not written.
+                if warnings is None:
+                    warnings = []
+                elif isinstance(warnings, tuple):
+                    warnings = list(warnings)
+                warnings.append(f"Failed to save report to {output_path}: {exc}")
         else:
             # Fall back to the auto-saved path from synthesis
             resolved_path = metadata.pop("report_output_path", None)

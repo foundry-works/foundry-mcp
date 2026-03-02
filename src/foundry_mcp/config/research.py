@@ -26,9 +26,8 @@ logger = logging.getLogger(__name__)
 class ResearchConfig:
     """Configuration for research workflows (CHAT, CONSENSUS, THINKDEEP, IDEATE, DEEP_RESEARCH).
 
-    **Cost-tiered model routing:** High-volume roles (summarization, compression)
-    automatically use a cheap model (``gemini-2.5-flash``) when no explicit model
-    is configured.  See ``_COST_TIER_MODEL_DEFAULTS`` and the deep-research guide.
+    **Model routing:** LLM calls are routed to different models based on task role
+    via ``ModelRoleConfig``.  Cost-tier defaults require explicit tier configuration.
 
     Attributes:
         enabled: Master switch for research tools
