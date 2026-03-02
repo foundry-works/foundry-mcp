@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0a1] - 2026-03-02
+
+### Added
+
+- **Academic search providers**: OpenAlex (Tier 1) and Crossref (Tier 2) providers for scholarly metadata enrichment, with identifier validation, filter sanitization, and rate limiting.
+- **Citation tools**: Citation network graph builder, related papers discovery, APA citation formatting, and BibTeX/RIS reference export.
+- **Deep analysis**: Full-text PDF analysis extending the existing extractor, and methodology quality assessment for empirical studies.
+- **Research profiles**: Composable named profiles (e.g., `systematic-review`, `bibliometric`) replace monolithic `research_mode`, with backward-compatible mapping.
+- **Provenance audit trail**: Machine-readable audit trail tracking provider queries, source discovery, coverage assessments, gap identification, and resolution across research sessions.
+- **Structured output mode**: Deep research produces both markdown reports and structured JSON output (source catalog, findings, gaps, landscape metadata) for downstream tool consumption.
+- **Literature review query type**: Specialized query type with academic-specific synthesis instructions and coverage-aware prompts.
+- **Academic brief enrichment**: Profile-aware brief generation with discipline-specific decomposition guidelines.
+- **Research intelligence**: Influence-aware source scoring, research landscape metadata, academic coverage weights, and enhanced gap injection for academic queries.
+- **Adaptive provider selection**: Brief-phase signals drive provider selection — discipline and scope automatically activate relevant providers.
+- **Strategic research primitives**: Topic researchers receive BROADEN/DEEPEN/VALIDATE/SATURATE strategy guidance for systematic coverage.
+- **Semantic Scholar enhancements**: Paper ID URL-encoding, additional search fields, and related papers support.
+
+### Fixed
+
+- **Security hardening**: Input validation for OpenAlex identifiers, filter sanitization to prevent injection, DNS resolution fail-closed for PDF extraction, content-type gate tightening.
+- **Provider robustness**: Crossref DOI URL-encoding, Semantic Scholar paper ID encoding, OpenAlex 403 error handling, OOM cap on related paper queries.
+- **Config validation**: Citation influence threshold ordering validation, methodology assessment handler path fixes.
+- **Test coverage**: Citation tool gating, provider fallback chains, paper ID validation, assistant message sanitization, PDF content preview sanitization.
+
+### Changed
+
+- **Supervision refactoring**: Extracted first-round decomposition into `supervision_first_round.py`, introduced `ResearchExtensions` container on `DeepResearchState` to prevent state model bloat.
+- **Removed internal plan references**: Stripped all PLAN-N/FIX-N prefixes from code comments and docstrings, renamed plan-numbered test files, deleted completed plan documents.
+
 ## [0.17.0b8] - 2026-02-28
 
 ### Changed
