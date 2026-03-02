@@ -983,7 +983,7 @@ PROFILE_GENERAL = ResearchProfile(
 
 PROFILE_ACADEMIC = ResearchProfile(
     name="academic",
-    providers=["semantic_scholar", "tavily"],
+    providers=["semantic_scholar", "openalex", "crossref", "tavily"],
     source_quality_mode=ResearchMode.ACADEMIC,
     citation_style="apa",
     export_formats=["bibtex", "ris"],
@@ -999,7 +999,7 @@ PROFILE_ACADEMIC = ResearchProfile(
 
 PROFILE_SYSTEMATIC_REVIEW = ResearchProfile(
     name="systematic-review",
-    providers=["semantic_scholar", "tavily"],
+    providers=["semantic_scholar", "openalex", "crossref", "tavily"],
     source_quality_mode=ResearchMode.ACADEMIC,
     citation_style="apa",
     export_formats=["bibtex", "ris"],
@@ -1018,7 +1018,7 @@ PROFILE_SYSTEMATIC_REVIEW = ResearchProfile(
 
 PROFILE_BIBLIOMETRIC = ResearchProfile(
     name="bibliometric",
-    providers=["semantic_scholar", "tavily"],
+    providers=["semantic_scholar", "openalex", "crossref", "tavily"],
     source_quality_mode=ResearchMode.ACADEMIC,
     citation_style="apa",
     export_formats=["bibtex", "ris"],
