@@ -29,8 +29,10 @@
   - [ ] Store detected blocks per topic in a local `dict[str, list[str]]` keyed by `sub_query_id`
   - [ ] After gather completes, pass the topic's blocks to `_compression_output_is_valid()` at the validation call site
   - [ ] `_compress_single_topic_async` return type stays `tuple[int, int, bool]` — no interface change
-- [ ] Update `_compression_output_is_valid()` to accept optional `structured_blocks: list[str] | None` parameter
-  - [ ] Call `_validate_structured_data_survival()` when blocks are provided
+- [ ] Update **module-level** function `_compression_output_is_valid()` (top of `compression.py`, NOT a method on `CompressionMixin`)
+  - [ ] Current sig: `(compressed: str | None, message_history: list[dict[str, str]], topic_id: str) -> bool`
+  - [ ] New sig: `(compressed: str | None, message_history: list[dict[str, str]], topic_id: str, structured_blocks: list[str] | None = None) -> bool`
+  - [ ] Call `_validate_structured_data_survival()` when blocks are provided (additional check alongside existing length-ratio and source-reference checks)
   - [ ] On validation failure, retain `message_history` (existing behavior — `topic.message_history.clear()` is skipped)
 - [ ] Write unit tests for `_detect_structured_blocks()`
   - [ ] Test with markdown table input
@@ -75,11 +77,11 @@
   - [ ] `deep_research_claim_verification_max_corrections: int = 5`
   - [ ] `deep_research_claim_verification_annotate_unsupported: bool = False`
   - [ ] `deep_research_claim_verification_max_input_tokens: int = 200_000` (total token budget escape hatch — drops claims from tail of priority list when estimated input tokens exceed cap)
-- [ ] Verify `resolve_phase_provider(config, "claim_verification", "synthesis")` works via dynamic attr lookup (fallback chain: claim_verification → synthesis → default_provider)
+- [ ] Verify `resolve_phase_provider(config, "claim_verification", "synthesis")` works via dynamic `getattr()` lookup on variadic `*phase_names` (defined in `_model_resolution.py`; constructs `f"deep_research_{name}_provider"` for each name, falls back to `config.default_provider`)
 - [ ] Unit test `resolve_phase_provider` fallback chain for claim verification:
-  - [ ] Test with explicit `claim_verification_provider` set (uses it)
-  - [ ] Test with no `claim_verification_provider` but `synthesis_provider` set (falls back to synthesis)
-  - [ ] Test with neither set (falls back to `default_provider`)
+  - [ ] Test with explicit `deep_research_claim_verification_provider` set (uses it directly)
+  - [ ] Test with no `claim_verification_provider` but `deep_research_synthesis_provider` set (falls back to synthesis — second variadic arg)
+  - [ ] Test with neither set (falls back to `config.default_provider`)
 - [ ] Add verification budget constants to `_constants.py`
   - [ ] `VERIFICATION_MAX_CLAIMS_DEFAULT = 50`
   - [ ] `VERIFICATION_MAX_CONCURRENT_DEFAULT = 10`
@@ -120,7 +122,7 @@
   - [ ] Return `.content` if populated, else `.raw_content`, else `.snippet`
   - [ ] Return `None` if all three are `None` (source has no verifiable text)
 - [ ] Implement `_keyword_proximity_truncate(text: str, claim_text: str, max_chars: int) -> str` helper
-  - [ ] Extract keywords from claim text: split on whitespace, filter out words < 4 chars, then filter against `_STOPWORDS` — a small `frozenset` of ~20 common function words (`{"this", "that", "with", "from", "have", "been", ...}`) defined as a module-level constant in `claim_verification.py`, no external dependency. The length filter handles most determiners/prepositions/conjunctions without maintaining a large curated list.
+  - [ ] Extract keywords from claim text: split on whitespace, filter out words < 4 chars, then filter against `_STOPWORDS` — a `frozenset` of ~30 common function words (`{"this", "that", "with", "from", "have", "been", "will", "would", "could", "should", "their", "there", "which", "about", "where", "these", "those", "does", "into", "also", "more", "than", "only", "most", "each", "some", "when", "they", "were", "other"}`) defined as a module-level constant in `claim_verification.py`, no external dependency. The length filter handles most determiners/prepositions/conjunctions without maintaining a large curated list.
   - [ ] Search source text for first occurrence of any keyword
   - [ ] If found, extract window of `max_chars` centered on that position (clamped to content boundaries)
   - [ ] If no keyword match, fall back to prefix truncation (first `max_chars` characters)
@@ -138,7 +140,7 @@
   - [ ] Handle parse failures gracefully (default to UNSUPPORTED)
   - [ ] Per-claim timeout handling
 - [ ] Implement token budget check before dispatching verification batch
-  - [ ] Estimate total input tokens: `sum(len(resolved_source_text) / 4 for each claim's resolved sources)` (rough char-to-token ratio)
+  - [ ] Estimate total input tokens: `sum(len(resolved_source_text) / 3.5 for each claim's resolved sources)` (conservative char-to-token ratio)
   - [ ] If estimate exceeds `config.deep_research_claim_verification_max_input_tokens`, drop claims from tail of priority list until under budget
   - [ ] Log number of claims dropped due to token budget
 - [ ] Implement `_verify_claims_batch(claims, citation_map, provider) -> list[ClaimVerdict]`
@@ -173,8 +175,10 @@
   - [ ] Import `extract_and_verify_claims` and `apply_corrections` from `phases.claim_verification` (inline import inside the guard)
   - [ ] Guard with `config.deep_research_claim_verification_enabled`
   - [ ] Set `state.metadata["claim_verification_started"] = True` and `state.metadata["claim_verification_in_progress"] = True`, then persist state before verification
+  - [ ] Snapshot `report_snapshot = state.report` before `try` block (for rollback on exception)
   - [ ] Clear `claim_verification_in_progress` in a `finally` block (so status polling shows correct state even on failure)
-  - [ ] Wrap entire verification block in `try/except Exception` — on failure, log warning, set `state.metadata["claim_verification_skipped"]`, proceed to `mark_completed()`
+  - [ ] Wrap entire verification block in `try/except Exception` — on failure, **rollback** `state.report = report_snapshot`, log warning, set `state.metadata["claim_verification_skipped"]`, proceed to `mark_completed()`
+  - [ ] After corrections succeed, call `self.memory.save_deep_research(state)` to persist corrected report + verification result (survives crash before `mark_completed`)
   - [ ] Add audit event logging for verification completion (claims_extracted, verified, contradicted, corrections_applied)
 - [ ] Add resume guard at top of SYNTHESIS block (before `_run_phase` call)
   - [ ] If `state.report` exists and `claim_verification_started` is True but `state.claim_verification` is None → skip synthesis, run verification only
@@ -185,14 +189,17 @@
 ### Graceful Degradation
 
 - [ ] Outer `try/except` in `workflow_execution.py` catches all verification errors
+  - [ ] **Rollback** `state.report = report_snapshot` to avoid delivering a partially-corrected (garbled) report
   - [ ] Log a warning-level audit event: `claim_verification_failed` with error string
   - [ ] Set `state.metadata["claim_verification_skipped"]` to the error message string
-  - [ ] Proceed to `mark_completed()` with the unverified report
+  - [ ] Proceed to `mark_completed()` with the original (pre-correction) report
   - [ ] Do NOT fail the entire research session because of a verification error
 - [ ] Claim extraction failure (invalid JSON / empty) returns empty `ClaimVerificationResult` without raising
   - [ ] Set `state.metadata["claim_verification_skipped"] = "extraction_failed"`
 
 ### Testing
+
+**Mock strategy**: All unit tests for `claim_verification.py` must mock `execute_fn` (the LLM execution callable passed as a dependency). Because the module uses free functions (not mixins), mocking is straightforward — pass a mock/stub async callable directly. Create shared test fixtures for: (1) a minimal `DeepResearchState` with populated `sources` and `report`, (2) a `ResearchConfig` with verification enabled, (3) a mock `execute_fn` that returns canned JSON responses for extraction and verification prompts.
 
 - [ ] Unit tests for claim extraction
   - [ ] Test extraction from report with mixed claim types
@@ -221,6 +228,7 @@
   - [ ] Test annotation skip when quote context not found in report
   - [ ] Test single-pass correction (no re-verification)
   - [ ] Test sequential correction ordering: two CONTRADICTED claims with overlapping context windows — verify corrections are applied one at a time and the second operates on the already-corrected report (no garbled output from parallel mutation)
+  - [ ] Test context drift after earlier correction: two adjacent CONTRADICTED claims where correction #1 alters text near claim #2's `quote_context`, causing substring match to fail — verify claim #2 falls back to full-report correction with `report_section` hint (not crash or skip)
   - [ ] Test paragraph boundary clamping expands outward (window grows to include full paragraphs, never shrinks)
 - [ ] Unit tests for serialization round-trip
   - [ ] Test `ClaimVerificationResult` survives `DeepResearchState` serialize → deserialize
@@ -238,6 +246,11 @@
 - [ ] Unit tests for report overwrite after corrections
   - [ ] Test `Path(state.report_output_path).write_text()` overwrites the synthesis-created file
   - [ ] Test that corrections are skipped when `report_output_path` is None (no crash)
+- [ ] Unit tests for report snapshot/rollback
+  - [ ] Test that `apply_corrections` exception mid-way rolls back `state.report` to pre-correction snapshot (no partial corrections delivered)
+  - [ ] Test that original report markdown file is NOT overwritten when corrections fail (rollback means `write_text` is never reached)
+- [ ] Unit tests for post-correction persistence
+  - [ ] Test that `save_deep_research(state)` is called after corrections succeed (corrected report + ClaimVerificationResult survive crash before `mark_completed`)
 - [ ] Unit tests for `_resolve_source_text`
   - [ ] Test with `.content` populated (returns `.content`)
   - [ ] Test with `.content=None`, `.raw_content` populated (returns `.raw_content`)
@@ -251,7 +264,7 @@
   - [ ] Test source shorter than `max_chars` (returned as-is, no truncation)
 - [ ] Unit tests for token budget escape hatch
   - [ ] Test that claims are dropped from tail of priority list when estimated input tokens exceed `max_input_tokens`
-  - [ ] Test that estimation uses `sum(len(sources_text) / 4)` per claim (rough char-to-token ratio)
+  - [ ] Test that estimation uses `sum(len(sources_text) / 3.5)` per claim (conservative char-to-token ratio)
   - [ ] Test that token budget check happens after prioritization/filtering, before dispatch
   - [ ] Test that Pass 1 (extraction) is unaffected by the token budget cap
 - [ ] Unit tests for edge cases

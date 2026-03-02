@@ -49,7 +49,7 @@ Structured data loss primarily occurs during **per-topic compression** (the raw 
    - Extracts numeric data tokens from detected blocks using regex `r'\d[\d,./:]+' ` and checks for their literal presence in the compressed output. This avoids the need for proper noun detection (which would require NLP) — numeric tokens are sufficient and mechanically detectable
    - Returns False if either check fails (table row loss OR missing numeric tokens)
 
-4. Update `_compression_output_is_valid()` to accept an optional `structured_blocks: list[str] | None` parameter and call the new validation function as an additional check. When validation fails, the existing behavior applies: `message_history` is retained instead of being cleared.
+4. Update the **module-level** function `_compression_output_is_valid()` (defined at the top of `compression.py`, NOT a method on `CompressionMixin`) to accept an optional `structured_blocks` parameter. Current signature: `(compressed: str | None, message_history: list[dict[str, str]], topic_id: str) -> bool`. New signature: `(compressed: str | None, message_history: list[dict[str, str]], topic_id: str, structured_blocks: list[str] | None = None) -> bool`. Call the new `_validate_structured_data_survival()` when blocks are provided, as an additional check alongside the existing length-ratio and source-reference checks. When validation fails, the existing behavior applies: `message_history` is retained instead of being cleared.
 
    **Wiring (no return type change needed)**: Detect structured blocks in `_compress_topic_findings_async()`, not inside `_compress_single_topic_async()`. The caller already has access to each `TopicResearchResult`'s `message_history` before compression runs — call `_detect_structured_blocks()` on the concatenated message content there, then pass the result to `_compression_output_is_valid()` at the validation call site. This avoids widening `_compress_single_topic_async`'s `tuple[int, int, bool]` return type, which would be a needless interface change forcing all call sites to unpack a 4th value.
 
@@ -136,7 +136,7 @@ For each claim flagged for verification (all negative + quantitative, sampled po
 
 3. **Source content truncation**: Each source's content is truncated to `VERIFICATION_SOURCE_MAX_CHARS` (default: 8,000 characters) in verification prompts. Without truncation, a claim citing 3 large sources could produce a 30K+ token input per verification call. With 50 parallel calls, this risks 1.5M+ input tokens — far exceeding the "20-50K additional tokens" budget.
 
-   **Keyword-proximity truncation** (not naive prefix): Extract keywords from the claim text by splitting on whitespace and filtering out short words (< 4 characters) plus a small explicit stopword set (`_STOPWORDS: frozenset` — ~20 common function words: `{"this", "that", "with", "from", "have", "been", "will", "would", "could", "should", "their", "there", "which", "about", "where", "these", "those", "does", "into", "also"}`, defined as a module-level constant in `claim_verification.py`, no external dependency). The length filter handles most determiners/prepositions/conjunctions ("the", "is", "of", "to", "and", "in", "for") without maintaining a large curated list. Search the source content for the first occurrence of any keyword. If found, extract a window of `VERIFICATION_SOURCE_MAX_CHARS` centered on that position (clamped to content boundaries). If no keywords match, fall back to prefix truncation (first `VERIFICATION_SOURCE_MAX_CHARS` characters). This is ~10 extra lines of code and dramatically improves verification accuracy for long sources where the relevant evidence appears deep in the document. The worst case (50 claims × 3 sources × 8K chars ≈ 1.2M chars ≈ 300K tokens) is unlikely in practice; the typical case (15-20 claims, 1-2 sources each) aligns with the 30-80K token estimate.
+   **Keyword-proximity truncation** (not naive prefix): Extract keywords from the claim text by splitting on whitespace and filtering out short words (< 4 characters) plus a small explicit stopword set (`_STOPWORDS: frozenset` — ~30 common function words: `{"this", "that", "with", "from", "have", "been", "will", "would", "could", "should", "their", "there", "which", "about", "where", "these", "those", "does", "into", "also", "more", "than", "only", "most", "each", "some", "when", "they", "were", "other"}`, defined as a module-level constant in `claim_verification.py`, no external dependency). The length filter handles most determiners/prepositions/conjunctions ("the", "is", "of", "to", "and", "in", "for") without maintaining a large curated list. Search the source content for the first occurrence of any keyword. If found, extract a window of `VERIFICATION_SOURCE_MAX_CHARS` centered on that position (clamped to content boundaries). If no keywords match, fall back to prefix truncation (first `VERIFICATION_SOURCE_MAX_CHARS` characters). This is ~10 extra lines of code and dramatically improves verification accuracy for long sources where the relevant evidence appears deep in the document. The worst case (50 claims × 3 sources × 8K chars ≈ 1.2M chars ≈ 300K tokens) is unlikely in practice; the typical case (15-20 claims, 1-2 sources each) aligns with the 30-80K token estimate.
 
 4. Build a verification prompt:
 
@@ -188,6 +188,8 @@ Return a JSON object with: verdict, evidence_quote, explanation
 
 **Corrections are applied sequentially, not in parallel.** Two CONTRADICTED claims may have overlapping or adjacent context windows. Parallel correction would race on `state.report`, potentially producing garbled output when both replacements land. Sequential application ensures each correction operates on the report as modified by all prior corrections. The iteration order follows the same priority used for budget selection (negative > quantitative > comparative > positive, then by cited source count).
 
+**Context drift after earlier corrections**: A known consequence of sequential application is that correction N may alter text near correction N+1's `quote_context`, causing the substring match to fail. This is an expected failure mode, not a bug. When it occurs, the existing fallback applies: full-report correction with an explicit single-claim instruction and `report_section` hint. The fallback is robust because it does not depend on positional matching — it instructs the LLM to find and fix the specific claim by content, not location. A test case should verify this scenario: two adjacent CONTRADICTED claims where the first correction shifts text enough to invalidate the second's `quote_context`.
+
 **Single-pass correction only**: Corrections are NOT re-verified. A correction that itself introduces errors is an acceptable (and rare) tradeoff vs. the cost of recursive verification. The correction prompt explicitly instructs the model to only fix the specific contradicted claim without altering surrounding content, minimizing blast radius.
 
 **Correction budget cap**: Corrections are capped at `deep_research_claim_verification_max_corrections` (default: 5). If more than 5 claims are CONTRADICTED, only the highest-priority ones are corrected, using the same priority order as verification: negative > quantitative > comparative > positive, with ties broken by number of cited sources (more sources = higher priority). Remaining CONTRADICTED claims beyond the cap are logged in `ClaimVerificationResult.details` with `correction_applied=False` but are not annotated or modified — their presence in the verification metadata serves as a signal that the report may have broader quality issues. This prevents unbounded correction LLM calls in pathologically bad synthesis outputs.
@@ -207,7 +209,7 @@ The verification model SHOULD differ from the synthesis model when possible, to 
 - **Targeted re-synthesis** (if needed): 0 to `max_corrections` (default: 5) LLM calls for contradicted sections
 - **Expected latency addition**: 15-45 seconds (parallelized verification)
 - **Expected token cost**: ~30-80K additional tokens per research session (dominated by verification inputs). Comprehensive comparison reports with many sources may reach ~100-150K tokens at `max_claims=50`. Source truncation is the primary cost control lever.
-- **Total token budget escape hatch**: A `deep_research_claim_verification_max_input_tokens` config field (default: 200,000) caps the estimated total input tokens for the verification batch. Before dispatching verification calls, `extract_and_verify_claims` estimates the total input tokens as `sum(len(sources_text) / 4 for each claim)` (rough char-to-token ratio). If the estimate exceeds the cap, claims are dropped from the tail of the priority list until the estimate fits. This prevents pathological cases (100-source report, 200 claims) from producing unbounded LLM costs. The cap is checked after prioritization/filtering and before dispatch — it does not affect claim extraction (Pass 1), only verification (Pass 2).
+- **Total token budget escape hatch**: A `deep_research_claim_verification_max_input_tokens` config field (default: 200,000) caps the estimated total input tokens for the verification batch. Before dispatching verification calls, `extract_and_verify_claims` estimates the total input tokens as `sum(len(sources_text) / 3.5 for each claim)` (conservative char-to-token ratio — typical English prose is ~4 chars/token, but content with URLs, numbers, and markdown formatting tokenizes less efficiently). If the estimate exceeds the cap, claims are dropped from the tail of the priority list until the estimate fits. This prevents pathological cases (100-source report, 200 claims) from producing unbounded LLM costs. The cap is checked after prioritization/filtering and before dispatch — it does not affect claim extraction (Pass 1), only verification (Pass 2).
 
 #### Integration Point
 
@@ -237,6 +239,13 @@ if state.phase == DeepResearchPhase.SYNTHESIS:
         state.metadata["claim_verification_in_progress"] = True
         self.memory.save_deep_research(state)  # checkpoint before verification
 
+        # Snapshot report before corrections so we can rollback on exception.
+        # apply_corrections mutates state.report sequentially; if it raises
+        # mid-way the report would be partially corrected — neither the
+        # original nor the fully-corrected version.  Restoring the snapshot
+        # guarantees we always deliver a coherent (if unverified) report.
+        report_snapshot = state.report
+
         try:
             verification_result = await extract_and_verify_claims(
                 state=state,
@@ -260,6 +269,10 @@ if state.phase == DeepResearchPhase.SYNTHESIS:
                 if state.report_output_path:
                     Path(state.report_output_path).write_text(state.report, encoding="utf-8")
 
+            # Persist corrected report + verification result so they survive
+            # a crash between here and mark_completed().
+            self.memory.save_deep_research(state)
+
             self._write_audit_event(state, "claim_verification_complete", data={
                 "claims_extracted": verification_result.claims_extracted,
                 "claims_verified": verification_result.claims_verified,
@@ -267,6 +280,10 @@ if state.phase == DeepResearchPhase.SYNTHESIS:
                 "corrections_applied": verification_result.corrections_applied,
             })
         except Exception as exc:
+            # Rollback to pre-correction report to avoid delivering a
+            # partially-corrected (and potentially garbled) report.
+            state.report = report_snapshot
+
             logger.warning(
                 "Claim verification failed for research %s, delivering unverified report: %s",
                 state.id, exc,
@@ -287,7 +304,9 @@ if state.phase == DeepResearchPhase.SYNTHESIS:
 
 Claim verification does NOT need its own `DeepResearchPhase` enum value — it runs as a sub-step within the SYNTHESIS phase, after report generation but before completion. This avoids state machine changes and simplifies resume logic.
 
-**Note on graceful degradation**: The entire verification block is wrapped in a `try/except` in the integration snippet above. If verification crashes, times out, or encounters any unhandled error, the exception is caught, logged as a warning audit event, and the report proceeds to `mark_completed()` unverified. Verification failures must **never** fail the research session.
+**Note on graceful degradation**: The entire verification block is wrapped in a `try/except` in the integration snippet above. If verification crashes, times out, or encounters any unhandled error, the exception is caught, `state.report` is **rolled back to the pre-correction snapshot** (so we never deliver a partially-corrected report), the failure is logged as a warning audit event, and the original report proceeds to `mark_completed()` unverified. Verification failures must **never** fail the research session.
+
+**Note on post-correction persistence**: After corrections complete successfully, `self.memory.save_deep_research(state)` is called before the audit event to checkpoint the corrected report and `ClaimVerificationResult`. This ensures the corrected report survives a crash between verification completion and `mark_completed()`.
 
 #### Resumability
 
