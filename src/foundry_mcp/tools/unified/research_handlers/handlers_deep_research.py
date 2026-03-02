@@ -57,6 +57,8 @@ def _handle_deep_research(
     timeout_per_operation: float = 120.0,
     max_concurrent: int = 3,
     task_timeout: Optional[float] = None,
+    research_profile: Optional[str] = None,
+    profile_overrides: Optional[dict] = None,
     **kwargs: Any,
 ) -> dict:
     """Handle deep-research action with background execution.
@@ -95,6 +97,23 @@ def _handle_deep_research(
     config = _get_config()
     workflow = DeepResearchWorkflow(config.research, _get_memory())
 
+    # Resolve research profile from parameters + config
+    resolved_profile = None
+    if deep_research_action == "start":
+        try:
+            resolved_profile = config.research.resolve_profile(
+                research_profile=research_profile,
+                research_mode=None,  # Legacy mode comes from config.deep_research_mode
+                profile_overrides=profile_overrides,
+            )
+        except ValueError as exc:
+            return _validation_error(
+                field="research_profile",
+                action="deep-research",
+                message=str(exc),
+                remediation="Use a valid profile name: general, academic, systematic-review, bibliometric, technical",
+            )
+
     # Apply config default for task_timeout if not explicitly set
     # Precedence: explicit param > config > hardcoded fallback
     effective_timeout = task_timeout
@@ -116,6 +135,7 @@ def _handle_deep_research(
         max_concurrent=max_concurrent,
         background=True,
         task_timeout=effective_timeout,
+        research_profile=resolved_profile,
     )
 
     if result.success:
@@ -228,6 +248,10 @@ def _handle_deep_research_report(
         metadata = result.metadata or {}
         warnings = metadata.pop("warnings", None)
 
+        # Load state once for path resolution, provenance, and structured output
+        assert research_id is not None  # validated by _DR_REPORT_SCHEMA
+        state = memory.load_deep_research(research_id)
+
         # Determine report file path
         resolved_path: Optional[str] = None
 
@@ -240,20 +264,23 @@ def _handle_deep_research_report(
                 resolved_path = str(p)
 
                 # Update state so future calls reflect the new path
-                assert research_id is not None
-                state = memory.load_deep_research(research_id)
                 if state:
                     state.report_output_path = resolved_path
                     memory.save_deep_research(state)
-            except Exception:
+            except Exception as exc:
                 logger.warning("Failed to save report to %s", output_path, exc_info=True)
+                # Surface the save failure to the caller so they know their
+                # requested output_path was not written.
+                if warnings is None:
+                    warnings = []
+                elif isinstance(warnings, tuple):
+                    warnings = list(warnings)
+                warnings.append(f"Failed to save report to {output_path}: {exc}")
         else:
             # Fall back to the auto-saved path from synthesis
             resolved_path = metadata.pop("report_output_path", None)
-            if not resolved_path and research_id:
-                state = memory.load_deep_research(research_id)
-                if state and state.report_output_path:
-                    resolved_path = state.report_output_path
+            if not resolved_path and state and state.report_output_path:
+                resolved_path = state.report_output_path
 
         # Build response data with all fields
         response_data: dict[str, Any] = {
@@ -262,6 +289,20 @@ def _handle_deep_research_report(
         }
         if resolved_path:
             response_data["output_path"] = resolved_path
+
+        # Include provenance summary and structured output
+        if state is not None:
+            if state.provenance is not None:
+                response_data["provenance_summary"] = {
+                    "entry_count": len(state.provenance.entries),
+                    "started_at": state.provenance.started_at,
+                    "completed_at": state.provenance.completed_at,
+                    "profile": state.provenance.profile,
+                }
+            if state.extensions.structured_output is not None:
+                response_data["structured"] = state.extensions.structured_output.model_dump(
+                    mode="json",
+                )
 
         return asdict(
             success_response(
@@ -375,6 +416,519 @@ def _handle_deep_research_delete(
             data={
                 "deleted": True,
                 "research_id": research_id,
+            }
+        )
+    )
+
+
+# ---------------------------------------------------------------------------
+# Provenance audit trail
+# ---------------------------------------------------------------------------
+
+_DR_PROVENANCE_SCHEMA = {
+    "research_id": Str(required=True),
+}
+
+
+def _handle_deep_research_provenance(
+    *,
+    research_id: Optional[str] = None,
+    **kwargs: Any,
+) -> dict:
+    """Retrieve the provenance audit trail for a deep research session.
+
+    Returns the full provenance log with all events, or a summary if the
+    session has no provenance (legacy sessions).
+    """
+    payload = {"research_id": research_id}
+    err = validate_payload(
+        payload, _DR_PROVENANCE_SCHEMA, tool_name="research", action="deep-research-provenance"
+    )
+    if err:
+        return err
+
+    memory = _get_memory()
+    assert research_id is not None  # validated by schema
+    state = memory.load_deep_research(research_id)
+
+    if state is None:
+        return asdict(
+            error_response(
+                f"Research session '{research_id}' not found",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Use deep-research-list to find valid research IDs",
+            )
+        )
+
+    if state.provenance is None:
+        return asdict(
+            success_response(
+                data={
+                    "research_id": research_id,
+                    "provenance": None,
+                    "message": "No provenance data available (session predates provenance feature)",
+                }
+            )
+        )
+
+    return asdict(
+        success_response(
+            data={
+                "research_id": research_id,
+                "provenance": state.provenance.model_dump(mode="json"),
+            }
+        )
+    )
+
+
+# ---------------------------------------------------------------------------
+# BibTeX / RIS export
+# ---------------------------------------------------------------------------
+
+_DR_EXPORT_SCHEMA = {
+    "research_id": Str(required=True),
+}
+
+
+_VALID_EXPORT_FORMATS = frozenset({"bibtex", "ris"})
+
+
+def _handle_deep_research_export(
+    *,
+    research_id: Optional[str] = None,
+    export_format: Optional[str] = None,
+    academic_only: Optional[bool] = None,
+    # Accept legacy name for backward compat but prefer export_format
+    format: Optional[str] = None,
+    **kwargs: Any,
+) -> dict:
+    """Export bibliography from a completed research session.
+
+    Args:
+        research_id: ID of the deep research session.
+        export_format: Export format — ``"bibtex"`` or ``"ris"``.
+        academic_only: When True, only export academic sources.
+
+    Returns:
+        Response envelope with the exported bibliography string.
+    """
+    payload = {"research_id": research_id}
+    err = validate_payload(payload, _DR_EXPORT_SCHEMA, tool_name="research", action="deep-research-export")
+    if err:
+        return err
+
+    # Resolve export_format: explicit param > legacy 'format' param > default
+    effective_format = export_format or format or "bibtex"
+    if effective_format not in _VALID_EXPORT_FORMATS:
+        return asdict(
+            error_response(
+                f"Unknown export format '{effective_format}'. Valid formats: {', '.join(sorted(_VALID_EXPORT_FORMATS))}",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
+                remediation="Use export_format='bibtex' or export_format='ris'",
+            )
+        )
+
+    # Default academic_only to True when not provided
+    effective_academic_only = academic_only if academic_only is not None else True
+
+    memory = _get_memory()
+    assert research_id is not None  # validated by _DR_EXPORT_SCHEMA
+    state = memory.load_deep_research(research_id)
+
+    if state is None:
+        return asdict(
+            error_response(
+                f"Research session '{research_id}' not found",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Use deep-research-list to find valid research IDs",
+            )
+        )
+
+    from foundry_mcp.core.research.models.sources import SourceType
+
+    # Filter sources
+    sources = state.sources
+    if effective_academic_only:
+        sources = [s for s in sources if s.source_type == SourceType.ACADEMIC]
+
+    if not sources:
+        return asdict(
+            success_response(
+                data={
+                    "research_id": research_id,
+                    "format": effective_format,
+                    "source_count": 0,
+                    "content": "",
+                    "message": "No sources to export"
+                    + (" (try academic_only=false)" if effective_academic_only else ""),
+                }
+            )
+        )
+
+    # Generate export
+    if effective_format == "ris":
+        from foundry_mcp.core.research.export.ris import sources_to_ris
+
+        content = sources_to_ris(sources)
+    else:
+        from foundry_mcp.core.research.export.bibtex import sources_to_bibtex
+
+        content = sources_to_bibtex(sources)
+
+    return asdict(
+        success_response(
+            data={
+                "research_id": research_id,
+                "format": effective_format,
+                "source_count": len(sources),
+                "content": content,
+            }
+        )
+    )
+
+
+# ---------------------------------------------------------------------------
+# Citation Network
+# ---------------------------------------------------------------------------
+
+_DR_NETWORK_SCHEMA = {
+    "research_id": Str(required=True),
+}
+
+
+def _handle_deep_research_network(
+    *,
+    research_id: Optional[str] = None,
+    max_references_per_paper: Optional[int] = None,
+    max_citations_per_paper: Optional[int] = None,
+    **kwargs: Any,
+) -> dict:
+    """Build citation network for a completed research session.
+
+    User-triggered. Requires a completed session with 3+ academic sources
+    that have paper IDs. Uses OpenAlex (primary) and Semantic Scholar
+    (fallback) to fetch references and forward citations.
+
+    Args:
+        research_id: ID of the deep research session.
+        max_references_per_paper: Max backward references per source (default from config).
+        max_citations_per_paper: Max forward citations per source (default from config).
+    """
+    import asyncio
+
+    payload = {"research_id": research_id}
+    err = validate_payload(
+        payload, _DR_NETWORK_SCHEMA, tool_name="research", action="deep-research-network"
+    )
+    if err:
+        return err
+
+    memory = _get_memory()
+    config = _get_config()
+    assert research_id is not None  # validated by schema
+
+    state = memory.load_deep_research(research_id)
+    if state is None:
+        return asdict(
+            error_response(
+                f"Research session '{research_id}' not found",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Use deep-research-list to find valid research IDs",
+            )
+        )
+
+    # Use explicit parameter if provided, otherwise fall back to config.
+    # Clamp to [1, 100] to prevent excessive API calls from unbounded input.
+    effective_max_refs = (
+        max_references_per_paper
+        if max_references_per_paper is not None
+        else config.research.deep_research_citation_network_max_refs_per_paper
+    )
+    effective_max_cites = (
+        max_citations_per_paper
+        if max_citations_per_paper is not None
+        else config.research.deep_research_citation_network_max_cites_per_paper
+    )
+    effective_max_refs = max(1, min(effective_max_refs, 100))
+    effective_max_cites = max(1, min(effective_max_cites, 100))
+
+    # Build providers
+    openalex_provider = None
+    semantic_scholar_provider = None
+
+    try:
+        from foundry_mcp.core.research.providers.openalex import OpenAlexProvider
+
+        api_key = config.research.openalex_api_key or None
+        if config.research.openalex_enabled:
+            openalex_provider = OpenAlexProvider(api_key=api_key)
+    except Exception:
+        logger.debug("Could not initialize OpenAlex provider for citation network")
+
+    try:
+        from foundry_mcp.core.research.providers.semantic_scholar import (
+            SemanticScholarProvider,
+        )
+
+        # S2 works without a key at lower rate limits
+        api_key = config.research.semantic_scholar_api_key or None
+        semantic_scholar_provider = SemanticScholarProvider(api_key=api_key)
+    except Exception:
+        logger.debug("Could not initialize Semantic Scholar provider for citation network")
+
+    if openalex_provider is None and semantic_scholar_provider is None:
+        return asdict(
+            error_response(
+                "No academic providers available for citation network construction",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+                remediation="Ensure OpenAlex or Semantic Scholar is configured",
+            )
+        )
+
+    from foundry_mcp.core.research.workflows.deep_research.phases.citation_network import (
+        CitationNetworkBuilder,
+    )
+
+    builder = CitationNetworkBuilder(
+        openalex_provider=openalex_provider,
+        semantic_scholar_provider=semantic_scholar_provider,
+        max_references_per_paper=effective_max_refs,
+        max_citations_per_paper=effective_max_cites,
+    )
+
+    # Run async builder in event loop
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        network = asyncio.run(builder.build_network(state.sources))
+    else:
+        # Avoid blocking a running loop by executing in a worker thread.
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            network = pool.submit(
+                asyncio.run, builder.build_network(state.sources)
+            ).result(timeout=120)
+
+    # Save to state
+    state.extensions.citation_network = network
+    memory.save_deep_research(state)
+
+    # Check if skipped
+    if network.stats.get("status") == "skipped":
+        return asdict(
+            success_response(
+                data={
+                    "research_id": research_id,
+                    "status": "skipped",
+                    "reason": network.stats.get("reason", "insufficient academic sources"),
+                    "academic_source_count": network.stats.get("academic_source_count", 0),
+                }
+            )
+        )
+
+    return asdict(
+        success_response(
+            data={
+                "research_id": research_id,
+                "status": "completed",
+                "network": network.model_dump(mode="json"),
+            }
+        )
+    )
+
+
+# ---------------------------------------------------------------------------
+# Methodology Assessment (user-triggered)
+# ---------------------------------------------------------------------------
+
+_DR_ASSESS_SCHEMA = {
+    "research_id": Str(required=True),
+}
+
+
+def _handle_deep_research_assess(
+    *,
+    research_id: Optional[str] = None,
+    **kwargs: Any,
+) -> dict:
+    """Run methodology quality assessment on a completed research session.
+
+    User-triggered post-hoc action. Filters to academic sources with
+    sufficient content, then uses LLM extraction to assess study design,
+    sample size, effect size, limitations, and biases.
+
+    Args:
+        research_id: ID of the deep research session.
+    """
+    import asyncio
+
+    payload = {"research_id": research_id}
+    err = validate_payload(
+        payload, _DR_ASSESS_SCHEMA, tool_name="research", action="deep-research-assess"
+    )
+    if err:
+        return err
+
+    memory = _get_memory()
+    config = _get_config()
+    assert research_id is not None  # validated by schema
+
+    state = memory.load_deep_research(research_id)
+    if state is None:
+        return asdict(
+            error_response(
+                f"Research session '{research_id}' not found",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Use deep-research-list to find valid research IDs",
+            )
+        )
+
+    # Validate session has sources
+    if not state.sources:
+        return asdict(
+            error_response(
+                "Research session has no sources to assess",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
+                remediation="Run deep-research first to gather sources",
+            )
+        )
+
+    from foundry_mcp.core.research.workflows.deep_research.phases.methodology_assessment import (
+        MethodologyAssessor,
+    )
+
+    # Use config for assessment parameters
+    assess_provider_id = config.research.deep_research_methodology_assessment_provider
+    assess_timeout = config.research.deep_research_methodology_assessment_timeout
+    assessor = MethodologyAssessor(
+        provider_id=assess_provider_id,
+        timeout=assess_timeout,
+        min_content_length=config.research.deep_research_methodology_assessment_min_content_length,
+    )
+
+    # Check eligibility before running expensive LLM calls
+    eligible = assessor.filter_assessable_sources(state.sources)
+    if len(eligible) < 2:
+        return asdict(
+            error_response(
+                f"Only {len(eligible)} eligible academic source(s) found (need at least 2)",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
+                remediation="Session needs 2+ academic sources with sufficient content for methodology assessment",
+                details={
+                    "research_id": research_id,
+                    "eligible_count": len(eligible),
+                    "total_sources": len(state.sources),
+                },
+            )
+        )
+
+    # Build standalone LLM call function using provider infrastructure
+    # so assess_sources can make LLM calls without a full workflow object.
+    async def _llm_call_fn(system_prompt: str, user_prompt: str) -> str | None:
+        import asyncio as _aio
+
+        from foundry_mcp.core.providers import (
+            ProviderHooks,
+            ProviderRequest,
+            ProviderStatus,
+        )
+        from foundry_mcp.core.providers.registry import resolve_provider
+
+        effective_provider_id = assess_provider_id or config.research.default_provider
+        try:
+            provider = resolve_provider(effective_provider_id, hooks=ProviderHooks())
+        except Exception:
+            logger.warning(
+                "Failed to resolve provider '%s' for methodology assessment",
+                effective_provider_id,
+                exc_info=True,
+            )
+            return None
+
+        request = ProviderRequest(
+            prompt=user_prompt,
+            system_prompt=system_prompt,
+            timeout=assess_timeout,
+            temperature=0.1,
+        )
+        # provider.generate is synchronous — run in executor to avoid blocking
+        loop = _aio.get_running_loop()
+        try:
+            result = await loop.run_in_executor(None, provider.generate, request)
+        except Exception:
+            logger.warning(
+                "Methodology assessment provider call failed",
+                exc_info=True,
+            )
+            return None
+
+        if result.status == ProviderStatus.SUCCESS:
+            return result.content
+        logger.warning(
+            "Methodology assessment provider returned status %s",
+            result.status.value,
+        )
+        return None
+
+    # Run async assessor
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        assessments = asyncio.run(
+            assessor.assess_sources(state.sources, llm_call_fn=_llm_call_fn)
+        )
+    else:
+        # Avoid blocking a running loop by executing in a worker thread.
+        import concurrent.futures
+
+        total_timeout = assess_timeout * len(eligible) + 30
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            assessments = pool.submit(
+                asyncio.run,
+                assessor.assess_sources(state.sources, llm_call_fn=_llm_call_fn),
+            ).result(timeout=total_timeout)
+
+    # Save assessments to state
+    state.extensions.methodology_assessments = assessments
+    memory.save_deep_research(state)
+
+    # Build response
+    assessment_summaries = []
+    for a in assessments:
+        summary: dict[str, Any] = {
+            "source_id": a.source_id,
+            "study_design": a.study_design.value,
+            "confidence": a.confidence,
+            "content_basis": a.content_basis,
+        }
+        if a.sample_size is not None:
+            summary["sample_size"] = a.sample_size
+        if a.effect_size:
+            summary["effect_size"] = a.effect_size
+        if a.limitations_noted:
+            summary["limitations_count"] = len(a.limitations_noted)
+        if a.potential_biases:
+            summary["biases_count"] = len(a.potential_biases)
+        assessment_summaries.append(summary)
+
+    return asdict(
+        success_response(
+            data={
+                "research_id": research_id,
+                "status": "completed",
+                "assessment_count": len(assessments),
+                "eligible_sources": len(eligible),
+                "total_sources": len(state.sources),
+                "assessments": assessment_summaries,
             }
         )
     )

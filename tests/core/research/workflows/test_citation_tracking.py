@@ -21,6 +21,7 @@ from foundry_mcp.core.research.models.sources import (
 from foundry_mcp.core.research.workflows.deep_research.phases._citation_postprocess import (
     build_sources_section,
     extract_cited_numbers,
+    format_source_apa,
     postprocess_citations,
     remove_dangling_citations,
     strip_llm_sources_section,
@@ -481,3 +482,328 @@ class TestCitationStabilityAcrossRefinement:
         finding = state_with_sources.findings[0]
         citation_refs = [id_to_cn[sid] for sid in finding.source_ids]
         assert citation_refs == [1, 2]
+
+
+# =============================================================================
+# APA Citation Formatting
+# =============================================================================
+
+
+class TestFormatSourceApa:
+    """Tests for format_source_apa() — APA 7th-edition reference formatting.
+
+    Note: Semantic Scholar formats authors as comma-separated full names
+    (e.g. "John Smith, Jane Jones") — not "Last, First" format.
+    """
+
+    def test_full_academic_metadata(self):
+        """Full academic source: Authors (Year). Title. *Venue*. DOI_URL."""
+        source = ResearchSource(
+            title="Deep Learning for NLP",
+            url="https://semanticscholar.org/paper/abc",
+            metadata={
+                "authors": "John Smith, Alice Jones, Chang Lee",
+                "year": 2023,
+                "venue": "Nature Machine Intelligence",
+                "doi": "10.1038/s42256-023-00001-1",
+                "citation_count": 142,
+            },
+        )
+        result = format_source_apa(source)
+        assert "John Smith, Alice Jones, & Chang Lee" in result
+        assert "(2023)" in result
+        assert "Deep Learning for NLP." in result
+        assert "*Nature Machine Intelligence*." in result
+        assert "https://doi.org/10.1038/s42256-023-00001-1" in result
+        # DOI URL preferred over source.url
+        assert "semanticscholar.org" not in result
+
+    def test_partial_metadata_missing_venue(self):
+        """Missing venue: Authors (Year). Title. URL."""
+        source = ResearchSource(
+            title="Attention Is All You Need",
+            url="https://arxiv.org/abs/1706.03762",
+            metadata={
+                "authors": "Ashish Vaswani, Noam Shazeer",
+                "year": 2017,
+                "doi": None,
+                "venue": None,
+            },
+        )
+        result = format_source_apa(source)
+        assert "Ashish Vaswani & Noam Shazeer" in result
+        assert "(2017)" in result
+        assert "Attention Is All You Need." in result
+        assert "https://arxiv.org/abs/1706.03762" in result
+        # No venue italics
+        assert "*" not in result
+
+    def test_partial_metadata_missing_doi(self):
+        """Missing DOI: falls back to source.url."""
+        source = ResearchSource(
+            title="Some Paper",
+            url="https://example.com/paper",
+            metadata={
+                "authors": "Jane Doe",
+                "year": 2020,
+                "venue": "ICML",
+            },
+        )
+        result = format_source_apa(source)
+        assert "Jane Doe (2020). Some Paper." in result
+        assert "*ICML*." in result
+        assert "https://example.com/paper" in result
+
+    def test_web_source_no_academic_metadata(self):
+        """Web source with no academic metadata: Title. URL."""
+        source = ResearchSource(
+            title="Getting Started with Python",
+            url="https://python.org/getting-started",
+            metadata={},
+        )
+        result = format_source_apa(source)
+        # No author → title in author position
+        assert result.startswith("Getting Started with Python (n.d.).")
+        assert "https://python.org/getting-started" in result
+        # No venue
+        assert "*" not in result
+
+    def test_et_al_more_than_five_authors(self):
+        """>5 authors: first author et al."""
+        source = ResearchSource(
+            title="Large Collaboration Paper",
+            url="https://example.com",
+            metadata={
+                "authors": "Alice Alpha, Bob Beta, Carol Gamma, Dan Delta, Eve Epsilon, Frank Zeta",
+                "year": 2024,
+            },
+        )
+        result = format_source_apa(source)
+        assert "Alice Alpha et al." in result
+        assert "(2024)" in result
+        # Other authors should not appear
+        assert "Bob Beta" not in result
+        assert "Frank Zeta" not in result
+
+    def test_missing_year_nd(self):
+        """Missing year: (n.d.) per APA convention."""
+        source = ResearchSource(
+            title="Undated Document",
+            url="https://example.com/undated",
+            metadata={"authors": "Alex Unknown"},
+        )
+        result = format_source_apa(source)
+        assert "(n.d.)" in result
+        assert "Alex Unknown (n.d.). Undated Document." in result
+
+    def test_no_url_and_no_doi(self):
+        """Source with no URL and no DOI: just author, year, title."""
+        source = ResearchSource(
+            title="Offline Paper",
+            metadata={"authors": "Jane Doe", "year": 2019},
+        )
+        result = format_source_apa(source)
+        assert result == "Jane Doe (2019). Offline Paper."
+
+    def test_empty_metadata(self):
+        """Source with completely empty metadata: minimal fallback."""
+        source = ResearchSource(title="Bare Title")
+        result = format_source_apa(source)
+        assert result == "Bare Title (n.d.)."
+
+    def test_two_authors(self):
+        """Two authors: joined with &."""
+        source = ResearchSource(
+            title="Dual Author Paper",
+            metadata={"authors": "Alice Foo, Bob Bar", "year": 2021},
+        )
+        result = format_source_apa(source)
+        assert "Alice Foo & Bob Bar" in result
+
+    def test_single_author(self):
+        """Single author: no & or comma joining."""
+        source = ResearchSource(
+            title="Solo Paper",
+            metadata={"authors": "Sam Solo", "year": 2022},
+        )
+        result = format_source_apa(source)
+        assert result.startswith("Sam Solo (2022). Solo Paper.")
+
+    def test_five_authors_all_listed(self):
+        """Exactly 5 authors: all listed with & before last."""
+        source = ResearchSource(
+            title="Five Authors Paper",
+            metadata={
+                "authors": "A One, B Two, C Three, D Four, E Five",
+                "year": 2023,
+            },
+        )
+        result = format_source_apa(source)
+        assert "A One, B Two, C Three, D Four, & E Five" in result
+
+
+class TestBuildSourcesSectionApa:
+    """Tests for build_sources_section() with format_style='apa'."""
+
+    @pytest.fixture
+    def state_with_academic_sources(self) -> DeepResearchState:
+        """State with sources that have academic metadata."""
+        state = DeepResearchState(original_query="literature review on X")
+        state.add_source(
+            title="Paper Alpha",
+            url="https://doi.org/10.1234/alpha",
+            metadata={
+                "authors": "John Smith, Kate Lee",
+                "year": 2022,
+                "venue": "Nature",
+                "doi": "10.1234/alpha",
+            },
+        )
+        state.add_source(
+            title="Paper Beta",
+            url="https://example.com/beta",
+            metadata={
+                "authors": "Alice Jones",
+                "year": 2023,
+            },
+        )
+        state.add_source(
+            title="Web Source Gamma",
+            url="https://gamma.example.com",
+        )
+        return state
+
+    def test_apa_format_produces_references_heading(self, state_with_academic_sources):
+        section = build_sources_section(state_with_academic_sources, format_style="apa")
+        assert "## References" in section
+        assert "## Sources" not in section
+
+    def test_default_format_produces_sources_heading(self, state_with_academic_sources):
+        section = build_sources_section(state_with_academic_sources, format_style="default")
+        assert "## Sources" in section
+        assert "## References" not in section
+
+    def test_apa_entries_contain_apa_formatting(self, state_with_academic_sources):
+        section = build_sources_section(state_with_academic_sources, format_style="apa")
+        # First source: full academic
+        assert "John Smith & Kate Lee (2022). Paper Alpha." in section
+        assert "*Nature*." in section
+        # Second source: partial
+        assert "Alice Jones (2023). Paper Beta." in section
+        # Third source: web/minimal
+        assert "Web Source Gamma (n.d.)." in section
+
+    def test_default_format_preserves_existing_behavior(self, state_with_academic_sources):
+        section = build_sources_section(state_with_academic_sources, format_style="default")
+        assert "[1] [Paper Alpha](https://doi.org/10.1234/alpha)" in section
+        assert "[2] [Paper Beta](https://example.com/beta)" in section
+        assert "[3] [Web Source Gamma](https://gamma.example.com)" in section
+
+    def test_apa_entries_have_citation_numbers(self, state_with_academic_sources):
+        """APA entries still include [N] prefix for cross-referencing."""
+        section = build_sources_section(state_with_academic_sources, format_style="apa")
+        assert "[1] " in section
+        assert "[2] " in section
+        assert "[3] " in section
+
+    def test_empty_state_returns_empty(self):
+        state = DeepResearchState(original_query="test")
+        section = build_sources_section(state, format_style="apa")
+        assert section == ""
+
+
+class TestPostprocessCitationsWithProfile:
+    """Integration tests: postprocess_citations() respects profile and query_type."""
+
+    @pytest.fixture
+    def academic_state(self) -> DeepResearchState:
+        """State with academic profile and sources."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_ACADEMIC
+
+        state = DeepResearchState(original_query="literature review on attention mechanisms")
+        state.extensions.research_profile = PROFILE_ACADEMIC
+        state.add_source(
+            title="Attention Is All You Need",
+            url="https://arxiv.org/abs/1706.03762",
+            metadata={
+                "authors": "Ashish Vaswani, Noam Shazeer, Niki Parmar",
+                "year": 2017,
+                "venue": "NeurIPS",
+                "doi": "10.5555/3295222.3295349",
+            },
+        )
+        state.add_source(
+            title="BERT: Pre-training of Deep Bidirectional Transformers",
+            url="https://arxiv.org/abs/1810.04805",
+            metadata={
+                "authors": "Jacob Devlin, Ming-Wei Chang, Kenton Lee, Kristina Toutanova",
+                "year": 2019,
+                "venue": "NAACL",
+            },
+        )
+        return state
+
+    def test_literature_review_query_type_forces_apa(self, academic_state):
+        """query_type='literature_review' forces APA regardless of profile."""
+        report = "# Report\n\nFindings [1] and [2] support the thesis.\n"
+        processed, meta = postprocess_citations(
+            report, academic_state, query_type="literature_review",
+        )
+        assert "## References" in processed
+        assert "## Sources" not in processed
+        assert meta["format_style"] == "apa"
+
+    def test_academic_profile_uses_apa(self, academic_state):
+        """Academic profile (citation_style='apa') produces APA output."""
+        report = "# Report\n\nSee [1] for details.\n"
+        processed, meta = postprocess_citations(
+            report, academic_state, query_type="explanation",
+        )
+        assert "## References" in processed
+        assert meta["format_style"] == "apa"
+
+    def test_general_profile_uses_default(self):
+        """General profile uses default formatting."""
+        state = DeepResearchState(original_query="test query")
+        state.add_source(title="Source A", url="https://a.example.com")
+        report = "# Report\n\nFinding [1].\n"
+        processed, meta = postprocess_citations(
+            report, state, query_type="explanation",
+        )
+        assert "## Sources" in processed
+        assert "## References" not in processed
+        assert meta["format_style"] == "default"
+
+    def test_no_query_type_defaults_to_profile(self, academic_state):
+        """When query_type is None, uses profile's citation_style."""
+        report = "# Report\n\nFinding [1].\n"
+        processed, meta = postprocess_citations(report, academic_state)
+        assert "## References" in processed
+        assert meta["format_style"] == "apa"
+
+    def test_apa_entries_in_final_output(self, academic_state):
+        """Verify APA-formatted entries appear in the final processed report."""
+        report = "# Report\n\nAttention mechanisms [1] are foundational.\n"
+        processed, _meta = postprocess_citations(
+            report, academic_state, query_type="literature_review",
+        )
+        # Source 1: 3 authors with DOI URL
+        assert "Ashish Vaswani, Noam Shazeer, & Niki Parmar (2017)" in processed
+        assert "*NeurIPS*." in processed
+        assert "https://doi.org/10.5555/3295222.3295349" in processed
+        # Source 2: 4 authors without DOI
+        assert "Jacob Devlin, Ming-Wei Chang, Kenton Lee, & Kristina Toutanova (2019)" in processed
+        assert "*NAACL*." in processed
+
+    def test_existing_tests_still_pass_with_default(self):
+        """Backward compat: postprocess_citations without query_type produces default format."""
+        state = DeepResearchState(original_query="test query")
+        state.add_source(title="Alpha Source", url="https://alpha.example.com")
+        state.add_source(title="Beta Source", url="https://beta.example.com")
+        report = "# Report\n\nFinding [1] and [2].\n\n## Sources\n\n- Old\n"
+        processed, meta = postprocess_citations(report, state)
+        # Default format
+        assert "[1] [Alpha Source](https://alpha.example.com)" in processed
+        assert "[2] [Beta Source](https://beta.example.com)" in processed
+        assert "## Sources" in processed
+        assert meta["format_style"] == "default"

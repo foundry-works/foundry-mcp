@@ -259,3 +259,55 @@ class TestTokenLimitsSyncJsonFallback:
             if json_limits[key] != fallback_limits[key]:
                 mismatches.append(f"  {key}: JSON={json_limits[key]} vs fallback={fallback_limits[key]}")
         assert not mismatches, "Value mismatches between JSON and fallback:\n" + "\n".join(mismatches)
+
+
+# ===========================================================================
+# Citation influence threshold ordering validation
+# ===========================================================================
+
+
+class TestCitationInfluenceThresholdValidation:
+    """Citation influence thresholds must satisfy low < medium < high."""
+
+    def test_default_thresholds_pass(self):
+        """Default thresholds (5, 20, 100) pass validation."""
+        config = ResearchConfig()
+        assert config.deep_research_influence_low_citation_threshold == 5
+        assert config.deep_research_influence_medium_citation_threshold == 20
+        assert config.deep_research_influence_high_citation_threshold == 100
+
+    def test_custom_valid_thresholds_pass(self):
+        """Custom thresholds that satisfy low < medium < high pass."""
+        config = ResearchConfig(
+            deep_research_influence_low_citation_threshold=1,
+            deep_research_influence_medium_citation_threshold=10,
+            deep_research_influence_high_citation_threshold=50,
+        )
+        assert config.deep_research_influence_low_citation_threshold == 1
+
+    def test_inverted_thresholds_raise(self):
+        """Inverted thresholds (100, 20, 5) raise ValueError."""
+        with pytest.raises(ValueError, match="low < medium < high"):
+            ResearchConfig(
+                deep_research_influence_low_citation_threshold=100,
+                deep_research_influence_medium_citation_threshold=20,
+                deep_research_influence_high_citation_threshold=5,
+            )
+
+    def test_equal_thresholds_raise(self):
+        """Equal thresholds (20, 20, 20) raise ValueError."""
+        with pytest.raises(ValueError, match="low < medium < high"):
+            ResearchConfig(
+                deep_research_influence_low_citation_threshold=20,
+                deep_research_influence_medium_citation_threshold=20,
+                deep_research_influence_high_citation_threshold=20,
+            )
+
+    def test_from_toml_dict_inverted_raises(self):
+        """from_toml_dict also triggers threshold validation."""
+        with pytest.raises(ValueError, match="low < medium < high"):
+            ResearchConfig.from_toml_dict({
+                "deep_research_influence_low_citation_threshold": 50,
+                "deep_research_influence_medium_citation_threshold": 20,
+                "deep_research_influence_high_citation_threshold": 10,
+            })

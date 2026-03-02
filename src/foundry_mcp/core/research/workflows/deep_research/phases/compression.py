@@ -415,7 +415,7 @@ def _split_supervisor_brief(content: str) -> tuple[str, str | None]:
         (compressed_findings, supervisor_summary) — supervisor_summary
         is ``None`` if the marker was not found.
     """
-    idx = content.rfind(_SUPERVISOR_BRIEF_MARKER)
+    idx = content.find(_SUPERVISOR_BRIEF_MARKER)
     if idx == -1:
         return content, None
 
@@ -585,7 +585,9 @@ class CompressionMixin:
             "1. COVERED: What specific aspects of the research topic "
             "were investigated\n"
             "2. KEY FINDINGS: 3-5 most important facts or conclusions "
-            "(with source attribution)\n"
+            "(with source attribution). For academic sources, include "
+            "citation counts when known, e.g. 'Smith et al. (2021) "
+            "[cited 342 times]: Found that...'\n"
             "3. CONFIDENCE: How confident are you in the findings "
             "(high/medium/low) and why\n"
             "4. GAPS: What aspects could not be adequately answered or "

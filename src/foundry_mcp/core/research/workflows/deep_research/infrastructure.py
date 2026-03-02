@@ -146,8 +146,9 @@ def _crash_handler(exc_type: type, exc_value: BaseException, exc_tb: Any) -> Non
         try:
             state.metadata["crash"] = True
             state.metadata["crash_error"] = str(exc_value)
-            # Write crash marker file
-            crash_path = Path.home() / ".foundry-mcp" / "research" / "deep_research" / f"{research_id}.crash"
+            # Sanitize research_id to prevent path traversal in crash file names
+            safe_id = Path(research_id).name
+            crash_path = Path.home() / ".foundry-mcp" / "research" / "deep_research" / f"{safe_id}.crash"
             crash_path.parent.mkdir(parents=True, exist_ok=True)
             crash_path.write_text(tb_str)
         except Exception:

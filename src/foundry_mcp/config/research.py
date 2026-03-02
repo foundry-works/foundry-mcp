@@ -17,6 +17,7 @@ from foundry_mcp.config.parsing import _expand_alias, _expand_alias_list, _parse
 
 if TYPE_CHECKING:
     from foundry_mcp.core.llm_config.provider_spec import ProviderSpec
+    from foundry_mcp.core.research.models.deep_research import ResearchProfile
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +26,8 @@ logger = logging.getLogger(__name__)
 class ResearchConfig:
     """Configuration for research workflows (CHAT, CONSENSUS, THINKDEEP, IDEATE, DEEP_RESEARCH).
 
-    **Cost-tiered model routing:** High-volume roles (summarization, compression)
-    automatically use a cheap model (``gemini-2.5-flash``) when no explicit model
-    is configured.  See ``_COST_TIER_MODEL_DEFAULTS`` and the deep-research guide.
+    **Model routing:** LLM calls are routed to different models based on task role
+    via ``ModelRoleConfig``.  Cost-tier defaults require explicit tier configuration.
 
     Attributes:
         enabled: Master switch for research tools
@@ -54,6 +54,10 @@ class ResearchConfig:
         google_api_key: API key for Google Custom Search (optional, reads from GOOGLE_API_KEY env var)
         google_cse_id: Google Custom Search Engine ID (optional, reads from GOOGLE_CSE_ID env var)
         semantic_scholar_api_key: API key for Semantic Scholar (optional, reads from SEMANTIC_SCHOLAR_API_KEY env var)
+        openalex_api_key: API key for OpenAlex (optional, reads from OPENALEX_API_KEY env var)
+        openalex_enabled: Whether OpenAlex provider is enabled (default: True)
+        crossref_email: Email for Crossref polite pool (optional, reads from CROSSREF_MAILTO env var)
+        crossref_enabled: Whether Crossref provider is enabled (default: True)
         tavily_search_depth: Tavily search depth ("basic", "advanced", "fast", "ultra_fast")
         tavily_topic: Tavily search topic ("general", "news")
         tavily_news_days: Days limit for news search (1-365, only for topic="news")
@@ -110,6 +114,12 @@ class ResearchConfig:
     deep_research_coverage_confidence_weights: Optional[dict] = (
         None  # Dimension weights: {source_adequacy, domain_diversity, query_completion_rate}
     )
+    # Academic coverage weights (used when research_mode == ACADEMIC)
+    deep_research_academic_coverage_weights: Optional[dict] = None  # Default: {source_adequacy: 0.3, domain_diversity: 0.15, query_completion_rate: 0.2, source_influence: 0.35}
+    # Influence scoring thresholds (citation counts)
+    deep_research_influence_high_citation_threshold: int = 100
+    deep_research_influence_medium_citation_threshold: int = 20
+    deep_research_influence_low_citation_threshold: int = 5
     deep_research_supervision_wall_clock_timeout: float = (
         1800.0  # Max wall-clock seconds for entire supervision phase (default 30 min)
     )
@@ -211,6 +221,9 @@ class ResearchConfig:
     deep_research_audit_artifacts: bool = True
     # Research mode: "general" | "academic" | "technical"
     deep_research_mode: str = "general"
+    # Research profile configuration
+    deep_research_default_profile: str = "general"  # Default profile when none specified
+    deep_research_profiles: Dict[str, dict] = field(default_factory=dict)  # Custom profile definitions from config
     # Search rate limiting configuration
     search_rate_limit: int = 60  # requests per minute (global default)
     max_concurrent_searches: int = 3  # for asyncio.Semaphore in gathering phase
@@ -220,6 +233,8 @@ class ResearchConfig:
             "perplexity": 60,  # Perplexity: ~1 req/sec (pricing: $5/1k requests)
             "google": 100,  # Google CSE: 100 queries/day free, ~100/min paid
             "semantic_scholar": 20,  # Semantic Scholar: ~20 req/min (100 req/5min unauthenticated)
+            "openalex": 3000,  # OpenAlex: ~50 req/sec (100 hard cap)
+            "crossref": 600,  # Crossref polite pool: ~10 req/sec
         }
     )
     # Search provider API keys (all optional, read from env vars if not set)
@@ -228,6 +243,10 @@ class ResearchConfig:
     google_api_key: Optional[str] = None
     google_cse_id: Optional[str] = None
     semantic_scholar_api_key: Optional[str] = None
+    openalex_api_key: Optional[str] = None
+    openalex_enabled: bool = True
+    crossref_email: Optional[str] = None
+    crossref_enabled: bool = True
     # Token management configuration
     token_management_enabled: bool = True  # Master switch for token management
     token_safety_margin: float = 0.15  # Fraction of budget to reserve as buffer
@@ -291,6 +310,22 @@ class ResearchConfig:
     deep_research_digest_evidence_max_chars: int = 400  # Max chars per evidence snippet
     deep_research_digest_max_evidence_snippets: int = 5  # Max evidence snippets per digest
     deep_research_digest_fetch_pdfs: bool = False  # Whether to fetch and extract PDF content
+
+    # PDF extraction settings for academic paper analysis
+    deep_research_pdf_max_pages: int = 50  # Max pages to extract from academic PDFs
+    deep_research_pdf_priority_sections: List[str] = field(
+        default_factory=lambda: ["methods", "results", "discussion"]
+    )  # Sections to prioritize when truncating PDF content
+
+    # Citation network settings (user-triggered)
+    deep_research_citation_network_max_refs_per_paper: int = 20  # Max backward references per source
+    deep_research_citation_network_max_cites_per_paper: int = 20  # Max forward citations per source
+
+    # Methodology quality assessment (experimental)
+    deep_research_methodology_assessment_provider: Optional[str] = None  # Provider for LLM extraction (None = use default)
+    deep_research_methodology_assessment_timeout: float = 60.0  # Timeout per LLM extraction call (seconds)
+    deep_research_methodology_assessment_min_content_length: int = 200  # Min chars to trigger assessment
+
     deep_research_archive_content: bool = False  # Archive canonical text for digested sources
     deep_research_archive_retention_days: int = 30  # Days to retain archived digest content (0 = keep indefinitely)
     # Digest LLM provider configuration (uses default provider if not set)
@@ -553,6 +588,8 @@ class ResearchConfig:
                 "perplexity": 60,
                 "google": 100,
                 "semantic_scholar": 20,  # ~20 req/min unauthenticated
+                "openalex": 3000,  # ~50 req/sec
+                "crossref": 600,  # ~10 req/sec polite pool
             },
         )
         if isinstance(per_provider_rate_limits, dict):
@@ -664,6 +701,9 @@ class ResearchConfig:
             deep_research_audit_artifacts=_parse_bool(data.get("deep_research_audit_artifacts", True)),
             # Research mode
             deep_research_mode=str(data.get("deep_research_mode", "general")),
+            # Research profiles
+            deep_research_default_profile=str(data.get("deep_research_default_profile", "general")),
+            deep_research_profiles=dict(data.get("deep_research_profiles", {})),
             # Search rate limiting configuration
             search_rate_limit=int(data.get("search_rate_limit", 60)),
             max_concurrent_searches=int(data.get("max_concurrent_searches", 3)),
@@ -674,6 +714,10 @@ class ResearchConfig:
             google_api_key=data.get("google_api_key"),
             google_cse_id=data.get("google_cse_id"),
             semantic_scholar_api_key=data.get("semantic_scholar_api_key"),
+            openalex_api_key=data.get("openalex_api_key"),
+            openalex_enabled=_parse_bool(data.get("openalex_enabled", True)),
+            crossref_email=data.get("crossref_email"),
+            crossref_enabled=_parse_bool(data.get("crossref_enabled", True)),
             # Tavily search configuration
             tavily_search_depth=str(data.get("tavily_search_depth", "basic")),
             tavily_topic=str(data.get("tavily_topic", "general")),
@@ -730,6 +774,40 @@ class ResearchConfig:
             deep_research_archive_retention_days=int(data.get("deep_research_archive_retention_days", 30)),
             deep_research_digest_provider=data.get("deep_research_digest_provider"),
             deep_research_digest_providers=_parse_provider_list("deep_research_digest_providers"),
+            # PDF extraction settings
+            deep_research_pdf_max_pages=int(data.get("deep_research_pdf_max_pages", 50)),
+            deep_research_pdf_priority_sections=data.get(
+                "deep_research_pdf_priority_sections", ["methods", "results", "discussion"]
+            ),
+            # Citation network settings
+            deep_research_citation_network_max_refs_per_paper=int(
+                data.get("deep_research_citation_network_max_refs_per_paper", 20)
+            ),
+            deep_research_citation_network_max_cites_per_paper=int(
+                data.get("deep_research_citation_network_max_cites_per_paper", 20)
+            ),
+            # Methodology assessment settings
+            deep_research_methodology_assessment_provider=data.get(
+                "deep_research_methodology_assessment_provider"
+            ),
+            deep_research_methodology_assessment_timeout=float(
+                data.get("deep_research_methodology_assessment_timeout", 60.0)
+            ),
+            deep_research_methodology_assessment_min_content_length=int(
+                data.get("deep_research_methodology_assessment_min_content_length", 200)
+            ),
+            # Academic coverage weights
+            deep_research_academic_coverage_weights=data.get("deep_research_academic_coverage_weights"),
+            # Influence scoring thresholds
+            deep_research_influence_high_citation_threshold=int(
+                data.get("deep_research_influence_high_citation_threshold", 100)
+            ),
+            deep_research_influence_medium_citation_threshold=int(
+                data.get("deep_research_influence_medium_citation_threshold", 20)
+            ),
+            deep_research_influence_low_citation_threshold=int(
+                data.get("deep_research_influence_low_citation_threshold", 5)
+            ),
             # Model tier configuration
             _tier_config=data.get("model_tiers"),
         )
@@ -775,6 +853,7 @@ class ResearchConfig:
         """Validate configuration fields after initialization."""
         self._validate_deep_research_mode()
         self._validate_deep_research_bounds()
+        self._validate_citation_influence_thresholds()
         self._validate_supervision_config()
         self._validate_tavily_config()
         self._validate_perplexity_config()
@@ -792,6 +871,102 @@ class ResearchConfig:
                 f"{sorted(self._VALID_DEEP_RESEARCH_MODES)}, "
                 f"got {self.deep_research_mode!r}"
             )
+
+    def _validate_citation_influence_thresholds(self) -> None:
+        """Validate that citation influence thresholds satisfy low < medium < high."""
+        low = self.deep_research_influence_low_citation_threshold
+        med = self.deep_research_influence_medium_citation_threshold
+        high = self.deep_research_influence_high_citation_threshold
+        if not (low < med < high):
+            raise ValueError(
+                "Citation influence thresholds must satisfy: low < medium < high "
+                f"(got {low} < {med} < {high})"
+            )
+
+    # -----------------------------------------------------------------
+    # Research profile resolution
+    # -----------------------------------------------------------------
+
+    def resolve_profile(
+        self,
+        research_profile: Optional[str] = None,
+        research_mode: Optional[str] = None,
+        profile_overrides: Optional[dict] = None,
+    ) -> "ResearchProfile":
+        """Resolve a :class:`ResearchProfile` from request parameters and config.
+
+        Resolution order (first match wins):
+        1. Explicit ``research_profile`` name → look up built-in or config-defined
+        2. Legacy ``research_mode`` → map to built-in profile name
+        3. Config default (``deep_research_default_profile``)
+
+        After resolution, ``profile_overrides`` (if any) are applied on top via
+        ``model_copy(update=...)``.
+
+        Raises:
+            ValueError: If the resolved profile name is unknown.
+        """
+        from foundry_mcp.core.research.models.deep_research import (
+            BUILTIN_PROFILES,
+            ResearchProfile,
+            _RESEARCH_MODE_TO_PROFILE,
+        )
+
+        # Warn if both new and legacy parameters specified
+        if research_profile and research_mode:
+            warnings.warn(
+                f"Both research_profile={research_profile!r} and "
+                f"research_mode={research_mode!r} specified; "
+                f"research_profile takes precedence. "
+                f"research_mode is deprecated — use research_profile instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
+        # Step 1: Determine profile name
+        profile_name: Optional[str] = None
+        if research_profile:
+            profile_name = research_profile
+        elif research_mode:
+            profile_name = _RESEARCH_MODE_TO_PROFILE.get(research_mode)
+            if profile_name is None:
+                raise ValueError(
+                    f"Unknown research_mode {research_mode!r}; "
+                    f"valid values: {sorted(_RESEARCH_MODE_TO_PROFILE)}"
+                )
+        else:
+            profile_name = self.deep_research_default_profile
+
+        # Step 2: Look up profile (built-in first, then config-defined)
+        profile: Optional[ResearchProfile] = BUILTIN_PROFILES.get(profile_name)
+        if profile is None and profile_name in self.deep_research_profiles:
+            from pydantic import ValidationError
+
+            try:
+                profile = ResearchProfile(**self.deep_research_profiles[profile_name])
+            except (TypeError, ValidationError) as exc:
+                raise ValueError(
+                    f"Invalid profile config for {profile_name!r}: {exc}"
+                ) from exc
+        if profile is None:
+            available = sorted(set(BUILTIN_PROFILES) | set(self.deep_research_profiles))
+            raise ValueError(
+                f"Unknown research profile {profile_name!r}; "
+                f"available profiles: {available}"
+            )
+
+        # Step 3: Apply per-request overrides
+        if profile_overrides:
+            from pydantic import ValidationError as _ValidationError
+
+            try:
+                profile = profile.model_copy(update=profile_overrides)
+            except (TypeError, _ValidationError) as exc:
+                raise ValueError(
+                    f"Invalid profile overrides for {profile_name!r}: {exc}"
+                ) from exc
+
+        return profile
 
     def _validate_deep_research_bounds(self) -> None:
         """Validate deep research configuration bounds.
@@ -994,6 +1169,38 @@ class ResearchConfig:
                             v,
                         )
                         del weights[k]
+
+        # Validate academic_coverage_weights schema (includes source_influence)
+        _VALID_ACADEMIC_WEIGHT_KEYS = {
+            "source_adequacy", "domain_diversity", "query_completion_rate", "source_influence",
+        }
+        if self.deep_research_academic_coverage_weights is not None:
+            acad_weights = self.deep_research_academic_coverage_weights
+            if not isinstance(acad_weights, dict):
+                logger.warning(
+                    "deep_research_academic_coverage_weights must be a dict, got %s; resetting to None",
+                    type(acad_weights).__name__,
+                )
+                self.deep_research_academic_coverage_weights = None
+            else:
+                unknown_acad_keys = set(acad_weights.keys()) - _VALID_ACADEMIC_WEIGHT_KEYS
+                if unknown_acad_keys:
+                    logger.warning(
+                        "deep_research_academic_coverage_weights contains unknown keys: %s "
+                        "(valid keys: %s); removing them",
+                        unknown_acad_keys,
+                        _VALID_ACADEMIC_WEIGHT_KEYS,
+                    )
+                    for k in unknown_acad_keys:
+                        del acad_weights[k]
+                for k, v in list(acad_weights.items()):
+                    if not isinstance(v, (int, float)):
+                        logger.warning(
+                            "deep_research_academic_coverage_weights[%r]=%r is not numeric; removing",
+                            k,
+                            v,
+                        )
+                        del acad_weights[k]
 
     def _validate_tavily_config(self) -> None:
         """Validate all Tavily configuration fields.
@@ -1723,6 +1930,16 @@ class ResearchConfig:
                 "config_key": "semantic_scholar_api_key",
                 "env_var": "SEMANTIC_SCHOLAR_API_KEY",
                 "setup_url": "https://www.semanticscholar.org/product/api",
+            },
+            "openalex": {
+                "config_key": "openalex_api_key",
+                "env_var": "OPENALEX_API_KEY",
+                "setup_url": "https://openalex.org/users/me",
+            },
+            "crossref": {
+                "config_key": "crossref_email",
+                "env_var": "CROSSREF_MAILTO",
+                "setup_url": "https://api.crossref.org/",
             },
         }
 

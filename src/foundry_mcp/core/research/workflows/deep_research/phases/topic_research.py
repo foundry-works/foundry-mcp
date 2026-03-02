@@ -16,7 +16,7 @@ import asyncio
 import logging
 import re
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from foundry_mcp.config.research import ResearchConfig
@@ -24,8 +24,11 @@ if TYPE_CHECKING:
 
 from foundry_mcp.core.errors.provider import ContextWindowError
 from foundry_mcp.core.research.models.deep_research import (
+    CitationSearchTool,
     DeepResearchState,
     ExtractContentTool,
+    ExtractPDFTool,
+    RelatedPapersTool,
     ResearcherToolCall,
     ThinkTool,
     TopicResearchResult,
@@ -46,6 +49,50 @@ from foundry_mcp.core.research.workflows.deep_research.source_quality import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ------------------------------------------------------------------
+# PDF URL detection helper
+# ------------------------------------------------------------------
+
+# URL patterns that strongly indicate a PDF resource.
+_PDF_URL_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"\.pdf(\?|#|$)", re.IGNORECASE),
+    re.compile(r"arxiv\.org/pdf/", re.IGNORECASE),
+    re.compile(r"arxiv\.org/ftp/", re.IGNORECASE),
+]
+
+
+def _is_pdf_url(url: str) -> bool:
+    """Detect whether a URL likely points to a PDF document.
+
+    Checks URL patterns (*.pdf, arxiv.org/pdf/*) without making
+    any network requests.  Content-Type based detection is handled
+    downstream by the extraction layer.
+
+    Args:
+        url: URL string to check.
+
+    Returns:
+        True if the URL matches a known PDF pattern.
+    """
+    return any(pattern.search(url) for pattern in _PDF_URL_PATTERNS)
+
+
+# ------------------------------------------------------------------
+# Paper ID validation
+# ------------------------------------------------------------------
+
+# Covers DOIs (10.xxxx/...), Semantic Scholar hex IDs, ArXiv IDs,
+# OpenAlex IDs (W/A prefixed), and PubMed numeric IDs.
+_PAPER_ID_RE = re.compile(r"^[a-zA-Z0-9._/:\-]{1,256}$")
+
+
+def _validate_paper_id(paper_id: str) -> str | None:
+    """Return an error message if ``paper_id`` is invalid, else ``None``."""
+    if not paper_id or not _PAPER_ID_RE.match(paper_id):
+        return f"Invalid paper_id format: {paper_id!r:.80}"
+    return None
 
 
 # ------------------------------------------------------------------
@@ -244,6 +291,59 @@ You have {remaining} of {total} tool calls remaining (web_search and extract_con
 Today's date is {date}.
 """
 
+# Additional tool documentation injected when citation tools are enabled
+_CITATION_TOOLS_PROMPT = """
+### citation_search
+Search for papers that cite a given paper (forward citation search / snowball sampling).
+Arguments: {{"paper_id": "DOI or Semantic Scholar paper ID", "max_results": 10}}
+Returns: List of citing papers with metadata. Use this for forward snowball sampling — start from a seminal paper and trace who built on it.
+
+### related_papers
+Find papers similar to a given paper (lateral discovery).
+Arguments: {{"paper_id": "DOI or Semantic Scholar paper ID", "max_results": 5}}
+Returns: List of related papers based on content similarity. Use this to discover work the initial search may have missed — especially useful for finding papers that use different terminology for the same concept.
+"""
+
+# Strategic research guidance injected alongside citation tools
+_STRATEGIC_RESEARCH_PROMPT = """
+## Research Strategies
+
+Apply these strategies deliberately. State which strategy you are using in your `think` calls so your reasoning is transparent.
+
+### BROADEN — Expand coverage when initial results are narrow
+- Reformulate with alternative terminology, synonyms, or related concepts.
+- Use `related_papers` to discover adjacent work that uses different vocabulary.
+- Search across disciplinary boundaries (e.g., a clinical concept may have a parallel in public health or social science).
+- **When to use**: Your first 1-2 searches returned results from a single perspective or subdomain.
+
+### DEEPEN — Drill into a promising thread
+- Use `citation_search` on a seminal or highly-cited paper to trace subsequent developments.
+- Search for methodological variations, replications, or extensions of key findings.
+- Extract full text from the most relevant sources to capture nuance that abstracts miss.
+- **When to use**: You found a key paper and need to understand the lineage of work it spawned.
+
+### VALIDATE — Corroborate or challenge a finding
+- Search explicitly for contradictory evidence, failed replications, or critical commentary.
+- Use `citation_search` to find papers that cite a controversial claim — citing papers often include critique.
+- Cross-check across providers: a finding corroborated by independent sources is far more reliable.
+- **When to use**: A finding seems too clean, comes from a single group, or is central to your answer.
+
+### SATURATE — Recognize when coverage is sufficient
+- If >50% of new results are duplicates or near-duplicates of sources you already have, coverage is likely saturated.
+- Check novelty tags: a pattern of [RELATED] and [DUPLICATE] signals diminishing returns.
+- Call `research_complete` — additional searches at saturation add noise without new signal.
+- **When to use**: Your last 2 tool calls returned mostly familiar material.
+"""
+
+# PDF extraction tool documentation (injected when profile enables PDF extraction)
+_EXTRACT_PDF_PROMPT = """
+### extract_pdf
+Extract full text from an open-access academic paper PDF. Use this for papers where the abstract is insufficient — methods sections, detailed results, and supplementary data are only available in the full text.
+Arguments: {"url": "direct PDF URL (e.g. https://arxiv.org/pdf/2301.00001.pdf)", "max_pages": 30}
+Returns: Full paper text with section structure (Abstract, Methods, Results, etc.) and page numbers. Only works with open-access PDFs; paywalled papers will fail gracefully.
+Use this when `extract_content` returns limited content for an academic paper and you have a direct PDF link (often ending in .pdf or from arxiv.org/pdf/).
+"""
+
 
 # ------------------------------------------------------------------
 # Shared dedup helper for _topic_search and _topic_extract
@@ -259,14 +359,17 @@ async def _dedup_and_add_source(
     state_lock: asyncio.Lock,
     content_dedup_enabled: bool = True,
     dedup_threshold: float = 0.8,
-) -> bool:
+) -> tuple[bool, Optional[str]]:
     """Deduplicate a source and add it to state if novel.
 
     Performs URL dedup, title dedup, and optional content-similarity dedup
     using the three-phase lock pattern (fast check → unlocked comparison →
     final commit). Used by both ``_topic_search`` and ``_topic_extract``.
 
-    Returns True if the source was added, False if it was a duplicate.
+    Returns:
+        Tuple of (was_added, dedup_reason). dedup_reason is None when the
+        source was added, or one of "url_match", "title_match",
+        "content_similarity" when deduplicated.
     """
     from foundry_mcp.core.research.workflows.deep_research._content_dedup import (
         content_similarity,
@@ -275,12 +378,12 @@ async def _dedup_and_add_source(
     # --- Phase 1: fast checks under lock (URL + title dedup) ---
     async with state_lock:
         if source.url and source.url in seen_urls:
-            return False
+            return False, "url_match"
 
         normalized_title = _normalize_title(source.title)
         if normalized_title and len(normalized_title) > 20:
             if normalized_title in seen_titles:
-                return False
+                return False, "title_match"
 
         # Snapshot existing sources for content-similarity check
         # outside the lock to avoid O(n^2) contention.
@@ -301,17 +404,17 @@ async def _dedup_and_add_source(
                         sim,
                         existing_src.url or existing_src.title,
                     )
-                    return False
+                    return False, "content_similarity"
 
     # --- Phase 3: final add-or-skip under lock (re-check for races) ---
     async with state_lock:
         if source.url and source.url in seen_urls:
-            return False
+            return False, "url_match"
 
         normalized_title = _normalize_title(source.title)
         if normalized_title and len(normalized_title) > 20:
             if normalized_title in seen_titles:
-                return False
+                return False, "title_match"
             seen_titles[normalized_title] = source.url or ""
 
         if source.url:
@@ -321,7 +424,7 @@ async def _dedup_and_add_source(
 
         state.append_source(source)
         sub_query.source_ids.append(source.id)
-        return True
+        return True, None
 
 
 def _build_researcher_system_prompt(
@@ -329,6 +432,8 @@ def _build_researcher_system_prompt(
     budget_total: int,
     budget_remaining: int,
     extract_enabled: bool,
+    citation_tools_enabled: bool = False,
+    pdf_extraction_enabled: bool = False,
     date_str: str | None = None,
 ) -> str:
     """Build the researcher system prompt with budget and context.
@@ -337,6 +442,10 @@ def _build_researcher_system_prompt(
         budget_total: Total tool call budget for this researcher.
         budget_remaining: Remaining tool calls.
         extract_enabled: Whether extract_content tool is available.
+        citation_tools_enabled: Whether citation_search and related_papers
+            tools are available (gated by research profile).
+        pdf_extraction_enabled: Whether extract_pdf tool is available
+            (gated by research profile enable_pdf_extraction).
         date_str: Today's date string. Defaults to UTC today.
 
     Returns:
@@ -360,6 +469,21 @@ def _build_researcher_system_prompt(
             "Returns: Full page content in markdown format.\n"
             "Only available when extraction is enabled. If unavailable, focus on web_search.\n\n",
             "",
+        )
+
+    if citation_tools_enabled:
+        # Insert citation tool documentation and strategic guidance
+        # before the Response Format section
+        prompt = prompt.replace(
+            "## Response Format",
+            f"{_CITATION_TOOLS_PROMPT}\n{_STRATEGIC_RESEARCH_PROMPT}\n## Response Format",
+        )
+
+    if pdf_extraction_enabled:
+        # Insert extract_pdf tool documentation before the Response Format section
+        prompt = prompt.replace(
+            "## Response Format",
+            f"{_EXTRACT_PDF_PROMPT}\n## Response Format",
         )
 
     return prompt
@@ -393,7 +517,8 @@ def _build_react_user_prompt(
             role = msg.get("role", "unknown")
             content = msg.get("content", "")
             if role == "assistant":
-                parts.append(f'\n<turn number="{i + 1}" role="assistant">\n{content}\n</turn>')
+                safe_content = sanitize_external_content(content)
+                parts.append(f'\n<turn number="{i + 1}" role="assistant">\n{safe_content}\n</turn>')
             elif role == "tool":
                 tool_name = msg.get("tool", "unknown")
                 # Tool results contain web-sourced content — sanitize before
@@ -432,6 +557,7 @@ _MIN_PRESERVE_RECENT_TURNS: int = 4
 def _truncate_researcher_history(
     message_history: list[dict[str, str]],
     model: str | None,
+    budget_fraction: float = 1.0,
 ) -> list[dict[str, str]]:
     """Truncate researcher conversation history to fit model context window.
 
@@ -442,6 +568,9 @@ def _truncate_researcher_history(
     Args:
         message_history: The researcher's message history (assistant/tool turns).
         model: Model identifier for context-window lookup.
+        budget_fraction: Multiplier for the effective budget (0.0–1.0).
+            Use < 1.0 on retry after a context-window error to produce a
+            strictly shorter prompt than the initial attempt.  Default 1.0.
 
     Returns:
         The (possibly truncated) message list.  Returns the original list
@@ -461,7 +590,8 @@ def _truncate_researcher_history(
     if max_tokens is None:
         max_tokens = 128_000  # conservative fallback
 
-    budget_chars = int(max_tokens * _RESEARCHER_HISTORY_BUDGET_FRACTION * _CHARS_PER_TOKEN)
+    effective_budget = _RESEARCHER_HISTORY_BUDGET_FRACTION * budget_fraction
+    budget_chars = int(max_tokens * effective_budget * _CHARS_PER_TOKEN)
 
     total_chars = sum(len(msg.get("content", "")) for msg in message_history)
     if total_chars <= budget_chars:
@@ -569,6 +699,11 @@ class TopicResearchMixin:
 
         extract_enabled, extract_max_per_iter, provider_id, researcher_model = self._resolve_topic_research_config()
 
+        # Resolve profile-gated tool flags
+        profile = state.research_profile
+        citation_tools_enabled = getattr(profile, "enable_citation_tools", False) if profile else False
+        pdf_extraction_enabled = getattr(profile, "enable_pdf_extraction", False) if profile else False
+
         message_history: list[dict[str, str]] = []
         max_turns = max_searches * 3  # generous: 3x budget allows think steps
 
@@ -598,6 +733,8 @@ class TopicResearchMixin:
                 budget_remaining=budget_remaining,
                 max_searches=max_searches,
                 extract_enabled=extract_enabled,
+                citation_tools_enabled=citation_tools_enabled,
+                pdf_extraction_enabled=pdf_extraction_enabled,
                 turn=turn,
             )
             if llm_result is None:
@@ -610,6 +747,8 @@ class TopicResearchMixin:
                 budget_total=max_searches,
                 budget_remaining=budget_remaining,
                 extract_enabled=extract_enabled,
+                citation_tools_enabled=citation_tools_enabled,
+                pdf_extraction_enabled=pdf_extraction_enabled,
             )
             response, tokens_delta = await self._parse_with_retry_async(
                 raw_content=raw_content,
@@ -670,6 +809,8 @@ class TopicResearchMixin:
                 budget_remaining=budget_remaining,
                 extract_enabled=extract_enabled,
                 extract_max_per_iter=extract_max_per_iter,
+                citation_tools_enabled=citation_tools_enabled,
+                pdf_extraction_enabled=pdf_extraction_enabled,
             )
             tool_calls_used += calls_delta
             budget_remaining -= budget_delta
@@ -735,6 +876,8 @@ class TopicResearchMixin:
         max_searches: int,
         extract_enabled: bool,
         turn: int,
+        citation_tools_enabled: bool = False,
+        pdf_extraction_enabled: bool = False,
     ) -> Any | None:
         """Execute a single researcher LLM call for one ReAct turn.
 
@@ -751,6 +894,9 @@ class TopicResearchMixin:
             max_searches: Total tool call budget.
             extract_enabled: Whether extract_content is available.
             turn: Current turn index (for logging).
+            citation_tools_enabled: Whether citation_search and related_papers
+                tools are available.
+            pdf_extraction_enabled: Whether extract_pdf tool is available.
 
         Returns:
             LLM result object on success, None on failure.
@@ -759,6 +905,8 @@ class TopicResearchMixin:
             budget_total=max_searches,
             budget_remaining=budget_remaining,
             extract_enabled=extract_enabled,
+            citation_tools_enabled=citation_tools_enabled,
+            pdf_extraction_enabled=pdf_extraction_enabled,
         )
         truncated_history = _truncate_researcher_history(message_history, researcher_model)
         user_prompt = _build_react_user_prompt(
@@ -797,8 +945,11 @@ class TopicResearchMixin:
                 turn + 1,
                 exc,
             )
-            # Aggressively truncate and retry once
-            truncated = _truncate_researcher_history(message_history, researcher_model)
+            # Aggressively truncate and retry once — halve the budget so the
+            # retry is strictly shorter than the initial attempt.
+            truncated = _truncate_researcher_history(
+                message_history, researcher_model, budget_fraction=0.5,
+            )
             retry_prompt = _build_react_user_prompt(
                 topic=sub_query.query,
                 message_history=truncated,
@@ -850,7 +1001,9 @@ class TopicResearchMixin:
                     turn + 1,
                     exc,
                 )
-                truncated = _truncate_researcher_history(message_history, researcher_model)
+                truncated = _truncate_researcher_history(
+                    message_history, researcher_model, budget_fraction=0.5,
+                )
                 retry_prompt = _build_react_user_prompt(
                     topic=sub_query.query,
                     message_history=truncated,
@@ -1053,6 +1206,8 @@ class TopicResearchMixin:
         budget_remaining: int,
         extract_enabled: bool,
         extract_max_per_iter: int,
+        citation_tools_enabled: bool = False,
+        pdf_extraction_enabled: bool = False,
     ) -> tuple[bool, int, int]:
         """Dispatch all tool calls from a single researcher turn.
 
@@ -1077,6 +1232,7 @@ class TopicResearchMixin:
                     tool_call=tool_call,
                     sub_query=sub_query,
                     result=result,
+                    state=state,
                 )
                 message_history.append(
                     {
@@ -1161,6 +1317,134 @@ class TopicResearchMixin:
                     {
                         "role": "tool",
                         "tool": "extract_content",
+                        "content": tool_result_text,
+                    }
+                )
+
+            elif tool_call.tool == "extract_pdf":
+                if not pdf_extraction_enabled:
+                    message_history.append(
+                        {
+                            "role": "tool",
+                            "tool": "extract_pdf",
+                            "content": "PDF extraction is not available for this research profile.",
+                        }
+                    )
+                    continue
+
+                if budget_remaining - budget_delta <= 0:
+                    message_history.append(
+                        {
+                            "role": "tool",
+                            "tool": "extract_pdf",
+                            "content": "Budget exhausted. No more extractions allowed.",
+                        }
+                    )
+                    continue
+
+                tool_result_text = await self._handle_extract_pdf_tool(
+                    tool_call=tool_call,
+                    sub_query=sub_query,
+                    state=state,
+                    result=result,
+                    seen_urls=seen_urls,
+                    seen_titles=seen_titles,
+                    state_lock=state_lock,
+                    semaphore=semaphore,
+                    timeout=timeout,
+                )
+                tool_calls_delta += 1
+                budget_delta += 1
+                message_history.append(
+                    {
+                        "role": "tool",
+                        "tool": "extract_pdf",
+                        "content": tool_result_text,
+                    }
+                )
+
+            elif tool_call.tool == "citation_search":
+                if not citation_tools_enabled:
+                    message_history.append(
+                        {
+                            "role": "tool",
+                            "tool": "citation_search",
+                            "content": "Citation search is not available for this research profile.",
+                        }
+                    )
+                    continue
+
+                if budget_remaining - budget_delta <= 0:
+                    message_history.append(
+                        {
+                            "role": "tool",
+                            "tool": "citation_search",
+                            "content": "Budget exhausted. No more searches allowed.",
+                        }
+                    )
+                    continue
+
+                tool_result_text = await self._handle_citation_search_tool(
+                    tool_call=tool_call,
+                    sub_query=sub_query,
+                    state=state,
+                    result=result,
+                    seen_urls=seen_urls,
+                    seen_titles=seen_titles,
+                    state_lock=state_lock,
+                    semaphore=semaphore,
+                    timeout=timeout,
+                )
+                tool_calls_delta += 1
+                budget_delta += 1
+                result.searches_performed += 1
+                message_history.append(
+                    {
+                        "role": "tool",
+                        "tool": "citation_search",
+                        "content": tool_result_text,
+                    }
+                )
+
+            elif tool_call.tool == "related_papers":
+                if not citation_tools_enabled:
+                    message_history.append(
+                        {
+                            "role": "tool",
+                            "tool": "related_papers",
+                            "content": "Related papers search is not available for this research profile.",
+                        }
+                    )
+                    continue
+
+                if budget_remaining - budget_delta <= 0:
+                    message_history.append(
+                        {
+                            "role": "tool",
+                            "tool": "related_papers",
+                            "content": "Budget exhausted. No more searches allowed.",
+                        }
+                    )
+                    continue
+
+                tool_result_text = await self._handle_related_papers_tool(
+                    tool_call=tool_call,
+                    sub_query=sub_query,
+                    state=state,
+                    result=result,
+                    seen_urls=seen_urls,
+                    seen_titles=seen_titles,
+                    state_lock=state_lock,
+                    semaphore=semaphore,
+                    timeout=timeout,
+                )
+                tool_calls_delta += 1
+                budget_delta += 1
+                result.searches_performed += 1
+                message_history.append(
+                    {
+                        "role": "tool",
+                        "tool": "related_papers",
                         "content": tool_result_text,
                     }
                 )
@@ -1376,11 +1660,15 @@ class TopicResearchMixin:
     # Tool dispatch handlers
     # ------------------------------------------------------------------
 
+    # Strategy keywords recognized in think tool output for provenance logging
+    _STRATEGY_KEYWORDS = ("BROADEN", "DEEPEN", "VALIDATE", "SATURATE")
+
     def _handle_think_tool(
         self,
         tool_call: ResearcherToolCall,
         sub_query: SubQuery,
         result: TopicResearchResult,
+        state: DeepResearchState | None = None,
     ) -> str:
         """Handle a Think tool call: log reasoning, return acknowledgment.
 
@@ -1388,6 +1676,7 @@ class TopicResearchMixin:
             tool_call: The think tool call with reasoning argument.
             sub_query: The sub-query being researched (for logging).
             result: TopicResearchResult to update with reflection notes.
+            state: Optional research state for provenance logging.
 
         Returns:
             Tool result string.
@@ -1404,6 +1693,21 @@ class TopicResearchMixin:
             reasoning[:200] if reasoning else "(empty)",
         )
         result.reflection_notes.append(f"[think] {reasoning}")
+
+        # Detect strategy keywords and log in provenance
+        if reasoning and state is not None and state.provenance is not None:
+            reasoning_upper = reasoning.upper()
+            detected = [kw for kw in self._STRATEGY_KEYWORDS if kw in reasoning_upper]
+            if detected:
+                state.provenance.append(
+                    phase="supervision",
+                    event_type="strategy_detected",
+                    summary=f"Strategy {', '.join(detected)} used in topic {sub_query.id}",
+                    strategies=detected,
+                    sub_query_id=sub_query.id,
+                    reasoning_excerpt=reasoning[:200],
+                )
+
         return (
             "Reflection recorded. Before your next search, check the stop criteria:\n"
             "- Do I have 3+ high-quality relevant sources?\n"
@@ -1812,6 +2116,467 @@ class TopicResearchMixin:
         return "\n\n".join(blocks)
 
     # ------------------------------------------------------------------
+    # PDF extraction handler
+    # ------------------------------------------------------------------
+
+    async def _handle_extract_pdf_tool(
+        self,
+        tool_call: ResearcherToolCall,
+        sub_query: SubQuery,
+        state: DeepResearchState,
+        result: TopicResearchResult,
+        seen_urls: set[str],
+        seen_titles: dict[str, str],
+        state_lock: asyncio.Lock,
+        semaphore: asyncio.Semaphore,
+        timeout: float,
+    ) -> str:
+        """Handle an extract_pdf tool call: fetch and extract a PDF.
+
+        Uses PDFExtractor to download and extract text from an open-access
+        PDF URL, then applies section detection and prioritized extraction.
+        Creates a ResearchSource with page boundary metadata.
+
+        Args:
+            tool_call: The extract_pdf tool call with url argument.
+            sub_query: The sub-query being researched.
+            state: Current research state.
+            result: TopicResearchResult to update.
+            seen_urls: Shared URL dedup set.
+            seen_titles: Shared title dedup dict.
+            state_lock: Lock for thread-safe state mutations.
+            semaphore: Semaphore for concurrency control.
+            timeout: Extraction timeout.
+
+        Returns:
+            Formatted tool result string with extracted content summary.
+        """
+        from foundry_mcp.core.research.models.sources import ResearchSource, SourceType
+        from foundry_mcp.core.research.pdf_extractor import PDFExtractor
+        from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
+            validate_extract_url,
+        )
+
+        # Parse arguments
+        try:
+            args = ExtractPDFTool.model_validate(tool_call.arguments)
+            url = args.url
+            max_pages = args.max_pages
+        except Exception:
+            url = tool_call.arguments.get("url", "")
+            max_pages = int(tool_call.arguments.get("max_pages", 30))
+
+        if not url:
+            return "Error: url is required for extract_pdf."
+
+        # SSRF protection
+        if not validate_extract_url(url, resolve_dns=True):
+            return "Error: URL failed security validation."
+
+        # Use config for max_pages if available
+        config_max_pages = getattr(self.config, "deep_research_pdf_max_pages", 50)
+        max_pages = min(max_pages, config_max_pages)
+
+        priority_sections = getattr(
+            self.config, "deep_research_pdf_priority_sections", None
+        ) or ["methods", "results", "discussion"]
+
+        async with semaphore:
+            try:
+                extractor = PDFExtractor(max_pages=max_pages, timeout=timeout)
+                pdf_result = await asyncio.wait_for(
+                    extractor.extract_from_url(url),
+                    timeout=timeout,
+                )
+            except asyncio.TimeoutError:
+                return f"PDF extraction timed out after {timeout:.0f}s for {url}"
+            except Exception as exc:
+                logger.warning("PDF extraction failed for %s: %s", url, exc)
+                return f"PDF extraction failed: {exc}"
+
+        if not pdf_result.success:
+            warnings_str = "; ".join(pdf_result.warnings[:3]) if pdf_result.warnings else "no text extracted"
+            return f"PDF extraction yielded no text ({warnings_str}). The PDF may be scanned or paywalled."
+
+        # Section detection and prioritized extraction
+        sections = extractor.detect_sections(pdf_result)
+        content = extractor.extract_prioritized(
+            pdf_result,
+            max_chars=50000,
+            priority_sections=list(priority_sections),
+        )
+
+        # Build section summary for the researcher
+        section_names = list(sections.keys()) if sections else []
+        section_info = f"Sections detected: {', '.join(section_names)}" if section_names else "No standard sections detected"
+
+        # Build page boundary metadata for downstream digest pipeline
+        page_boundaries = [
+            (i + 1, start, end)
+            for i, (start, end) in enumerate(pdf_result.page_offsets)
+        ]
+
+        # Create source with PDF metadata
+        source = ResearchSource(
+            url=url,
+            title=f"PDF: {url.split('/')[-1][:80]}",
+            source_type=SourceType.ACADEMIC,
+            content=content,
+            snippet=f"Full-text PDF ({pdf_result.extracted_page_count} pages). {section_info}",
+            sub_query_id=sub_query.id,
+            metadata={
+                "pdf_extraction": True,
+                "page_count": pdf_result.page_count,
+                "extracted_page_count": pdf_result.extracted_page_count,
+                "sections": section_names,
+                "page_boundaries": page_boundaries,
+                "warnings": pdf_result.warnings[:5],
+            },
+        )
+
+        was_added, dedup_reason = await _dedup_and_add_source(
+            source=source,
+            sub_query=sub_query,
+            state=state,
+            seen_urls=seen_urls,
+            seen_titles=seen_titles,
+            state_lock=state_lock,
+        )
+
+        if not was_added:
+            return f"PDF content from {url} was deduplicated ({dedup_reason})."
+
+        result.sources_found += 1
+
+        # Build response for the researcher
+        content_preview = sanitize_external_content(
+            content[:500] + "..." if len(content) > 500 else content
+        )
+        response_parts = [
+            f"Extracted {pdf_result.extracted_page_count} pages from PDF ({len(content)} chars).",
+            section_info,
+            f"\nCONTENT PREVIEW:\n{content_preview}",
+        ]
+        if pdf_result.warnings:
+            response_parts.append(f"\nWarnings: {'; '.join(pdf_result.warnings[:3])}")
+
+        return "\n".join(response_parts)
+
+    # ------------------------------------------------------------------
+    # Citation and related papers handlers
+    # ------------------------------------------------------------------
+
+    async def _handle_citation_search_tool(
+        self,
+        tool_call: ResearcherToolCall,
+        sub_query: SubQuery,
+        state: DeepResearchState,
+        result: TopicResearchResult,
+        seen_urls: set[str],
+        seen_titles: dict[str, str],
+        state_lock: asyncio.Lock,
+        semaphore: asyncio.Semaphore,
+        timeout: float,
+    ) -> str:
+        """Handle a citation_search tool call: find papers citing a given paper.
+
+        Tries Semantic Scholar first, falls back to OpenAlex. Runs dedup
+        and novelty scoring on results following the web_search handler pattern.
+
+        Args:
+            tool_call: The citation_search tool call with paper_id argument.
+            sub_query: The sub-query being researched.
+            state: Current research state.
+            result: TopicResearchResult to update.
+            seen_urls: Shared URL dedup set.
+            seen_titles: Shared title dedup dict.
+            state_lock: Lock for thread-safe state mutations.
+            semaphore: Semaphore for concurrency control.
+            timeout: Request timeout.
+
+        Returns:
+            Formatted tool result string.
+        """
+        # Parse arguments
+        try:
+            args = CitationSearchTool.model_validate(tool_call.arguments)
+            paper_id = args.paper_id
+            max_results = args.max_results
+        except Exception:
+            paper_id = tool_call.arguments.get("paper_id", "")
+            max_results = int(tool_call.arguments.get("max_results", 10))
+
+        if not paper_id:
+            return "Error: paper_id is required for citation_search."
+
+        id_err = _validate_paper_id(paper_id)
+        if id_err:
+            return f"Error: {id_err}"
+
+        # Try Semantic Scholar first, then OpenAlex as fallback
+        sources: list[Any] = []
+        provider_name = "no_provider_available"
+        async with semaphore:
+            for name in ("semantic_scholar", "openalex"):
+                provider = self._get_search_provider(name)
+                if provider is None:
+                    continue
+                try:
+                    self._check_cancellation(state)
+                    provider_name = name
+                    sources = await asyncio.wait_for(
+                        provider.get_citations(paper_id, max_results),
+                        timeout=timeout,
+                    )
+                    break
+                except Exception as e:
+                    logger.warning(
+                        "Citation search via %s failed for %r: %s",
+                        name,
+                        paper_id[:50],
+                        e,
+                    )
+                    continue
+
+        return await self._process_academic_tool_results(
+            sources=sources,
+            provider_name=provider_name,
+            tool_name="citation_search",
+            paper_id=paper_id,
+            sub_query=sub_query,
+            state=state,
+            result=result,
+            seen_urls=seen_urls,
+            seen_titles=seen_titles,
+            state_lock=state_lock,
+        )
+
+    async def _handle_related_papers_tool(
+        self,
+        tool_call: ResearcherToolCall,
+        sub_query: SubQuery,
+        state: DeepResearchState,
+        result: TopicResearchResult,
+        seen_urls: set[str],
+        seen_titles: dict[str, str],
+        state_lock: asyncio.Lock,
+        semaphore: asyncio.Semaphore,
+        timeout: float,
+    ) -> str:
+        """Handle a related_papers tool call: find papers similar to a given paper.
+
+        Tries Semantic Scholar recommendations first, falls back to OpenAlex
+        get_related. Runs dedup and novelty scoring on results.
+
+        Args:
+            tool_call: The related_papers tool call with paper_id argument.
+            sub_query: The sub-query being researched.
+            state: Current research state.
+            result: TopicResearchResult to update.
+            seen_urls: Shared URL dedup set.
+            seen_titles: Shared title dedup dict.
+            state_lock: Lock for thread-safe state mutations.
+            semaphore: Semaphore for concurrency control.
+            timeout: Request timeout.
+
+        Returns:
+            Formatted tool result string.
+        """
+        # Parse arguments
+        try:
+            args = RelatedPapersTool.model_validate(tool_call.arguments)
+            paper_id = args.paper_id
+            max_results = args.max_results
+        except Exception:
+            paper_id = tool_call.arguments.get("paper_id", "")
+            max_results = int(tool_call.arguments.get("max_results", 5))
+
+        if not paper_id:
+            return "Error: paper_id is required for related_papers."
+
+        id_err = _validate_paper_id(paper_id)
+        if id_err:
+            return f"Error: {id_err}"
+
+        # Try Semantic Scholar recommendations first, then OpenAlex related
+        sources: list[Any] = []
+        provider_name = "no_provider_available"
+        async with semaphore:
+            # Semantic Scholar recommendations
+            s2_provider = self._get_search_provider("semantic_scholar")
+            if s2_provider is not None:
+                try:
+                    self._check_cancellation(state)
+                    provider_name = "semantic_scholar"
+                    sources = await asyncio.wait_for(
+                        s2_provider.get_recommendations(paper_id, max_results),
+                        timeout=timeout,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Related papers via semantic_scholar failed for %r: %s",
+                        paper_id[:50],
+                        e,
+                    )
+
+            # Fallback to OpenAlex if S2 failed or returned nothing
+            if not sources:
+                oa_provider = self._get_search_provider("openalex")
+                if oa_provider is not None:
+                    try:
+                        self._check_cancellation(state)
+                        provider_name = "openalex"
+                        sources = await asyncio.wait_for(
+                            oa_provider.get_related(paper_id, max_results),
+                            timeout=timeout,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "Related papers via openalex failed for %r: %s",
+                            paper_id[:50],
+                            e,
+                        )
+
+        return await self._process_academic_tool_results(
+            sources=sources,
+            provider_name=provider_name,
+            tool_name="related_papers",
+            paper_id=paper_id,
+            sub_query=sub_query,
+            state=state,
+            result=result,
+            seen_urls=seen_urls,
+            seen_titles=seen_titles,
+            state_lock=state_lock,
+        )
+
+    async def _process_academic_tool_results(
+        self,
+        sources: list[Any],
+        provider_name: str,
+        tool_name: str,
+        paper_id: str,
+        sub_query: SubQuery,
+        state: DeepResearchState,
+        result: TopicResearchResult,
+        seen_urls: set[str],
+        seen_titles: dict[str, str],
+        state_lock: asyncio.Lock,
+    ) -> str:
+        """Process results from citation_search or related_papers tools.
+
+        Handles dedup, novelty scoring, provenance logging, and formatting —
+        shared logic for both academic tool handlers.
+
+        Args:
+            sources: ResearchSource objects from the provider.
+            provider_name: Which provider returned the results.
+            tool_name: Tool name for provenance logging.
+            paper_id: The seed paper ID.
+            sub_query: The sub-query being researched.
+            state: Current research state.
+            result: TopicResearchResult to update.
+            seen_urls: Shared URL dedup set.
+            seen_titles: Shared title dedup dict.
+            state_lock: Lock for thread-safe state mutations.
+
+        Returns:
+            Formatted tool result string.
+        """
+        if not sources:
+            return f"No results found for {tool_name} with paper_id={paper_id!r}."
+
+        # Dedup sources
+        content_dedup_enabled = getattr(self.config, "deep_research_enable_content_dedup", True)
+        dedup_threshold = getattr(self.config, "deep_research_content_dedup_threshold", 0.8)
+
+        added = 0
+        added_source_ids: list[str] = []
+        for source in sources:
+            was_added, dedup_reason = await _dedup_and_add_source(
+                source=source,
+                sub_query=sub_query,
+                state=state,
+                seen_urls=seen_urls,
+                seen_titles=seen_titles,
+                state_lock=state_lock,
+                content_dedup_enabled=content_dedup_enabled,
+                dedup_threshold=dedup_threshold,
+            )
+            if was_added:
+                added += 1
+                added_source_ids.append(source.id)
+            elif dedup_reason and state.provenance is not None:
+                state.provenance.append(
+                    phase="supervision",
+                    event_type="source_deduplicated",
+                    summary=f"Source deduplicated ({dedup_reason}): {(source.title or '')[:80]}",
+                    source_url=source.url or "",
+                    source_title=(source.title or "")[:120],
+                    reason=dedup_reason,
+                )
+
+        # Log provenance
+        if state.provenance is not None:
+            state.provenance.append(
+                phase="supervision",
+                event_type="provider_query",
+                summary=f"{tool_name} via {provider_name}: {len(sources)} results for paper_id={paper_id!r}",
+                provider=provider_name,
+                query=f"{tool_name}:{paper_id}",
+                result_count=len(sources),
+                source_ids=added_source_ids,
+            )
+
+        # Track provider stats
+        async with state_lock:
+            state.search_provider_stats[provider_name] = (
+                state.search_provider_stats.get(provider_name, 0) + 1
+            )
+
+        result.sources_found += added
+
+        if added == 0:
+            return f"{tool_name} for paper_id={paper_id!r} returned {len(sources)} result(s), but all were duplicates of existing sources."
+
+        # Novelty scoring
+        from foundry_mcp.core.research.workflows.deep_research._content_dedup import (
+            NoveltyTag,
+            compute_novelty_tag,
+        )
+        from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
+            build_novelty_summary,
+        )
+
+        topic_source_ids = set(sub_query.source_ids)
+        topic_sources = [s for s in state.sources if s.id in topic_source_ids]
+        recent_sources = topic_sources[-added:]
+
+        pre_existing_ids = {s.id for s in recent_sources}
+        pre_existing_sources: list[tuple[str, str, str | None]] = []
+        for s in topic_sources:
+            if s.id not in pre_existing_ids:
+                pre_existing_sources.append((s.content or s.snippet or "", s.title, s.url))
+
+        novelty_tags: list[NoveltyTag] = []
+        for src in recent_sources:
+            tag = compute_novelty_tag(
+                new_content=src.content or src.snippet or "",
+                new_url=src.url,
+                existing_sources=pre_existing_sources,
+            )
+            novelty_tags.append(tag)
+            src.metadata["novelty_tag"] = tag.category
+            src.metadata["novelty_similarity"] = tag.similarity
+
+        novelty_header = build_novelty_summary(novelty_tags)
+        return _format_search_results_batch(
+            sources=recent_sources,
+            novelty_tags=novelty_tags,
+            novelty_header=novelty_header,
+        )
+
+    # ------------------------------------------------------------------
     # Search step (scoped to one sub-query)
     # ------------------------------------------------------------------
 
@@ -1886,8 +2651,9 @@ class TopicResearchMixin:
                     content_dedup_enabled = getattr(self.config, "deep_research_enable_content_dedup", True)
                     dedup_threshold = getattr(self.config, "deep_research_content_dedup_threshold", 0.8)
 
+                    added_source_ids: list[str] = []
                     for source in sources:
-                        was_added = await _dedup_and_add_source(
+                        was_added, dedup_reason = await _dedup_and_add_source(
                             source=source,
                             sub_query=sub_query,
                             state=state,
@@ -1899,6 +2665,28 @@ class TopicResearchMixin:
                         )
                         if was_added:
                             added += 1
+                            added_source_ids.append(source.id)
+                        elif dedup_reason and state.provenance is not None:
+                            state.provenance.append(
+                                phase="supervision",
+                                event_type="source_deduplicated",
+                                summary=f"Source deduplicated ({dedup_reason}): {(source.title or '')[:80]}",
+                                source_url=source.url or "",
+                                source_title=(source.title or "")[:120],
+                                reason=dedup_reason,
+                            )
+
+                    # Log provider_query provenance event
+                    if state.provenance is not None:
+                        state.provenance.append(
+                            phase="supervision",
+                            event_type="provider_query",
+                            summary=f"Queried {provider_name}: {len(sources)} results for '{query[:80]}'",
+                            provider=provider_name,
+                            query=query,
+                            result_count=len(sources),
+                            source_ids=added_source_ids,
+                        )
 
                     # Track search provider query count
                     async with state_lock:
@@ -1946,8 +2734,9 @@ class TopicResearchMixin:
     ) -> int:
         """Extract full content from promising URLs found in search results.
 
-        Uses Tavily Extract API to fetch and parse page content. Extracted
-        sources are deduplicated against existing sources and added to state.
+        Uses Tavily Extract API for web pages and PDFExtractor for PDF URLs.
+        PDF URLs are detected by pattern (*.pdf, arxiv.org/pdf/*) and routed
+        to the PDF extraction pipeline with section detection.
 
         Args:
             urls: URLs to extract (pre-validated, max per config)
@@ -1971,12 +2760,34 @@ class TopicResearchMixin:
         if not urls:
             return 0
 
+        # Split PDF URLs from regular web URLs for routing
+        pdf_urls = [u for u in urls if _is_pdf_url(u)]
+        web_urls = [u for u in urls if not _is_pdf_url(u)]
+
+        added = 0
+
+        # --- Route PDF URLs to PDFExtractor ---
+        if pdf_urls:
+            added += await self._extract_pdf_urls(
+                pdf_urls=pdf_urls,
+                sub_query=sub_query,
+                state=state,
+                seen_urls=seen_urls,
+                seen_titles=seen_titles,
+                state_lock=state_lock,
+                semaphore=semaphore,
+                timeout=timeout,
+            )
+
+        # --- Route web URLs to Tavily Extract ---
+        if not web_urls:
+            return added
+
         api_key = self.config.tavily_api_key or os.environ.get("TAVILY_API_KEY")
         if not api_key:
             logger.debug("Tavily API key not available for topic extract")
-            return 0
+            return added
 
-        added = 0
         async with semaphore:
             try:
                 provider = TavilyExtractProvider(api_key=api_key)
@@ -1984,7 +2795,7 @@ class TopicResearchMixin:
 
                 extracted_sources = await asyncio.wait_for(
                     provider.extract(
-                        urls=urls,
+                        urls=web_urls,
                         extract_depth=extract_depth,
                         format="markdown",
                         query=sub_query.query,
@@ -2001,7 +2812,7 @@ class TopicResearchMixin:
                     source.sub_query_id = sub_query.id
                     source.metadata["extract_source"] = True
 
-                    was_added = await _dedup_and_add_source(
+                    was_added, dedup_reason = await _dedup_and_add_source(
                         source=source,
                         sub_query=sub_query,
                         state=state,
@@ -2013,6 +2824,15 @@ class TopicResearchMixin:
                     )
                     if was_added:
                         added += 1
+                    elif dedup_reason and state.provenance is not None:
+                        state.provenance.append(
+                            phase="supervision",
+                            event_type="source_deduplicated",
+                            summary=f"Source deduplicated ({dedup_reason}): {(source.title or '')[:80]}",
+                            source_url=source.url or "",
+                            source_title=(source.title or "")[:120],
+                            reason=dedup_reason,
+                        )
 
                 logger.info(
                     "Topic extract for %r: %d/%d URLs yielded new sources",
@@ -2033,5 +2853,128 @@ class TopicResearchMixin:
                     sub_query.id,
                     exc,
                 )
+
+        return added
+
+    # ------------------------------------------------------------------
+    # PDF URL extraction helper
+    # ------------------------------------------------------------------
+
+    async def _extract_pdf_urls(
+        self,
+        pdf_urls: list[str],
+        sub_query: SubQuery,
+        state: DeepResearchState,
+        seen_urls: set[str],
+        seen_titles: dict[str, str],
+        state_lock: asyncio.Lock,
+        semaphore: asyncio.Semaphore,
+        timeout: float = 60.0,
+    ) -> int:
+        """Extract content from PDF URLs via PDFExtractor.
+
+        Called by ``_topic_extract`` when URLs match PDF patterns.
+        Creates ResearchSource objects with page boundary metadata
+        for downstream page-aware digest locators.
+
+        Args:
+            pdf_urls: PDF URLs to extract (pre-validated).
+            sub_query: The sub-query being researched.
+            state: Current research state.
+            seen_urls: Shared URL dedup set.
+            seen_titles: Shared title dedup dict.
+            state_lock: Lock for thread-safe state mutations.
+            semaphore: Semaphore for concurrency control.
+            timeout: Per-extraction timeout.
+
+        Returns:
+            Number of new sources added from PDF extraction.
+        """
+        from foundry_mcp.core.research.models.sources import ResearchSource, SourceType
+        from foundry_mcp.core.research.pdf_extractor import PDFExtractor
+
+        config_max_pages = getattr(self.config, "deep_research_pdf_max_pages", 50)
+        priority_sections = getattr(
+            self.config, "deep_research_pdf_priority_sections", None
+        ) or ["methods", "results", "discussion"]
+
+        added = 0
+        for url in pdf_urls:
+            try:
+                extractor = PDFExtractor(max_pages=config_max_pages, timeout=timeout)
+                async with semaphore:
+                    pdf_result = await asyncio.wait_for(
+                        extractor.extract_from_url(url),
+                        timeout=timeout,
+                    )
+
+                if not pdf_result.success:
+                    logger.debug("PDF extraction yielded no text for %s", url)
+                    continue
+
+                # Section-aware content extraction
+                sections = extractor.detect_sections(pdf_result)
+                content = extractor.extract_prioritized(
+                    pdf_result,
+                    max_chars=50000,
+                    priority_sections=list(priority_sections),
+                )
+                section_names = list(sections.keys()) if sections else []
+
+                # Page boundaries for digest locators
+                page_boundaries = [
+                    (i + 1, start, end)
+                    for i, (start, end) in enumerate(pdf_result.page_offsets)
+                ]
+
+                source = ResearchSource(
+                    url=url,
+                    title=f"PDF: {url.split('/')[-1][:80]}",
+                    source_type=SourceType.ACADEMIC,
+                    content=content,
+                    snippet=f"Full-text PDF ({pdf_result.extracted_page_count} pages)",
+                    sub_query_id=sub_query.id,
+                    metadata={
+                        "pdf_extraction": True,
+                        "extract_source": True,
+                        "page_count": pdf_result.page_count,
+                        "extracted_page_count": pdf_result.extracted_page_count,
+                        "sections": section_names,
+                        "page_boundaries": page_boundaries,
+                        "warnings": pdf_result.warnings[:5],
+                    },
+                )
+
+                was_added, dedup_reason = await _dedup_and_add_source(
+                    source=source,
+                    sub_query=sub_query,
+                    state=state,
+                    seen_urls=seen_urls,
+                    seen_titles=seen_titles,
+                    state_lock=state_lock,
+                )
+                if was_added:
+                    added += 1
+                    logger.info(
+                        "PDF extracted for %r: %s (%d pages, %d chars)",
+                        sub_query.id,
+                        url[:80],
+                        pdf_result.extracted_page_count,
+                        len(content),
+                    )
+                elif dedup_reason and state.provenance is not None:
+                    state.provenance.append(
+                        phase="supervision",
+                        event_type="source_deduplicated",
+                        summary=f"PDF source deduplicated ({dedup_reason}): {url[:80]}",
+                        source_url=url,
+                        source_title=f"PDF: {url.split('/')[-1][:80]}",
+                        reason=dedup_reason,
+                    )
+
+            except asyncio.TimeoutError:
+                logger.warning("PDF extraction timed out for %s after %.1fs", url, timeout)
+            except Exception as exc:
+                logger.warning("PDF extraction failed for %s: %s. Falling back to Tavily.", url, exc)
 
         return added

@@ -8,14 +8,24 @@ from __future__ import annotations
 import logging
 import re
 import time
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from foundry_mcp.config.research import ResearchConfig
     from foundry_mcp.core.research.memory import ResearchMemory
+    from foundry_mcp.core.research.models.deep_research import ResearchProfile
 
 from foundry_mcp.core.research.context_budget import AllocationResult
-from foundry_mcp.core.research.models.deep_research import DeepResearchState
+from foundry_mcp.core.research.models.deep_research import (
+    DeepResearchState,
+    ResearchLandscape,
+    StructuredResearchOutput,
+)
+from foundry_mcp.core.research.models.sources import ResearchMode, SourceType
+from foundry_mcp.core.research.workflows.deep_research.phases.methodology_assessment import (
+    format_methodology_context,
+)
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research._budgeting import (
     allocate_synthesis_budget,
@@ -62,8 +72,16 @@ def _slugify_query(query: str, max_len: int = 80) -> str:
     return slug[:max_len].rstrip("-")
 
 
-def _save_report_markdown(state: DeepResearchState) -> Optional[str]:
-    """Save the report as a markdown file in the current working directory.
+def _save_report_markdown(
+    state: DeepResearchState,
+    output_dir: Optional[Path] = None,
+) -> Optional[str]:
+    """Save the report as a markdown file.
+
+    Args:
+        state: Research state containing the report and query.
+        output_dir: Directory to save the report in.  When *None*, falls
+            back to ``Path.cwd()`` with a debug-level log.
 
     Returns the output path on success, or None if saving failed.
     Failure is non-fatal — logs a warning but does not break the workflow.
@@ -76,7 +94,12 @@ def _save_report_markdown(state: DeepResearchState) -> Optional[str]:
         if not slug:
             slug = "deep-research-report"
 
-        output_dir = Path.cwd()
+        if output_dir is None:
+            logger.debug(
+                "No explicit output_dir for report markdown; falling back to cwd"
+            )
+            output_dir = Path.cwd()
+
         output_path = output_dir / f"{slug}.md"
 
         # Collision handling: append research ID suffix if file exists
@@ -109,20 +132,64 @@ _HOWTO_PATTERNS = re.compile(
     r"\b(how to|how do|steps to|guide to|tutorial|setup|install\w*|implement\w*|build\w*)\b",
     re.IGNORECASE,
 )
+_LITERATURE_REVIEW_PATTERNS = re.compile(
+    r"\b("
+    r"literature\s+review"
+    r"|systematic\s+review"
+    r"|meta[\-\s]analysis"
+    r"|survey\s+of\b"
+    r"|state\s+of\s+the\s+art"
+    r"|body\s+of\s+(research|literature|work)"
+    r"|prior\s+(work|research|studies)"
+    r"|existing\s+(research|literature|studies)"
+    r"|review\s+of\s+the\s+(literature|research)"
+    r"|what\s+does\s+the\s+(research|literature|evidence)\s+(say|show|suggest)"
+    r"|research\s+(landscape|overview)"
+    r"|scoping\s+review"
+    r")\b",
+    re.IGNORECASE,
+)
 
 
-def _classify_query_type(query: str) -> str:
+def _classify_query_type(
+    query: str,
+    *,
+    profile: Optional["ResearchProfile"] = None,
+) -> str:
     """Classify a research query into a structural type.
 
-    Returns one of: ``"comparison"``, ``"enumeration"``, ``"howto"``,
-    or ``"explanation"`` (the default).
+    Returns one of: ``"literature_review"``, ``"comparison"``,
+    ``"enumeration"``, ``"howto"``, or ``"explanation"`` (the default).
+
+    Args:
+        query: The original research query string.
+        profile: Optional research profile.  When the profile's
+            ``synthesis_template`` is set, it overrides auto-detection.
+            When ``source_quality_mode`` is ACADEMIC and no specific
+            pattern matches, the classifier biases toward
+            ``"literature_review"``.
     """
+    # Profile synthesis_template override — highest priority
+    if profile is not None and profile.synthesis_template:
+        return profile.synthesis_template
+
+    # Literature review patterns — checked before other types
+    if _LITERATURE_REVIEW_PATTERNS.search(query):
+        return "literature_review"
     if _COMPARISON_PATTERNS.search(query):
         return "comparison"
     if _ENUMERATION_PATTERNS.search(query):
         return "enumeration"
     if _HOWTO_PATTERNS.search(query):
         return "howto"
+
+    # Academic bias: ambiguous queries default to literature_review
+    if (
+        profile is not None
+        and profile.source_quality_mode == ResearchMode.ACADEMIC
+    ):
+        return "literature_review"
+
     return "explanation"
 
 
@@ -160,6 +227,21 @@ For **explanation/overview** queries, use this structure:
 ### [Theme/Category 1]
 ### [Theme/Category 2]
 ## Conclusions""",
+    "literature_review": """\
+For **literature review** queries, use this structure:
+# Literature Review: [Topic]
+## Executive Summary
+## Introduction & Scope
+## Theoretical Foundations
+## Thematic Analysis
+### [Theme 1]
+### [Theme 2]
+### [Theme N]
+## Methodological Approaches
+## Key Debates & Contradictions
+## Research Gaps & Future Directions
+## Conclusions
+Organize findings thematically rather than source-by-source. Group related studies under conceptual themes, tracing how understanding has evolved. The References section will be appended automatically — do NOT generate it.""",
 }
 
 
@@ -352,11 +434,24 @@ class SynthesisPhaseMixin:
             },
         )
 
+        # Classify query type once for the entire synthesis phase.
+        query_type = _classify_query_type(
+            state.original_query, profile=state.research_profile,
+        )
+        if state.provenance is not None:
+            state.provenance.append(
+                phase="synthesis",
+                event_type="synthesis_query_type",
+                summary=f"Query classified as '{query_type}' for synthesis structure",
+                query_type=query_type,
+            )
+
         # Allocate budget, build prompts, run final-fit validation.
         system_prompt, user_prompt = self._prepare_synthesis_budget_and_prompts(
             state,
             provider_id,
             degraded_mode,
+            query_type=query_type,
         )
 
         # Check for cancellation before making provider call
@@ -387,6 +482,7 @@ class SynthesisPhaseMixin:
             total_chars_dropped=total_chars_dropped,
             used_fallback=used_fallback,
             degraded_mode=degraded_mode,
+            query_type=query_type,
         )
 
     # ------------------------------------------------------------------
@@ -462,6 +558,8 @@ class SynthesisPhaseMixin:
         state: DeepResearchState,
         provider_id: Optional[str],
         degraded_mode: bool,
+        *,
+        query_type: str = "explanation",
     ) -> tuple[str, str]:
         """Allocate token budget, build prompts, and run final-fit validation.
 
@@ -469,6 +567,7 @@ class SynthesisPhaseMixin:
             state: Current research state.
             provider_id: LLM provider to use.
             degraded_mode: Whether synthesis is running from raw notes.
+            query_type: Pre-classified query type for structural guidance.
 
         Returns:
             A tuple of (system_prompt, user_prompt) ready for the LLM call.
@@ -494,11 +593,14 @@ class SynthesisPhaseMixin:
         )
 
         # Build the synthesis prompt with allocated content
-        system_prompt = self._build_synthesis_system_prompt(state)
+        system_prompt = self._build_synthesis_system_prompt(state, query_type=query_type)
+        system_prompt_tokens = len(system_prompt) // 4
         user_prompt = self._build_synthesis_user_prompt(
             state,
             allocation_result,
             degraded_mode=degraded_mode,
+            system_prompt_tokens=system_prompt_tokens,
+            query_type=query_type,
         )
 
         # Final-fit validation before provider dispatch
@@ -555,6 +657,7 @@ class SynthesisPhaseMixin:
         result = None
 
         for outer_attempt in range(_MAX_FINDINGS_TRUNCATION_RETRIES + 1):  # 0 = initial
+            self._check_cancellation(state)
             call_result = await execute_llm_call(
                 workflow=self,
                 state=state,
@@ -752,6 +855,8 @@ class SynthesisPhaseMixin:
         total_chars_dropped: int,
         used_fallback: bool,
         degraded_mode: bool,
+        *,
+        query_type: str = "explanation",
     ) -> WorkflowResult:
         """Extract the report, post-process citations, audit, and build the result.
 
@@ -766,6 +871,7 @@ class SynthesisPhaseMixin:
             total_chars_dropped: Total characters dropped during retries.
             used_fallback: Whether generic prompt truncation was used.
             degraded_mode: Whether synthesis ran from raw notes.
+            query_type: Pre-classified query type (computed once upstream).
 
         Returns:
             WorkflowResult with the final synthesis report.
@@ -778,18 +884,69 @@ class SynthesisPhaseMixin:
             # Use raw content as fallback
             report = result.content
 
-        # Post-process citations: remove dangling refs, append Sources section
-        report, citation_metadata = postprocess_citations(report, state)
+        # Post-process citations: remove dangling refs, append Sources/References
+        report, citation_metadata = postprocess_citations(
+            report, state, query_type=query_type,
+        )
 
         # Store report in state
         state.report = report
 
-        # Auto-save report as markdown file
-        output_path = _save_report_markdown(state)
+        # Build research landscape metadata (pure data transformation)
+        try:
+            landscape = self._build_research_landscape(state)
+            state.extensions.research_landscape = landscape
+            logger.info(
+                "Built research landscape: %d timeline entries, %d venues, %d top-cited papers",
+                len(landscape.timeline),
+                len(landscape.venue_distribution),
+                len(landscape.top_cited_papers),
+            )
+        except Exception:
+            logger.warning("Failed to build research landscape", exc_info=True)
+
+        # Build structured output (pure data transformation)
+        try:
+            structured = self._build_structured_output(state, query_type)
+            state.extensions.structured_output = structured
+            logger.info(
+                "Built structured output: %d sources, %d findings, %d gaps, %d contradictions",
+                len(structured.sources),
+                len(structured.findings),
+                len(structured.gaps),
+                len(structured.contradictions),
+            )
+        except Exception:
+            logger.warning("Failed to build structured output", exc_info=True)
+
+        # Auto-save report as markdown file — prefer memory workspace over cwd
+        report_dir: Optional[Path] = None
+        if hasattr(self, "memory") and hasattr(self.memory, "base_path"):
+            report_dir = Path(self.memory.base_path)
+        output_path = _save_report_markdown(state, output_dir=report_dir)
         if output_path:
             state.report_output_path = output_path
 
-        # Save state
+        # Log synthesis_completed provenance event
+        # Append provenance BEFORE state save so it's not lost on a crash
+        # between save and finalize_phase.
+        if state.provenance is not None:
+            state.provenance.append(
+                phase="synthesis",
+                event_type="synthesis_completed",
+                summary=(
+                    f"Synthesis complete: {len(state.report)} char report, "
+                    f"{len(state.sources)} sources cited"
+                ),
+                report_length=len(state.report),
+                source_count=len(state.sources),
+                finding_count=len(state.findings),
+                provider_id=result.provider_id,
+                model_used=result.model_used,
+                degraded_mode=degraded_mode,
+            )
+
+        # Save state (landscape, structured output, provenance all captured)
         self.memory.save_deep_research(state)
         synthesis_audit_data: dict[str, Any] = {
             "provider_id": result.provider_id,
@@ -839,22 +996,212 @@ class SynthesisPhaseMixin:
             },
         )
 
-    def _build_synthesis_system_prompt(self, state: DeepResearchState) -> str:
+    # ------------------------------------------------------------------
+    # Research landscape builder
+    # ------------------------------------------------------------------
+
+    def _build_research_landscape(self, state: DeepResearchState) -> ResearchLandscape:
+        """Extract structured landscape metadata from research sources.
+
+        Pure data transformation — iterates state.sources, aggregates by year,
+        venue, field, citation count, and author. No additional API or LLM calls.
+        """
+        timeline_data: dict[int, dict[str, Any]] = {}
+        venue_dist: dict[str, int] = {}
+        field_dist: dict[str, int] = {}
+        author_freq: dict[str, int] = {}
+        source_type_count: dict[str, int] = {}
+        cited_papers: list[dict[str, Any]] = []
+
+        for source in state.sources:
+            # Source type breakdown
+            st = source.source_type.value if hasattr(source.source_type, "value") else str(source.source_type)
+            source_type_count[st] = source_type_count.get(st, 0) + 1
+
+            meta = source.metadata or {}
+
+            # Year-based timeline
+            year = meta.get("year")
+            if year and isinstance(year, int):
+                if year not in timeline_data:
+                    timeline_data[year] = {"year": year, "count": 0, "key_papers": []}
+                timeline_data[year]["count"] += 1
+                citation_count = meta.get("citation_count", 0) or 0
+                if citation_count >= 10:
+                    timeline_data[year]["key_papers"].append(
+                        {"title": source.title, "citation_count": citation_count}
+                    )
+
+            # Venue distribution
+            venue = meta.get("venue") or meta.get("journal")
+            if venue and isinstance(venue, str) and venue.strip():
+                venue_dist[venue.strip()] = venue_dist.get(venue.strip(), 0) + 1
+
+            # Field distribution
+            fields = meta.get("fields_of_study") or meta.get("fields") or []
+            if isinstance(fields, list):
+                for f in fields:
+                    if isinstance(f, str) and f.strip():
+                        field_dist[f.strip()] = field_dist.get(f.strip(), 0) + 1
+
+            # Author frequency
+            authors = meta.get("authors") or []
+            if isinstance(authors, list):
+                for author in authors:
+                    name = author.get("name", author) if isinstance(author, dict) else str(author)
+                    if name and isinstance(name, str) and name.strip():
+                        author_freq[name.strip()] = author_freq.get(name.strip(), 0) + 1
+
+            # Collect papers with citation counts for top-cited ranking
+            citation_count = meta.get("citation_count")
+            if citation_count is not None and isinstance(citation_count, (int, float)):
+                author_names = []
+                for a in (meta.get("authors") or []):
+                    if isinstance(a, dict):
+                        author_names.append(a.get("name", ""))
+                    elif isinstance(a, str):
+                        author_names.append(a)
+                cited_papers.append({
+                    "title": source.title,
+                    "authors": ", ".join(author_names),
+                    "year": meta.get("year"),
+                    "citation_count": int(citation_count),
+                    "doi": meta.get("doi", ""),
+                })
+
+        # Sort timeline ascending by year
+        timeline = sorted(timeline_data.values(), key=lambda x: x["year"])
+        # Sort key_papers descending within each year
+        for entry in timeline:
+            entry["key_papers"] = sorted(
+                entry["key_papers"], key=lambda x: x.get("citation_count", 0), reverse=True
+            )[:5]
+
+        # Top-cited papers descending
+        top_cited = sorted(cited_papers, key=lambda x: x.get("citation_count", 0), reverse=True)[:20]
+
+        # Sort author frequency descending
+        sorted_authors = dict(sorted(author_freq.items(), key=lambda x: x[1], reverse=True)[:30])
+
+        return ResearchLandscape(
+            timeline=timeline,
+            venue_distribution=venue_dist,
+            field_distribution=field_dist,
+            top_cited_papers=top_cited,
+            author_frequency=sorted_authors,
+            source_type_breakdown=source_type_count,
+        )
+
+    # ------------------------------------------------------------------
+    # Structured output builder
+    # ------------------------------------------------------------------
+
+    def _build_structured_output(
+        self,
+        state: DeepResearchState,
+        query_type: str,
+    ) -> StructuredResearchOutput:
+        """Transform research state into a machine-readable structured output.
+
+        Pure data transformation — no LLM calls. Denormalizes sources,
+        findings, gaps, and contradictions into flat dicts suitable for
+        downstream tool consumption (Zotero, visualization, etc.).
+
+        Args:
+            state: Current research state after synthesis.
+            query_type: Classified query type from synthesis.
+
+        Returns:
+            StructuredResearchOutput with all fields populated.
+        """
+        # Sources: denormalized with full public metadata
+        structured_sources = []
+        for src in state.sources:
+            meta = src.public_metadata()
+            entry: dict[str, Any] = {
+                "id": src.id,
+                "title": src.title,
+                "url": src.url,
+                "source_type": src.source_type.value if hasattr(src.source_type, "value") else str(src.source_type),
+                "quality": src.quality.value if hasattr(src.quality, "value") else str(src.quality),
+                "citation_number": src.citation_number,
+                "authors": meta.get("authors"),
+                "year": meta.get("year"),
+                "venue": meta.get("venue"),
+                "doi": meta.get("doi"),
+                "citation_count": meta.get("citation_count"),
+            }
+            # Include any remaining public metadata not already denormalized
+            for key, val in meta.items():
+                if key not in entry:
+                    entry[key] = val
+            structured_sources.append(entry)
+
+        # Findings: with confidence + source IDs + category
+        structured_findings = []
+        for finding in state.findings:
+            structured_findings.append({
+                "id": finding.id,
+                "content": finding.content,
+                "confidence": finding.confidence.value if hasattr(finding.confidence, "value") else str(finding.confidence),
+                "source_ids": finding.source_ids,
+                "category": finding.category,
+            })
+
+        # Gaps: unresolved only
+        structured_gaps = []
+        for gap in state.gaps:
+            if gap.resolved:
+                continue
+            structured_gaps.append({
+                "id": gap.id,
+                "description": gap.description,
+                "priority": gap.priority,
+                "suggested_queries": gap.suggested_queries,
+            })
+
+        # Contradictions
+        structured_contradictions = []
+        for contradiction in state.contradictions:
+            structured_contradictions.append({
+                "id": contradiction.id,
+                "description": contradiction.description,
+                "finding_ids": contradiction.finding_ids,
+                "severity": contradiction.severity,
+                "resolution": contradiction.resolution,
+            })
+
+        return StructuredResearchOutput(
+            sources=structured_sources,
+            findings=structured_findings,
+            gaps=structured_gaps,
+            contradictions=structured_contradictions,
+            query_type=query_type,
+            profile=state.research_profile.name if state.research_profile else "general",
+            generated_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+    def _build_synthesis_system_prompt(
+        self,
+        state: DeepResearchState,
+        *,
+        query_type: str = "explanation",
+    ) -> str:
         """Build system prompt for report synthesis.
 
         The prompt is state-aware: it detects query language and adapts
         structural guidance based on query type.
 
         Args:
-            state: Current research state used for language and structure hints
+            state: Current research state used for language and structure hints.
+            query_type: Pre-classified query type (computed once upstream).
 
         Returns:
             System prompt string
         """
-        query_type = _classify_query_type(state.original_query)
         structure_guidance = _STRUCTURE_GUIDANCE.get(query_type, _STRUCTURE_GUIDANCE["explanation"])
 
-        return f"""You are a research synthesizer. Your task is to create a comprehensive, well-structured research report from analyzed findings.
+        base_prompt = f"""You are a research synthesizer. Your task is to create a comprehensive, well-structured research report from analyzed findings.
 
 ## Report Structure
 
@@ -898,12 +1245,55 @@ The research and findings may be in English, but you must translate information 
 
 IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
 
+        # Add academic-specific synthesis instructions
+        if state.research_mode == ResearchMode.ACADEMIC:
+            base_prompt += """
+
+## Study Comparison Table (Academic Mode)
+
+If the research involves multiple empirical studies, include a markdown comparison table
+in the "Methodological Approaches" section with columns:
+
+| Study | Year | Method | Sample | Key Finding | Effect Size | Limitations |
+|-------|------|--------|--------|-------------|-------------|-------------|
+
+Only include this table when there are 3+ empirical studies with sufficient methodological
+detail. Populate from the findings provided — do not invent data. Use "Not reported" for
+missing values rather than omitting the study.
+
+## Research Gaps & Future Directions (Academic Mode)
+
+For the "Research Gaps & Future Directions" section:
+- Base this on the identified research gaps provided in the input
+- Distinguish between completely unexplored areas and partially addressed topics
+- For each gap, suggest specific research questions or methodological approaches
+- Prioritize gaps by their potential impact on the field"""
+
+        # Literature review synthesis instructions
+        if query_type == "literature_review":
+            base_prompt += """
+
+## Literature Review Guidelines
+
+This is a **literature review** synthesis. Follow these additional guidelines:
+
+- **Thematic organization**: Group studies by conceptual themes, not chronologically or source-by-source. Each theme should trace how understanding has evolved across multiple studies.
+- **Per-study notes**: When discussing a study, include author(s), year, methodology, and sample where available. Example: "Smith et al. (2021) conducted a randomized controlled trial (N=450) and found..."
+- **Seminal works**: Identify and highlight foundational/seminal works that established the field or introduced key frameworks. These should be cited early and referenced throughout.
+- **Methodological trends**: Track how research methods have evolved over time. Note shifts from qualitative to quantitative approaches, emerging methodologies, or persistent methodological limitations.
+- **Conflicting findings**: Present contradictory results with balanced weight. Explain possible reasons for disagreement (different populations, methodologies, time periods, operationalizations).
+- **Research gaps**: Explicitly identify what remains unstudied or understudied. Distinguish between gaps where no research exists and areas where evidence is inconclusive."""
+
+        return base_prompt
+
     def _build_synthesis_user_prompt(
         self,
         state: DeepResearchState,
         allocation_result: Optional[AllocationResult] = None,
         *,
         degraded_mode: bool = False,
+        system_prompt_tokens: int = 0,
+        query_type: str = "explanation",
     ) -> str:
         """Build user prompt with findings and sources for synthesis.
 
@@ -912,6 +1302,9 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
             allocation_result: Optional budget allocation result for token-aware prompts
             degraded_mode: When True, build prompt from raw_notes because no
                 compressed findings are available (Phase 3b ODR alignment).
+            system_prompt_tokens: Pre-computed system prompt token estimate
+                (avoids rebuilding the system prompt just for size calculation).
+            query_type: Pre-classified query type (computed once upstream).
 
         Returns:
             User prompt string
@@ -960,6 +1353,8 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                 prompt_parts,
                 id_to_citation,
                 allocation_result,
+                system_prompt_tokens=system_prompt_tokens,
+                query_type=query_type,
             )
 
         # When a global compressed digest is available, use it as the
@@ -982,6 +1377,8 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                 prompt_parts,
                 id_to_citation,
                 allocation_result,
+                system_prompt_tokens=system_prompt_tokens,
+                query_type=query_type,
             )
 
         # ---------------------------------------------------------------
@@ -1016,6 +1413,8 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                 prompt_parts,
                 id_to_citation,
                 allocation_result,
+                system_prompt_tokens=system_prompt_tokens,
+                query_type=query_type,
             )
 
         # ---------------------------------------------------------------
@@ -1057,6 +1456,8 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
             prompt_parts,
             id_to_citation,
             allocation_result,
+            system_prompt_tokens=system_prompt_tokens,
+            query_type=query_type,
         )
 
     def _append_contradictions_and_gaps(
@@ -1095,7 +1496,32 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                         prompt_parts.append(f"  Preferred source: [{cn}]")
             prompt_parts.append("")
 
-        if state.gaps:
+        # Enhanced gap injection for academic queries
+        is_academic = state.research_mode == ResearchMode.ACADEMIC
+        unresolved_gaps = [g for g in state.gaps if not g.resolved]
+        resolved_gaps = [g for g in state.gaps if g.resolved]
+
+        if unresolved_gaps and is_academic:
+            prompt_parts.append("## Identified Research Gaps (from iterative analysis)")
+            for i, gap in enumerate(unresolved_gaps, 1):
+                prompt_parts.append(f"{i}. {sanitize_external_content(gap.description)} (priority: {gap.priority})")
+            prompt_parts.append(
+                "\nIncorporate these gaps into a 'Research Gaps & Future Directions' "
+                "section. Frame them constructively — what specific studies or "
+                "methodologies would address each gap?"
+            )
+            prompt_parts.append("")
+
+            if resolved_gaps:
+                prompt_parts.append("## Partially Addressed Gaps")
+                for gap in resolved_gaps:
+                    resolution = sanitize_external_content(gap.resolution_notes or "No details")
+                    prompt_parts.append(
+                        f"- {sanitize_external_content(gap.description)} — Addressed by: {resolution}"
+                    )
+                prompt_parts.append("")
+        elif state.gaps:
+            # Non-academic: original compact format
             prompt_parts.append("## Knowledge Gaps Identified")
             for gap in state.gaps:
                 status = "addressed" if gap.resolved else "unresolved"
@@ -1108,6 +1534,9 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         prompt_parts: list[str],
         id_to_citation: dict[str, int],
         allocation_result: Optional[AllocationResult] = None,
+        *,
+        system_prompt_tokens: int = 0,
+        query_type: str = "explanation",
     ) -> str:
         """Append source reference and instructions to the synthesis prompt.
 
@@ -1119,6 +1548,8 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
             prompt_parts: Accumulated prompt sections (mutated in-place)
             id_to_citation: source-id → citation-number mapping
             allocation_result: Optional budget allocation result
+            system_prompt_tokens: Pre-computed system prompt token estimate
+            query_type: Pre-classified query type (computed once upstream).
 
         Returns:
             Complete user prompt string
@@ -1184,13 +1615,23 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
 
         prompt_parts.append("")
 
+        # Inject methodology context when available
+        if state.methodology_assessments:
+            methodology_section = format_methodology_context(
+                assessments=state.methodology_assessments,
+                id_to_citation=id_to_citation,
+                sources=state.sources,
+            )
+            if methodology_section:
+                prompt_parts.append(methodology_section)
+
         # Add synthesis instructions with query-type structural hint
-        query_type = _classify_query_type(state.original_query)
         query_type_labels = {
             "comparison": "comparison (side-by-side analysis of alternatives)",
             "enumeration": "list/enumeration (discrete items or options)",
             "howto": "how-to (step-by-step procedural guide)",
             "explanation": "explanation/overview (topical deep-dive)",
+            "literature_review": "literature review (thematic synthesis of research)",
         }
         type_label = query_type_labels.get(query_type, query_type)
 
@@ -1216,13 +1657,15 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         # compression, improving report depth without risking token-limit
         # failures.
         prompt = "\n".join(prompt_parts)
-        prompt = self._inject_supplementary_raw_notes(state, prompt)
+        prompt = self._inject_supplementary_raw_notes(state, prompt, system_prompt_tokens=system_prompt_tokens)
         return prompt
 
     def _inject_supplementary_raw_notes(
         self,
         state: DeepResearchState,
         prompt: str,
+        *,
+        system_prompt_tokens: int = 0,
     ) -> str:
         """Append supplementary raw notes when token headroom allows.
 
@@ -1260,11 +1703,11 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         # Estimate current prompt size in tokens (4 chars ≈ 1 token heuristic)
         current_tokens = len(prompt) // 4
 
-        # Estimate the system prompt token count so we don't over-allocate
-        # headroom. The system prompt occupies context-window space alongside
-        # the user prompt but was previously ignored in this calculation.
-        system_prompt = self._build_synthesis_system_prompt(state)
-        system_prompt_tokens = len(system_prompt) // 4
+        # Use pre-computed system prompt token estimate to avoid rebuilding
+        # the system prompt (which would append a duplicate provenance event).
+        # Falls back to a conservative estimate if not provided.
+        if not system_prompt_tokens:
+            system_prompt_tokens = 2000  # conservative fallback
 
         # Available headroom = effective_context - system_prompt - current_tokens - output_reserved
         headroom_tokens = context_window - system_prompt_tokens - current_tokens - SYNTHESIS_OUTPUT_RESERVED

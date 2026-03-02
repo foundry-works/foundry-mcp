@@ -1145,6 +1145,74 @@ class TestEligibilityAlwaysPolicy:
         assert "empty" in reason.lower()
 
 
+class TestEligibilityProactivePolicy:
+    """Tests for PROACTIVE digest policy - behaves like ALWAYS for eligibility."""
+
+    @pytest.fixture
+    def digestor(self):
+        """Create a DocumentDigestor with PROACTIVE policy."""
+        from unittest.mock import MagicMock
+
+        from foundry_mcp.core.research.document_digest import (
+            DigestConfig,
+            DigestPolicy,
+            DocumentDigestor,
+        )
+
+        mock_summarizer = MagicMock()
+        mock_pdf_extractor = MagicMock()
+        config = DigestConfig(policy=DigestPolicy.PROACTIVE)
+        return DocumentDigestor(
+            summarizer=mock_summarizer,
+            pdf_extractor=mock_pdf_extractor,
+            config=config,
+        )
+
+    def test_proactive_policy_low_quality_eligible(self, digestor):
+        """Test PROACTIVE policy accepts LOW quality content."""
+        from foundry_mcp.core.research.models.sources import SourceQuality
+
+        content = "Some content"
+        assert digestor._is_eligible(content, SourceQuality.LOW) is True
+
+    def test_proactive_policy_unknown_quality_eligible(self, digestor):
+        """Test PROACTIVE policy accepts UNKNOWN quality content."""
+        from foundry_mcp.core.research.models.sources import SourceQuality
+
+        content = "Some content"
+        assert digestor._is_eligible(content, SourceQuality.UNKNOWN) is True
+
+    def test_proactive_policy_none_quality_eligible(self, digestor):
+        """Test PROACTIVE policy accepts content without quality specified."""
+        content = "Some content"
+        assert digestor._is_eligible(content, None) is True
+
+    def test_proactive_policy_short_content_eligible(self, digestor):
+        """Test PROACTIVE policy accepts short content (ignores min_content_length)."""
+        content = "Short"
+        assert digestor._is_eligible(content, None) is True
+
+    def test_proactive_policy_empty_content_ineligible(self, digestor):
+        """Test PROACTIVE policy rejects empty content."""
+        assert digestor._is_eligible("", None) is False
+
+    def test_proactive_policy_whitespace_only_ineligible(self, digestor):
+        """Test PROACTIVE policy rejects whitespace-only content."""
+        assert digestor._is_eligible("   \n\t   ", None) is False
+
+    def test_proactive_policy_skip_reason_for_empty(self, digestor):
+        """Test PROACTIVE policy returns correct skip reason for empty content."""
+        reason = digestor._get_skip_reason("", None)
+        assert "empty" in reason.lower()
+
+    def test_proactive_policy_high_quality_eligible(self, digestor):
+        """Test PROACTIVE policy accepts HIGH quality content."""
+        from foundry_mcp.core.research.models.sources import SourceQuality
+
+        content = "Some substantial content for digestion"
+        assert digestor._is_eligible(content, SourceQuality.HIGH) is True
+
+
 class TestEligibilityAutoPolicy:
     """Tests for AUTO digest policy - checks thresholds."""
 

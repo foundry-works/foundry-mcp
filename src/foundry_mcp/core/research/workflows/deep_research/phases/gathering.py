@@ -20,6 +20,7 @@ from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.models.sources import SourceQuality
 from foundry_mcp.core.research.providers import (
     GoogleSearchProvider,
+    OpenAlexProvider,
     PerplexitySearchProvider,
     SearchProvider,
     SemanticScholarProvider,
@@ -233,6 +234,10 @@ class GatheringPhaseMixin(CompressionMixin):
                 return provider
             if provider_name == "semantic_scholar":
                 provider = SemanticScholarProvider()
+                self._search_providers[provider_name] = provider
+                return provider
+            if provider_name == "openalex":
+                provider = OpenAlexProvider()
                 self._search_providers[provider_name] = provider
                 return provider
             else:

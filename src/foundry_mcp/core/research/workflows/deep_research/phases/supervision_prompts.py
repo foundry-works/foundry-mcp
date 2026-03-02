@@ -12,7 +12,9 @@ from typing import Any, Optional
 
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
+    ResearchProfile,
 )
+from foundry_mcp.core.research.models.sources import ResearchMode
 from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
     build_sanitized_context,
     sanitize_external_content,
@@ -295,6 +297,7 @@ def build_delegation_user_prompt(
     state: DeepResearchState,
     coverage_data: list[dict[str, Any]],
     think_output: Optional[str] = None,
+    active_providers: Optional[list[str]] = None,
 ) -> str:
     """Build user prompt for directive generation.
 
@@ -302,6 +305,7 @@ def build_delegation_user_prompt(
         state: Current research state
         coverage_data: Per-sub-query coverage data
         think_output: Gap analysis from think step
+        active_providers: Active search providers for this session
 
     Returns:
         User prompt string
@@ -342,6 +346,18 @@ def build_delegation_user_prompt(
             "",
         ]
     )
+
+    # Active search providers
+    if active_providers:
+        parts.extend(
+            [
+                "## Available Search Providers",
+                f"The following search providers are active for this session: **{', '.join(active_providers)}**.",
+                "When structuring directives, consider which providers are best suited for each research angle "
+                "(e.g., academic providers for scholarly sources, web providers for recent developments).",
+                "",
+            ]
+        )
 
     # Prior supervisor conversation (accumulated across rounds)
     if state.supervision_messages:
@@ -516,12 +532,23 @@ def build_first_round_think_prompt(state: DeepResearchState) -> str:
     return "\n".join(parts)
 
 
-def build_first_round_delegation_system_prompt() -> str:
+def build_first_round_delegation_system_prompt(
+    profile: Optional[ResearchProfile] = None,
+    active_providers: Optional[list[str]] = None,
+) -> str:
     """Build system prompt for first-round decomposition delegation.
 
     Combines the standard delegation format with planning-quality
     decomposition guidance. This replaces the PLANNING phase's
     decomposition rules.
+
+    When an academic profile is active, appends guidelines for targeting
+    foundational/seminal works, recent empirical studies, per-discipline
+    directives, and literature-review-section mapping.
+
+    Args:
+        profile: Active research profile (used to inject academic guidelines)
+        active_providers: Active search providers for this session
 
     Returns:
         System prompt instructing initial query decomposition via directives
@@ -535,19 +562,86 @@ def build_first_round_delegation_system_prompt() -> str:
 - Directives should be SPECIFIC enough to yield targeted search results
 - Directives must cover DISTINCT aspects — no two should investigate substantially the same ground"""
 
+    # Academic decomposition guidelines
+    if profile is not None and profile.source_quality_mode == ResearchMode.ACADEMIC:
+        guidelines += _build_academic_decomposition_guidelines(profile)
+
+    # Inject active provider awareness
+    if active_providers:
+        guidelines += (
+            "\n\n**Available Search Providers:** "
+            + ", ".join(active_providers)
+            + "\nWhen designing directives, consider which providers are best suited "
+            "for each research angle (e.g., academic providers like semantic_scholar "
+            "or openalex for scholarly sources, web providers like tavily for recent "
+            "developments and grey literature)."
+        )
+
     preamble = "You are a research lead performing initial query decomposition. Your task is to break down a research query into focused, parallel research directives — each assigned to a specialized researcher.\n\n"
     return preamble + _build_delegation_core_prompt().replace("%GUIDELINES%", guidelines)
+
+
+def _build_academic_decomposition_guidelines(profile: ResearchProfile) -> str:
+    """Build academic-specific decomposition guidelines.
+
+    Appended to the first-round delegation system prompt when the active
+    profile has ``source_quality_mode == ACADEMIC``.  Guides the supervisor
+    to produce directives that map to literature review sections and target
+    the evidence types academic research demands.
+
+    Args:
+        profile: Active academic research profile
+
+    Returns:
+        Guidelines text block to append to the base guidelines
+    """
+    parts: list[str] = [
+        "\n\n**Academic Research Decomposition:**",
+        "This is an academic research query. Apply these additional guidelines:",
+        "",
+        "- **Foundational/seminal works directive**: Include at least one directive "
+        "targeting foundational and seminal works in the field. These are highly-cited "
+        "papers that established key theories, frameworks, or findings. Sort results "
+        "by citation count when possible.",
+        "- **Recent empirical studies directive**: Include at least one directive "
+        "targeting recent empirical studies (last 3-5 years) to capture the current "
+        "state of knowledge. Focus on peer-reviewed journal articles with clear "
+        "methodology sections.",
+    ]
+
+    # Per-discipline directives for cross-disciplinary topics
+    if profile.disciplinary_scope and len(profile.disciplinary_scope) > 1:
+        disciplines = ", ".join(profile.disciplinary_scope)
+        parts.append(
+            f"- **Cross-disciplinary coverage**: The research spans multiple disciplines "
+            f"({disciplines}). Consider dedicating separate directives to each major "
+            f"disciplinary perspective to ensure balanced coverage."
+        )
+
+    parts.extend([
+        "- **Literature review section mapping**: Structure directives so they "
+        "naturally map to literature review sections — theoretical foundations, "
+        "thematic analysis, methodological approaches, and key debates/contradictions.",
+        "- **Evidence types**: Each directive's \"evidence_needed\" should specify "
+        "academic evidence types: peer-reviewed articles, sample sizes, effect sizes, "
+        "confidence intervals, theoretical frameworks, replication status, and "
+        "methodological quality indicators.",
+    ])
+
+    return "\n".join(parts)
 
 
 def build_first_round_delegation_user_prompt(
     state: DeepResearchState,
     think_output: Optional[str] = None,
+    active_providers: Optional[list[str]] = None,
 ) -> str:
     """Build user prompt for first-round decomposition delegation.
 
     Args:
         state: Current research state with research_brief
         think_output: Decomposition strategy from think step
+        active_providers: Active search providers for this session
 
     Returns:
         User prompt string
@@ -578,6 +672,17 @@ def build_first_round_delegation_user_prompt(
             [
                 "## Additional Context",
                 ctx["system_prompt"],
+                "",
+            ]
+        )
+
+    # Active search providers
+    if active_providers:
+        parts.extend(
+            [
+                "## Available Search Providers",
+                f"The following search providers are active for this session: **{', '.join(active_providers)}**.",
+                "Consider which providers are best suited for each directive's research angle.",
                 "",
             ]
         )

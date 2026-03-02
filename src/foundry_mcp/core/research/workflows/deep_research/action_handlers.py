@@ -19,6 +19,7 @@ from foundry_mcp.core import task_registry
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
     DeepResearchState,
+    ProvenanceLog,
 )
 from foundry_mcp.core.research.models.sources import ResearchMode
 from foundry_mcp.core.research.workflows.base import WorkflowResult, _max_prompt_chars_for_model
@@ -90,6 +91,7 @@ class ActionHandlersMixin:
         max_concurrent: int,
         background: bool,
         task_timeout: Optional[float],
+        research_profile: Optional[Any] = None,
     ) -> WorkflowResult:
         """Start a new deep research session."""
         if not query:
@@ -155,6 +157,21 @@ class ActionHandlersMixin:
             synthesis_model=None if provider_id else synthesis_model,
             # Supervision configuration
             max_supervision_rounds=self.config.deep_research_max_supervision_rounds,
+        )
+
+        # Attach resolved research profile to extensions
+        if research_profile is not None:
+            state.extensions.research_profile = research_profile
+
+        # Initialize provenance audit trail
+        profile_name = research_profile.name if research_profile is not None else "general"
+        profile_config = research_profile.model_dump() if research_profile is not None else {}
+        state.extensions.provenance = ProvenanceLog(
+            session_id=state.id,
+            query=query,
+            profile=profile_name,
+            profile_config=profile_config,
+            started_at=datetime.now(timezone.utc).isoformat(),
         )
 
         # Save initial state

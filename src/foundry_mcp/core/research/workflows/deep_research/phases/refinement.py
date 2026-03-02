@@ -217,6 +217,14 @@ class RefinementPhaseMixin:
                 gap = state.get_gap(gap_id)
                 if gap:
                     gap.resolved = True
+                    if state.provenance is not None:
+                        state.provenance.append(
+                            phase="refinement",
+                            event_type="gap_resolved",
+                            summary=f"Gap resolved: {gap.description[:80]}",
+                            gap_id=gap.id,
+                            resolution_notes=parsed.get("resolution_summary", ""),
+                        )
 
         # Convert follow-up queries to new sub-queries for next iteration
         new_sub_queries = 0

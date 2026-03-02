@@ -258,26 +258,15 @@ class SearchProvider(ABC):
         Returns:
             ErrorClassification with retryable, trips_breaker, and error_type
         """
-        from foundry_mcp.core.research.providers.resilience import (
-            ErrorClassification,
-        )
         from foundry_mcp.core.research.providers.shared import (
-            _ERROR_TYPE_DEFAULTS,
             classify_http_error,
-            extract_status_code,
+            classify_with_registry,
         )
 
         # 1. Check ERROR_CLASSIFIERS registry for SearchProviderError
-        if self.ERROR_CLASSIFIERS and isinstance(error, SearchProviderError):
-            code = extract_status_code(str(error))
-            if code is not None and code in self.ERROR_CLASSIFIERS:
-                error_type = self.ERROR_CLASSIFIERS[code]
-                retryable, trips_breaker = _ERROR_TYPE_DEFAULTS.get(error_type.value, (False, True))
-                return ErrorClassification(
-                    retryable=retryable,
-                    trips_breaker=trips_breaker,
-                    error_type=error_type,
-                )
+        result = classify_with_registry(error, self.ERROR_CLASSIFIERS, self.get_provider_name())
+        if result is not None:
+            return result
 
         # 2. Fall back to shared generic classification
         return classify_http_error(error, self.get_provider_name())

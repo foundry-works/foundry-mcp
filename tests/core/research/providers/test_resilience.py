@@ -148,7 +148,7 @@ class TestProviderConfigs:
 
     def test_all_providers_present(self):
         """All expected providers are configured."""
-        expected = {"tavily", "google", "perplexity", "semantic_scholar", "tavily_extract"}
+        expected = {"tavily", "google", "perplexity", "semantic_scholar", "tavily_extract", "openalex", "crossref"}
         assert set(PROVIDER_CONFIGS.keys()) == expected
 
     def test_get_provider_config_existing(self):
@@ -258,9 +258,11 @@ class TestProviderResilienceManager:
         """get_all_provider_statuses returns all providers."""
         mgr = get_resilience_manager()
         statuses = mgr.get_all_provider_statuses()
-        assert len(statuses) == 5
+        assert len(statuses) == 7
         assert "tavily" in statuses
         assert "semantic_scholar" in statuses
+        assert "openalex" in statuses
+        assert "crossref" in statuses
 
 
 class TestAsyncRetryWithBackoff:
@@ -1324,7 +1326,7 @@ class TestFullStackIntegration:
         mgr = get_resilience_manager()
         statuses = mgr.get_all_provider_statuses()
 
-        expected_providers = {"tavily", "google", "perplexity", "semantic_scholar", "tavily_extract"}
+        expected_providers = {"tavily", "google", "perplexity", "semantic_scholar", "tavily_extract", "openalex", "crossref"}
         assert set(statuses.keys()) == expected_providers
 
         for provider_name, status in statuses.items():

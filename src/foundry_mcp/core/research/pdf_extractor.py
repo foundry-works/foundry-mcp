@@ -39,6 +39,7 @@ import asyncio
 import io
 import ipaddress
 import logging
+import re
 import socket
 import time
 from dataclasses import dataclass, field
@@ -163,7 +164,6 @@ VALID_PDF_CONTENT_TYPES = frozenset(
     [
         "application/pdf",
         "application/x-pdf",
-        "application/octet-stream",  # Some servers serve PDFs with this
     ]
 )
 """Content-types that are acceptable for PDF responses."""
@@ -286,8 +286,10 @@ def validate_url_for_ssrf(url: str) -> None:
             if is_internal_ip(ip):
                 raise SSRFError(f"Hostname {hostname} resolves to internal IP: {ip}")
     except socket.gaierror:
-        # DNS resolution failed - allow the request to fail naturally later
-        logger.debug(f"DNS resolution failed for {hostname}, allowing request")
+        # Fail closed: DNS resolution failure must block the request.
+        # Matches _injection_protection.py behavior (returns False on gaierror).
+        logger.warning("DNS resolution failed for %s — blocking request (fail closed)", hostname)
+        raise SSRFError(f"DNS resolution failed for hostname: {hostname}")
 
 
 def validate_pdf_magic_bytes(data: bytes) -> None:
@@ -322,6 +324,12 @@ def validate_content_type(content_type: Optional[str]) -> None:
 
     # Extract base content type (ignore parameters like charset)
     base_type = content_type.split(";")[0].strip().lower()
+
+    if base_type == "application/octet-stream":
+        logger.warning(
+            "Server returned application/octet-stream for PDF URL — "
+            "rejecting at content-type gate (rely on magic byte check for ambiguous types)"
+        )
 
     if base_type not in VALID_PDF_CONTENT_TYPES:
         raise InvalidPDFError(
@@ -481,7 +489,7 @@ class PDFExtractor:
             validate_pdf_magic_bytes(pdf_bytes)
 
         # Run CPU-bound extraction in thread pool with timeout
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         try:
             return await asyncio.wait_for(
                 loop.run_in_executor(None, self._extract_sync, source),
@@ -739,6 +747,163 @@ class PDFExtractor:
             page_count=total_page_count,
             extracted_page_count=extracted_count,
         )
+
+    # ------------------------------------------------------------------
+    # Academic paper section detection and prioritized extraction
+    # ------------------------------------------------------------------
+
+    # Regex patterns for common academic section headers.
+    # Matches numbered ("1. Introduction") and unnumbered ("Introduction")
+    # variants, case-insensitive, at the start of a line.
+    _SECTION_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+        ("abstract", re.compile(r"^(?:\d+[\.\)]\s*)?abstract\b", re.IGNORECASE | re.MULTILINE)),
+        ("introduction", re.compile(r"^(?:\d+[\.\)]\s*)?introduction\b", re.IGNORECASE | re.MULTILINE)),
+        ("background", re.compile(r"^(?:\d+[\.\)]\s*)?background\b", re.IGNORECASE | re.MULTILINE)),
+        ("literature_review", re.compile(r"^(?:\d+[\.\)]\s*)?literature\s+review\b", re.IGNORECASE | re.MULTILINE)),
+        ("methods", re.compile(r"^(?:\d+[\.\)]\s*)?(?:methods?|methodology|materials?\s+and\s+methods?)\b", re.IGNORECASE | re.MULTILINE)),
+        ("results", re.compile(r"^(?:\d+[\.\)]\s*)?results?\b", re.IGNORECASE | re.MULTILINE)),
+        ("discussion", re.compile(r"^(?:\d+[\.\)]\s*)?discussion\b", re.IGNORECASE | re.MULTILINE)),
+        ("conclusion", re.compile(r"^(?:\d+[\.\)]\s*)?conclusions?\b", re.IGNORECASE | re.MULTILINE)),
+        ("references", re.compile(r"^(?:\d+[\.\)]\s*)?references\b", re.IGNORECASE | re.MULTILINE)),
+    ]
+
+    def detect_sections(self, result: PDFExtractionResult) -> dict[str, tuple[int, int]]:
+        """Detect standard academic paper sections from extracted text.
+
+        Scans the extracted text for common section headers (Abstract,
+        Introduction, Methods, Results, Discussion, Conclusion, References)
+        using regex patterns. Each section spans from its header to the
+        start of the next detected section (or end of text).
+
+        Args:
+            result: A PDFExtractionResult containing extracted text.
+
+        Returns:
+            Dict mapping section name to (start_char, end_char) offsets
+            in the result text. Returns empty dict if no sections detected.
+        """
+        if not result.text:
+            return {}
+
+        text = result.text
+
+        # Find all section header positions
+        found: list[tuple[str, int]] = []
+        for name, pattern in self._SECTION_PATTERNS:
+            match = pattern.search(text)
+            if match:
+                found.append((name, match.start()))
+
+        if not found:
+            return {}
+
+        # Sort by position in text
+        found.sort(key=lambda x: x[1])
+
+        # Build section spans: each section ends where the next begins
+        sections: dict[str, tuple[int, int]] = {}
+        for i, (name, start) in enumerate(found):
+            if i + 1 < len(found):
+                end = found[i + 1][1]
+            else:
+                end = len(text)
+            # Only keep the first occurrence of each section name
+            if name not in sections:
+                sections[name] = (start, end)
+
+        return sections
+
+    def extract_prioritized(
+        self,
+        result: PDFExtractionResult,
+        max_chars: int = 50000,
+        priority_sections: list[str] | None = None,
+    ) -> str:
+        """Extract text prioritizing specific sections for academic papers.
+
+        When full text exceeds max_chars, builds output by including the
+        abstract first, then priority sections (methods, results, discussion
+        by default), then remaining sections. Truncates gracefully.
+
+        If no sections are detected, returns the first max_chars of the
+        full text as a simple truncation.
+
+        Args:
+            result: PDFExtractionResult with extracted text.
+            max_chars: Maximum characters to return (default 50000).
+            priority_sections: Section names to prioritize. Defaults to
+                ["methods", "results", "discussion"].
+
+        Returns:
+            Extracted text within max_chars, prioritizing key sections.
+        """
+        if not result.text:
+            return ""
+
+        # Fast path: full text fits
+        if len(result.text) <= max_chars:
+            return result.text
+
+        if priority_sections is None:
+            priority_sections = ["methods", "results", "discussion"]
+
+        sections = self.detect_sections(result)
+
+        # No sections detected — simple truncation
+        if not sections:
+            return result.text[:max_chars]
+
+        # Build output in priority order:
+        # 1. Abstract (always first)
+        # 2. Priority sections in order
+        # 3. Remaining sections in document order
+        parts: list[tuple[str, str]] = []
+        used_sections: set[str] = set()
+
+        # Abstract first
+        if "abstract" in sections:
+            start, end = sections["abstract"]
+            parts.append(("abstract", result.text[start:end]))
+            used_sections.add("abstract")
+
+        # Priority sections
+        for sec_name in priority_sections:
+            if sec_name in sections and sec_name not in used_sections:
+                start, end = sections[sec_name]
+                parts.append((sec_name, result.text[start:end]))
+                used_sections.add(sec_name)
+
+        # Remaining sections in document order (excluding references)
+        remaining = [
+            (name, span)
+            for name, span in sorted(sections.items(), key=lambda x: x[1][0])
+            if name not in used_sections and name != "references"
+        ]
+        for name, (start, end) in remaining:
+            parts.append((name, result.text[start:end]))
+
+        # Assemble within budget, accounting for "\n\n" separators
+        output_parts: list[str] = []
+        chars_used = 0
+
+        for name, text in parts:
+            if chars_used >= max_chars:
+                break
+            # Account for separator between parts
+            separator_cost = 2 if output_parts else 0
+            available = max_chars - chars_used - separator_cost
+            if available <= 0:
+                break
+            if len(text) <= available:
+                output_parts.append(text)
+                chars_used += len(text) + separator_cost
+            else:
+                # Truncate this section to fit
+                output_parts.append(text[:available])
+                chars_used += available + separator_cost
+                break
+
+        return "\n\n".join(output_parts) if output_parts else result.text[:max_chars]
 
     async def extract_from_url(self, url: str) -> PDFExtractionResult:
         """Extract text from a PDF at a URL with SSRF protection.

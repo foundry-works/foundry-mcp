@@ -367,3 +367,55 @@ class TestBackwardCompatibility:
             await provider.search("test query", max_results=250)
             params = mock_client.get.call_args.kwargs["params"]
             assert params["limit"] == 100
+
+
+class TestSemanticScholarURLEncoding:
+    """paper_id must be URL-encoded in URL paths."""
+
+    @pytest.mark.asyncio
+    async def test_paper_id_with_special_chars_is_encoded(self):
+        """Paper IDs with path traversal chars are safely URL-encoded."""
+        from urllib.parse import quote as _url_quote
+
+        provider = SemanticScholarProvider(api_key="test-key")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "data": [{"paperId": "abc", "title": "Test", "authors": []}],
+        }
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            await provider.get_paper("../admin")
+
+            called_url = mock_client.get.call_args.args[0]
+            # The paper_id must be encoded, NOT appear raw in the URL
+            assert "../admin" not in called_url
+            assert _url_quote("../admin", safe="") in called_url
+
+    @pytest.mark.asyncio
+    async def test_standard_paper_id_resolves(self):
+        """Standard paper IDs still work correctly."""
+        provider = SemanticScholarProvider(api_key="test-key")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "data": [{"paperId": "abc123", "title": "Test", "authors": []}],
+        }
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            result = await provider.get_paper("abc123")
+            assert result is not None

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
 from foundry_mcp.core.research.evaluation.dimensions import DIMENSIONS, Dimension
 from foundry_mcp.core.research.evaluation.scoring import (
@@ -28,8 +28,6 @@ from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import 
     execute_llm_call,
 )
 
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -313,7 +311,8 @@ async def evaluate_report(
         )
         return call_result
 
-    assert isinstance(call_result, LLMCallResult)
+    if not isinstance(call_result, LLMCallResult):
+        raise TypeError(f"Expected LLMCallResult, got {type(call_result).__name__}")
     content = call_result.result.content or ""
 
     # Parse the evaluation response
@@ -333,13 +332,13 @@ async def evaluate_report(
             metadata={"raw_response": content[:2000]},
         )
 
-    # Attach metadata
-    eval_result.metadata = {
+    # Attach LLM call metadata (preserve parse-time keys like imputed_count, warnings)
+    eval_result.metadata.update({
         "provider_id": call_result.result.provider_id,
         "model_used": call_result.result.model_used,
         "duration_ms": call_result.llm_call_duration_ms,
         "research_id": state.id,
-    }
+    })
 
     # Store in state metadata
     state.metadata["evaluation"] = eval_result.to_dict()

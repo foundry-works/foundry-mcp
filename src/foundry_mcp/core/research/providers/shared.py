@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     import httpx
 
     from foundry_mcp.core.research.models.sources import ResearchSource
-    from foundry_mcp.core.research.providers.resilience.models import ErrorClassification
+    from foundry_mcp.core.research.providers.resilience.models import ErrorClassification, ErrorType
 
 logger = logging.getLogger(__name__)
 
@@ -277,6 +277,38 @@ def extract_domain(url: str) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# Text utilities
+# ---------------------------------------------------------------------------
+
+
+def truncate_abstract(
+    abstract: Optional[str],
+    max_length: int = 500,
+) -> Optional[str]:
+    """Truncate an abstract for use as a snippet field.
+
+    Shared utility for academic providers (Semantic Scholar, OpenAlex, CrossRef)
+    that need to produce short snippets from full abstracts.
+
+    Args:
+        abstract: Full abstract text.
+        max_length: Maximum snippet length.
+
+    Returns:
+        Truncated abstract with ``"..."`` suffix, or ``None`` if input is empty.
+    """
+    if not abstract:
+        return None
+    if len(abstract) <= max_length:
+        return abstract
+    truncated = abstract[:max_length]
+    last_space = truncated.rfind(" ")
+    if last_space > max_length * 0.8:
+        truncated = truncated[:last_space]
+    return truncated + "..."
+
+
+# ---------------------------------------------------------------------------
 # Parameterized patterns
 # ---------------------------------------------------------------------------
 
@@ -284,8 +316,11 @@ def extract_domain(url: str) -> Optional[str]:
 def extract_status_code(error_message: str) -> Optional[int]:
     """Extract an HTTP status code from an error message string.
 
-    Looks for patterns like ``"HTTP 503"``, ``"API error 429:"``, or bare
-    ``"500"`` / ``"502"`` / ``"503"`` / ``"504"`` status codes.
+    Looks for patterns like ``"HTTP 503"``, ``"API error 429:"``, ``"status 404"``,
+    or a bare status code at the start of the message.
+
+    Uses an anchored regex to avoid false positives from incidental 3-digit
+    numbers in error messages (e.g. "Found 200 results").
 
     Args:
         error_message: Error message that may contain an HTTP status code.
@@ -295,9 +330,18 @@ def extract_status_code(error_message: str) -> Optional[int]:
     """
     if not error_message:
         return None
-    match = re.search(r"\b([1-5]\d{2})\b", error_message)
+    # Match status codes preceded by HTTP/status/error keywords, or at start of string.
+    # Anchored to known patterns to avoid false positives from incidental numbers
+    # (e.g. "Found 200 results" should NOT extract 200).
+    match = re.search(
+        r"(?:HTTP|status|error)\s*(?:code\s*)?:?\s*(\d{3})\b|^(\d{3})\s",
+        error_message,
+        re.IGNORECASE,
+    )
     if match:
-        return int(match.group(1))
+        code = int(match.group(1) or match.group(2))
+        if 100 <= code <= 599:
+            return code
     return None
 
 
@@ -313,6 +357,45 @@ _ERROR_TYPE_DEFAULTS: dict[str, tuple[bool, bool]] = {
     "invalid_request": (False, False),
     "unknown": (False, True),
 }
+
+
+def classify_with_registry(
+    error: Exception,
+    error_classifiers: dict[int, "ErrorType"],
+    provider_name: str,
+) -> Optional["ErrorClassification"]:
+    """Check ERROR_CLASSIFIERS registry for a matching status code.
+
+    Shared implementation used by both ``SearchProvider.classify_error``
+    and ``CrossrefProvider.classify_error`` to avoid code duplication.
+
+    Args:
+        error: The exception to classify.
+        error_classifiers: Mapping of HTTP status codes to ``ErrorType``.
+        provider_name: Provider name (unused, reserved for future logging).
+
+    Returns:
+        An ``ErrorClassification`` if the error matches a registry entry,
+        or ``None`` to fall through to generic classification.
+    """
+    from foundry_mcp.core.research.providers.base import SearchProviderError
+    from foundry_mcp.core.research.providers.resilience import (
+        ErrorClassification,
+    )
+
+    if error_classifiers and isinstance(error, SearchProviderError):
+        code = getattr(error, "status_code", None) or extract_status_code(str(error))
+        if code is not None and code in error_classifiers:
+            error_type = error_classifiers[code]
+            retryable, trips_breaker = _ERROR_TYPE_DEFAULTS.get(
+                error_type.value, (False, True)
+            )
+            return ErrorClassification(
+                retryable=retryable,
+                trips_breaker=trips_breaker,
+                error_type=error_type,
+            )
+    return None
 
 
 def classify_http_error(
@@ -383,14 +466,14 @@ def classify_http_error(
 
     # 4-6. SearchProviderError
     if isinstance(error, SearchProviderError):
-        error_str = str(error).lower()
-        if any(code in error_str for code in ("500", "502", "503", "504")):
+        code = getattr(error, "status_code", None) or extract_status_code(str(error))
+        if code is not None and code >= 500:
             return ErrorClassification(
                 retryable=True,
                 trips_breaker=True,
                 error_type=ErrorType.SERVER_ERROR,
             )
-        if "400" in error_str:
+        if code == 400:
             return ErrorClassification(
                 retryable=False,
                 trips_breaker=False,

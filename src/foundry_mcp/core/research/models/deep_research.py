@@ -18,11 +18,13 @@ from foundry_mcp.core.research.models.fidelity import (
     PhaseMetrics,
 )
 from foundry_mcp.core.research.models.sources import (
+    MethodologyAssessment,
     ResearchFinding,
     ResearchGap,
     ResearchMode,
     ResearchSource,
     SourceType,
+    StudyDesign,
     SubQuery,
 )
 
@@ -519,6 +521,26 @@ class ExtractContentTool(BaseModel):
         return safe[:2]
 
 
+class ExtractPDFTool(BaseModel):
+    """Tool schema for extracting full text from academic paper PDFs.
+
+    Profile-gated: only available when ``enable_pdf_extraction`` is True
+    (systematic-review profile). The researcher calls this when a direct
+    PDF link is available and the abstract is insufficient.
+    """
+
+    url: str = Field(
+        ...,
+        description="Direct PDF URL (e.g. https://arxiv.org/pdf/2301.00001.pdf)",
+    )
+    max_pages: int = Field(
+        default=30,
+        ge=1,
+        le=100,
+        description="Maximum pages to extract (default 30)",
+    )
+
+
 class ThinkTool(BaseModel):
     """Tool schema for strategic reflection.
 
@@ -545,6 +567,50 @@ class ResearchCompleteTool(BaseModel):
     )
 
 
+class CitationSearchTool(BaseModel):
+    """Tool schema for forward citation search.
+
+    The researcher calls this to find papers that cite a given paper,
+    enabling forward snowball sampling in academic research.
+    """
+
+    paper_id: str = Field(
+        ...,
+        description=(
+            "Paper identifier: Semantic Scholar ID, DOI (e.g. '10.1234/...'), "
+            "ArXiv ID (e.g. 'ArXiv:2301.12345'), or URL of a known paper"
+        ),
+    )
+    max_results: int = Field(
+        default=10,
+        ge=1,
+        le=50,
+        description="Maximum number of citing papers to return",
+    )
+
+
+class RelatedPapersTool(BaseModel):
+    """Tool schema for related papers discovery.
+
+    The researcher calls this to find papers similar to a given paper,
+    enabling lateral discovery of relevant work the initial search may have missed.
+    """
+
+    paper_id: str = Field(
+        ...,
+        description=(
+            "Paper identifier: Semantic Scholar ID, DOI (e.g. '10.1234/...'), "
+            "ArXiv ID (e.g. 'ArXiv:2301.12345'), or URL of a known paper"
+        ),
+    )
+    max_results: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maximum number of related papers to return",
+    )
+
+
 class ResearcherToolCall(BaseModel):
     """A single tool call from the researcher LLM.
 
@@ -554,7 +620,7 @@ class ResearcherToolCall(BaseModel):
 
     tool: str = Field(
         ...,
-        description="Tool name: web_search, extract_content, think, research_complete",
+        description="Tool name: web_search, extract_content, extract_pdf, think, research_complete, citation_search, related_papers",
     )
     arguments: dict[str, Any] = Field(
         default_factory=dict,
@@ -591,8 +657,11 @@ class ResearcherResponse(BaseModel):
 RESEARCHER_TOOL_SCHEMAS: dict[str, type[BaseModel]] = {
     "web_search": WebSearchTool,
     "extract_content": ExtractContentTool,
+    "extract_pdf": ExtractPDFTool,
     "think": ThinkTool,
     "research_complete": ResearchCompleteTool,
+    "citation_search": CitationSearchTool,
+    "related_papers": RelatedPapersTool,
 }
 
 #: Tools that do NOT count against the researcher's budget.
@@ -766,6 +835,496 @@ class DeepResearchPhase(str, Enum):
     REFINEMENT = "refinement"  # DEPRECATED: legacy-resume-only; retained for deserialization
     SUPERVISION = "supervision"
     SYNTHESIS = "synthesis"
+
+
+class StudyComparison(BaseModel):
+    """Structured comparison of an empirical study."""
+
+    model_config = {"extra": "forbid"}
+
+    study_title: str
+    authors: str = ""
+    year: Optional[int] = None
+    methodology: Optional[str] = None
+    sample_description: Optional[str] = None
+    key_finding: Optional[str] = None
+    source_id: str = ""
+
+
+class ResearchLandscape(BaseModel):
+    """Structured metadata about the research landscape.
+
+    Built from source metadata after synthesis — pure data transformation,
+    no additional LLM or API calls. Included in structured output for
+    downstream consumption by visualization or analysis tools.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    timeline: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="[{year: int, count: int, key_papers: [{title, citation_count}]}]",
+    )
+    methodology_breakdown: dict[str, int] = Field(
+        default_factory=dict,
+        description='{"RCT": 5, "qualitative": 3, "meta_analysis": 2, ...}',
+    )
+    venue_distribution: dict[str, int] = Field(
+        default_factory=dict,
+        description='{"Journal of Educational Psychology": 4, ...}',
+    )
+    field_distribution: dict[str, int] = Field(
+        default_factory=dict,
+        description='{"Education": 8, "Psychology": 5, ...}',
+    )
+    top_cited_papers: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="[{title, authors, year, citation_count, doi}] sorted by citation_count desc",
+    )
+    author_frequency: dict[str, int] = Field(
+        default_factory=dict,
+        description="Most prolific authors in results, by count",
+    )
+    source_type_breakdown: dict[str, int] = Field(
+        default_factory=dict,
+        description='{"academic": 15, "web": 3}',
+    )
+    study_comparisons: list[StudyComparison] = Field(
+        default_factory=list,
+        description="Structured comparisons of empirical studies",
+    )
+
+
+# =========================================================================
+# Research Profiles
+# =========================================================================
+
+
+class ResearchProfile(BaseModel):
+    """Named bundle of settings that configures the deep research pipeline per-session.
+
+    Replaces the monolithic ``ResearchMode`` enum with composable, declarative
+    configuration.  Named profiles provide sensible defaults; per-request
+    overrides (applied via ``model_copy(update=...)``) provide flexibility.
+
+    Built-in profiles are registered in :data:`BUILTIN_PROFILES`.
+    """
+
+    name: str = Field(
+        default="general",
+        description="Profile identifier (must match a built-in or config-defined name)",
+    )
+    providers: list[str] = Field(
+        default_factory=lambda: ["tavily", "semantic_scholar"],
+        description="Ordered list of search providers to use",
+    )
+    source_quality_mode: ResearchMode = Field(
+        default=ResearchMode.GENERAL,
+        description="Controls domain-tier scoring heuristics",
+    )
+    citation_style: str = Field(
+        default="default",
+        description="Citation format: 'default' | 'apa' | 'ieee' | 'chicago'",
+    )
+    export_formats: list[str] = Field(
+        default_factory=lambda: ["bibtex"],
+        description="Supported export formats for bibliography",
+    )
+    synthesis_template: Optional[str] = Field(
+        default=None,
+        description="Force a synthesis query type (None = auto-detect, 'literature_review', etc.)",
+    )
+    enable_citation_tools: bool = Field(
+        default=False,
+        description="Enable citation analysis tools",
+    )
+    enable_methodology_assessment: bool = Field(
+        default=False,
+        description="Enable methodology quality assessment",
+    )
+    enable_citation_network: bool = Field(
+        default=False,
+        description="Enable citation network analysis",
+    )
+    enable_pdf_extraction: bool = Field(
+        default=False,
+        description="Enable PDF content extraction",
+    )
+    source_type_hierarchy: Optional[list[str]] = Field(
+        default=None,
+        description="Ordered source type preference (e.g. ['peer-reviewed', 'meta-analysis', ...])",
+    )
+    disciplinary_scope: Optional[list[str]] = Field(
+        default=None,
+        description="Target disciplines (e.g. ['psychology', 'education'])",
+    )
+    time_period: Optional[str] = Field(
+        default=None,
+        description="Time scope (e.g. '2010-2024', 'last 5 years')",
+    )
+    methodology_preferences: Optional[list[str]] = Field(
+        default=None,
+        description="Preferred methodologies (e.g. ['RCT', 'meta-analysis', 'qualitative'])",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+# ---------------------------------------------------------------------------
+# Built-in profile definitions
+# ---------------------------------------------------------------------------
+
+PROFILE_GENERAL = ResearchProfile(
+    name="general",
+    providers=["tavily", "semantic_scholar"],
+    source_quality_mode=ResearchMode.GENERAL,
+    citation_style="default",
+)
+
+PROFILE_ACADEMIC = ResearchProfile(
+    name="academic",
+    providers=["semantic_scholar", "tavily"],
+    source_quality_mode=ResearchMode.ACADEMIC,
+    citation_style="apa",
+    export_formats=["bibtex", "ris"],
+    enable_citation_tools=True,
+    source_type_hierarchy=[
+        "peer-reviewed",
+        "meta-analysis",
+        "book",
+        "preprint",
+        "report",
+    ],
+)
+
+PROFILE_SYSTEMATIC_REVIEW = ResearchProfile(
+    name="systematic-review",
+    providers=["semantic_scholar", "tavily"],
+    source_quality_mode=ResearchMode.ACADEMIC,
+    citation_style="apa",
+    export_formats=["bibtex", "ris"],
+    synthesis_template="literature_review",
+    enable_citation_tools=True,
+    enable_methodology_assessment=True,
+    enable_pdf_extraction=True,
+    source_type_hierarchy=[
+        "peer-reviewed",
+        "meta-analysis",
+        "book",
+        "preprint",
+        "report",
+    ],
+)
+
+PROFILE_BIBLIOMETRIC = ResearchProfile(
+    name="bibliometric",
+    providers=["semantic_scholar", "tavily"],
+    source_quality_mode=ResearchMode.ACADEMIC,
+    citation_style="apa",
+    export_formats=["bibtex", "ris"],
+    enable_citation_tools=True,
+    enable_citation_network=True,
+)
+
+PROFILE_TECHNICAL = ResearchProfile(
+    name="technical",
+    providers=["tavily", "google"],
+    source_quality_mode=ResearchMode.TECHNICAL,
+    citation_style="default",
+)
+
+BUILTIN_PROFILES: dict[str, ResearchProfile] = {
+    "general": PROFILE_GENERAL,
+    "academic": PROFILE_ACADEMIC,
+    "systematic-review": PROFILE_SYSTEMATIC_REVIEW,
+    "bibliometric": PROFILE_BIBLIOMETRIC,
+    "technical": PROFILE_TECHNICAL,
+}
+
+# Legacy research_mode → profile name mapping (backward compatibility)
+_RESEARCH_MODE_TO_PROFILE: dict[str, str] = {
+    "general": "general",
+    "academic": "academic",
+    "technical": "technical",
+}
+
+
+# =========================================================================
+# Provenance audit trail
+# =========================================================================
+
+# Cap provenance entries to prevent unbounded growth in long sessions.
+MAX_PROVENANCE_ENTRIES: int = 500
+
+
+class ProvenanceEntry(BaseModel):
+    """A single provenance event in the audit trail.
+
+    Records a decision or action taken during a research session with
+    enough context to diagnose methodology issues (e.g., missed papers,
+    narrow sub-queries, premature coverage assessment).
+    """
+
+    timestamp: str = Field(
+        ...,
+        description="ISO 8601 timestamp of the event",
+    )
+    phase: str = Field(
+        ...,
+        description="Research phase: brief, supervision, or synthesis",
+    )
+    event_type: str = Field(
+        ...,
+        description=(
+            "Event type: brief_generated, decomposition, provider_query, "
+            "source_discovered, source_deduplicated, coverage_assessment, "
+            "gap_identified, gap_resolved, iteration_complete, "
+            "synthesis_query_type, synthesis_completed, strategy_detected"
+        ),
+    )
+    summary: str = Field(
+        ...,
+        description="Human-readable summary of the event",
+    )
+    details: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Structured event-specific details",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+class ProvenanceLog(BaseModel):
+    """Append-only audit trail for a deep research session.
+
+    Records every significant decision and action during research so that
+    methodology is inspectable and reproducible. Different environments may
+    produce different results — provenance makes the *why* transparent.
+    """
+
+    session_id: str = Field(..., description="Research session ID")
+    query: str = Field(..., description="Original research query")
+    profile: str = Field(default="general", description="Research profile name")
+    profile_config: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Frozen profile configuration at session start",
+    )
+    started_at: str = Field(..., description="ISO 8601 session start timestamp")
+    completed_at: Optional[str] = Field(
+        default=None,
+        description="ISO 8601 session completion timestamp",
+    )
+    entries: list[ProvenanceEntry] = Field(
+        default_factory=list,
+        description="Ordered list of provenance events",
+    )
+
+    model_config = {"extra": "forbid"}
+
+    def append(
+        self,
+        phase: str,
+        event_type: str,
+        summary: str,
+        **details: Any,
+    ) -> None:
+        """Append a new provenance entry with auto-generated timestamp.
+
+        Args:
+            phase: Research phase (brief, supervision, synthesis).
+            event_type: Event type identifier.
+            summary: Human-readable event summary.
+            **details: Event-specific key-value details.
+        """
+        entry = ProvenanceEntry(
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            phase=phase,
+            event_type=event_type,
+            summary=summary,
+            details=details,
+        )
+        self.entries.append(entry)
+
+        # Cap entries to prevent unbounded growth
+        if len(self.entries) > MAX_PROVENANCE_ENTRIES:
+            excess = len(self.entries) - MAX_PROVENANCE_ENTRIES
+            self.entries = self.entries[excess:]
+
+
+class StructuredResearchOutput(BaseModel):
+    """Machine-readable structured output from a deep research session.
+
+    Produced alongside the prose report during synthesis. Provides
+    denormalized, reference-manager-ready data for downstream tools
+    (Zotero, visualization, citation network analysis, etc.).
+
+    Every field is a flat list of dicts for maximum interoperability
+    — no nested Pydantic models, so consumers can parse with plain JSON.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    sources: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description=(
+            "Denormalized source catalog. Keys: id, title, url, source_type, "
+            "quality, citation_number, authors, year, venue, doi, citation_count, "
+            "plus any additional provider-specific metadata"
+        ),
+    )
+    findings: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description=(
+            "Key findings extracted from sources. Keys: id, content, confidence, "
+            "source_ids, category"
+        ),
+    )
+    gaps: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description=(
+            "Unresolved research gaps only (resolved gaps excluded). Keys: id, "
+            "description, priority, suggested_queries"
+        ),
+    )
+    contradictions: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description=(
+            "Cross-source conflicts. Keys: id, description, finding_ids, "
+            "severity, resolution"
+        ),
+    )
+    query_type: str = Field(
+        default="explanation",
+        description="Classified query type used for synthesis structure",
+    )
+    profile: str = Field(
+        default="general",
+        description="Research profile name used for the session",
+    )
+    generated_at: Optional[str] = Field(
+        default=None,
+        description="ISO 8601 timestamp of when this output was generated",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Citation Network Models
+# ---------------------------------------------------------------------------
+
+
+class CitationNode(BaseModel):
+    """A node in the citation network representing a paper."""
+
+    paper_id: str = Field(description="Provider-specific paper ID (OpenAlex or Semantic Scholar)")
+    title: str = Field(description="Paper title")
+    authors: str = Field(default="", description="Formatted author string")
+    year: Optional[int] = Field(default=None, description="Publication year")
+    citation_count: Optional[int] = Field(default=None, description="Total citation count")
+    is_discovered: bool = Field(
+        default=False,
+        description="True if this paper was a source in the original research session",
+    )
+    source_id: Optional[str] = Field(
+        default=None,
+        description="ID of the ResearchSource if is_discovered is True",
+    )
+    role: str = Field(
+        default="peripheral",
+        description="Role in the network: foundational, discovered, extension, or peripheral",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+class CitationEdge(BaseModel):
+    """A directed edge in the citation network."""
+
+    citing_paper_id: str = Field(description="Paper ID of the citing paper")
+    cited_paper_id: str = Field(description="Paper ID of the cited paper")
+
+    model_config = {"extra": "forbid"}
+
+
+class ResearchThread(BaseModel):
+    """A connected component in the citation network with 3+ nodes."""
+
+    name: str = Field(description="Auto-generated thread label")
+    paper_ids: list[str] = Field(default_factory=list, description="Paper IDs in this thread")
+    description: str = Field(default="", description="Brief description of the thread")
+
+    model_config = {"extra": "forbid"}
+
+
+class CitationNetwork(BaseModel):
+    """Citation network built from a completed research session's sources.
+
+    Nodes are papers (both discovered sources and their references/citations).
+    Edges are directed citation relationships.
+    """
+
+    nodes: list[CitationNode] = Field(default_factory=list)
+    edges: list[CitationEdge] = Field(default_factory=list)
+    foundational_papers: list[str] = Field(
+        default_factory=list,
+        description="Paper IDs cited by many discovered papers",
+    )
+    research_threads: list[ResearchThread] = Field(
+        default_factory=list,
+        description="Connected components with 3+ nodes",
+    )
+    stats: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Network statistics (total_nodes, total_edges, etc.)",
+    )
+    generated_at: Optional[str] = Field(
+        default=None,
+        description="ISO 8601 timestamp of when this network was built",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+class ResearchExtensions(BaseModel):
+    """Container for extended research capabilities.
+
+    Lives here rather than directly on DeepResearchState. This keeps the
+    core state model stable and serialization cost proportional to features
+    used. Fields are populated lazily by each feature's implementation.
+    """
+
+    research_profile: Optional[ResearchProfile] = Field(
+        default=None,
+        description="Research profile controlling providers, citation style, and capabilities",
+    )
+    provenance: Optional[ProvenanceLog] = Field(
+        default=None,
+        description="Provenance audit trail for research session",
+    )
+    structured_output: Optional[StructuredResearchOutput] = Field(
+        default=None,
+        description="Machine-readable structured research output",
+    )
+
+    research_landscape: Optional[ResearchLandscape] = Field(
+        default=None,
+        description="Structured research landscape metadata",
+    )
+
+    citation_network: Optional[CitationNetwork] = Field(
+        default=None,
+        description="Citation network graph",
+    )
+    methodology_assessments: Optional[list[MethodologyAssessment]] = Field(
+        default=None,
+        description="Methodology quality assessments",
+    )
+
+    model_config = {"extra": "forbid"}
+
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+        """Override to exclude None fields by default."""
+        kwargs.setdefault("exclude_none", True)
+        return super().model_dump(**kwargs)
 
 
 class DeepResearchState(BaseModel):
@@ -968,6 +1527,15 @@ class DeepResearchState(BaseModel):
     system_prompt: Optional[str] = Field(default=None)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+    # Extended capabilities container. Uses default_factory so the field is
+    # always present but lightweight when unused — exclude_none in
+    # ResearchExtensions.model_dump() means empty extensions add zero
+    # overhead to state serialization.
+    extensions: ResearchExtensions = Field(
+        default_factory=ResearchExtensions,
+        description="Extended research capabilities",
+    )
+
     # Citation counter — maintained by add_source()/append_source().
     # Avoids O(n) scan of all sources on every add.
     next_citation_number: int = Field(
@@ -1006,6 +1574,40 @@ class DeepResearchState(BaseModel):
             if max_existing >= self.next_citation_number:
                 self.next_citation_number = max_existing + 1
         return self
+
+    # =========================================================================
+    # Extension convenience accessors
+    # =========================================================================
+
+    @property
+    def research_profile(self) -> ResearchProfile:
+        """Convenience accessor for extensions.research_profile.
+
+        Returns the configured profile, or the default GENERAL profile
+        if none was explicitly set.
+        """
+        return self.extensions.research_profile or PROFILE_GENERAL
+
+    @property
+    def provenance(self) -> Optional[ProvenanceLog]:
+        """Convenience accessor for extensions.provenance."""
+        return self.extensions.provenance
+
+    @property
+    def research_landscape(self) -> Optional[ResearchLandscape]:
+        """Convenience accessor for extensions.research_landscape."""
+        return self.extensions.research_landscape
+
+    @property
+    def citation_network(self) -> Optional[CitationNetwork]:
+        """Convenience accessor for extensions.citation_network."""
+        return self.extensions.citation_network
+
+    @property
+    def methodology_assessments(self) -> list[MethodologyAssessment]:
+        """Convenience accessor for extensions.methodology_assessments."""
+        assessments = self.extensions.methodology_assessments
+        return assessments if assessments is not None else []
 
     # =========================================================================
     # Collection Management Methods
@@ -1351,10 +1953,14 @@ class DeepResearchState(BaseModel):
             report: Optional final report content
         """
         self.phase = DeepResearchPhase.SYNTHESIS
-        self.completed_at = datetime.now(timezone.utc)
-        self.updated_at = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        self.completed_at = now
+        self.updated_at = now
         if report:
             self.report = report
+        # Stamp provenance completion
+        if self.extensions.provenance is not None:
+            self.extensions.provenance.completed_at = now.isoformat()
 
     def mark_failed(self, error: str) -> None:
         """Mark the research session as failed with an error message.
@@ -1365,11 +1971,15 @@ class DeepResearchState(BaseModel):
         Args:
             error: Description of why the research failed
         """
-        self.completed_at = datetime.now(timezone.utc)
-        self.updated_at = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        self.completed_at = now
+        self.updated_at = now
         self.metadata["failed"] = True
         self.metadata["failure_error"] = error
         self.metadata["terminal_status"] = "failed"
+        # Stamp provenance completion
+        if self.extensions.provenance is not None:
+            self.extensions.provenance.completed_at = now.isoformat()
 
     def mark_cancelled(self, *, phase_state: Optional[str] = None) -> None:
         """Mark the research session as cancelled by user request.
@@ -1380,12 +1990,16 @@ class DeepResearchState(BaseModel):
         Args:
             phase_state: Optional description of phase state at cancellation time
         """
-        self.completed_at = datetime.now(timezone.utc)
-        self.updated_at = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        self.completed_at = now
+        self.updated_at = now
         self.metadata["cancelled"] = True
         self.metadata["terminal_status"] = "cancelled"
         if phase_state:
             self.metadata["cancelled_phase_state"] = phase_state
+        # Stamp provenance completion
+        if self.extensions.provenance is not None:
+            self.extensions.provenance.completed_at = now.isoformat()
 
     def mark_interrupted(self, *, reason: str = "SIGTERM") -> None:
         """Mark the research session as interrupted by process signal.
@@ -1396,13 +2010,17 @@ class DeepResearchState(BaseModel):
         Args:
             reason: Reason for interruption (default: "SIGTERM")
         """
-        self.completed_at = datetime.now(timezone.utc)
-        self.updated_at = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        self.completed_at = now
+        self.updated_at = now
         self.metadata["interrupted"] = True
         self.metadata["terminal_status"] = "interrupted"
         self.metadata["interrupt_reason"] = reason
         self.metadata["interrupt_phase"] = self.phase.value
         self.metadata["interrupt_iteration"] = self.iteration
+        # Stamp provenance completion (consistent with mark_failed/mark_cancelled)
+        if self.extensions.provenance is not None:
+            self.extensions.provenance.completed_at = now.isoformat()
 
     # ==========================================================================
     # Content Fidelity Tracking Methods

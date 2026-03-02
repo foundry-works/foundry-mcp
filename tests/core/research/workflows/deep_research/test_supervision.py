@@ -1600,6 +1600,122 @@ class TestFirstRoundDecompositionPrompts:
         assert "Decompose the research query" in prompt
 
 
+# ===========================================================================
+# Academic decomposition prompt tests
+# ===========================================================================
+
+
+class TestAcademicDecompositionPrompts:
+    """Tests for profile-aware decomposition prompts."""
+
+    def test_supervision_prompt_includes_academic_guidelines_for_academic_profile(self):
+        """Supervision prompt includes academic guidelines when profile is academic."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_ACADEMIC
+
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_first_round_delegation_system_prompt,
+        )
+
+        prompt = build_first_round_delegation_system_prompt(profile=PROFILE_ACADEMIC)
+
+        assert "Academic Research Decomposition" in prompt
+        assert "Foundational/seminal works" in prompt
+        assert "Recent empirical studies" in prompt
+        assert "Literature review section mapping" in prompt
+        assert "Evidence types" in prompt
+        assert "peer-reviewed" in prompt.lower()
+        # Still has base decomposition rules
+        assert "2-5 directives" in prompt
+
+    def test_supervision_prompt_unchanged_for_general_profile(self):
+        """Supervision prompt unchanged when profile is general."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
+
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_first_round_delegation_system_prompt,
+        )
+
+        prompt_general = build_first_round_delegation_system_prompt(profile=PROFILE_GENERAL)
+        prompt_none = build_first_round_delegation_system_prompt()
+
+        assert "Academic Research Decomposition" not in prompt_general
+        assert "Academic Research Decomposition" not in prompt_none
+        # Base rules still present
+        assert "2-5 directives" in prompt_general
+        assert "2-5 directives" in prompt_none
+
+    def test_supervision_prompt_unchanged_for_no_profile(self):
+        """Supervision prompt unchanged when no profile is provided."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_first_round_delegation_system_prompt,
+        )
+
+        prompt = build_first_round_delegation_system_prompt()
+        assert "Academic Research Decomposition" not in prompt
+        assert "2-5 directives" in prompt
+
+    def test_cross_disciplinary_directive_for_multi_discipline_profile(self):
+        """Cross-disciplinary coverage note when profile has multiple disciplines."""
+        from foundry_mcp.core.research.models.deep_research import ResearchProfile
+        from foundry_mcp.core.research.models.sources import ResearchMode
+
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_first_round_delegation_system_prompt,
+        )
+
+        profile = ResearchProfile(
+            name="cross-discipline",
+            source_quality_mode=ResearchMode.ACADEMIC,
+            disciplinary_scope=["psychology", "neuroscience", "education"],
+        )
+        prompt = build_first_round_delegation_system_prompt(profile=profile)
+
+        assert "Cross-disciplinary" in prompt
+        assert "psychology" in prompt
+        assert "neuroscience" in prompt
+        assert "education" in prompt
+
+    def test_no_cross_disciplinary_for_single_discipline(self):
+        """No cross-disciplinary note when profile has a single discipline."""
+        from foundry_mcp.core.research.models.deep_research import ResearchProfile
+        from foundry_mcp.core.research.models.sources import ResearchMode
+
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_first_round_delegation_system_prompt,
+        )
+
+        profile = ResearchProfile(
+            name="single-discipline",
+            source_quality_mode=ResearchMode.ACADEMIC,
+            disciplinary_scope=["biology"],
+        )
+        prompt = build_first_round_delegation_system_prompt(profile=profile)
+
+        assert "Academic Research Decomposition" in prompt
+        assert "Cross-disciplinary" not in prompt
+
+    def test_wrapper_method_with_state(self):
+        """Wrapper method on SupervisionPhaseMixin passes profile from state."""
+        from foundry_mcp.core.research.models.deep_research import (
+            PROFILE_ACADEMIC,
+            ResearchExtensions,
+        )
+
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=0, supervision_round=0)
+        state.extensions = ResearchExtensions(research_profile=PROFILE_ACADEMIC)
+
+        prompt = stub._build_first_round_delegation_system_prompt(state)
+        assert "Academic Research Decomposition" in prompt
+
+    def test_wrapper_method_without_state_backward_compat(self):
+        """Wrapper method works without state (backward compat)."""
+        stub = StubSupervision(delegation_model=True)
+        prompt = stub._build_first_round_delegation_system_prompt()
+        assert "Academic Research Decomposition" not in prompt
+        assert "2-5 directives" in prompt
+
+
 class TestFirstRoundDecompositionIntegration:
     """Integration tests for supervisor-owned decomposition flow."""
 
@@ -5072,3 +5188,124 @@ class TestAllDirectivesFail:
         # The loop should have stopped after the first round (0 new sources)
         # Round 0 ran → incremented to 1 → bookkeeping returns True (stop)
         assert state.supervision_round == 1
+
+
+# ===========================================================================
+# Adaptive Provider Selection — Prompt Integration Tests
+# ===========================================================================
+
+
+class TestAdaptiveProviderSelectionPrompts:
+    """Tests for active provider injection into delegation prompts."""
+
+    def test_delegation_user_prompt_includes_active_providers(self):
+        """Delegation user prompt includes 'Available Search Providers' section."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_delegation_user_prompt,
+        )
+
+        state = _make_state(num_completed=2, sources_per_query=2)
+        coverage = StubSupervision(delegation_model=True)._build_per_query_coverage(state)
+
+        prompt = build_delegation_user_prompt(
+            state,
+            coverage,
+            active_providers=["tavily", "semantic_scholar", "openalex"],
+        )
+
+        assert "Available Search Providers" in prompt
+        assert "tavily" in prompt
+        assert "semantic_scholar" in prompt
+        assert "openalex" in prompt
+
+    def test_delegation_user_prompt_omits_providers_when_none(self):
+        """Delegation user prompt omits providers section when active_providers is None."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_delegation_user_prompt,
+        )
+
+        state = _make_state(num_completed=2, sources_per_query=2)
+        coverage = StubSupervision(delegation_model=True)._build_per_query_coverage(state)
+
+        prompt = build_delegation_user_prompt(state, coverage, active_providers=None)
+
+        assert "Available Search Providers" not in prompt
+
+    def test_delegation_user_prompt_omits_providers_when_empty(self):
+        """Delegation user prompt omits providers section when list is empty."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_delegation_user_prompt,
+        )
+
+        state = _make_state(num_completed=2, sources_per_query=2)
+        coverage = StubSupervision(delegation_model=True)._build_per_query_coverage(state)
+
+        prompt = build_delegation_user_prompt(state, coverage, active_providers=[])
+
+        assert "Available Search Providers" not in prompt
+
+    def test_first_round_system_prompt_includes_active_providers(self):
+        """First-round delegation system prompt includes provider awareness."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_first_round_delegation_system_prompt,
+        )
+
+        prompt = build_first_round_delegation_system_prompt(
+            profile=None,
+            active_providers=["tavily", "openalex"],
+        )
+
+        assert "Available Search Providers" in prompt
+        assert "tavily" in prompt
+        assert "openalex" in prompt
+
+    def test_first_round_system_prompt_omits_providers_when_none(self):
+        """First-round delegation system prompt omits providers when None."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_first_round_delegation_system_prompt,
+        )
+
+        prompt = build_first_round_delegation_system_prompt(profile=None, active_providers=None)
+
+        assert "Available Search Providers" not in prompt
+
+    def test_first_round_user_prompt_includes_active_providers(self):
+        """First-round delegation user prompt includes active providers."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_first_round_delegation_user_prompt,
+        )
+
+        state = _make_state(num_completed=0, sources_per_query=0)
+
+        prompt = build_first_round_delegation_user_prompt(
+            state,
+            think_output="Decomposition plan here",
+            active_providers=["tavily", "semantic_scholar"],
+        )
+
+        assert "Available Search Providers" in prompt
+        assert "tavily" in prompt
+        assert "semantic_scholar" in prompt
+
+    def test_stub_delegation_prompt_reads_metadata(self):
+        """Stub's _build_delegation_user_prompt reads active_providers from state.metadata."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=2, sources_per_query=2)
+        state.metadata["active_providers"] = ["tavily", "openalex", "semantic_scholar"]
+        coverage = stub._build_per_query_coverage(state)
+
+        prompt = stub._build_delegation_user_prompt(state, coverage)
+
+        assert "Available Search Providers" in prompt
+        assert "openalex" in prompt
+
+    def test_stub_delegation_prompt_no_metadata(self):
+        """Stub's _build_delegation_user_prompt works when no active_providers in metadata."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=2, sources_per_query=2)
+        # No "active_providers" in metadata
+        coverage = stub._build_per_query_coverage(state)
+
+        prompt = stub._build_delegation_user_prompt(state, coverage)
+
+        assert "Available Search Providers" not in prompt

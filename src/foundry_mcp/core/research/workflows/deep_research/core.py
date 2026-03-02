@@ -181,6 +181,7 @@ class DeepResearchWorkflow(
         max_concurrent: int = 3,
         background: bool = False,
         task_timeout: Optional[float] = None,
+        research_profile: Optional[Any] = None,
         **kwargs: Any,
     ) -> WorkflowResult:
         """Execute deep research workflow.
@@ -225,6 +226,7 @@ class DeepResearchWorkflow(
                     max_concurrent=max_concurrent,
                     background=background,
                     task_timeout=task_timeout,
+                    research_profile=research_profile,
                 )
             elif action == "continue":
                 return self._continue_research(
