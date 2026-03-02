@@ -33,9 +33,7 @@ def _determine_ris_type(source: "ResearchSource") -> str:
     from foundry_mcp.core.research.models.sources import SourceType
 
     if source.source_type == SourceType.ACADEMIC:
-        if venue:
-            return "JOUR"
-        return "JOUR"  # Default for academic even without venue
+        return "JOUR"
 
     return "ELEC"
 

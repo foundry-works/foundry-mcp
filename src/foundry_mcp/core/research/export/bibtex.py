@@ -21,6 +21,8 @@ _BIBTEX_SPECIAL = str.maketrans({
     "_": r"\_",
     "{": r"\{",
     "}": r"\}",
+    "$": r"\$",
+    "~": r"\textasciitilde{}",
 })
 
 

@@ -489,7 +489,7 @@ class PDFExtractor:
             validate_pdf_magic_bytes(pdf_bytes)
 
         # Run CPU-bound extraction in thread pool with timeout
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         try:
             return await asyncio.wait_for(
                 loop.run_in_executor(None, self._extract_sync, source),

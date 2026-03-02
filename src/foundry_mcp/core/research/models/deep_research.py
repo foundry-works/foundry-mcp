@@ -840,6 +840,8 @@ class DeepResearchPhase(str, Enum):
 class StudyComparison(BaseModel):
     """Structured comparison of an empirical study (PLAN-3 item 4)."""
 
+    model_config = {"extra": "forbid"}
+
     study_title: str
     authors: str = ""
     year: Optional[int] = None
@@ -856,6 +858,8 @@ class ResearchLandscape(BaseModel):
     no additional LLM or API calls. Included in structured output for
     downstream consumption by visualization or analysis tools.
     """
+
+    model_config = {"extra": "forbid"}
 
     timeline: list[dict[str, Any]] = Field(
         default_factory=list,
@@ -1157,6 +1161,8 @@ class StructuredResearchOutput(BaseModel):
     Every field is a flat list of dicts for maximum interoperability
     — no nested Pydantic models, so consumers can parse with plain JSON.
     """
+
+    model_config = {"extra": "forbid"}
 
     sources: list[dict[str, Any]] = Field(
         default_factory=list,

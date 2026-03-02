@@ -304,100 +304,100 @@
 ### Item 4.1: Fix Dead Code in `ris.py`
 > **File**: `src/foundry_mcp/core/research/export/ris.py`
 
-- [ ] Remove the redundant inner `if venue:` check at lines ~36-38
-- [ ] Both branches return `"JOUR"` — collapse to single `return "JOUR"`
+- [x] Remove the redundant inner `if venue:` check at lines ~36-38
+- [x] Both branches return `"JOUR"` — collapse to single `return "JOUR"`
 
 #### Item 4.1 Validation
 
-- [ ] Academic sources with venue produce `TY  - JOUR`
-- [ ] Academic sources without venue produce `TY  - JOUR`
-- [ ] Existing RIS tests pass unchanged
+- [x] Academic sources with venue produce `TY  - JOUR`
+- [x] Academic sources without venue produce `TY  - JOUR`
+- [x] Existing RIS tests pass unchanged
 
 ---
 
 ### Item 4.2: Add `$` and `~` to BibTeX Special Character Escaping
 > **File**: `src/foundry_mcp/core/research/export/bibtex.py`
 
-- [ ] Add `ord("$"): r"\$"` to `_BIBTEX_SPECIAL` translation table
-- [ ] Add `ord("~"): r"\textasciitilde{}"` to `_BIBTEX_SPECIAL` translation table
+- [x] Add `ord("$"): r"\$"` to `_BIBTEX_SPECIAL` translation table
+- [x] Add `ord("~"): r"\textasciitilde{}"` to `_BIBTEX_SPECIAL` translation table
 
 #### Item 4.2 Validation
 
-- [ ] Title containing `$` is escaped to `\$` in BibTeX output
-- [ ] Title containing `~` is escaped to `\textasciitilde{}` in BibTeX output
-- [ ] Existing BibTeX tests pass unchanged
+- [x] Title containing `$` is escaped to `\$` in BibTeX output
+- [x] Title containing `~` is escaped to `\textasciitilde{}` in BibTeX output
+- [x] Existing BibTeX tests pass unchanged
 
 ---
 
 ### Item 4.3: Replace `assert` with Type Check in `evaluator.py`
 > **File**: `src/foundry_mcp/core/research/evaluation/evaluator.py`
 
-- [ ] Replace `assert isinstance(call_result, LLMCallResult)` (line ~316) with `if not isinstance(call_result, LLMCallResult): raise TypeError(...)`
+- [x] Replace `assert isinstance(call_result, LLMCallResult)` (line ~316) with `if not isinstance(call_result, LLMCallResult): raise TypeError(...)` — already implemented in prior FIX-1.1 commit
 
 #### Item 4.3 Validation
 
-- [ ] Invalid call_result type raises `TypeError` (not `AssertionError`)
-- [ ] Valid `LLMCallResult` passes through normally
-- [ ] Works with `python -O` (optimized mode)
+- [x] Invalid call_result type raises `TypeError` (not `AssertionError`)
+- [x] Valid `LLMCallResult` passes through normally
+- [x] Works with `python -O` (optimized mode)
 
 ---
 
 ### Item 4.4: Remove Empty `TYPE_CHECKING` Block in `evaluator.py`
 > **File**: `src/foundry_mcp/core/research/evaluation/evaluator.py`
 
-- [ ] Remove `if TYPE_CHECKING: pass` block (lines ~31-32)
+- [x] Remove `if TYPE_CHECKING: pass` block (lines ~31-32) — already removed in prior FIX-1.1 commit
 
 #### Item 4.4 Validation
 
-- [ ] No import errors after removal
-- [ ] Existing evaluator tests pass unchanged
+- [x] No import errors after removal
+- [x] Existing evaluator tests pass unchanged
 
 ---
 
 ### Item 4.5: Fix `asyncio.get_event_loop()` Deprecation
 > **File**: `src/foundry_mcp/core/research/pdf_extractor.py`
 
-- [ ] Replace `asyncio.get_event_loop()` (line ~485) with `asyncio.get_running_loop()`
+- [x] Replace `asyncio.get_event_loop()` (line ~485) with `asyncio.get_running_loop()`
 
 #### Item 4.5 Validation
 
-- [ ] No `DeprecationWarning` on Python 3.12+
-- [ ] Existing tests pass unchanged
+- [x] No `DeprecationWarning` on Python 3.12+
+- [x] Existing tests pass unchanged
 
 ---
 
 ### Item 4.6: Add `extra="forbid"` to Remaining New Models
 > **File**: `src/foundry_mcp/core/research/models/deep_research.py`
 
-- [ ] Add `model_config = {"extra": "forbid"}` to `ResearchLandscape`
-- [ ] Add `model_config = {"extra": "forbid"}` to `StudyComparison`
-- [ ] Add `model_config = {"extra": "forbid"}` to `StructuredResearchOutput`
+- [x] Add `model_config = {"extra": "forbid"}` to `ResearchLandscape`
+- [x] Add `model_config = {"extra": "forbid"}` to `StudyComparison`
+- [x] Add `model_config = {"extra": "forbid"}` to `StructuredResearchOutput`
 
 #### Item 4.6 Validation
 
-- [ ] `ResearchLandscape(typo_field="value")` raises `ValidationError`
-- [ ] `StudyComparison(typo_field="value")` raises `ValidationError`
-- [ ] `StructuredResearchOutput(typo_field="value")` raises `ValidationError`
-- [ ] Existing tests pass unchanged (no tests rely on extra fields being silently accepted)
+- [x] `ResearchLandscape(typo_field="value")` raises `ValidationError`
+- [x] `StudyComparison(typo_field="value")` raises `ValidationError`
+- [x] `StructuredResearchOutput(typo_field="value")` raises `ValidationError`
+- [x] Existing tests pass unchanged (no tests rely on extra fields being silently accepted)
 
 ---
 
 ## Final Validation
 
-- [ ] All 7,597+ tests pass
-- [ ] No new `DeprecationWarning` on Python 3.12+
-- [ ] DNS resolution failure in `pdf_extractor.py` fails closed
-- [ ] All provider URL paths use URL-encoded identifiers
-- [ ] OpenAlex filter values validated against expected patterns
-- [ ] `application/octet-stream` no longer accepted as valid PDF content type
-- [ ] Evaluator metadata contains both parse-time and call-time keys
-- [ ] `content_basis` rejects invalid string values
-- [ ] All new models exported from `models/__init__.py`
-- [ ] 404 detection uses structured status codes, not string matching
-- [ ] 7 tautological tests removed
-- [ ] `DigestPolicy.PROACTIVE` has test coverage
-- [ ] No references to `gemini-2.5-flash` in config docstrings
-- [ ] `deep-research-provenance` discoverable in MCP tool description
+- [x] All 7,597+ tests pass (7,607 passed, 44 skipped)
+- [x] No new `DeprecationWarning` on Python 3.12+
+- [x] DNS resolution failure in `pdf_extractor.py` fails closed
+- [x] All provider URL paths use URL-encoded identifiers
+- [x] OpenAlex filter values validated against expected patterns
+- [x] `application/octet-stream` no longer accepted as valid PDF content type
+- [x] Evaluator metadata contains both parse-time and call-time keys
+- [x] `content_basis` rejects invalid string values
+- [x] All new models exported from `models/__init__.py`
+- [x] 404 detection uses structured status codes, not string matching
+- [x] 7 tautological tests removed
+- [x] `DigestPolicy.PROACTIVE` has test coverage
+- [x] No references to `gemini-2.5-flash` in config docstrings
+- [x] `deep-research-provenance` discoverable in MCP tool description
 
 ---
 
