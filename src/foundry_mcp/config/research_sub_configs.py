@@ -226,7 +226,7 @@ class DeepResearchSettings:
     providers: List[str] = field(default_factory=lambda: ["tavily", "google", "semantic_scholar"])
 
     # Stale task detection
-    stale_task_seconds: float = 300.0
+    stale_task_seconds: float = 900.0
 
     # Document digest configuration
     digest_min_chars: int = 10000

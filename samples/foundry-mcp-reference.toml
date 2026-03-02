@@ -245,13 +245,13 @@
 # deep_research_max_sub_queries = 5        # Max sub-queries per decomposition (1–50)
 # deep_research_max_sources = 5            # Max sources per sub-query (1–100)
 # deep_research_max_concurrent = 3         # Max parallel operations (1–20)
-# deep_research_timeout = 2400.0           # Whole workflow timeout, seconds (max 3600)
+# deep_research_timeout = 3600.0           # Whole workflow timeout, seconds (60 minutes)
 # deep_research_follow_links = true        # Follow and extract URLs
 # deep_research_audit_artifacts = true     # Write audit artifacts for debugging
 # deep_research_mode = "general"           # "general" | "academic" | "technical"
 # deep_research_providers = ["tavily", "openalex", "crossref", "semantic_scholar"]  # Search providers
 
-# deep_research_stale_task_seconds = 300.0 # Seconds before a task is considered stale
+# deep_research_stale_task_seconds = 900.0 # Seconds before a task is considered stale
 # status_persistence_throttle_seconds = 5  # Min seconds between status file writes
 
 

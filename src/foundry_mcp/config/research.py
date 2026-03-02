@@ -202,7 +202,7 @@ class ResearchConfig:
     deep_research_max_sub_queries: int = 5
     deep_research_max_sources: int = 5
     deep_research_follow_links: bool = True
-    deep_research_timeout: float = 2400.0  # Wall-clock timeout for the entire deep research workflow (must exceed supervision_wall_clock_timeout + per-phase timeouts; see deep_research_planning_timeout / deep_research_synthesis_timeout for per-phase overrides)
+    deep_research_timeout: float = 3600.0  # Wall-clock timeout for the entire deep research workflow (must exceed supervision_wall_clock_timeout + per-phase timeouts; see deep_research_planning_timeout / deep_research_synthesis_timeout for per-phase overrides)
     deep_research_max_concurrent: int = 3
     # Per-phase timeout overrides (seconds) - uses deep_research_timeout if not set
     deep_research_planning_timeout: float = 360.0
@@ -293,7 +293,7 @@ class ResearchConfig:
     semantic_scholar_use_extended_fields: bool = True  # Include TLDR and extended metadata
 
     # Stale task detection threshold for deep research background tasks
-    deep_research_stale_task_seconds: float = 300.0  # Seconds of inactivity before a task is considered stale
+    deep_research_stale_task_seconds: float = 900.0  # Seconds of inactivity before a task is considered stale
 
     # Status persistence throttling (reduces disk I/O during deep research)
     status_persistence_throttle_seconds: int = 5  # Minimum seconds between status saves (0 = always persist)
@@ -464,7 +464,7 @@ class ResearchConfig:
         # every *_timeout default that was not explicitly set in *data*.
         _TIMEOUT_DEFAULTS: Dict[str, float] = {
             "default_timeout": 360.0,
-            "deep_research_timeout": 2400.0,
+            "deep_research_timeout": 3600.0,
             "deep_research_planning_timeout": 360.0,
             "deep_research_synthesis_timeout": 600.0,
             "deep_research_reflection_timeout": 60.0,
@@ -683,7 +683,7 @@ class ResearchConfig:
             deep_research_max_sub_queries=int(data.get("deep_research_max_sub_queries", 5)),
             deep_research_max_sources=int(data.get("deep_research_max_sources", 5)),
             deep_research_follow_links=_parse_bool(data.get("deep_research_follow_links", True)),
-            deep_research_timeout=float(data.get("deep_research_timeout", 2400.0)),
+            deep_research_timeout=float(data.get("deep_research_timeout", 3600.0)),
             deep_research_max_concurrent=int(data.get("deep_research_max_concurrent", 3)),
             # Per-phase timeout overrides (match class defaults)
             deep_research_planning_timeout=float(data.get("deep_research_planning_timeout", 360.0)),
@@ -756,7 +756,7 @@ class ResearchConfig:
             content_archive_ttl_hours=int(data.get("content_archive_ttl_hours", 168)),
             research_archive_dir=data.get("research_archive_dir"),
             # Stale task detection
-            deep_research_stale_task_seconds=float(data.get("deep_research_stale_task_seconds", 300.0)),
+            deep_research_stale_task_seconds=float(data.get("deep_research_stale_task_seconds", 900.0)),
             # Status persistence throttling
             status_persistence_throttle_seconds=int(data.get("status_persistence_throttle_seconds", 5)),
             # Audit verbosity
