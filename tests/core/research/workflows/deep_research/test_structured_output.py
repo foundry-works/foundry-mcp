@@ -469,7 +469,12 @@ class TestReportResponseInclusion:
         ):
             mock_config.return_value.research = MagicMock()
 
-            result = _handle_deep_research_report(research_id="test-123")
+            # Structured output is opt-in; verify it's excluded by default
+            result_default = _handle_deep_research_report(research_id="test-123")
+            assert "structured" not in result_default["data"]
+
+            # When explicitly requested, structured output is included
+            result = _handle_deep_research_report(research_id="test-123", include_structured=True)
 
         assert result["data"]["structured"]["query_type"] == "literature_review"
         assert result["data"]["structured"]["profile"] == "academic"

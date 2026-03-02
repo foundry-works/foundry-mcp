@@ -254,6 +254,8 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
         max_citations_per_paper: int = 20,
         export_format: Optional[str] = None,
         academic_only: Optional[bool] = None,
+        output_path: Optional[str] = None,
+        include_structured: bool = False,
     ) -> dict:
         """Execute research workflows via the action router.
 
@@ -323,6 +325,8 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
             max_citations_per_paper: Max forward citations per paper (deep-research-network)
             export_format: Export format for deep-research-export: "bibtex" or "ris"
             academic_only: When true, only export academic sources (deep-research-export, default true)
+            output_path: Custom file path to save the report (deep-research-report)
+            include_structured: Include structured source data in report response (deep-research-report, default false)
 
         Returns:
             Response envelope with action results

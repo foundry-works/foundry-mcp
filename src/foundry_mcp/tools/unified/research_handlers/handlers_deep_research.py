@@ -226,6 +226,7 @@ def _handle_deep_research_report(
     *,
     research_id: Optional[str] = None,
     output_path: Optional[str] = None,
+    include_structured: bool = False,
     **kwargs: Any,
 ) -> dict:
     """Handle deep-research-report action."""
@@ -299,7 +300,7 @@ def _handle_deep_research_report(
                     "completed_at": state.provenance.completed_at,
                     "profile": state.provenance.profile,
                 }
-            if state.extensions.structured_output is not None:
+            if include_structured and state.extensions.structured_output is not None:
                 response_data["structured"] = state.extensions.structured_output.model_dump(
                     mode="json",
                 )
