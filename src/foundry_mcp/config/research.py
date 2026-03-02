@@ -853,6 +853,7 @@ class ResearchConfig:
         """Validate configuration fields after initialization."""
         self._validate_deep_research_mode()
         self._validate_deep_research_bounds()
+        self._validate_citation_influence_thresholds()
         self._validate_supervision_config()
         self._validate_tavily_config()
         self._validate_perplexity_config()
@@ -869,6 +870,17 @@ class ResearchConfig:
                 f"deep_research_mode must be one of "
                 f"{sorted(self._VALID_DEEP_RESEARCH_MODES)}, "
                 f"got {self.deep_research_mode!r}"
+            )
+
+    def _validate_citation_influence_thresholds(self) -> None:
+        """Validate that citation influence thresholds satisfy low < medium < high."""
+        low = self.deep_research_influence_low_citation_threshold
+        med = self.deep_research_influence_medium_citation_threshold
+        high = self.deep_research_influence_high_citation_threshold
+        if not (low < med < high):
+            raise ValueError(
+                "Citation influence thresholds must satisfy: low < medium < high "
+                f"(got {low} < {med} < {high})"
             )
 
     # -----------------------------------------------------------------

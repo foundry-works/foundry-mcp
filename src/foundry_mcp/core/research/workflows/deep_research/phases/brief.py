@@ -38,6 +38,15 @@ from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import 
     finalize_phase,
 )
 
+# Known provider names for adaptive provider selection in the brief phase.
+# SYNC: This set must be kept in sync with the concrete provider classes
+# exported from foundry_mcp.core.research.providers (see providers/__init__.py).
+# When adding a new search provider, add its name here so that discipline-
+# based provider hints can activate it.
+_KNOWN_PROVIDERS: frozenset[str] = frozenset(
+    {"tavily", "semantic_scholar", "google", "openalex", "crossref", "perplexity"}
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -491,9 +500,7 @@ class BriefPhaseMixin:
             The resolved active provider list stored in state.metadata.
         """
         if known_providers is None:
-            known_providers = frozenset(
-                {"tavily", "semantic_scholar", "google", "openalex", "crossref", "perplexity"}
-            )
+            known_providers = _KNOWN_PROVIDERS
 
         profile = state.research_profile
 

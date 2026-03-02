@@ -55,32 +55,32 @@
 ### Item 1.1: Validate Citation Influence Threshold Ordering
 > **File**: `src/foundry_mcp/config/research.py`
 
-- [ ] Add validation in `__post_init__()` that `low < medium < high` for citation thresholds
-- [ ] Raise `ValueError` with descriptive message on mismatch
-- [ ] Add unit test: valid thresholds (5, 20, 100) pass without error
-- [ ] Add unit test: inverted thresholds (100, 20, 5) raise `ValueError`
-- [ ] Add unit test: equal thresholds (20, 20, 20) raise `ValueError`
+- [x] Add validation in `__post_init__()` that `low < medium < high` for citation thresholds
+- [x] Raise `ValueError` with descriptive message on mismatch
+- [x] Add unit test: valid thresholds (5, 20, 100) pass without error
+- [x] Add unit test: inverted thresholds (100, 20, 5) raise `ValueError`
+- [x] Add unit test: equal thresholds (20, 20, 20) raise `ValueError`
 
 #### Item 1.1 Validation
 
-- [ ] Default config passes validation
-- [ ] Custom valid thresholds pass
-- [ ] Inverted thresholds raise with clear error message
-- [ ] Existing config tests pass unchanged
+- [x] Default config passes validation
+- [x] Custom valid thresholds pass
+- [x] Inverted thresholds raise with clear error message
+- [x] Existing config tests pass unchanged (34 tests in test_config_phase4.py)
 
 ---
 
 ### Item 1.2: Address Hardcoded Provider List in Brief
 > **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/brief.py`
 
-- [ ] Add comment documenting that `_KNOWN_PROVIDERS` must stay in sync with provider registry
-- [ ] Move constant to top of file for visibility (if not already)
-- [ ] OR: query provider registry dynamically (if low complexity)
+- [x] Add comment documenting that `_KNOWN_PROVIDERS` must stay in sync with provider registry
+- [x] Move constant to top of file for visibility (extracted from inline default to module-level constant)
+- [ ] ~~OR: query provider registry dynamically~~ (opted for option (b) — documented constant)
 
 #### Item 1.2 Validation
 
-- [ ] Existing brief tests pass unchanged
-- [ ] Comment clearly explains sync requirement
+- [x] Existing brief tests pass unchanged (84 brief-related tests)
+- [x] Comment clearly explains sync requirement
 
 ---
 
