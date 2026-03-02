@@ -838,7 +838,7 @@ class DeepResearchPhase(str, Enum):
 
 
 class StudyComparison(BaseModel):
-    """Structured comparison of an empirical study (PLAN-3 item 4)."""
+    """Structured comparison of an empirical study."""
 
     model_config = {"extra": "forbid"}
 
@@ -852,7 +852,7 @@ class StudyComparison(BaseModel):
 
 
 class ResearchLandscape(BaseModel):
-    """Structured metadata about the research landscape (PLAN-3 item 2).
+    """Structured metadata about the research landscape.
 
     Built from source metadata after synthesis — pure data transformation,
     no additional LLM or API calls. Included in structured output for
@@ -891,12 +891,12 @@ class ResearchLandscape(BaseModel):
     )
     study_comparisons: list[StudyComparison] = Field(
         default_factory=list,
-        description="Structured comparisons of empirical studies (PLAN-3 item 4)",
+        description="Structured comparisons of empirical studies",
     )
 
 
 # =========================================================================
-# PLAN-1: Research Profiles
+# Research Profiles
 # =========================================================================
 
 
@@ -1050,7 +1050,7 @@ _RESEARCH_MODE_TO_PROFILE: dict[str, str] = {
 
 
 # =========================================================================
-# Provenance audit trail (PLAN-1 Item 2)
+# Provenance audit trail
 # =========================================================================
 
 # Cap provenance entries to prevent unbounded growth in long sessions.
@@ -1208,7 +1208,7 @@ class StructuredResearchOutput(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# PLAN-4 Item 2: Citation Network Models
+# Citation Network Models
 # ---------------------------------------------------------------------------
 
 
@@ -1287,44 +1287,36 @@ class CitationNetwork(BaseModel):
 class ResearchExtensions(BaseModel):
     """Container for extended research capabilities.
 
-    All fields from PLAN-1 through PLAN-4 live here rather than
-    directly on DeepResearchState. This keeps the core state model
-    stable and serialization cost proportional to features used.
-
-    Fields are populated lazily by each plan's implementation:
-    - PLAN-1: research_profile, provenance, structured_output
-    - PLAN-3: research_landscape
-    - PLAN-4: citation_network, methodology_assessments
+    Lives here rather than directly on DeepResearchState. This keeps the
+    core state model stable and serialization cost proportional to features
+    used. Fields are populated lazily by each feature's implementation.
     """
 
-    # PLAN-1: Foundations
     research_profile: Optional[ResearchProfile] = Field(
         default=None,
         description="Research profile controlling providers, citation style, and capabilities",
     )
     provenance: Optional[ProvenanceLog] = Field(
         default=None,
-        description="Provenance audit trail for research session (PLAN-1 Item 2)",
+        description="Provenance audit trail for research session",
     )
     structured_output: Optional[StructuredResearchOutput] = Field(
         default=None,
-        description="Machine-readable structured research output (PLAN-1 Item 6)",
+        description="Machine-readable structured research output",
     )
 
-    # PLAN-3: Intelligence
     research_landscape: Optional[ResearchLandscape] = Field(
         default=None,
-        description="Structured research landscape metadata (PLAN-3)",
+        description="Structured research landscape metadata",
     )
 
-    # PLAN-4: Deep Analysis
     citation_network: Optional[CitationNetwork] = Field(
         default=None,
-        description="Citation network graph from PLAN-4 Item 2",
+        description="Citation network graph",
     )
     methodology_assessments: Optional[list[MethodologyAssessment]] = Field(
         default=None,
-        description="Methodology quality assessments from PLAN-4 Item 3",
+        description="Methodology quality assessments",
     )
 
     model_config = {"extra": "forbid"}
@@ -1535,13 +1527,13 @@ class DeepResearchState(BaseModel):
     system_prompt: Optional[str] = Field(default=None)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
-    # Extended capabilities container (PLAN-1 through PLAN-4).
-    # Uses default_factory so the field is always present but lightweight
-    # when unused — exclude_none in ResearchExtensions.model_dump() means
-    # empty extensions add zero overhead to state serialization.
+    # Extended capabilities container. Uses default_factory so the field is
+    # always present but lightweight when unused — exclude_none in
+    # ResearchExtensions.model_dump() means empty extensions add zero
+    # overhead to state serialization.
     extensions: ResearchExtensions = Field(
         default_factory=ResearchExtensions,
-        description="Extended capabilities from PLAN-1 through PLAN-4",
+        description="Extended research capabilities",
     )
 
     # Citation counter — maintained by add_source()/append_source().

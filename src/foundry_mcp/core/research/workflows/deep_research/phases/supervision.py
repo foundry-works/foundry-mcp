@@ -236,7 +236,7 @@ class SupervisionPhaseMixin:
             # Heuristic early-exit (round > 0)
             should_exit, heuristic_data = self._should_exit_heuristic(state, min_sources)
 
-            # PLAN-1 Item 2: Log coverage_assessment provenance event
+            # Log coverage_assessment provenance event
             if heuristic_data and state.provenance is not None:
                 state.provenance.append(
                     phase="supervision",
@@ -294,7 +294,7 @@ class SupervisionPhaseMixin:
                 )
                 break
 
-            # PLAN-1 Item 2: Log decomposition provenance event
+            # Log decomposition provenance event
             if directives and state.provenance is not None:
                 state.provenance.append(
                     phase="supervision",
@@ -325,7 +325,7 @@ class SupervisionPhaseMixin:
             total_new_sources += round_new_sources
             total_directives_executed += len(directive_results)
 
-            # PLAN-1 Item 2: Log source_discovered provenance events (per-directive aggregate)
+            # Log source_discovered provenance events (per-directive aggregate)
             if state.provenance is not None and directive_results:
                 for dr_result in directive_results:
                     if dr_result.sources_found > 0:
@@ -821,7 +821,7 @@ class SupervisionPhaseMixin:
                 model=state.supervision_model,
             )
 
-        # PLAN-1 Item 2: Log iteration_complete provenance event
+        # Log iteration_complete provenance event
         if state.provenance is not None:
             state.provenance.append(
                 phase="supervision",
@@ -980,7 +980,7 @@ class SupervisionPhaseMixin:
                 timeout,
             )
 
-        # PLAN-2 Item 5: Pass active providers from adaptive selection
+        # Pass active providers from adaptive selection
         active_providers: list[str] | None = state.metadata.get("active_providers")
 
         system_prompt = build_delegation_system_prompt()

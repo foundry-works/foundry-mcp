@@ -1,4 +1,4 @@
-"""Tests for PLAN-2 Item 3: Citation Graph & Related Papers Tools.
+"""Tests for citation graph and related papers tools.
 
 Tests cover:
 1. Semantic Scholar new methods (get_paper, get_citations, get_recommendations)
@@ -623,7 +623,7 @@ class TestNoveltyTrackingAcrossTools:
 
 
 # ====================================================================
-# PLAN-2 Item 4: Strategic Research Primitives
+# Strategic Research Primitives
 # ====================================================================
 
 

@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 
 
 # ------------------------------------------------------------------
-# PDF URL detection helper (PLAN-4 Item 1c)
+# PDF URL detection helper
 # ------------------------------------------------------------------
 
 # URL patterns that strongly indicate a PDF resource.
@@ -80,7 +80,7 @@ def _is_pdf_url(url: str) -> bool:
 
 
 # ------------------------------------------------------------------
-# Paper ID validation (PLANFIX FIX-3 Item 3.1)
+# Paper ID validation
 # ------------------------------------------------------------------
 
 # Covers DOIs (10.xxxx/...), Semantic Scholar hex IDs, ArXiv IDs,
@@ -2116,7 +2116,7 @@ class TopicResearchMixin:
         return "\n\n".join(blocks)
 
     # ------------------------------------------------------------------
-    # PDF extraction handler (PLAN-4 Item 1d)
+    # PDF extraction handler
     # ------------------------------------------------------------------
 
     async def _handle_extract_pdf_tool(
@@ -2857,7 +2857,7 @@ class TopicResearchMixin:
         return added
 
     # ------------------------------------------------------------------
-    # PDF URL extraction helper (PLAN-4 Item 1c)
+    # PDF URL extraction helper
     # ------------------------------------------------------------------
 
     async def _extract_pdf_urls(

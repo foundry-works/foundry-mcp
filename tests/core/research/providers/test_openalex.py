@@ -799,7 +799,7 @@ class TestOpenAlexResponseParsing:
 
 
 class TestOpenAlexFilterValidation:
-    """FIX-0 Item 0.3: work_id and topic_id must be validated before filter interpolation."""
+    """work_id and topic_id must be validated before filter interpolation."""
 
     @pytest.mark.asyncio
     async def test_valid_work_id_accepted(self):
@@ -855,7 +855,7 @@ class TestOpenAlexRateLimitConfig:
 
 
 # ---------------------------------------------------------------------------
-# FIX-2 Item 2.3: get_related() and OOM cap tests
+# get_related() and OOM cap tests
 # ---------------------------------------------------------------------------
 
 
@@ -933,7 +933,7 @@ class TestAbstractReconstructionOOMCap:
 
 
 # ---------------------------------------------------------------------------
-# FIX-2 Item 2.5: 403 error test
+# 403 error test
 # ---------------------------------------------------------------------------
 
 

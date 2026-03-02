@@ -1,4 +1,4 @@
-"""PLAN-1 Item 6 tests: Structured Research Output.
+"""Tests for structured research output.
 
 Validates the StructuredResearchOutput model, the _build_structured_output()
 synthesis method, report response inclusion, and serialization roundtrip.

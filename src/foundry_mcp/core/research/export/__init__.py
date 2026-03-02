@@ -1,4 +1,4 @@
-"""Reference export utilities for deep research (PLAN-3 item 5).
+"""Reference export utilities for deep research.
 
 Generates BibTeX and RIS formatted bibliographies from ResearchSource
 metadata collected during deep research sessions.

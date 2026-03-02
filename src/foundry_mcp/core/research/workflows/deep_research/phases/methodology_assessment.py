@@ -1,4 +1,4 @@
-"""Methodology quality assessment for deep research (PLAN-4 Item 3).
+"""Methodology quality assessment for deep research.
 
 Extracts study design, sample size, effect size, limitations, and biases
 from research source content via LLM extraction.

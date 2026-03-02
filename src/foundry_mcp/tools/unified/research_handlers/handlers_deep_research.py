@@ -97,7 +97,7 @@ def _handle_deep_research(
     config = _get_config()
     workflow = DeepResearchWorkflow(config.research, _get_memory())
 
-    # PLAN-1: Resolve research profile from parameters + config
+    # Resolve research profile from parameters + config
     resolved_profile = None
     if deep_research_action == "start":
         try:
@@ -290,7 +290,7 @@ def _handle_deep_research_report(
         if resolved_path:
             response_data["output_path"] = resolved_path
 
-        # PLAN-1 Items 2 & 6: Include provenance summary and structured output
+        # Include provenance summary and structured output
         if state is not None:
             if state.provenance is not None:
                 response_data["provenance_summary"] = {
@@ -422,7 +422,7 @@ def _handle_deep_research_delete(
 
 
 # ---------------------------------------------------------------------------
-# PLAN-1 Item 2: Provenance audit trail
+# Provenance audit trail
 # ---------------------------------------------------------------------------
 
 _DR_PROVENANCE_SCHEMA = {
@@ -438,7 +438,7 @@ def _handle_deep_research_provenance(
     """Retrieve the provenance audit trail for a deep research session.
 
     Returns the full provenance log with all events, or a summary if the
-    session has no provenance (pre-PLAN-1 sessions).
+    session has no provenance (legacy sessions).
     """
     payload = {"research_id": research_id}
     err = validate_payload(
@@ -483,7 +483,7 @@ def _handle_deep_research_provenance(
 
 
 # ---------------------------------------------------------------------------
-# PLAN-3: BibTeX / RIS export
+# BibTeX / RIS export
 # ---------------------------------------------------------------------------
 
 _DR_EXPORT_SCHEMA = {
@@ -591,7 +591,7 @@ def _handle_deep_research_export(
 
 
 # ---------------------------------------------------------------------------
-# PLAN-4 Item 2: Citation Network
+# Citation Network
 # ---------------------------------------------------------------------------
 
 _DR_NETWORK_SCHEMA = {
@@ -744,7 +744,7 @@ def _handle_deep_research_network(
 
 
 # ---------------------------------------------------------------------------
-# PLAN-4 Item 3: Methodology Assessment (user-triggered)
+# Methodology Assessment (user-triggered)
 # ---------------------------------------------------------------------------
 
 _DR_ASSESS_SCHEMA = {

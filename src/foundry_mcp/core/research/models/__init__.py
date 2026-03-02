@@ -129,7 +129,7 @@ __all__ = [
     # Deep research state
     "ResearchExtensions",
     "DeepResearchState",
-    # PLAN-1: Research profiles
+    # Research profiles
     "ResearchProfile",
     "BUILTIN_PROFILES",
     # Structured output

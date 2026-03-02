@@ -1,4 +1,4 @@
-"""PLAN-1 Item 3 tests: literature_review query type.
+"""Tests for literature_review query type.
 
 Validates classification patterns, profile overrides, academic bias,
 structure guidance injection, and no-regression for existing types.

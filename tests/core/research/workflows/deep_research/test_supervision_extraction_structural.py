@@ -1,7 +1,7 @@
-"""PLAN-0 structural tests.
+"""Structural tests for supervision extraction and ResearchExtensions.
 
-Validates the Phase 1 (supervision extraction) and Phase 2 (ResearchExtensions)
-changes from PLAN-0. These are purely structural tests — no behavioral changes.
+Validates the supervision extraction and ResearchExtensions changes.
+These are purely structural tests — no behavioral changes.
 """
 
 from __future__ import annotations

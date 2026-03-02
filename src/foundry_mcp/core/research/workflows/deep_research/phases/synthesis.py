@@ -892,7 +892,7 @@ class SynthesisPhaseMixin:
         # Store report in state
         state.report = report
 
-        # PLAN-3: Build research landscape metadata (pure data transformation)
+        # Build research landscape metadata (pure data transformation)
         try:
             landscape = self._build_research_landscape(state)
             state.extensions.research_landscape = landscape
@@ -905,7 +905,7 @@ class SynthesisPhaseMixin:
         except Exception:
             logger.warning("Failed to build research landscape", exc_info=True)
 
-        # PLAN-1 Item 6: Build structured output (pure data transformation)
+        # Build structured output (pure data transformation)
         try:
             structured = self._build_structured_output(state, query_type)
             state.extensions.structured_output = structured
@@ -927,7 +927,7 @@ class SynthesisPhaseMixin:
         if output_path:
             state.report_output_path = output_path
 
-        # PLAN-1 Item 2: Log synthesis_completed provenance event
+        # Log synthesis_completed provenance event
         # Append provenance BEFORE state save so it's not lost on a crash
         # between save and finalize_phase.
         if state.provenance is not None:
@@ -997,7 +997,7 @@ class SynthesisPhaseMixin:
         )
 
     # ------------------------------------------------------------------
-    # PLAN-3: Research landscape builder
+    # Research landscape builder
     # ------------------------------------------------------------------
 
     def _build_research_landscape(self, state: DeepResearchState) -> ResearchLandscape:
@@ -1093,7 +1093,7 @@ class SynthesisPhaseMixin:
         )
 
     # ------------------------------------------------------------------
-    # PLAN-1 Item 6: Structured output builder
+    # Structured output builder
     # ------------------------------------------------------------------
 
     def _build_structured_output(
@@ -1245,7 +1245,7 @@ The research and findings may be in English, but you must translate information 
 
 IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
 
-        # PLAN-3: Add academic-specific synthesis instructions
+        # Add academic-specific synthesis instructions
         if state.research_mode == ResearchMode.ACADEMIC:
             base_prompt += """
 
@@ -1269,7 +1269,7 @@ For the "Research Gaps & Future Directions" section:
 - For each gap, suggest specific research questions or methodological approaches
 - Prioritize gaps by their potential impact on the field"""
 
-        # PLAN-1 Item 3: Literature review synthesis instructions
+        # Literature review synthesis instructions
         if query_type == "literature_review":
             base_prompt += """
 
@@ -1496,7 +1496,7 @@ This is a **literature review** synthesis. Follow these additional guidelines:
                         prompt_parts.append(f"  Preferred source: [{cn}]")
             prompt_parts.append("")
 
-        # PLAN-3: Enhanced gap injection for academic queries
+        # Enhanced gap injection for academic queries
         is_academic = state.research_mode == ResearchMode.ACADEMIC
         unresolved_gaps = [g for g in state.gaps if not g.resolved]
         resolved_gaps = [g for g in state.gaps if g.resolved]
@@ -1615,7 +1615,7 @@ This is a **literature review** synthesis. Follow these additional guidelines:
 
         prompt_parts.append("")
 
-        # PLAN-4 Item 3: Inject methodology context when available
+        # Inject methodology context when available
         if state.methodology_assessments:
             methodology_section = format_methodology_context(
                 assessments=state.methodology_assessments,

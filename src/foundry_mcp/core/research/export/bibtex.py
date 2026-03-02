@@ -1,4 +1,4 @@
-"""BibTeX export for deep research sources (PLAN-3 item 5a).
+"""BibTeX export for deep research sources.
 
 Converts ResearchSource objects to BibTeX format entries compatible with
 LaTeX, BibLaTeX, and reference managers like Zotero, Mendeley, and EndNote.

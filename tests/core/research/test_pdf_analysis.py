@@ -1,4 +1,4 @@
-"""Tests for PLAN-4 Item 1: Full-Text PDF Analysis.
+"""Tests for full-text PDF analysis.
 
 Tests cover:
 1. Section detection from synthetic academic text

@@ -417,12 +417,12 @@ class TestResearchBriefOutputModel:
 
 
 # ===========================================================================
-# PLAN-1 Item 5: Academic Brief Enrichment tests
+# Academic Brief Enrichment tests
 # ===========================================================================
 
 
 class TestAcademicBriefEnrichment:
-    """Tests for profile-aware brief system prompt (PLAN-1 Item 5a)."""
+    """Tests for profile-aware brief system prompt."""
 
     def test_brief_prompt_includes_academic_dimensions_for_academic_profile(self):
         """Brief prompt includes academic dimensions when profile is academic."""
@@ -515,7 +515,7 @@ class TestAcademicBriefEnrichment:
 
 
 # ===========================================================================
-# PLAN-2 Item 5: Adaptive Provider Selection tests
+# Adaptive Provider Selection tests
 # ===========================================================================
 
 

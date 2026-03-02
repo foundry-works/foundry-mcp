@@ -287,7 +287,7 @@ def compute_coverage_delta(
 
 
 # ======================================================================
-# PLAN-3: Influence-aware source scoring
+# Influence-aware source scoring
 # ======================================================================
 
 
@@ -297,7 +297,7 @@ def _is_academic_mode(state: DeepResearchState) -> bool:
     Returns True when:
     - state.research_mode == ACADEMIC, OR
     - state.extensions.research_profile has source_quality_mode == "academic"
-      (PLAN-1 forward-compatible)
+      (forward-compatible)
     """
     if state.research_mode == ResearchMode.ACADEMIC:
         return True
@@ -451,7 +451,7 @@ def assess_coverage_heuristic(
     # --- Dimension 3: Query completion rate ---
     query_completion_rate = len(completed) / total_queries if total_queries > 0 else 0.0
 
-    # --- Dimension 4 (PLAN-3): Source influence ---
+    # --- Dimension 4: Source influence ---
     source_influence = compute_source_influence(state, config)
 
     # --- Weighted confidence ---

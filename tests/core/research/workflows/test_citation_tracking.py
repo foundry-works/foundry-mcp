@@ -485,7 +485,7 @@ class TestCitationStabilityAcrossRefinement:
 
 
 # =============================================================================
-# APA Citation Formatting (PLAN-1 Item 4)
+# APA Citation Formatting
 # =============================================================================
 
 

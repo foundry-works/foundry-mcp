@@ -504,7 +504,7 @@ class ResearchGap(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Methodology Quality Assessment (PLAN-4 Item 3)
+# Methodology Quality Assessment
 # ---------------------------------------------------------------------------
 
 

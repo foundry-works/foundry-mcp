@@ -1601,12 +1601,12 @@ class TestFirstRoundDecompositionPrompts:
 
 
 # ===========================================================================
-# PLAN-1 Item 5b: Academic decomposition prompt tests
+# Academic decomposition prompt tests
 # ===========================================================================
 
 
 class TestAcademicDecompositionPrompts:
-    """Tests for profile-aware decomposition prompts (PLAN-1 Item 5b)."""
+    """Tests for profile-aware decomposition prompts."""
 
     def test_supervision_prompt_includes_academic_guidelines_for_academic_profile(self):
         """Supervision prompt includes academic guidelines when profile is academic."""
@@ -5191,7 +5191,7 @@ class TestAllDirectivesFail:
 
 
 # ===========================================================================
-# PLAN-2 Item 5: Adaptive Provider Selection — Prompt Integration Tests
+# Adaptive Provider Selection — Prompt Integration Tests
 # ===========================================================================
 
 

@@ -319,7 +319,7 @@ class TestSSRFProtection:
         validate_url_for_ssrf("https://example.com/doc.pdf?token=abc&version=1")
 
     def test_dns_resolution_failure_raises_ssrf_error(self, monkeypatch):
-        """FIX-0 Item 0.1: DNS resolution failure must fail closed (raise SSRFError)."""
+        """DNS resolution failure must fail closed (raise SSRFError)."""
         import socket as _socket
 
         def fake_getaddrinfo(host, port, *args, **kwargs):
@@ -331,7 +331,7 @@ class TestSSRFProtection:
             validate_url_for_ssrf("https://unresolvable-host.test/doc.pdf")
 
     def test_valid_hostname_still_resolves(self, monkeypatch):
-        """FIX-0 Item 0.1: Valid hostnames with public IPs should still pass."""
+        """Valid hostnames with public IPs should still pass."""
         import socket as _socket
 
         def fake_getaddrinfo(host, port, *args, **kwargs):
@@ -609,7 +609,7 @@ class TestContentTypeValidation:
         validate_content_type("application/x-pdf")
 
     def test_octet_stream_rejected(self):
-        """Test application/octet-stream is rejected (FIX-0 Item 0.4: tighten content-type gate)."""
+        """Test application/octet-stream is rejected (tighten content-type gate)."""
         with pytest.raises(InvalidPDFError):
             validate_content_type("application/octet-stream")
 

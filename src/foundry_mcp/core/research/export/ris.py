@@ -1,4 +1,4 @@
-"""RIS export for deep research sources (PLAN-3 item 5b).
+"""RIS export for deep research sources.
 
 Converts ResearchSource objects to RIS (Research Information Systems) format
 compatible with Zotero, Mendeley, EndNote, and other reference managers.

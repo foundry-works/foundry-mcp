@@ -1,4 +1,4 @@
-"""Tests for PLAN-4 Item 2: Citation Network / Connected Papers Graph.
+"""Tests for citation network / connected papers graph.
 
 Tests cover:
 1. CitationNode, CitationEdge, CitationNetwork model serialization

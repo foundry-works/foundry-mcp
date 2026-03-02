@@ -1,4 +1,4 @@
-"""Citation network builder for deep research sessions (PLAN-4 Item 2).
+"""Citation network builder for deep research sessions.
 
 Builds a citation graph from a completed research session's academic sources.
 User-triggered via the ``deep-research-network`` action — not part of the

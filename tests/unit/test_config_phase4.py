@@ -262,7 +262,7 @@ class TestTokenLimitsSyncJsonFallback:
 
 
 # ===========================================================================
-# FIX-1 Item 1.1 — Citation influence threshold ordering validation
+# Citation influence threshold ordering validation
 # ===========================================================================
 
 

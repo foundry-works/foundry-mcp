@@ -1,4 +1,4 @@
-"""Tests for PLAN-1 Item 1: Research Profiles.
+"""Tests for research profiles.
 
 Covers:
 - ResearchProfile model creation and validation

@@ -183,7 +183,7 @@ class BriefPhaseMixin:
                 state.id,
             )
 
-        # PLAN-2 Item 5: Adaptive provider selection from brief signals
+        # Adaptive provider selection from brief signals
         effective_brief = brief_text or state.original_query
         provider_hints: list[str] = []
         active_providers: list[str] = []
@@ -217,7 +217,7 @@ class BriefPhaseMixin:
             },
         )
 
-        # PLAN-2 Item 5: Log adaptive provider selection provenance event
+        # Log adaptive provider selection provenance event
         if state.provenance is not None and provider_hints:
             state.provenance.append(
                 phase="brief",
@@ -228,7 +228,7 @@ class BriefPhaseMixin:
                 profile_name=state.research_profile.name if state.research_profile else "general",
             )
 
-        # PLAN-1 Item 2: Log brief_generated provenance event
+        # Log brief_generated provenance event
         if state.provenance is not None and brief_text:
             state.provenance.append(
                 phase="brief",
@@ -313,7 +313,7 @@ class BriefPhaseMixin:
             "intent.\n\n"
         )
 
-        # PLAN-1 Item 5a: Academic brief enrichment
+        # Academic brief enrichment
         if profile is not None and profile.source_quality_mode == ResearchMode.ACADEMIC:
             base += self._build_academic_brief_instructions(profile)
 
@@ -404,7 +404,7 @@ class BriefPhaseMixin:
         return "\n".join(parts)
 
     # ------------------------------------------------------------------
-    # PLAN-2 Item 5: Adaptive Provider Selection
+    # Adaptive Provider Selection
     # ------------------------------------------------------------------
 
     # Discipline keyword → provider hint mapping.  Keywords are matched
@@ -507,7 +507,7 @@ class BriefPhaseMixin:
         # Store raw hints in metadata regardless of application
         state.metadata["provider_hints"] = hints
 
-        # Guard: legacy sessions (pre-PLAN-1) may have research_profile=None
+        # Guard: older sessions may have research_profile=None
         if profile is None:
             state.metadata["active_providers"] = []
             return []

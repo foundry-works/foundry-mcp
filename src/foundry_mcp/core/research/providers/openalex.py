@@ -70,12 +70,12 @@ DEFAULT_RATE_LIMIT = 50.0  # requests per second (conservative; 100 hard cap)
 # Maximum results per API page
 MAX_PER_PAGE = 200
 
-# Validation patterns for identifiers used in filter interpolation (FIX-0 Item 0.3)
+# Validation patterns for identifiers used in filter interpolation
 _OPENALEX_WORK_ID_RE = re.compile(r"^(W\d+|https://openalex\.org/W\d+)$")
 _OPENALEX_TOPIC_ID_RE = re.compile(r"^T\d+$")
 
 # ------------------------------------------------------------------
-# Filter sanitization (PLANFIX FIX-3 Item 3.3)
+# Filter sanitization
 # ------------------------------------------------------------------
 
 _ALLOWED_FILTER_KEYS = frozenset({
@@ -278,7 +278,7 @@ class OpenAlexProvider(SearchProvider):
             "per_page": min(max_results, MAX_PER_PAGE),
         }
 
-        # Build sanitized filter string (FIX-3 Item 3.3)
+        # Build sanitized filter string
         filter_string = _build_filter_string(filters)
         if filter_string:
             params["filter"] = filter_string

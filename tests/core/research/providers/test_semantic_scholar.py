@@ -370,7 +370,7 @@ class TestBackwardCompatibility:
 
 
 class TestSemanticScholarURLEncoding:
-    """FIX-0 Item 0.2: paper_id must be URL-encoded in URL paths."""
+    """paper_id must be URL-encoded in URL paths."""
 
     @pytest.mark.asyncio
     async def test_paper_id_with_special_chars_is_encoded(self):

@@ -159,11 +159,11 @@ class ActionHandlersMixin:
             max_supervision_rounds=self.config.deep_research_max_supervision_rounds,
         )
 
-        # PLAN-1: Attach resolved research profile to extensions
+        # Attach resolved research profile to extensions
         if research_profile is not None:
             state.extensions.research_profile = research_profile
 
-        # PLAN-1 Item 2: Initialize provenance audit trail
+        # Initialize provenance audit trail
         profile_name = research_profile.name if research_profile is not None else "general"
         profile_config = research_profile.model_dump() if research_profile is not None else {}
         state.extensions.provenance = ProvenanceLog(

@@ -1,4 +1,4 @@
-"""Tests for PLAN-1 Item 2: Research Provenance Audit Trail.
+"""Tests for research provenance audit trail.
 
 Covers:
 - ProvenanceEntry and ProvenanceLog model creation and validation
@@ -314,7 +314,7 @@ class TestProvenancePersistence:
         assert loaded.provenance.entries[0].event_type == "brief_generated"
 
     def test_load_without_provenance_sidecar(self, tmp_path: Path):
-        """Pre-PLAN-1 states have no provenance sidecar — should load fine."""
+        """Older session states have no provenance sidecar — should load fine."""
         from foundry_mcp.core.research.memory import ResearchMemory
 
         memory = ResearchMemory(base_path=tmp_path, ttl_hours=24)

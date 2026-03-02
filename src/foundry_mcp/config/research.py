@@ -114,9 +114,9 @@ class ResearchConfig:
     deep_research_coverage_confidence_weights: Optional[dict] = (
         None  # Dimension weights: {source_adequacy, domain_diversity, query_completion_rate}
     )
-    # PLAN-3: Academic coverage weights (used when research_mode == ACADEMIC)
+    # Academic coverage weights (used when research_mode == ACADEMIC)
     deep_research_academic_coverage_weights: Optional[dict] = None  # Default: {source_adequacy: 0.3, domain_diversity: 0.15, query_completion_rate: 0.2, source_influence: 0.35}
-    # PLAN-3: Influence scoring thresholds (citation counts)
+    # Influence scoring thresholds (citation counts)
     deep_research_influence_high_citation_threshold: int = 100
     deep_research_influence_medium_citation_threshold: int = 20
     deep_research_influence_low_citation_threshold: int = 5
@@ -221,7 +221,7 @@ class ResearchConfig:
     deep_research_audit_artifacts: bool = True
     # Research mode: "general" | "academic" | "technical"
     deep_research_mode: str = "general"
-    # PLAN-1: Research profile configuration
+    # Research profile configuration
     deep_research_default_profile: str = "general"  # Default profile when none specified
     deep_research_profiles: Dict[str, dict] = field(default_factory=dict)  # Custom profile definitions from config
     # Search rate limiting configuration
@@ -311,17 +311,17 @@ class ResearchConfig:
     deep_research_digest_max_evidence_snippets: int = 5  # Max evidence snippets per digest
     deep_research_digest_fetch_pdfs: bool = False  # Whether to fetch and extract PDF content
 
-    # PDF extraction settings for academic paper analysis (PLAN-4 Item 1)
+    # PDF extraction settings for academic paper analysis
     deep_research_pdf_max_pages: int = 50  # Max pages to extract from academic PDFs
     deep_research_pdf_priority_sections: List[str] = field(
         default_factory=lambda: ["methods", "results", "discussion"]
     )  # Sections to prioritize when truncating PDF content
 
-    # Citation network settings (PLAN-4 Item 2, user-triggered)
+    # Citation network settings (user-triggered)
     deep_research_citation_network_max_refs_per_paper: int = 20  # Max backward references per source
     deep_research_citation_network_max_cites_per_paper: int = 20  # Max forward citations per source
 
-    # Methodology quality assessment (PLAN-4 Item 3, experimental)
+    # Methodology quality assessment (experimental)
     deep_research_methodology_assessment_provider: Optional[str] = None  # Provider for LLM extraction (None = use default)
     deep_research_methodology_assessment_timeout: float = 60.0  # Timeout per LLM extraction call (seconds)
     deep_research_methodology_assessment_min_content_length: int = 200  # Min chars to trigger assessment
@@ -701,7 +701,7 @@ class ResearchConfig:
             deep_research_audit_artifacts=_parse_bool(data.get("deep_research_audit_artifacts", True)),
             # Research mode
             deep_research_mode=str(data.get("deep_research_mode", "general")),
-            # PLAN-1: Research profiles
+            # Research profiles
             deep_research_default_profile=str(data.get("deep_research_default_profile", "general")),
             deep_research_profiles=dict(data.get("deep_research_profiles", {})),
             # Search rate limiting configuration
@@ -774,19 +774,19 @@ class ResearchConfig:
             deep_research_archive_retention_days=int(data.get("deep_research_archive_retention_days", 30)),
             deep_research_digest_provider=data.get("deep_research_digest_provider"),
             deep_research_digest_providers=_parse_provider_list("deep_research_digest_providers"),
-            # PDF extraction settings (PLAN-4 Item 1)
+            # PDF extraction settings
             deep_research_pdf_max_pages=int(data.get("deep_research_pdf_max_pages", 50)),
             deep_research_pdf_priority_sections=data.get(
                 "deep_research_pdf_priority_sections", ["methods", "results", "discussion"]
             ),
-            # Citation network settings (PLAN-4 Item 2)
+            # Citation network settings
             deep_research_citation_network_max_refs_per_paper=int(
                 data.get("deep_research_citation_network_max_refs_per_paper", 20)
             ),
             deep_research_citation_network_max_cites_per_paper=int(
                 data.get("deep_research_citation_network_max_cites_per_paper", 20)
             ),
-            # Methodology assessment settings (PLAN-4 Item 3)
+            # Methodology assessment settings
             deep_research_methodology_assessment_provider=data.get(
                 "deep_research_methodology_assessment_provider"
             ),
@@ -796,9 +796,9 @@ class ResearchConfig:
             deep_research_methodology_assessment_min_content_length=int(
                 data.get("deep_research_methodology_assessment_min_content_length", 200)
             ),
-            # Academic coverage weights (PLAN-3)
+            # Academic coverage weights
             deep_research_academic_coverage_weights=data.get("deep_research_academic_coverage_weights"),
-            # Influence scoring thresholds (PLAN-3)
+            # Influence scoring thresholds
             deep_research_influence_high_citation_threshold=int(
                 data.get("deep_research_influence_high_citation_threshold", 100)
             ),
@@ -884,7 +884,7 @@ class ResearchConfig:
             )
 
     # -----------------------------------------------------------------
-    # PLAN-1: Research profile resolution
+    # Research profile resolution
     # -----------------------------------------------------------------
 
     def resolve_profile(

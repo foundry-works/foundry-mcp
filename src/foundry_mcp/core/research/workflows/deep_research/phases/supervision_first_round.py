@@ -180,7 +180,7 @@ async def run_first_round_generate(
     """
     _, execute_structured_llm_call = _get_lifecycle_fns()
 
-    # PLAN-2 Item 5: Pass active providers from adaptive selection
+    # Pass active providers from adaptive selection
     active_providers: list[str] | None = state.metadata.get("active_providers")
 
     workflow._check_cancellation(state)

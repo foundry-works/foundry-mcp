@@ -1,4 +1,4 @@
-"""Tests for PLAN-3: Research Intelligence features.
+"""Tests for research intelligence features.
 
 Covers:
 - Item 1: Influence-aware source ranking

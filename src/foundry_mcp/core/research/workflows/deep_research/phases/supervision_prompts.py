@@ -305,7 +305,7 @@ def build_delegation_user_prompt(
         state: Current research state
         coverage_data: Per-sub-query coverage data
         think_output: Gap analysis from think step
-        active_providers: Active search providers for this session (PLAN-2 Item 5)
+        active_providers: Active search providers for this session
 
     Returns:
         User prompt string
@@ -347,7 +347,7 @@ def build_delegation_user_prompt(
         ]
     )
 
-    # PLAN-2 Item 5: Active search providers
+    # Active search providers
     if active_providers:
         parts.extend(
             [
@@ -548,7 +548,7 @@ def build_first_round_delegation_system_prompt(
 
     Args:
         profile: Active research profile (used to inject academic guidelines)
-        active_providers: Active search providers for this session (PLAN-2 Item 5)
+        active_providers: Active search providers for this session
 
     Returns:
         System prompt instructing initial query decomposition via directives
@@ -562,11 +562,11 @@ def build_first_round_delegation_system_prompt(
 - Directives should be SPECIFIC enough to yield targeted search results
 - Directives must cover DISTINCT aspects — no two should investigate substantially the same ground"""
 
-    # PLAN-1 Item 5b: Academic decomposition guidelines
+    # Academic decomposition guidelines
     if profile is not None and profile.source_quality_mode == ResearchMode.ACADEMIC:
         guidelines += _build_academic_decomposition_guidelines(profile)
 
-    # PLAN-2 Item 5: Inject active provider awareness
+    # Inject active provider awareness
     if active_providers:
         guidelines += (
             "\n\n**Available Search Providers:** "
@@ -641,7 +641,7 @@ def build_first_round_delegation_user_prompt(
     Args:
         state: Current research state with research_brief
         think_output: Decomposition strategy from think step
-        active_providers: Active search providers for this session (PLAN-2 Item 5)
+        active_providers: Active search providers for this session
 
     Returns:
         User prompt string
@@ -676,7 +676,7 @@ def build_first_round_delegation_user_prompt(
             ]
         )
 
-    # PLAN-2 Item 5: Active search providers
+    # Active search providers
     if active_providers:
         parts.extend(
             [
