@@ -249,7 +249,7 @@
 # deep_research_follow_links = true        # Follow and extract URLs
 # deep_research_audit_artifacts = true     # Write audit artifacts for debugging
 # deep_research_mode = "general"           # "general" | "academic" | "technical"
-# deep_research_providers = ["tavily", "google", "semantic_scholar"]  # Search providers
+# deep_research_providers = ["tavily", "openalex", "crossref", "semantic_scholar"]  # Search providers
 
 # deep_research_stale_task_seconds = 300.0 # Seconds before a task is considered stale
 # status_persistence_throttle_seconds = 5  # Min seconds between status file writes
@@ -533,6 +533,27 @@
 
 
 # -----------------------------------------------------------------------------
+# Search Providers — OpenAlex (academic)
+# -----------------------------------------------------------------------------
+# Scholarly metadata from the OpenAlex index (250M+ works).
+# Free API key from https://openalex.org/users/me — $1/day free budget (~1,000 searches).
+# Env: OPENALEX_API_KEY
+
+# openalex_api_key = null                  # API key (prefer OPENALEX_API_KEY env var)
+
+
+# -----------------------------------------------------------------------------
+# Search Providers — Crossref (academic)
+# -----------------------------------------------------------------------------
+# DOI metadata enrichment from the Crossref registry.
+# No API key needed. Providing an email enables the polite pool (higher rate limits).
+# Env: CROSSREF_MAILTO
+
+# crossref_email = null                    # Email for polite pool (prefer CROSSREF_MAILTO env var)
+# crossref_enabled = true                  # Enable/disable Crossref provider
+
+
+# -----------------------------------------------------------------------------
 # Search Providers — Google
 # -----------------------------------------------------------------------------
 # Env: GOOGLE_API_KEY, GOOGLE_CSE_ID
@@ -550,6 +571,8 @@
 # perplexity = 60
 # google = 100
 # semantic_scholar = 20
+# openalex = 600
+# crossref = 600
 
 
 # =============================================================================

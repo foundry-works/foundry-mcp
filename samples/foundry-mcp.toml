@@ -39,7 +39,11 @@ consensus_providers = [
     "[cli]claude:sonnet",
 ]
 deep_research_mode = "technical"
-deep_research_providers = ["tavily"]
+deep_research_providers = ["tavily", "openalex", "crossref", "semantic_scholar"]
+
+# Academic provider credentials (or set as env vars)
+# openalex_api_key = "..."    # Env: OPENALEX_API_KEY — free key from https://openalex.org/users/me
+# crossref_email = "..."      # Env: CROSSREF_MAILTO — your email for polite pool (higher rate limits)
 
 # Model tiers — configure all 11 deep-research roles via 3 named tiers.
 # Per-role overrides (deep_research_{role}_provider) still win.
