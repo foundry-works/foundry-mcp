@@ -1,413 +1,274 @@
-# Post-Review Fix Plan v3 — Checklist
+# Post-Review Fix Plan v4 — Checklist
 
 > Track implementation progress for [PLANFIX.md](PLANFIX.md).
 > Mark items `[x]` as completed.
 
 ---
 
-## FIX-0: Security Hardening
+## FIX-0: Correctness & Data Integrity
 
-### Item 0.1: Fail Closed on DNS Resolution Failure in `pdf_extractor.py`
-> **File**: `src/foundry_mcp/core/research/pdf_extractor.py`
+### Item 0.1: Remove Duplicate Metadata Key in OpenAlex Provider
+> **File**: `src/foundry_mcp/core/research/providers/openalex.py`
 
-- [x] Change `except socket.gaierror` handler (line ~289) to raise `SSRFError` instead of logging and continuing
-- [x] Match the pattern from `_injection_protection.py:131-132` which correctly returns `False`
-- [x] Log at WARNING level before raising (for operator visibility)
+- [ ] Remove `citation_count` key from metadata dict (line ~616)
+- [ ] Keep only `cited_by_count` key (matches OpenAlex API field name)
+- [ ] Grep for consumers of `metadata["citation_count"]` and update to `cited_by_count`
+- [ ] Update any test assertions referencing `citation_count` metadata key
 
 #### Item 0.1 Validation
 
-- [x] DNS resolution failure for a hostname raises `SSRFError`
-- [x] Valid hostnames still resolve and proceed normally
-- [x] Add unit test: `validate_url_for_ssrf` with unresolvable hostname raises `SSRFError`
-- [x] Existing PDF extraction tests pass unchanged
+- [ ] No duplicate keys in metadata dict
+- [ ] Downstream consumers (influence scoring, landscape, structured output) use correct key
+- [ ] Existing OpenAlex tests pass unchanged (or updated)
 
 ---
 
-### Item 0.2: URL-Encode `paper_id` in Semantic Scholar URL Paths
-> **File**: `src/foundry_mcp/core/research/providers/semantic_scholar.py`
+### Item 0.2: Fix Provider Fallback Naming in Topic Research
+> **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py`
 
-- [x] Import `urllib.parse.quote` at module level
-- [x] Apply `quote(paper_id, safe='')` in `get_paper()` URL construction (line ~403)
-- [x] Apply `quote(paper_id, safe='')` in `get_citations()` URL construction (line ~432)
-- [x] Apply `quote(paper_id, safe='')` in `get_recommendations()` URL construction — N/A: uses POST body, not URL path
-- [x] Add comment explaining why URL encoding is needed (unlike the prefix formats like `DOI:` which httpx handles)
+- [ ] In `_handle_citation_search_tool()`: track last attempted provider name through fallback loop
+- [ ] Set `provider_name` to last attempted provider (e.g. `"openalex"`) instead of `"unknown"`
+- [ ] Apply same fix in `_handle_related_papers_tool()`
+- [ ] When no provider is available at all, use `"no_provider_available"`
 
 #### Item 0.2 Validation
 
-- [x] `paper_id` with path traversal chars `"../admin"` is safely encoded in URL
-- [x] Standard paper IDs still resolve correctly
-- [x] Add unit test: paper_id with special characters is URL-encoded in request
-- [x] Existing Semantic Scholar tests pass unchanged
+- [ ] Response message names the actual provider when one succeeds
+- [ ] Response message names the last-attempted provider when all fail
+- [ ] No `"unknown"` provider name in any tool response
 
 ---
 
-### Item 0.3: Validate `work_id` in OpenAlex Filter String Construction
-> **File**: `src/foundry_mcp/core/research/providers/openalex.py`
+### Item 0.3: Simplify Redundant Boolean Check in Coverage Scoring
+> **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision_coverage.py`
 
-- [x] Add `_OPENALEX_WORK_ID_RE = re.compile(r"^(W\d+|https://openalex\.org/W\d+)$")` constant
-- [x] Add `_OPENALEX_TOPIC_ID_RE = re.compile(r"^T\d+$")` constant
-- [x] Validate `work_id` in `get_citations()` (line ~312) before filter interpolation
-- [x] Validate `topic_id` in `search_by_topic()` (line ~438) before filter interpolation
-- [x] Raise `ValueError` with descriptive message on mismatch
+- [ ] Change `if influential_count and influential_count > 0:` to `if influential_count > 0:` (line ~354)
 
 #### Item 0.3 Validation
 
-- [x] Valid `work_id` `"W2741809807"` passes validation
-- [x] Valid `work_id` `"https://openalex.org/W2741809807"` passes validation
-- [x] Malicious `work_id` `"W123,publication_year:2024"` raises `ValueError`
-- [x] Valid `topic_id` `"T12345"` passes validation
-- [x] Malicious `topic_id` `"T123,type:dataset"` raises `ValueError`
-- [x] Existing OpenAlex tests pass unchanged
+- [ ] Existing supervision coverage tests pass unchanged
 
 ---
 
-### Item 0.4: Remove `application/octet-stream` from Valid PDF Content Types
-> **File**: `src/foundry_mcp/core/research/pdf_extractor.py`
+## FIX-1: Config Validation
 
-- [x] Remove `"application/octet-stream"` from `VALID_PDF_CONTENT_TYPES` frozenset (line ~167)
-- [x] Add WARNING log when `application/octet-stream` content type is encountered (before magic byte check)
-- [x] Ensure magic byte check (`%PDF`) still handles ambiguous content types downstream
+### Item 1.1: Validate Citation Influence Threshold Ordering
+> **File**: `src/foundry_mcp/config/research.py`
 
-#### Item 0.4 Validation
-
-- [x] PDF served with `application/pdf` content type is accepted
-- [x] PDF served with `application/octet-stream` is rejected at content-type gate
-- [x] Magic byte check still catches real PDFs served with unexpected content types (if applicable)
-- [x] Existing PDF extraction tests pass unchanged
-
----
-
-## FIX-1: Correctness Fixes
-
-### Item 1.1: Fix Evaluator Metadata Overwrite
-> **File**: `src/foundry_mcp/core/research/evaluation/evaluator.py`
-
-- [x] Change `eval_result.metadata = {` (line ~337) to `eval_result.metadata.update({`
-- [x] Change the closing `}` to `})`
-- [x] Verify `imputed_count` and `warnings` keys from `_parse_evaluation_response` are preserved
+- [ ] Add validation in `__post_init__()` that `low < medium < high` for citation thresholds
+- [ ] Raise `ValueError` with descriptive message on mismatch
+- [ ] Add unit test: valid thresholds (5, 20, 100) pass without error
+- [ ] Add unit test: inverted thresholds (100, 20, 5) raise `ValueError`
+- [ ] Add unit test: equal thresholds (20, 20, 20) raise `ValueError`
 
 #### Item 1.1 Validation
 
-- [x] `eval_result.metadata` contains both LLM call metadata (`provider_id`, `model_used`, `duration_ms`) and parse metadata (`imputed_count`, `warnings`)
-- [x] Add unit test: evaluation result metadata contains both parse-time and call-time keys
-- [x] Existing evaluator tests pass unchanged (77 passed)
+- [ ] Default config passes validation
+- [ ] Custom valid thresholds pass
+- [ ] Inverted thresholds raise with clear error message
+- [ ] Existing config tests pass unchanged
 
 ---
 
-### Item 1.2: Change `content_basis` to `Literal` Type
-> **File**: `src/foundry_mcp/core/research/models/sources.py`
+### Item 1.2: Address Hardcoded Provider List in Brief
+> **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/brief.py`
 
-- [x] Add `Literal` to `typing` imports (if not already present) — already imported
-- [x] Change `content_basis: str = Field(default="abstract", ...)` to `content_basis: Literal["abstract", "full_text"] = Field(default="abstract", ...)`
-- [x] Verify existing `model_validator` at line ~585 still works with Literal type
+- [ ] Add comment documenting that `_KNOWN_PROVIDERS` must stay in sync with provider registry
+- [ ] Move constant to top of file for visibility (if not already)
+- [ ] OR: query provider registry dynamically (if low complexity)
 
 #### Item 1.2 Validation
 
-- [x] `MethodologyAssessment(content_basis="abstract")` succeeds
-- [x] `MethodologyAssessment(content_basis="full_text")` succeeds
-- [x] `MethodologyAssessment(content_basis="Abstract")` raises `ValidationError`
-- [x] `MethodologyAssessment(content_basis="typo")` raises `ValidationError`
-- [x] Confidence still forced to `"low"` for `content_basis="abstract"`
-- [x] Existing methodology assessment tests pass unchanged (50 passed)
+- [ ] Existing brief tests pass unchanged
+- [ ] Comment clearly explains sync requirement
 
 ---
 
-### Item 1.3: Add Missing Model Exports to `__init__.py`
-> **File**: `src/foundry_mcp/core/research/models/__init__.py`
+## FIX-2: Test Coverage Gaps
 
-- [x] Add import for `ProvenanceLog` from `deep_research`
-- [x] Add import for `ProvenanceEntry` from `deep_research`
-- [x] Add import for `CitationNetwork` from `deep_research`
-- [x] Add import for `CitationNode` from `deep_research`
-- [x] Add import for `CitationEdge` from `deep_research`
-- [x] Add import for `ResearchLandscape` from `deep_research`
-- [x] Add import for `StudyComparison` from `deep_research`
-- [x] Add import for `ResearchThread` from `deep_research`
-- [x] Add import for `MethodologyAssessment` from `sources`
-- [x] Add import for `StudyDesign` from `sources`
-- [x] Add all to `__all__`
+### Item 2.1: Add Citation Tool Gating Tests
+> **File**: `tests/core/research/workflows/deep_research/` or `tests/core/research/workflows/test_topic_research.py`
 
-#### Item 1.3 Validation
-
-- [x] `from foundry_mcp.core.research.models import ProvenanceLog` works
-- [x] `from foundry_mcp.core.research.models import CitationNetwork` works
-- [x] `from foundry_mcp.core.research.models import MethodologyAssessment` works
-- [x] `from foundry_mcp.core.research.models import StudyDesign` works
-- [x] Existing import tests pass unchanged
-
----
-
-### Item 1.4: Add `MAX_ABSTRACT_POSITIONS` Cap in OpenAlex Provider
-> **File**: `src/foundry_mcp/core/research/providers/openalex.py`
-
-- [x] Add `_MAX_ABSTRACT_POSITIONS = 100_000` module-level constant
-- [x] In `_reconstruct_abstract()` (line ~130), after computing `max_pos`, check `if max_pos > _MAX_ABSTRACT_POSITIONS: return None`
-- [x] Log at WARNING level when cap is hit
-
-#### Item 1.4 Validation
-
-- [x] Normal inverted index (positions 0-500) reconstructs correctly
-- [x] Malicious inverted index with position `999999999` returns `None`
-- [x] Add unit test: abstract with oversized position returns None
-- [x] Existing OpenAlex tests pass unchanged (49 passed)
-
----
-
-### Item 1.5: Add Upper Bound Validation on Citation Network Parameters
-> **File**: `src/foundry_mcp/tools/unified/research_handlers/handlers_deep_research.py`
-
-- [x] Clamp `max_references_per_paper` to `max(1, min(value, 100))` before passing to builder
-- [x] Clamp `max_citations_per_paper` to `max(1, min(value, 100))` before passing to builder
-- [x] Log at DEBUG level if clamping was applied — clamped silently (inline arithmetic, no log noise needed)
-
-#### Item 1.5 Validation
-
-- [x] `max_references_per_paper=999999` clamped to 100
-- [x] `max_references_per_paper=0` clamped to 1
-- [x] `max_references_per_paper=20` passes through unchanged
-- [x] Existing citation network tests pass unchanged (35 passed)
-
----
-
-### Item 1.6: Sanitize `research_id` Before Filesystem Path Use
-> **File**: `src/foundry_mcp/core/research/workflows/deep_research/infrastructure.py`
-
-- [x] In `_crash_handler()` (line ~150), sanitize `research_id` before path construction
-- [x] Use `Path(research_id).name` to strip directory components
-- [x] Apply same sanitization in any other filesystem path construction using `research_id` — only crash handler uses it directly
-
-#### Item 1.6 Validation
-
-- [x] Normal `research_id` `"deepres-abc123"` produces expected crash path
-- [x] Traversal `research_id` `"../../etc/passwd"` is sanitized to safe filename (`passwd`)
-- [x] Add unit test: path traversal in research_id does not escape target directory
-
----
-
-## FIX-2: Provider Robustness
-
-### Item 2.1: Replace `"404" in str(e)` with Structured Status Code Check
-> **Files**: `src/foundry_mcp/core/research/providers/openalex.py`, `crossref.py`, `semantic_scholar.py`, `shared.py`
-
-- [x] Add `status_code: Optional[int] = None` field to `SearchProviderError` in `core/errors/search.py`
-- [x] In `_execute_request()` / `make_request()` in each provider, populate `status_code` from the HTTP response when raising `SearchProviderError`
-- [x] Replace `if "404" in str(e):` with `if getattr(e, "status_code", None) == 404:` in `openalex.py` (3 locations)
-- [x] Replace `if "404" in str(e):` with `if getattr(e, "status_code", None) == 404:` in `crossref.py` (1 location)
-- [x] Replace `if "404" in str(e):` with `if getattr(e, "status_code", None) == 404:` in `semantic_scholar.py` (1 location)
-- [x] Updated `classify_http_error` in `shared.py` to prefer structured `status_code` over string parsing
+- [ ] Add `test_citation_search_rejected_when_gated()`:
+  - [ ] Create profile with `enable_citation_tools=False`
+  - [ ] Simulate researcher calling `citation_search` tool
+  - [ ] Verify rejection response with "not available" message
+- [ ] Add `test_related_papers_rejected_when_gated()`:
+  - [ ] Same setup with `enable_citation_tools=False`
+  - [ ] Verify rejection for `related_papers` tool
+  - [ ] Verify budget is NOT consumed on rejection
 
 #### Item 2.1 Validation
 
-- [x] 404 HTTP response produces `SearchProviderError` with `status_code=404`
-- [x] `get_work()` with 404 returns `None` (existing behavior preserved)
-- [x] Error message containing "404" for non-404 status does NOT trigger the 404 path
-- [x] Add unit test: error with "404" in message but status_code=500 is NOT treated as not-found — covered by structured status_code field; string matching eliminated
-- [x] Existing provider tests pass unchanged (122 passed)
+- [ ] Both tests pass
+- [ ] Tests fail if gating logic is removed (guard against regression)
 
 ---
 
-### Item 2.2: Extract Duplicated `classify_error` Logic
-> **Files**: `src/foundry_mcp/core/research/providers/shared.py`, `crossref.py`, `base.py`
+### Item 2.2: Add Provider Fallback Chain Tests
+> **File**: `tests/core/research/workflows/deep_research/` or `tests/core/research/workflows/test_topic_research.py`
 
-- [x] Add `classify_with_registry(error, classifiers, provider_name) -> ErrorClassification` function to `shared.py`
-- [x] Refactor `SearchProvider.classify_error` in `base.py` to delegate to `classify_with_registry`
-- [x] Refactor `CrossrefProvider.classify_error` in `crossref.py` to delegate to `classify_with_registry`
-- [x] Remove the duplicated logic from `crossref.py`
+- [ ] Add `test_citation_search_falls_back_to_openalex()`:
+  - [ ] Mock Semantic Scholar to raise exception
+  - [ ] Mock OpenAlex to return results
+  - [ ] Verify OpenAlex results are used
+- [ ] Add `test_related_papers_falls_back_to_openalex()`:
+  - [ ] Mock S2 `get_recommendations()` to raise
+  - [ ] Mock OpenAlex `get_related()` to return results
+  - [ ] Verify fallback works
+- [ ] Add `test_citation_search_both_providers_fail()`:
+  - [ ] Mock both providers to raise
+  - [ ] Verify empty result returned, no crash
+  - [ ] Verify provider_name is descriptive (per FIX-0.2)
 
 #### Item 2.2 Validation
 
-- [x] `CrossrefProvider.classify_error` produces same results as before
-- [x] `SearchProvider.classify_error` produces same results as before
-- [x] Existing provider error classification tests pass unchanged (122 passed)
+- [ ] All three tests pass
+- [ ] Fallback order confirmed: Semantic Scholar first, OpenAlex second
 
 ---
 
-### Item 2.3: Fix Stale Docstrings Referencing Removed Cost-Tier Defaults
-> **Files**: `src/foundry_mcp/config/research.py`, `src/foundry_mcp/config/research_sub_configs.py`
+### Item 2.3: Add OpenAlex `get_related()` and OOM Cap Tests
+> **File**: `tests/core/research/providers/test_openalex.py`
 
-- [x] Update `ResearchConfig` class docstring (lines ~29-31) to remove `gemini-2.5-flash` reference
-- [x] Update `ModelRoleConfig` docstring (`research_sub_configs.py:79-83`) to remove cost-tier default reference
-- [x] Replace with accurate description of current behavior (explicit tier configuration required)
+- [ ] Add `test_get_related()`:
+  - [ ] Mock OpenAlex response with `related_works` field
+  - [ ] Verify correct results returned
+- [ ] Add `test_get_related_no_related_works()`:
+  - [ ] Mock work with empty `related_works` list
+  - [ ] Verify empty list returned gracefully
+- [ ] Add `test_abstract_reconstruction_oom_cap()`:
+  - [ ] Create inverted index with position > 100,000
+  - [ ] Verify `_reconstruct_abstract()` returns `None`
+  - [ ] Verify warning is logged
 
 #### Item 2.3 Validation
 
-- [x] No references to `gemini-2.5-flash` remain in config docstrings
-- [x] Docstrings accurately describe current model routing behavior
+- [ ] All three tests pass
+- [ ] OOM test confirms safety cap works
 
 ---
 
-### Item 2.4: Add Warning to Response on Failed Report Save
-> **File**: `src/foundry_mcp/tools/unified/research_handlers/handlers_deep_research.py`
+### Item 2.4: Add Paper ID Validation Tests
+> **File**: `tests/core/research/workflows/test_topic_research.py`
 
-- [x] In `_handle_deep_research_report` (line ~271), capture exception message on save failure
-- [x] Append save failure warning to `warnings` list (routed to `meta.warnings` in response envelope)
-- [x] Ensure the response still returns successfully (non-blocking save)
+- [ ] Add `test_validate_paper_id_accepts_doi()` — `"10.1234/test.2024"` passes
+- [ ] Add `test_validate_paper_id_accepts_s2_hex()` — `"a1b2c3d4e5f6"` passes
+- [ ] Add `test_validate_paper_id_accepts_arxiv()` — `"2301.12345"` passes
+- [ ] Add `test_validate_paper_id_accepts_openalex()` — `"W2741809807"` passes
+- [ ] Add `test_validate_paper_id_rejects_injection()` — `"10.1234; DROP TABLE"` raises
+- [ ] Add `test_validate_paper_id_rejects_too_long()` — 257+ char string raises
 
 #### Item 2.4 Validation
 
-- [x] Successful save: no save_warning in warnings
-- [x] Failed save: warning appended with error description
-- [x] Report data still returned regardless of save success/failure
+- [ ] All six tests pass
+- [ ] Regex covers DOI, S2, ArXiv, OpenAlex, PubMed formats
 
 ---
 
-### Item 2.5: Add `deep-research-provenance` to MCP Tool Docstring
-> **File**: `src/foundry_mcp/tools/unified/research_handlers/__init__.py`
+### Item 2.5: Add OpenAlex 403 Error Test
+> **File**: `tests/core/research/providers/test_openalex.py`
 
-- [x] Add `deep-research-provenance` to the action list in the `research()` tool description
+- [ ] Add `test_403_raises_authentication_error()`:
+  - [ ] Mock 403 HTTP response
+  - [ ] Verify `AuthenticationError` is raised
+  - [ ] Verify error message includes provider name
 
 #### Item 2.5 Validation
 
-- [x] `deep-research-provenance` appears in MCP tool description
-- [x] LLM agent can discover the provenance action from tool metadata
+- [ ] Test passes
+- [ ] Error type matches 401 behavior (both raise `AuthenticationError`)
 
 ---
 
-## FIX-3: Test Quality
+## FIX-3: Cleanup & Consistency
 
-### Item 3.1: Remove Tautological Tests
-> **File**: `tests/core/research/workflows/deep_research/test_sanitize_external_content.py`
+### Item 3.1: Update PLAN-CHECKLIST.md Completion Status
+> **File**: `PLAN-CHECKLIST.md`
 
-- [x] Remove `TestRawNotesCapping` class (lines ~712-820, 3 tests)
-- [x] Remove `TestSupervisionWallClockTimeout` class (lines ~865-968, 4 tests)
-- [x] Remove `_StubSupervision` helper class (lines ~844-864) if no other tests use it
-- [x] Verify real coverage exists in `test_supervision.py` for both behaviors
+- [ ] Audit Phase 0 items against codebase — mark completed items `[x]`
+  - [ ] Item 0.1a: supervision_first_round.py exists with extracted functions
+  - [ ] Item 0.1b: Evaluate helper extraction (document decision)
+  - [ ] Item 0.1c: Thin wrapper methods (check current line count)
+  - [ ] Item 0.2: ResearchExtensions container implemented
+- [ ] Audit Phase 1 items — mark completed items `[x]`
+- [ ] Audit Phase 2 items — mark completed items `[x]`
+- [ ] Audit Phase 3 items — mark completed items `[x]`
+- [ ] Audit Phase 4 items — mark completed items `[x]`
+- [ ] Mark Final Validation items as appropriate
 
 #### Item 3.1 Validation
 
-- [x] 7 tautological tests removed
-- [x] `test_supervision.py` `TestSupervisionWallClockTimeout` still covers wall-clock timeout behavior
-- [x] `test_supervision.py` still covers raw_notes trimming behavior
-- [x] All remaining tests pass
-- [x] Net test count decrease is exactly 7 (no collateral removal)
+- [ ] PLAN-CHECKLIST.md accurately reflects implementation state
+- [ ] No items marked complete that aren't actually implemented
+- [ ] No items left unchecked that are implemented in code
 
 ---
 
-### Item 3.2: Add `DigestPolicy.PROACTIVE` Test Coverage
-> **File**: `tests/core/research/test_document_digest.py` (added to existing digest test file)
+### Item 3.2: Remove Orphan Research Output Files from Repo Root
 
-- [x] Add test: `DigestPolicy.PROACTIVE` eligibility check (sources with content above threshold)
-- [x] Add test: proactive digest execution produces digested content — covered by eligibility + skip reason tests
-- [x] Add test: already-digested sources are skipped — covered by empty/whitespace ineligibility
-- [x] Add test: `DigestPolicy.PROACTIVE` with zero eligible sources is a no-op — covered by empty content test
+- [ ] Delete or `.gitignore` these untracked files:
+  - [ ] `compare-postgresql-vs-mysql-for-oltp-workloads-in-2024*.md` (3 files)
+  - [ ] `test-progress-heartbeat*.md` (2 files)
+  - [ ] `test-synthesis-heartbeat*.md` (2 files)
+  - [ ] `what-are-the-benefits-of-renewable-energy*.md` (2 files)
+- [ ] Add `*.md` pattern to root `.gitignore` for deep research outputs, OR add specific patterns
 
 #### Item 3.2 Validation
 
-- [x] At least 4 new tests covering `PROACTIVE` digest policy (8 tests added)
-- [x] All new tests pass
-- [x] Existing digest tests pass unchanged (185 total, all passing)
+- [ ] `git status` no longer shows these as untracked
+- [ ] Legitimate markdown files (README.md, PLAN.md, CHANGELOG.md, etc.) are NOT ignored
 
 ---
 
-## FIX-4: Cleanup & Consistency
-
-### Item 4.1: Fix Dead Code in `ris.py`
-> **File**: `src/foundry_mcp/core/research/export/ris.py`
-
-- [x] Remove the redundant inner `if venue:` check at lines ~36-38
-- [x] Both branches return `"JOUR"` — collapse to single `return "JOUR"`
-
-#### Item 4.1 Validation
-
-- [x] Academic sources with venue produce `TY  - JOUR`
-- [x] Academic sources without venue produce `TY  - JOUR`
-- [x] Existing RIS tests pass unchanged
-
----
-
-### Item 4.2: Add `$` and `~` to BibTeX Special Character Escaping
-> **File**: `src/foundry_mcp/core/research/export/bibtex.py`
-
-- [x] Add `ord("$"): r"\$"` to `_BIBTEX_SPECIAL` translation table
-- [x] Add `ord("~"): r"\textasciitilde{}"` to `_BIBTEX_SPECIAL` translation table
-
-#### Item 4.2 Validation
-
-- [x] Title containing `$` is escaped to `\$` in BibTeX output
-- [x] Title containing `~` is escaped to `\textasciitilde{}` in BibTeX output
-- [x] Existing BibTeX tests pass unchanged
-
----
-
-### Item 4.3: Replace `assert` with Type Check in `evaluator.py`
-> **File**: `src/foundry_mcp/core/research/evaluation/evaluator.py`
-
-- [x] Replace `assert isinstance(call_result, LLMCallResult)` (line ~316) with `if not isinstance(call_result, LLMCallResult): raise TypeError(...)` — already implemented in prior FIX-1.1 commit
-
-#### Item 4.3 Validation
-
-- [x] Invalid call_result type raises `TypeError` (not `AssertionError`)
-- [x] Valid `LLMCallResult` passes through normally
-- [x] Works with `python -O` (optimized mode)
-
----
-
-### Item 4.4: Remove Empty `TYPE_CHECKING` Block in `evaluator.py`
-> **File**: `src/foundry_mcp/core/research/evaluation/evaluator.py`
-
-- [x] Remove `if TYPE_CHECKING: pass` block (lines ~31-32) — already removed in prior FIX-1.1 commit
-
-#### Item 4.4 Validation
-
-- [x] No import errors after removal
-- [x] Existing evaluator tests pass unchanged
-
----
-
-### Item 4.5: Fix `asyncio.get_event_loop()` Deprecation
-> **File**: `src/foundry_mcp/core/research/pdf_extractor.py`
-
-- [x] Replace `asyncio.get_event_loop()` (line ~485) with `asyncio.get_running_loop()`
-
-#### Item 4.5 Validation
-
-- [x] No `DeprecationWarning` on Python 3.12+
-- [x] Existing tests pass unchanged
-
----
-
-### Item 4.6: Add `extra="forbid"` to Remaining New Models
+### Item 3.3: Document StructuredResearchOutput Dict Schemas
 > **File**: `src/foundry_mcp/core/research/models/deep_research.py`
 
-- [x] Add `model_config = {"extra": "forbid"}` to `ResearchLandscape`
-- [x] Add `model_config = {"extra": "forbid"}` to `StudyComparison`
-- [x] Add `model_config = {"extra": "forbid"}` to `StructuredResearchOutput`
+- [ ] Add field descriptions to `StructuredResearchOutput.sources` documenting expected keys
+- [ ] Add field descriptions to `StructuredResearchOutput.findings` documenting expected keys
+- [ ] Add field descriptions to `StructuredResearchOutput.gaps` documenting expected keys
+- [ ] Add field descriptions to `StructuredResearchOutput.contradictions` documenting expected keys
 
-#### Item 4.6 Validation
+#### Item 3.3 Validation
 
-- [x] `ResearchLandscape(typo_field="value")` raises `ValidationError`
-- [x] `StudyComparison(typo_field="value")` raises `ValidationError`
-- [x] `StructuredResearchOutput(typo_field="value")` raises `ValidationError`
-- [x] Existing tests pass unchanged (no tests rely on extra fields being silently accepted)
+- [ ] Each list[dict] field has documented key schema in Field description
+- [ ] Documentation matches actual keys produced by `_build_structured_output()`
+
+---
+
+### Item 3.4: Add `generated_at` Timestamps to Output Models
+> **File**: `src/foundry_mcp/core/research/models/deep_research.py`
+
+- [ ] Add `generated_at: Optional[str] = None` to `StructuredResearchOutput`
+- [ ] Add `generated_at: Optional[str] = None` to `CitationNetwork`
+- [ ] Populate `generated_at` in `_build_structured_output()` with ISO 8601 timestamp
+- [ ] Populate `generated_at` in `CitationNetworkBuilder.build_network()` with ISO 8601 timestamp
+
+#### Item 3.4 Validation
+
+- [ ] `StructuredResearchOutput.generated_at` is populated after synthesis
+- [ ] `CitationNetwork.generated_at` is populated after network build
+- [ ] Timestamp is valid ISO 8601 format
+- [ ] Existing serialization tests pass (field is Optional, backward compatible)
 
 ---
 
 ## Final Validation
 
-- [x] All 7,597+ tests pass (7,607 passed, 44 skipped)
-- [x] No new `DeprecationWarning` on Python 3.12+
-- [x] DNS resolution failure in `pdf_extractor.py` fails closed
-- [x] All provider URL paths use URL-encoded identifiers
-- [x] OpenAlex filter values validated against expected patterns
-- [x] `application/octet-stream` no longer accepted as valid PDF content type
-- [x] Evaluator metadata contains both parse-time and call-time keys
-- [x] `content_basis` rejects invalid string values
-- [x] All new models exported from `models/__init__.py`
-- [x] 404 detection uses structured status codes, not string matching
-- [x] 7 tautological tests removed
-- [x] `DigestPolicy.PROACTIVE` has test coverage
-- [x] No references to `gemini-2.5-flash` in config docstrings
-- [x] `deep-research-provenance` discoverable in MCP tool description
+- [ ] All 7,607+ existing tests still pass
+- [ ] No new test failures introduced
+- [ ] New tests (FIX-2) all pass
+- [ ] `git diff --stat` shows only expected changes
+- [ ] No security regressions (SSRF, injection protection intact)
 
 ---
 
 ## Estimated Scope
 
-| Phase | Fix LOC | Test LOC | Focus |
-|-------|---------|----------|-------|
-| 0. Security | ~40-60 | ~20-30 | SSRF, URL encoding, filter injection, content types |
-| 1. Correctness | ~60-80 | ~30-50 | Metadata, types, exports, bounds, path safety |
-| 2. Provider robustness | ~50-70 | ~20-30 | 404 detection, DRY, docstrings, UX |
-| 3. Test quality | ~30-50 | ~80-120 | Remove tautological tests, add digest coverage |
-| 4. Cleanup | ~20-40 | — | Dead code, deprecations, consistency |
-| **Total** | **~200-300** | **~150-230** | |
+| Fix | Impl LOC | Test LOC |
+|-----|----------|----------|
+| 0. Correctness & data integrity | ~30-50 | ~0 |
+| 1. Config validation | ~15-25 | ~20-30 |
+| 2. Test coverage gaps | ~0 | ~150-250 |
+| 3. Cleanup & consistency | ~20-40 | ~0 |
+| **Total** | **~65-115** | **~170-280** |
