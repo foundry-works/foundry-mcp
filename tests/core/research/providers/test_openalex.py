@@ -852,3 +852,116 @@ class TestOpenAlexRateLimitConfig:
         assert config.max_delay == 60.0
         assert config.circuit_failure_threshold == 5
         assert config.circuit_recovery_timeout == 30.0
+
+
+# ---------------------------------------------------------------------------
+# FIX-2 Item 2.3: get_related() and OOM cap tests
+# ---------------------------------------------------------------------------
+
+
+class TestOpenAlexGetRelated:
+    """Tests for get_related() method."""
+
+    @pytest.fixture
+    def provider(self):
+        return OpenAlexProvider(api_key="test-key")
+
+    @pytest.mark.asyncio
+    async def test_get_related(self, provider):
+        """get_related() returns ResearchSource objects for related works."""
+        work_response = MagicMock()
+        work_response.status_code = 200
+        work_response.json.return_value = MOCK_WORK  # has related_works: ["W333"]
+
+        related_response = MagicMock()
+        related_response.status_code = 200
+        related_response.json.return_value = MOCK_SEARCH_RESPONSE
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(side_effect=[work_response, related_response])
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            sources = await provider.get_related("W1234567890")
+
+        assert len(sources) == 1
+        assert sources[0].title == "Attention Is All You Need"
+
+    @pytest.mark.asyncio
+    async def test_get_related_no_related_works(self, provider):
+        """get_related() returns empty list when work has no related_works."""
+        work_data = {**MOCK_WORK, "related_works": []}
+        work_response = MagicMock()
+        work_response.status_code = 200
+        work_response.json.return_value = work_data
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=work_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            sources = await provider.get_related("W1234567890")
+
+        assert sources == []
+
+
+class TestAbstractReconstructionOOMCap:
+    """Tests for abstract reconstruction OOM safety cap."""
+
+    def test_abstract_reconstruction_oom_cap(self):
+        """Inverted index with position > 100,000 returns None."""
+        from foundry_mcp.core.research.providers.openalex import _MAX_ABSTRACT_POSITIONS
+
+        # Create inverted index with position exceeding the safety cap
+        huge_index = {"word": [_MAX_ABSTRACT_POSITIONS + 1]}
+        result = _reconstruct_abstract(huge_index)
+        assert result is None
+
+    def test_abstract_reconstruction_at_cap_succeeds(self):
+        """Inverted index with position exactly at cap still reconstructs."""
+        from foundry_mcp.core.research.providers.openalex import _MAX_ABSTRACT_POSITIONS
+
+        # Position at the cap should still work (cap is > not >=)
+        index = {"Hello": [0], "world": [1], "end": [_MAX_ABSTRACT_POSITIONS]}
+        result = _reconstruct_abstract(index)
+        assert result is not None
+        assert "Hello" in result
+
+
+# ---------------------------------------------------------------------------
+# FIX-2 Item 2.5: 403 error test
+# ---------------------------------------------------------------------------
+
+
+class TestOpenAlex403Error:
+    """Tests for 403 Forbidden error handling."""
+
+    @pytest.fixture
+    def provider(self):
+        return OpenAlexProvider(api_key="test-key")
+
+    @pytest.mark.asyncio
+    async def test_403_raises_authentication_error(self, provider):
+        """403 response raises AuthenticationError with provider name."""
+        from foundry_mcp.core.errors.search import AuthenticationError
+
+        mock_response = MagicMock()
+        mock_response.status_code = 403
+        mock_response.text = "Forbidden"
+        mock_response.headers = {}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            with pytest.raises(AuthenticationError) as exc_info:
+                await provider.search("test")
+
+        assert "openalex" in str(exc_info.value).lower() or exc_info.value.provider == "openalex"

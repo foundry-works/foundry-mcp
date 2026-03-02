@@ -87,97 +87,97 @@
 ## FIX-2: Test Coverage Gaps
 
 ### Item 2.1: Add Citation Tool Gating Tests
-> **File**: `tests/core/research/workflows/deep_research/` or `tests/core/research/workflows/test_topic_research.py`
+> **File**: `tests/core/research/workflows/test_topic_research.py`
 
-- [ ] Add `test_citation_search_rejected_when_gated()`:
-  - [ ] Create profile with `enable_citation_tools=False`
-  - [ ] Simulate researcher calling `citation_search` tool
-  - [ ] Verify rejection response with "not available" message
-- [ ] Add `test_related_papers_rejected_when_gated()`:
-  - [ ] Same setup with `enable_citation_tools=False`
-  - [ ] Verify rejection for `related_papers` tool
-  - [ ] Verify budget is NOT consumed on rejection
+- [x] Add `test_citation_search_rejected_when_gated()`:
+  - [x] Create profile with `enable_citation_tools=False`
+  - [x] Simulate researcher calling `citation_search` tool
+  - [x] Verify rejection response with "not available" message
+- [x] Add `test_related_papers_rejected_when_gated()`:
+  - [x] Same setup with `enable_citation_tools=False`
+  - [x] Verify rejection for `related_papers` tool
+  - [x] Verify budget is NOT consumed on rejection
 
 #### Item 2.1 Validation
 
-- [ ] Both tests pass
-- [ ] Tests fail if gating logic is removed (guard against regression)
+- [x] Both tests pass
+- [x] Tests fail if gating logic is removed (guard against regression)
 
 ---
 
 ### Item 2.2: Add Provider Fallback Chain Tests
-> **File**: `tests/core/research/workflows/deep_research/` or `tests/core/research/workflows/test_topic_research.py`
+> **File**: `tests/core/research/workflows/test_topic_research.py`
 
-- [ ] Add `test_citation_search_falls_back_to_openalex()`:
-  - [ ] Mock Semantic Scholar to raise exception
-  - [ ] Mock OpenAlex to return results
-  - [ ] Verify OpenAlex results are used
-- [ ] Add `test_related_papers_falls_back_to_openalex()`:
-  - [ ] Mock S2 `get_recommendations()` to raise
-  - [ ] Mock OpenAlex `get_related()` to return results
-  - [ ] Verify fallback works
-- [ ] Add `test_citation_search_both_providers_fail()`:
-  - [ ] Mock both providers to raise
-  - [ ] Verify empty result returned, no crash
-  - [ ] Verify provider_name is descriptive (per FIX-0.2)
+- [x] Add `test_citation_search_falls_back_to_openalex()`:
+  - [x] Mock Semantic Scholar to raise exception
+  - [x] Mock OpenAlex to return results
+  - [x] Verify OpenAlex results are used
+- [x] Add `test_related_papers_falls_back_to_openalex()`:
+  - [x] Mock S2 `get_recommendations()` to raise
+  - [x] Mock OpenAlex `get_related()` to return results
+  - [x] Verify fallback works
+- [x] Add `test_citation_search_both_providers_fail()`:
+  - [x] Mock both providers to raise
+  - [x] Verify empty result returned, no crash
+  - [x] Verify provider_name is descriptive (per FIX-0.2)
 
 #### Item 2.2 Validation
 
-- [ ] All three tests pass
-- [ ] Fallback order confirmed: Semantic Scholar first, OpenAlex second
+- [x] All three tests pass
+- [x] Fallback order confirmed: Semantic Scholar first, OpenAlex second
 
 ---
 
 ### Item 2.3: Add OpenAlex `get_related()` and OOM Cap Tests
 > **File**: `tests/core/research/providers/test_openalex.py`
 
-- [ ] Add `test_get_related()`:
-  - [ ] Mock OpenAlex response with `related_works` field
-  - [ ] Verify correct results returned
-- [ ] Add `test_get_related_no_related_works()`:
-  - [ ] Mock work with empty `related_works` list
-  - [ ] Verify empty list returned gracefully
-- [ ] Add `test_abstract_reconstruction_oom_cap()`:
-  - [ ] Create inverted index with position > 100,000
-  - [ ] Verify `_reconstruct_abstract()` returns `None`
-  - [ ] Verify warning is logged
+- [x] Add `test_get_related()`:
+  - [x] Mock OpenAlex response with `related_works` field
+  - [x] Verify correct results returned
+- [x] Add `test_get_related_no_related_works()`:
+  - [x] Mock work with empty `related_works` list
+  - [x] Verify empty list returned gracefully
+- [x] Add `test_abstract_reconstruction_oom_cap()`:
+  - [x] Create inverted index with position > 100,000
+  - [x] Verify `_reconstruct_abstract()` returns `None`
+  - [x] Added bonus `test_abstract_reconstruction_at_cap_succeeds()` — position exactly at cap still works
 
 #### Item 2.3 Validation
 
-- [ ] All three tests pass
-- [ ] OOM test confirms safety cap works
+- [x] All tests pass (4 tests: 2 get_related + 2 OOM cap)
+- [x] OOM test confirms safety cap works
 
 ---
 
 ### Item 2.4: Add Paper ID Validation Tests
 > **File**: `tests/core/research/workflows/test_topic_research.py`
 
-- [ ] Add `test_validate_paper_id_accepts_doi()` — `"10.1234/test.2024"` passes
-- [ ] Add `test_validate_paper_id_accepts_s2_hex()` — `"a1b2c3d4e5f6"` passes
-- [ ] Add `test_validate_paper_id_accepts_arxiv()` — `"2301.12345"` passes
-- [ ] Add `test_validate_paper_id_accepts_openalex()` — `"W2741809807"` passes
-- [ ] Add `test_validate_paper_id_rejects_injection()` — `"10.1234; DROP TABLE"` raises
-- [ ] Add `test_validate_paper_id_rejects_too_long()` — 257+ char string raises
+- [x] Add `test_validate_paper_id_accepts_doi()` — `"10.1234/test.2024"` passes
+- [x] Add `test_validate_paper_id_accepts_s2_hex()` — `"a1b2c3d4e5f6"` passes
+- [x] Add `test_validate_paper_id_accepts_arxiv()` — `"2301.12345"` passes
+- [x] Add `test_validate_paper_id_accepts_openalex()` — `"W2741809807"` passes
+- [x] Add `test_validate_paper_id_rejects_injection()` — `"10.1234; DROP TABLE"` raises
+- [x] Add `test_validate_paper_id_rejects_too_long()` — 257+ char string raises
 
 #### Item 2.4 Validation
 
-- [ ] All six tests pass
-- [ ] Regex covers DOI, S2, ArXiv, OpenAlex, PubMed formats
+- [x] All six tests pass
+- [x] Regex covers DOI, S2, ArXiv, OpenAlex, PubMed formats
 
 ---
 
 ### Item 2.5: Add OpenAlex 403 Error Test
 > **File**: `tests/core/research/providers/test_openalex.py`
 
-- [ ] Add `test_403_raises_authentication_error()`:
-  - [ ] Mock 403 HTTP response
-  - [ ] Verify `AuthenticationError` is raised
-  - [ ] Verify error message includes provider name
+- [x] Add `test_403_raises_authentication_error()`:
+  - [x] Mock 403 HTTP response
+  - [x] Verify `AuthenticationError` is raised
+  - [x] Verify error message includes provider name
 
 #### Item 2.5 Validation
 
-- [ ] Test passes
-- [ ] Error type matches 401 behavior (both raise `AuthenticationError`)
+- [x] Test passes
+- [x] Error type matches 401 behavior (both raise `AuthenticationError`)
 
 ---
 

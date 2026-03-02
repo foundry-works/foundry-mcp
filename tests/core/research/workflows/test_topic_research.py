@@ -163,6 +163,9 @@ class StubTopicResearch(TopicResearchMixin):
     def _get_semantic_scholar_search_kwargs(self, state: Any) -> dict[str, Any]:
         return {}
 
+    def _get_search_provider(self, provider_name: str) -> Any:
+        return self._search_providers.get(provider_name)
+
     async def _execute_provider_async(self, **kwargs: Any) -> MagicMock:
         """Mock provider async execution for researcher LLM calls."""
         if self._provider_async_fn:
@@ -3570,3 +3573,334 @@ class TestTopicResearcherPDFIntegration:
         # Extraction failed gracefully — no sources added, no crash
         assert added == 0
         assert len(state.sources) == 0
+
+
+# =============================================================================
+# FIX-2 Item 2.1: Citation Tool Gating Tests
+# =============================================================================
+
+
+class TestCitationToolGating:
+    """Tests that citation_search and related_papers are rejected when gated."""
+
+    @pytest.mark.asyncio
+    async def test_citation_search_rejected_when_gated(self) -> None:
+        """citation_search tool is rejected when enable_citation_tools=False."""
+        from foundry_mcp.core.research.models.deep_research import ResearchProfile
+
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        # Set profile with citation tools disabled
+        profile = ResearchProfile(name="test", enable_citation_tools=False)
+        state.extensions.research_profile = profile
+
+        call_count = 0
+
+        async def mock_llm(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 30
+            result.error = None
+            if call_count == 1:
+                result.content = _react_response(
+                    {"tool": "citation_search", "arguments": {"paper_id": "10.1234/test", "max_results": 5}}
+                )
+            else:
+                result.content = _react_response(_complete_call("Done"))
+            return result
+
+        mixin._provider_async_fn = mock_llm
+
+        topic_result = await mixin._execute_topic_research_async(
+            sub_query=state.sub_queries[0],
+            state=state,
+            available_providers=[_make_mock_provider("tavily")],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
+        )
+
+        # Budget should NOT be consumed on rejection (0 searches performed by citation tool)
+        assert topic_result.searches_performed == 0
+
+    @pytest.mark.asyncio
+    async def test_related_papers_rejected_when_gated(self) -> None:
+        """related_papers tool is rejected when enable_citation_tools=False."""
+        from foundry_mcp.core.research.models.deep_research import ResearchProfile
+
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        profile = ResearchProfile(name="test", enable_citation_tools=False)
+        state.extensions.research_profile = profile
+
+        call_count = 0
+
+        async def mock_llm(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 30
+            result.error = None
+            if call_count == 1:
+                result.content = _react_response(
+                    {"tool": "related_papers", "arguments": {"paper_id": "10.1234/test", "max_results": 5}}
+                )
+            else:
+                result.content = _react_response(_complete_call("Done"))
+            return result
+
+        mixin._provider_async_fn = mock_llm
+
+        topic_result = await mixin._execute_topic_research_async(
+            sub_query=state.sub_queries[0],
+            state=state,
+            available_providers=[_make_mock_provider("tavily")],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
+        )
+
+        assert topic_result.searches_performed == 0
+
+
+# =============================================================================
+# FIX-2 Item 2.2: Provider Fallback Chain Tests
+# =============================================================================
+
+
+class TestProviderFallbackChain:
+    """Tests for Semantic Scholar -> OpenAlex fallback in citation tools."""
+
+    @pytest.mark.asyncio
+    async def test_citation_search_falls_back_to_openalex(self) -> None:
+        """When Semantic Scholar fails, citation_search falls back to OpenAlex."""
+        from foundry_mcp.core.research.models.deep_research import ResearchProfile
+
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        profile = ResearchProfile(name="academic", enable_citation_tools=True)
+        state.extensions.research_profile = profile
+
+        # Set up providers: S2 fails, OpenAlex succeeds
+        s2_provider = MagicMock()
+        s2_provider.get_citations = AsyncMock(side_effect=RuntimeError("S2 down"))
+        oa_provider = MagicMock()
+        oa_provider.get_citations = AsyncMock(return_value=[
+            _make_source("src-oa-1", "https://openalex.org/W111", "OA Citation Result"),
+        ])
+        mixin._search_providers = {"semantic_scholar": s2_provider, "openalex": oa_provider}
+
+        call_count = 0
+
+        async def mock_llm(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 30
+            result.error = None
+            if call_count == 1:
+                result.content = _react_response(
+                    {"tool": "citation_search", "arguments": {"paper_id": "W1234567890", "max_results": 5}}
+                )
+            else:
+                result.content = _react_response(_complete_call("Done"))
+            return result
+
+        mixin._provider_async_fn = mock_llm
+
+        topic_result = await mixin._execute_topic_research_async(
+            sub_query=state.sub_queries[0],
+            state=state,
+            available_providers=[_make_mock_provider("tavily")],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
+        )
+
+        # S2 was attempted, OpenAlex was used as fallback
+        s2_provider.get_citations.assert_called_once()
+        oa_provider.get_citations.assert_called_once()
+        assert topic_result.searches_performed == 1
+
+    @pytest.mark.asyncio
+    async def test_related_papers_falls_back_to_openalex(self) -> None:
+        """When S2 recommendations fail, related_papers falls back to OpenAlex get_related."""
+        from foundry_mcp.core.research.models.deep_research import ResearchProfile
+
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        profile = ResearchProfile(name="academic", enable_citation_tools=True)
+        state.extensions.research_profile = profile
+
+        s2_provider = MagicMock()
+        s2_provider.get_recommendations = AsyncMock(side_effect=RuntimeError("S2 down"))
+        oa_provider = MagicMock()
+        oa_provider.get_related = AsyncMock(return_value=[
+            _make_source("src-oa-1", "https://openalex.org/W222", "OA Related Result"),
+        ])
+        mixin._search_providers = {"semantic_scholar": s2_provider, "openalex": oa_provider}
+
+        call_count = 0
+
+        async def mock_llm(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 30
+            result.error = None
+            if call_count == 1:
+                result.content = _react_response(
+                    {"tool": "related_papers", "arguments": {"paper_id": "W1234567890", "max_results": 5}}
+                )
+            else:
+                result.content = _react_response(_complete_call("Done"))
+            return result
+
+        mixin._provider_async_fn = mock_llm
+
+        topic_result = await mixin._execute_topic_research_async(
+            sub_query=state.sub_queries[0],
+            state=state,
+            available_providers=[_make_mock_provider("tavily")],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
+        )
+
+        s2_provider.get_recommendations.assert_called_once()
+        oa_provider.get_related.assert_called_once()
+        assert topic_result.searches_performed == 1
+
+    @pytest.mark.asyncio
+    async def test_citation_search_both_providers_fail(self) -> None:
+        """When both S2 and OpenAlex fail, citation_search returns empty, no crash."""
+        from foundry_mcp.core.research.models.deep_research import ResearchProfile
+
+        mixin = StubTopicResearch()
+        state = _make_state(num_sub_queries=1)
+        profile = ResearchProfile(name="academic", enable_citation_tools=True)
+        state.extensions.research_profile = profile
+
+        s2_provider = MagicMock()
+        s2_provider.get_citations = AsyncMock(side_effect=RuntimeError("S2 down"))
+        oa_provider = MagicMock()
+        oa_provider.get_citations = AsyncMock(side_effect=RuntimeError("OA down"))
+        mixin._search_providers = {"semantic_scholar": s2_provider, "openalex": oa_provider}
+
+        call_count = 0
+
+        async def mock_llm(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            result.success = True
+            result.tokens_used = 30
+            result.error = None
+            if call_count == 1:
+                result.content = _react_response(
+                    {"tool": "citation_search", "arguments": {"paper_id": "W1234567890", "max_results": 5}}
+                )
+            else:
+                result.content = _react_response(_complete_call("Done"))
+            return result
+
+        mixin._provider_async_fn = mock_llm
+
+        topic_result = await mixin._execute_topic_research_async(
+            sub_query=state.sub_queries[0],
+            state=state,
+            available_providers=[_make_mock_provider("tavily")],
+            max_searches=5,
+            timeout=30.0,
+            seen_urls=set(),
+            seen_titles={},
+            state_lock=asyncio.Lock(),
+            semaphore=asyncio.Semaphore(3),
+        )
+
+        # Both providers were attempted
+        s2_provider.get_citations.assert_called_once()
+        oa_provider.get_citations.assert_called_once()
+        # No crash, tool call still counted
+        assert topic_result.searches_performed == 1
+        # No sources added from failed citation search
+        assert len(state.sources) == 0
+
+
+# =============================================================================
+# FIX-2 Item 2.4: Paper ID Validation Tests
+# =============================================================================
+
+
+class TestValidatePaperId:
+    """Tests for _validate_paper_id() regex validation."""
+
+    def test_validate_paper_id_accepts_doi(self) -> None:
+        """DOI format like '10.1234/test.2024' passes validation."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            _validate_paper_id,
+        )
+
+        assert _validate_paper_id("10.1234/test.2024") is None
+
+    def test_validate_paper_id_accepts_s2_hex(self) -> None:
+        """Semantic Scholar hex ID like 'a1b2c3d4e5f6' passes validation."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            _validate_paper_id,
+        )
+
+        assert _validate_paper_id("a1b2c3d4e5f6") is None
+
+    def test_validate_paper_id_accepts_arxiv(self) -> None:
+        """ArXiv ID like '2301.12345' passes validation."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            _validate_paper_id,
+        )
+
+        assert _validate_paper_id("2301.12345") is None
+
+    def test_validate_paper_id_accepts_openalex(self) -> None:
+        """OpenAlex ID like 'W2741809807' passes validation."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            _validate_paper_id,
+        )
+
+        assert _validate_paper_id("W2741809807") is None
+
+    def test_validate_paper_id_rejects_injection(self) -> None:
+        """Injection attempt like '10.1234; DROP TABLE' is rejected."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            _validate_paper_id,
+        )
+
+        result = _validate_paper_id("10.1234; DROP TABLE")
+        assert result is not None
+        assert "Invalid paper_id" in result
+
+    def test_validate_paper_id_rejects_too_long(self) -> None:
+        """String of 257+ characters is rejected."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+            _validate_paper_id,
+        )
+
+        long_id = "a" * 257
+        result = _validate_paper_id(long_id)
+        assert result is not None
+        assert "Invalid paper_id" in result
