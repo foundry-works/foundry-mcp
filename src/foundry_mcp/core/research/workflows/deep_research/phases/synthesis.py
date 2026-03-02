@@ -1225,6 +1225,20 @@ Include analysis of Conflicting Information and Limitations where they exist, bu
 - Use clear, professional language.
 - Include all relevant findings. Do not omit information for brevity.
 
+## Factual Grounding
+
+- CRITICAL: Never claim that something is absent, excluded, or unavailable unless a source
+  EXPLICITLY states that exclusion. If a source lists items (e.g., transfer partners, features,
+  supported platforms), you may state what IS listed but must not infer what is NOT listed.
+  Negative claims ("X does not support Y", "Y is not available through X") require direct
+  source evidence — not inference from a list's absence of mention.
+- When making comparative claims (X has Y but Z does not), verify BOTH sides against sources.
+  Do not assume exclusivity from a source that only describes one side of the comparison.
+- If sources conflict on a factual point, acknowledge the conflict rather than choosing one
+  side and presenting it as definitive.
+- Quantitative claims (prices, rates, dates, ratios) must be traceable to a specific source.
+  Do not combine or extrapolate numbers from multiple sources without noting the synthesis.
+
 ## Citations
 
 - For the **first reference** to each source, use an inline markdown link followed by its citation number: `[Title](URL) [N]`. This makes sources immediately navigable in rendered markdown.
