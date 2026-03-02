@@ -10,43 +10,43 @@
 ### Item 0.1: Remove Duplicate Metadata Key in OpenAlex Provider
 > **File**: `src/foundry_mcp/core/research/providers/openalex.py`
 
-- [ ] Remove `citation_count` key from metadata dict (line ~616)
-- [ ] Keep only `cited_by_count` key (matches OpenAlex API field name)
-- [ ] Grep for consumers of `metadata["citation_count"]` and update to `cited_by_count`
-- [ ] Update any test assertions referencing `citation_count` metadata key
+- [x] Remove duplicate `cited_by_count` key from metadata dict (kept `citation_count` — the canonical cross-provider key used by crossref, semantic_scholar, and all consumers)
+- [x] Keep only `citation_count` key (canonical cross-provider convention)
+- [x] Grep for consumers of `metadata["cited_by_count"]` — none found, removal is safe
+- [x] No test updates needed — all tests use `citation_count`
 
 #### Item 0.1 Validation
 
-- [ ] No duplicate keys in metadata dict
-- [ ] Downstream consumers (influence scoring, landscape, structured output) use correct key
-- [ ] Existing OpenAlex tests pass unchanged (or updated)
+- [x] No duplicate keys in metadata dict
+- [x] Downstream consumers (influence scoring, landscape, structured output) use correct key
+- [x] Existing OpenAlex tests pass unchanged (114 tests + 134 downstream tests)
 
 ---
 
 ### Item 0.2: Fix Provider Fallback Naming in Topic Research
 > **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py`
 
-- [ ] In `_handle_citation_search_tool()`: track last attempted provider name through fallback loop
-- [ ] Set `provider_name` to last attempted provider (e.g. `"openalex"`) instead of `"unknown"`
-- [ ] Apply same fix in `_handle_related_papers_tool()`
-- [ ] When no provider is available at all, use `"no_provider_available"`
+- [x] In `_handle_citation_search_tool()`: track last attempted provider name through fallback loop
+- [x] Set `provider_name` to last attempted provider (e.g. `"openalex"`) instead of `"unknown"`
+- [x] Apply same fix in `_handle_related_papers_tool()`
+- [x] When no provider is available at all, use `"no_provider_available"`
 
 #### Item 0.2 Validation
 
-- [ ] Response message names the actual provider when one succeeds
-- [ ] Response message names the last-attempted provider when all fail
-- [ ] No `"unknown"` provider name in any tool response
+- [x] Response message names the actual provider when one succeeds
+- [x] Response message names the last-attempted provider when all fail
+- [x] No `"unknown"` provider name in any tool response
 
 ---
 
 ### Item 0.3: Simplify Redundant Boolean Check in Coverage Scoring
 > **File**: `src/foundry_mcp/core/research/workflows/deep_research/phases/supervision_coverage.py`
 
-- [ ] Change `if influential_count and influential_count > 0:` to `if influential_count > 0:` (line ~354)
+- [x] Change `if influential_count and influential_count > 0:` to `if influential_count > 0:` (line ~354)
 
 #### Item 0.3 Validation
 
-- [ ] Existing supervision coverage tests pass unchanged
+- [x] Existing supervision coverage tests pass unchanged
 
 ---
 

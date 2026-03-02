@@ -2315,7 +2315,7 @@ class TopicResearchMixin:
 
         # Try Semantic Scholar first, then OpenAlex as fallback
         sources: list[Any] = []
-        provider_name = "unknown"
+        provider_name = "no_provider_available"
         async with semaphore:
             for name in ("semantic_scholar", "openalex"):
                 provider = self._get_search_provider(name)
@@ -2400,7 +2400,7 @@ class TopicResearchMixin:
 
         # Try Semantic Scholar recommendations first, then OpenAlex related
         sources: list[Any] = []
-        provider_name = "unknown"
+        provider_name = "no_provider_available"
         async with semaphore:
             # Semantic Scholar recommendations
             s2_provider = self._get_search_provider("semantic_scholar")

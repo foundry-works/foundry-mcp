@@ -351,7 +351,7 @@ def compute_source_influence(
             weight = 0.5
 
         # Bonus for influential citations
-        if influential_count and influential_count > 0:
+        if influential_count > 0:
             weight += 0.5
 
         total_weight += weight

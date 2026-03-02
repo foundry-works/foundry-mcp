@@ -623,7 +623,6 @@ class OpenAlexProvider(SearchProvider):
                     "venue": self._extract_venue(work),
                     "funders": funders if funders else None,
                     "referenced_works_count": work.get("referenced_works_count"),
-                    "cited_by_count": work.get("cited_by_count"),
                 },
             )
 
