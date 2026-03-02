@@ -113,6 +113,9 @@ def _build_filter_string(filters: dict[str, Any]) -> str:
     return ",".join(parts)
 
 
+_MAX_ABSTRACT_POSITIONS = 100_000
+
+
 def _reconstruct_abstract(abstract_inverted_index: Optional[dict[str, list[int]]]) -> Optional[str]:
     """Reconstruct plaintext abstract from OpenAlex inverted index format.
 
@@ -124,7 +127,8 @@ def _reconstruct_abstract(abstract_inverted_index: Optional[dict[str, list[int]]
             e.g. {"This": [0], "is": [1, 3], "a": [2], "test": [4]}
 
     Returns:
-        Reconstructed abstract text, or None if input is None/empty.
+        Reconstructed abstract text, or None if input is None/empty
+        or if position values exceed the safety cap.
     """
     if not abstract_inverted_index:
         return None
@@ -138,8 +142,16 @@ def _reconstruct_abstract(abstract_inverted_index: Optional[dict[str, list[int]]
     if not position_map:
         return None
 
-    # Reconstruct text in order
+    # Guard against malicious inverted indices with huge position values (OOM)
     max_pos = max(position_map.keys())
+    if max_pos > _MAX_ABSTRACT_POSITIONS:
+        logger.warning(
+            "Abstract inverted index has position %d exceeding cap %d — skipping reconstruction",
+            max_pos,
+            _MAX_ABSTRACT_POSITIONS,
+        )
+        return None
+
     words = [position_map.get(i, "") for i in range(max_pos + 1)]
     return " ".join(w for w in words if w)
 

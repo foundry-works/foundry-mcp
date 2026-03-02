@@ -634,7 +634,8 @@ def _handle_deep_research_network(
             )
         )
 
-    # Use explicit parameter if provided, otherwise fall back to config
+    # Use explicit parameter if provided, otherwise fall back to config.
+    # Clamp to [1, 100] to prevent excessive API calls from unbounded input.
     effective_max_refs = (
         max_references_per_paper
         if max_references_per_paper is not None
@@ -645,6 +646,8 @@ def _handle_deep_research_network(
         if max_citations_per_paper is not None
         else config.research.deep_research_citation_network_max_cites_per_paper
     )
+    effective_max_refs = max(1, min(effective_max_refs, 100))
+    effective_max_cites = max(1, min(effective_max_cites, 100))
 
     # Build providers
     openalex_provider = None

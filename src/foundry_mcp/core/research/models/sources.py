@@ -574,7 +574,7 @@ class MethodologyAssessment(BaseModel):
         default="low",
         description="Extraction confidence: 'high', 'medium', or 'low'",
     )
-    content_basis: str = Field(
+    content_basis: Literal["abstract", "full_text"] = Field(
         default="abstract",
         description="Content used for assessment: 'abstract' or 'full_text'",
     )

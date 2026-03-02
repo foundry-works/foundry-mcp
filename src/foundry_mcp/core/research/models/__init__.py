@@ -20,12 +20,20 @@ from foundry_mcp.core.research.models.conversations import (
 # --- Wave 3: Extracted sub-modules ---
 from foundry_mcp.core.research.models.deep_research import (
     BUILTIN_PROFILES,
+    CitationEdge,
+    CitationNetwork,
+    CitationNode,
     DeepResearchConfig,
     DeepResearchPhase,
     DeepResearchState,
+    ProvenanceEntry,
+    ProvenanceLog,
     ResearchExtensions,
+    ResearchLandscape,
     ResearchProfile,
+    ResearchThread,
     StructuredResearchOutput,
+    StudyComparison,
 )
 from foundry_mcp.core.research.models.digest import (
     DigestPayload,
@@ -55,12 +63,14 @@ from foundry_mcp.core.research.models.ideation import (
 )
 from foundry_mcp.core.research.models.sources import (
     DOMAIN_TIERS,
+    MethodologyAssessment,
     ResearchFinding,
     ResearchGap,
     ResearchMode,
     ResearchSource,
     SourceQuality,
     SourceType,
+    StudyDesign,
     SubQuery,
 )
 from foundry_mcp.core.research.models.thinkdeep import (
@@ -122,6 +132,20 @@ __all__ = [
     # PLAN-1: Research profiles
     "ResearchProfile",
     "BUILTIN_PROFILES",
-    # PLAN-1: Structured output
+    # Structured output
     "StructuredResearchOutput",
+    # Provenance models
+    "ProvenanceEntry",
+    "ProvenanceLog",
+    # Citation network models
+    "CitationNode",
+    "CitationEdge",
+    "CitationNetwork",
+    # Academic analysis models
+    "ResearchLandscape",
+    "StudyComparison",
+    "ResearchThread",
+    # Methodology assessment models
+    "MethodologyAssessment",
+    "StudyDesign",
 ]
