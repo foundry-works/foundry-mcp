@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0a5] - 2026-03-03
+
+### Added
+
+- **Source relevance filtering**: Keyword-based relevance scoring during source collection deprioritizes topically irrelevant sources (e.g. seaplane transport papers appearing in credit card research) in compression while retaining them in state for provenance. Uses overlap coefficient with title/content weighting and configurable threshold (default 0.05).
+- **Demand-driven academic providers for general profile**: Removed `semantic_scholar` from the general profile defaults so academic providers only activate when the brief contains discipline keywords. Expanded discipline-provider mapping with 6 new groups (physics, math, psychology, engineering, law, history) for better adaptive routing.
+- **Claim verification enabled by default**: Claim verification was previously opt-in and invisible to users. Now enabled by default for all deep research sessions. Config acts as a global kill switch — setting `deep_research_claim_verification_enabled = false` in TOML reliably disables it regardless of profile.
+
+### Fixed
+
+- **Year references no longer parsed as citations**: The citation regex matched `[2025]` and `[2026]` year references in report text as citation numbers, producing false "dangling citation" warnings and incorrectly stripping them from output. Added `max_citation` parameter to bound the plausible citation range.
+
 ## [0.18.0a4] - 2026-03-03
 
 ### Added
