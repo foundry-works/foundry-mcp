@@ -20,19 +20,19 @@
 
 ## Phase 3: Fix claim verification timeout on large reports
 
-- [ ] Add `max_tokens=16384` to extraction call in `claim_verification.py:781-787`
-- [ ] Add report truncation guard (30K char cap) before extraction prompt construction
-- [ ] Update `_build_extraction_user_prompt()` or add wrapper to accept truncated report
-- [ ] Update default `deep_research_claim_verification_timeout` from 120.0 to 180.0 in `config/research.py:335`
-- [ ] Update TOML defaults dict timeout value in `config/research.py:488`
-- [ ] Add unit test: extraction call receives max_tokens parameter
-- [ ] Add unit test: large reports are truncated before extraction
-- [ ] Add unit test: truncation preserves report body, drops bibliography first
-- [ ] Verify existing claim verification tests still pass
+- [x] Add `max_tokens=16384` to extraction call in `claim_verification.py:781-787`
+- [x] Add report truncation guard (30K char cap) before extraction prompt construction
+- [x] Update `_build_extraction_user_prompt()` or add wrapper to accept truncated report
+- [x] Update default `deep_research_claim_verification_timeout` from 120.0 to 180.0 in `config/research.py:335`
+- [x] Update TOML defaults dict timeout value in `config/research.py:488`
+- [x] Add unit test: extraction call receives max_tokens parameter
+- [x] Add unit test: large reports are truncated before extraction
+- [x] Add unit test: truncation preserves report body, drops bibliography first
+- [x] Verify existing claim verification tests still pass
 
 ## Final Validation
 
-- [ ] Run full test suite (`pytest tests/`)
+- [x] Run full test suite (`pytest tests/`)
 - [ ] Run contract tests (`pytest tests/contract/`)
 - [ ] Smoke test: general-profile deep research session confirms only Tavily in provider stats
 - [ ] Smoke test: report bibliography matches inline citations

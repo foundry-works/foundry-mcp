@@ -776,7 +776,19 @@ async def extract_and_verify_claims(
         return result
 
     # --- Pass 1: Claim Extraction ---
-    extraction_prompt = _build_extraction_user_prompt(state.report)
+    # Cap report input to avoid timeout on very large reports.
+    _MAX_EXTRACTION_CHARS = 30_000
+    if len(state.report) > _MAX_EXTRACTION_CHARS:
+        # Prefer the first portion (exec summary + body) over the bibliography.
+        extraction_report = state.report[:_MAX_EXTRACTION_CHARS]
+        logger.info(
+            "Claim extraction: truncated report from %d to %d chars",
+            len(state.report),
+            _MAX_EXTRACTION_CHARS,
+        )
+    else:
+        extraction_report = state.report
+    extraction_prompt = _build_extraction_user_prompt(extraction_report)
     try:
         extraction_result: "WorkflowResult" = await execute_fn(
             prompt=extraction_prompt,
@@ -784,6 +796,7 @@ async def extract_and_verify_claims(
             provider_id=provider_id,
             timeout=timeout,
             phase="claim_extraction",
+            max_tokens=16384,
         )
         if not extraction_result.success or not extraction_result.content:
             logger.warning("Claim extraction LLM call failed")

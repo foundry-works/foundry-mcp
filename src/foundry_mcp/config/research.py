@@ -332,7 +332,7 @@ class ResearchConfig:
     deep_research_claim_verification_sample_rate: float = 0.3  # Sample 30% of positive claims
     deep_research_claim_verification_provider: Optional[str] = None  # Override verification provider
     deep_research_claim_verification_model: Optional[str] = None  # Override verification model
-    deep_research_claim_verification_timeout: float = 120.0  # Seconds (overall verification phase)
+    deep_research_claim_verification_timeout: float = 180.0  # Seconds (overall verification phase)
     deep_research_claim_verification_max_claims: int = 50  # Max claims to verify per report
     deep_research_claim_verification_max_concurrent: int = 10  # Max parallel verification LLM calls
     deep_research_claim_verification_max_corrections: int = 5  # Max correction LLM calls per report
@@ -485,7 +485,7 @@ class ResearchConfig:
             "deep_research_supervision_wall_clock_timeout": 1800.0,
             "deep_research_summarization_timeout": 60.0,
             "deep_research_digest_timeout": 120.0,
-            "deep_research_claim_verification_timeout": 120.0,
+            "deep_research_claim_verification_timeout": 180.0,
             "summarization_timeout": 60.0,
         }
         _TIMEOUT_PRESETS: Dict[str, float] = {
@@ -821,7 +821,7 @@ class ResearchConfig:
             deep_research_claim_verification_provider=data.get("deep_research_claim_verification_provider"),
             deep_research_claim_verification_model=data.get("deep_research_claim_verification_model"),
             deep_research_claim_verification_timeout=float(
-                data.get("deep_research_claim_verification_timeout", 120)
+                data.get("deep_research_claim_verification_timeout", 180)
             ),
             deep_research_claim_verification_max_claims=int(
                 data.get("deep_research_claim_verification_max_claims", 50)

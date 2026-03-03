@@ -329,7 +329,7 @@ class TestClaimVerificationConfigParsing:
         assert config.deep_research_claim_verification_sample_rate == 0.3
         assert config.deep_research_claim_verification_provider is None
         assert config.deep_research_claim_verification_model is None
-        assert config.deep_research_claim_verification_timeout == 120.0
+        assert config.deep_research_claim_verification_timeout == 180.0
         assert config.deep_research_claim_verification_max_claims == 50
         assert config.deep_research_claim_verification_max_concurrent == 10
         assert config.deep_research_claim_verification_max_corrections == 5
@@ -459,8 +459,8 @@ class TestClaimVerificationTimeoutTypes:
         config = ResearchConfig.from_toml_dict({
             "timeouts": {"preset": "fast"},
         })
-        # fast = 0.5x multiplier; 120.0 * 0.5 = 60.0
-        assert config.deep_research_claim_verification_timeout == 60.0
+        # fast = 0.5x multiplier; 180.0 * 0.5 = 90.0
+        assert config.deep_research_claim_verification_timeout == 90.0
         assert isinstance(config.deep_research_claim_verification_timeout, float)
 
 

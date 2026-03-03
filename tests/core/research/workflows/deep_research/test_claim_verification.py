@@ -1322,6 +1322,173 @@ class TestReportOverwriteAfterCorrections:
         if getattr(state, "report_output_path", None):
             Path(state.report_output_path).write_text(state.report or "", encoding="utf-8")
 
+
+# ---------------------------------------------------------------------------
+# Phase 3: Extraction max_tokens and report truncation
+# ---------------------------------------------------------------------------
+
+
+class TestExtractionMaxTokensAndTruncation:
+    """Tests for max_tokens=16384 on extraction call and 30K char truncation."""
+
+    @pytest.mark.asyncio
+    async def test_extraction_call_receives_max_tokens(self):
+        """Extraction LLM call should include max_tokens=16384."""
+        report = "Short report with a claim [1]."
+        sources = [_make_source(1, content="Source content")]
+        state = _make_state_with_sources(report, sources)
+        config = _make_config()
+
+        captured_kwargs: dict = {}
+
+        async def mock_execute(**kwargs):
+            phase = kwargs.get("phase", "")
+            if phase == "claim_extraction":
+                captured_kwargs.update(kwargs)
+                return MockWorkflowResult(
+                    success=True,
+                    content=json.dumps([{
+                        "claim": "A claim",
+                        "claim_type": "positive",
+                        "cited_sources": [1],
+                    }]),
+                )
+            elif phase == "claim_verification":
+                return MockWorkflowResult(
+                    success=True,
+                    content=json.dumps({
+                        "verdict": "SUPPORTED",
+                        "evidence_quote": "e",
+                        "explanation": "ok",
+                    }),
+                )
+            return MockWorkflowResult(success=True, content="")
+
+        await extract_and_verify_claims(
+            state=state, config=config, provider_id="test",
+            execute_fn=mock_execute, timeout=30,
+        )
+
+        assert "max_tokens" in captured_kwargs
+        assert captured_kwargs["max_tokens"] == 16384
+
+    @pytest.mark.asyncio
+    async def test_large_report_truncated_before_extraction(self):
+        """Reports > 30K chars should be truncated before extraction."""
+        # Build a report with body + large bibliography exceeding 30K chars.
+        body = "# Analysis\n\nImportant claim here [1].\n\n"
+        bibliography = "## Sources\n\n" + ("- Source entry\n" * 3000)  # ~45K chars
+        report = body + bibliography
+        assert len(report) > 30_000
+
+        sources = [_make_source(1, content="Source content")]
+        state = _make_state_with_sources(report, sources)
+        config = _make_config()
+
+        captured_prompt: str = ""
+
+        async def mock_execute(**kwargs):
+            nonlocal captured_prompt
+            phase = kwargs.get("phase", "")
+            if phase == "claim_extraction":
+                captured_prompt = kwargs.get("prompt", "")
+                return MockWorkflowResult(
+                    success=True,
+                    content=json.dumps([{
+                        "claim": "Important claim",
+                        "claim_type": "positive",
+                        "cited_sources": [1],
+                    }]),
+                )
+            elif phase == "claim_verification":
+                return MockWorkflowResult(
+                    success=True,
+                    content=json.dumps({
+                        "verdict": "SUPPORTED",
+                        "evidence_quote": "e",
+                        "explanation": "ok",
+                    }),
+                )
+            return MockWorkflowResult(success=True, content="")
+
+        await extract_and_verify_claims(
+            state=state, config=config, provider_id="test",
+            execute_fn=mock_execute, timeout=30,
+        )
+
+        # The prompt should contain truncated content, not full report.
+        # _build_extraction_user_prompt adds wrapper text, so prompt > 30K is fine,
+        # but the report portion should be capped at 30K chars.
+        assert len(captured_prompt) < len(report)
+        # Body content should be preserved (it's at the start).
+        assert "Important claim here [1]" in captured_prompt
+
+    @pytest.mark.asyncio
+    async def test_small_report_not_truncated(self):
+        """Reports <= 30K chars should not be truncated."""
+        report = "Short report with a claim [1]."
+        sources = [_make_source(1, content="Source content")]
+        state = _make_state_with_sources(report, sources)
+        config = _make_config()
+
+        captured_prompt: str = ""
+
+        async def mock_execute(**kwargs):
+            nonlocal captured_prompt
+            phase = kwargs.get("phase", "")
+            if phase == "claim_extraction":
+                captured_prompt = kwargs.get("prompt", "")
+                return MockWorkflowResult(
+                    success=True,
+                    content=json.dumps([]),
+                )
+            return MockWorkflowResult(success=True, content="")
+
+        await extract_and_verify_claims(
+            state=state, config=config, provider_id="test",
+            execute_fn=mock_execute, timeout=30,
+        )
+
+        # Full report should be in the prompt.
+        assert report in captured_prompt
+
+    @pytest.mark.asyncio
+    async def test_truncation_preserves_body_drops_bibliography(self):
+        """Truncation takes the first 30K chars, preserving body over bibliography."""
+        # Body is 5K chars, bibliography is 40K chars.
+        body_text = "# Executive Summary\n\n" + ("Analysis paragraph. " * 250)  # ~5K
+        bib_text = "\n\n## Sources\n\n" + ("- [N] Author, Title, URL\n" * 2000)  # ~40K
+        report = body_text + bib_text
+        assert len(report) > 30_000
+
+        sources = [_make_source(1, content="Source content")]
+        state = _make_state_with_sources(report, sources)
+        config = _make_config()
+
+        captured_prompt: str = ""
+
+        async def mock_execute(**kwargs):
+            nonlocal captured_prompt
+            phase = kwargs.get("phase", "")
+            if phase == "claim_extraction":
+                captured_prompt = kwargs.get("prompt", "")
+                return MockWorkflowResult(success=True, content=json.dumps([]))
+            return MockWorkflowResult(success=True, content="")
+
+        await extract_and_verify_claims(
+            state=state, config=config, provider_id="test",
+            execute_fn=mock_execute, timeout=30,
+        )
+
+        # Body content (executive summary) should be fully present.
+        assert "Executive Summary" in captured_prompt
+        assert "Analysis paragraph." in captured_prompt
+        # Bibliography should be partially truncated (not all entries present).
+        # Count bibliography entries in prompt vs original.
+        prompt_bib_count = captured_prompt.count("Author, Title, URL")
+        original_bib_count = report.count("Author, Title, URL")
+        assert prompt_bib_count < original_bib_count
+
         # No exception raised — test passes.
 
 
