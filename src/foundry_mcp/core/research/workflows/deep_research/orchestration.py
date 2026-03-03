@@ -362,10 +362,7 @@ class SupervisorOrchestrator:
         Args:
             state: Research state to update
         """
-        if "agent_decisions" not in state.metadata:
-            state.metadata["agent_decisions"] = []
-
-        state.metadata["agent_decisions"].extend([d.to_dict() for d in self._decisions])
+        state.extend_metadata_list("agent_decisions", [d.to_dict() for d in self._decisions])
         self._decisions.clear()
 
     def get_reflection_prompt(self, state: DeepResearchState, phase: DeepResearchPhase) -> str:

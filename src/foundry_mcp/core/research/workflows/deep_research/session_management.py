@@ -252,20 +252,20 @@ class SessionManagementMixin:
             if not state.findings:
                 issues.append("No findings found for synthesis phase")
 
-        # Check for rollback_note from cancellation — partial iteration data may
-        # be retained in state (sources, findings, directives) from an incomplete
-        # iteration.  This is a warning (not a resume blocker) since the data is
-        # usable, just potentially incomplete or duplicated.
-        rollback_note = state.metadata.get("rollback_note")
-        if rollback_note:
+        # Check for rollback_counts from cancellation — partial iteration data
+        # was removed during rollback, but the session was still cancelled
+        # mid-iteration.  This is informational (not a resume blocker).
+        rollback_counts = state.metadata.get("rollback_counts")
+        if rollback_counts:
             discarded_iter = state.metadata.get("discarded_iteration", "?")
             logger.warning(
-                "Resuming research %s with rollback_note=%r (discarded_iteration=%s). "
-                "Partial data from the cancelled iteration is retained in state — "
-                "results may contain duplicates or incomplete data.",
+                "Resuming research %s after rollback (discarded_iteration=%s, "
+                "removed: %d sources, %d findings, %d topic results).",
                 state.id,
-                rollback_note,
                 discarded_iter,
+                rollback_counts.get("sources_removed", 0),
+                rollback_counts.get("findings_removed", 0),
+                rollback_counts.get("topic_results_removed", 0),
             )
 
         # Note: Pydantic's default_factory=list guarantees collections are never None,

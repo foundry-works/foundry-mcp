@@ -96,14 +96,12 @@ class BackgroundTaskMixin:
         def run_in_thread() -> None:
             """Thread target that runs the async workflow.
 
-            WARNING — Shared-state constraint:
+            NOTE — Thread-safety:
             ``DeepResearchState`` is shared between this daemon thread and
-            the main thread. CPython's GIL protects individual attribute
-            writes, but composite read-modify-write operations on mutable
-            containers inside state (e.g. appending to lists, updating
-            dicts) can produce inconsistent views. A full lock-based or
-            message-passing fix is out of scope; callers that mutate
-            state collections should be aware of this limitation.
+            the main thread. Collection mutations use ``state._state_lock``
+            (a threading.Lock) via the thread-safe helpers on
+            DeepResearchState (add_source, append_raw_note, update_metadata,
+            etc.) to prevent inconsistent read-modify-write races.
             """
             try:
 
@@ -145,9 +143,9 @@ class BackgroundTaskMixin:
                         )
                     except asyncio.TimeoutError:
                         timeout_message = f"Research timed out after {task_timeout}s"
-                        state.metadata["timeout"] = True
-                        state.metadata["abort_phase"] = state.phase.value
-                        state.metadata["abort_iteration"] = state.iteration
+                        state.update_metadata("timeout", True)
+                        state.update_metadata("abort_phase", state.phase.value)
+                        state.update_metadata("abort_iteration", state.iteration)
                         state.mark_failed(timeout_message)
                         workflow.memory.save_deep_research(state)
                         workflow._write_audit_event(
@@ -214,8 +212,8 @@ class BackgroundTaskMixin:
                         },
                         level="error",
                     )
-                except Exception:
-                    pass  # Already logged above
+                except Exception as e:
+                    logger.debug("Post-failure audit/error-recording failed: %s", e, exc_info=True)
             finally:
                 # Unregister from active sessions (under lock)
                 with _active_sessions_lock:
@@ -223,14 +221,14 @@ class BackgroundTaskMixin:
                 # Ensure final state is persisted for completed/cancelled/failed workflows
                 try:
                     workflow._flush_state(state)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Final state flush failed: %s", e, exc_info=True)
                 # Remove completed task from registries to avoid leaks
                 try:
                     workflow._cleanup_completed_task(state.id)
                     task_registry.remove(state.id)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Task registry cleanup failed: %s", e, exc_info=True)
 
         # Create and start the daemon thread
         thread = threading.Thread(

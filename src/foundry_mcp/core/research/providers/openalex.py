@@ -138,6 +138,13 @@ def _reconstruct_abstract(abstract_inverted_index: Optional[dict[str, list[int]]
     position_map: dict[int, str] = {}
     for word, positions in abstract_inverted_index.items():
         for pos in positions:
+            if not isinstance(pos, int) or pos < 0:
+                logger.warning(
+                    "Abstract inverted index: skipping invalid position %r for word %r",
+                    pos,
+                    word[:50],
+                )
+                continue
             position_map[pos] = word
 
     if not position_map:

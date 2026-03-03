@@ -144,8 +144,8 @@ def _crash_handler(exc_type: type, exc_value: BaseException, exc_tb: Any) -> Non
     # Try to save crash markers for active research sessions
     for research_id, state in sessions_snapshot:
         try:
-            state.metadata["crash"] = True
-            state.metadata["crash_error"] = str(exc_value)
+            state.update_metadata("crash", True)
+            state.update_metadata("crash_error", str(exc_value))
             # Sanitize research_id to prevent path traversal in crash file names
             safe_id = Path(research_id).name
             crash_path = Path.home() / ".foundry-mcp" / "research" / "deep_research" / f"{safe_id}.crash"

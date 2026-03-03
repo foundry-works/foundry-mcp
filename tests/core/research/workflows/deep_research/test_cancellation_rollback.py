@@ -1,8 +1,8 @@
 """Tests for cancellation rollback metadata in workflow_execution.py.
 
-Phase 2C: Verifies that the rollback_note metadata flag is set when
-cancellation occurs during an in-progress iteration, so resume logic
-can detect that partial iteration data is retained in state.
+Phase 2C: Verifies that rollback_counts metadata is set when
+cancellation occurs during an in-progress iteration, and that
+partial iteration data is actually removed from state.
 """
 
 from __future__ import annotations
@@ -51,13 +51,13 @@ class StubWorkflowExecution(WorkflowExecutionMixin):
 
 
 class TestCancellationRollbackMetadata:
-    """2C: Verify rollback_note metadata is set on cancellation rollback."""
+    """2C: Verify rollback_counts metadata is set on cancellation rollback."""
 
     @pytest.mark.asyncio
     async def test_rollback_sets_metadata_on_incomplete_iteration(self):
         """When cancelled during in-progress iteration with prior checkpoint,
-        rollback_note='partial_iteration_data_retained' is set and
-        CancelledError is re-raised to honour Python's cancellation contract."""
+        rollback_counts is set and CancelledError is re-raised
+        to honour Python's cancellation contract."""
         stub = StubWorkflowExecution()
         state = DeepResearchState(
             original_query="test query",
@@ -81,14 +81,14 @@ class TestCancellationRollbackMetadata:
                 max_concurrent=3,
             )
 
-        assert state.metadata.get("rollback_note") == "partial_iteration_data_retained"
+        assert "rollback_counts" in state.metadata
         assert state.metadata.get("discarded_iteration") == 2
         assert state.iteration == 1
 
     @pytest.mark.asyncio
     async def test_rollback_sets_metadata_on_first_iteration_incomplete(self):
         """When first iteration is incomplete at cancellation,
-        rollback_note is still set and CancelledError propagates."""
+        rollback_counts is still set and CancelledError propagates."""
         stub = StubWorkflowExecution()
         state = DeepResearchState(
             original_query="test query",
@@ -111,12 +111,12 @@ class TestCancellationRollbackMetadata:
                 max_concurrent=3,
             )
 
-        assert state.metadata.get("rollback_note") == "partial_iteration_data_retained"
+        assert "rollback_counts" in state.metadata
         assert state.metadata.get("discarded_iteration") == 0
 
     @pytest.mark.asyncio
-    async def test_no_rollback_note_when_iteration_not_in_progress(self):
-        """When cancelled without iteration_in_progress, no rollback_note is set."""
+    async def test_no_rollback_counts_when_iteration_not_in_progress(self):
+        """When cancelled without iteration_in_progress, no rollback_counts is set."""
         stub = StubWorkflowExecution()
         state = DeepResearchState(
             original_query="test query",
@@ -138,4 +138,4 @@ class TestCancellationRollbackMetadata:
                 max_concurrent=3,
             )
 
-        assert "rollback_note" not in state.metadata
+        assert "rollback_counts" not in state.metadata

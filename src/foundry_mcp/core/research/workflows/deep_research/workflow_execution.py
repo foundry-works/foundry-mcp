@@ -36,6 +36,48 @@ from foundry_mcp.core.research.workflows.deep_research.source_quality import (
 logger = logging.getLogger(__name__)
 
 
+def _snapshot_iteration_counts(state: DeepResearchState) -> dict[str, int]:
+    """Capture current source/finding/directive counts at iteration start.
+
+    Returns a dict suitable for storing in ``state.metadata`` so that
+    cancellation rollback can trim items added during a partial iteration.
+    """
+    return {
+        "source_count": len(state.sources),
+        "finding_count": len(state.findings),
+        "topic_result_count": len(state.topic_research_results),
+    }
+
+
+def _rollback_partial_iteration(state: DeepResearchState) -> dict[str, int]:
+    """Remove sources, findings, and topic results added during a partial iteration.
+
+    Uses the snapshot stored in ``state.metadata["iteration_snapshot"]`` to
+    trim collections back to their pre-iteration sizes.
+
+    Returns a dict with counts of removed items for audit logging.
+    """
+    snapshot = state.metadata.get("iteration_snapshot")
+    if not snapshot:
+        return {"sources_removed": 0, "findings_removed": 0, "topic_results_removed": 0}
+
+    removed = {}
+    with state._state_lock:
+        src_count = snapshot.get("source_count", 0)
+        removed["sources_removed"] = max(0, len(state.sources) - src_count)
+        state.sources = state.sources[:src_count]
+
+        find_count = snapshot.get("finding_count", 0)
+        removed["findings_removed"] = max(0, len(state.findings) - find_count)
+        state.findings = state.findings[:find_count]
+
+        tr_count = snapshot.get("topic_result_count", 0)
+        removed["topic_results_removed"] = max(0, len(state.topic_research_results) - tr_count)
+        state.topic_research_results = state.topic_research_results[:tr_count]
+
+    return removed
+
+
 def _validate_report_output_path(path: str) -> Path:
     """Validate a report output path, blocking directory traversal.
 
@@ -298,6 +340,7 @@ class WorkflowExecutionMixin:
                     level="warning",
                 )
                 state.metadata["iteration_in_progress"] = True
+                state.metadata["iteration_snapshot"] = _snapshot_iteration_counts(state)
                 err = await self._run_phase(
                     state,
                     DeepResearchPhase.GATHERING,
@@ -334,6 +377,7 @@ class WorkflowExecutionMixin:
                     state.phase = DeepResearchPhase.SYNTHESIS
                 else:
                     state.metadata["iteration_in_progress"] = True
+                    state.metadata["iteration_snapshot"] = _snapshot_iteration_counts(state)
 
                     err = await self._run_phase(
                         state,
@@ -469,12 +513,13 @@ class WorkflowExecutionMixin:
                             level="warning",
                         )
                     finally:
-                        state.metadata.pop("claim_verification_in_progress", None)
+                        state.pop_metadata("claim_verification_in_progress")
                 # --- END CLAIM VERIFICATION ---
 
                 # No refinement — workflow complete
                 state.metadata["iteration_in_progress"] = False
                 state.metadata["last_completed_iteration"] = state.iteration
+                state.metadata.pop("iteration_snapshot", None)
                 state.mark_completed(report=state.report)
 
             # Calculate duration
@@ -564,42 +609,44 @@ class WorkflowExecutionMixin:
             )
             state.metadata["cancelled"] = True
 
-            # Check if current iteration is incomplete.
-            #
-            # ROLLBACK LIMITATION: The "rollback" below only resets
-            # ``state.iteration`` and ``state.phase``.  Accumulated
-            # sources, findings, directives, and topic_research_results
-            # from the partial iteration remain in state.  Resume logic
-            # should check ``state.metadata["rollback_note"]`` to detect
-            # this condition and decide whether to re-process or skip
-            # already-collected data.
+            # Check if current iteration is incomplete and roll back
+            # partial data collected during it.
             if state.metadata.get("iteration_in_progress"):
-                # Current iteration is incomplete - discard partial results from this iteration
+                # Remove sources, findings, and topic results added during
+                # the partial iteration using the snapshot taken at entry.
+                rollback_counts = _rollback_partial_iteration(state)
+
                 last_completed_iteration = state.metadata.get("last_completed_iteration")
                 if last_completed_iteration is not None and last_completed_iteration < state.iteration:
                     # We have a safe checkpoint from a prior completed iteration
                     logger.warning(
                         "Cancellation rollback: resetting iteration %d → %d and "
-                        "phase → SYNTHESIS for research %s. NOTE: sources, "
-                        "findings, and directives from the partial iteration are "
-                        "retained in state — only the iteration counter and phase "
-                        "marker are rolled back.",
+                        "phase → SYNTHESIS for research %s. Removed %d sources, "
+                        "%d findings, %d topic results from partial iteration.",
                         state.iteration,
                         last_completed_iteration,
                         state.id,
+                        rollback_counts.get("sources_removed", 0),
+                        rollback_counts.get("findings_removed", 0),
+                        rollback_counts.get("topic_results_removed", 0),
                     )
                     state.metadata["discarded_iteration"] = state.iteration
-                    state.metadata["rollback_note"] = "partial_iteration_data_retained"
+                    state.metadata["rollback_counts"] = rollback_counts
                     state.iteration = last_completed_iteration
                     state.phase = DeepResearchPhase.SYNTHESIS
                 else:
                     # First iteration is incomplete - we cannot safely resume, must discard entire session
                     logger.warning(
-                        "First iteration incomplete at cancellation, marking session for discard, research %s",
+                        "First iteration incomplete at cancellation, marking session "
+                        "for discard, research %s. Removed %d sources, %d findings, "
+                        "%d topic results.",
                         state.id,
+                        rollback_counts.get("sources_removed", 0),
+                        rollback_counts.get("findings_removed", 0),
+                        rollback_counts.get("topic_results_removed", 0),
                     )
                     state.metadata["discarded_iteration"] = state.iteration
-                    state.metadata["rollback_note"] = "partial_iteration_data_retained"
+                    state.metadata["rollback_counts"] = rollback_counts
             else:
                 # Iteration was successfully completed, safe to save
                 logger.info(

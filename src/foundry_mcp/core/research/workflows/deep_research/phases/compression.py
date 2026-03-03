@@ -23,6 +23,9 @@ if TYPE_CHECKING:
     from foundry_mcp.core.research.memory import ResearchMemory
 
 from foundry_mcp.core.research.models.deep_research import DeepResearchState, TopicResearchResult
+from foundry_mcp.core.research.workflows.deep_research._concurrency import (
+    check_gather_cancellation,
+)
 from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
     sanitize_external_content,
 )
@@ -995,11 +998,7 @@ class CompressionMixin:
         # Run compression tasks in parallel
         tasks = [compress_one(tr) for tr in results_to_compress]
         gather_results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Propagate cancellation if any task was cancelled
-        for r in gather_results:
-            if isinstance(r, asyncio.CancelledError):
-                raise r
+        check_gather_cancellation(gather_results)
 
         # Aggregate results after gather completes (no nonlocal mutation).
         # Note: per-topic PhaseMetrics and token tracking are handled by

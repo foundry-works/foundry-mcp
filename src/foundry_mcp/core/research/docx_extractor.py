@@ -174,6 +174,9 @@ DEFAULT_FETCH_TIMEOUT = 30.0
 MAX_DOCX_REDIRECTS = 5
 """Maximum number of redirects to follow when fetching DOCX files."""
 
+MAX_DECOMPRESSION_RATIO = 100
+"""Maximum allowed ratio of decompressed-to-compressed size (zip bomb protection)."""
+
 
 # =============================================================================
 # Error classes (canonical definitions in foundry_mcp.core.errors.research)
@@ -215,13 +218,22 @@ def validate_docx_magic_bytes(data: bytes) -> None:
         preview = data[:20].hex()
         raise InvalidDocxError(f"Invalid DOCX: missing PK header. Got: {preview}...")
 
-    # Probe ZIP for word/ entries to confirm it's a DOCX (not just any ZIP)
+    # Probe ZIP for word/ entries to confirm it's a DOCX (not just any ZIP),
+    # and check decompression ratio to prevent zip bombs.
     try:
         with zipfile.ZipFile(io.BytesIO(data), "r") as zf:
             names = zf.namelist()
             if not any(name.startswith("word/") for name in names):
                 raise InvalidDocxError(
                     "ZIP archive does not contain word/ entries — not a valid DOCX file"
+                )
+            # Zip bomb protection: check declared decompressed size
+            total_decompressed = sum(info.file_size for info in zf.infolist())
+            compressed_size = len(data)
+            if compressed_size > 0 and total_decompressed > compressed_size * MAX_DECOMPRESSION_RATIO:
+                raise DocxSecurityError(
+                    f"Decompression ratio {total_decompressed / compressed_size:.0f}:1 "
+                    f"exceeds limit {MAX_DECOMPRESSION_RATIO}:1 — possible zip bomb"
                 )
     except zipfile.BadZipFile as e:
         raise InvalidDocxError(f"Invalid DOCX: corrupt ZIP archive: {e}") from e

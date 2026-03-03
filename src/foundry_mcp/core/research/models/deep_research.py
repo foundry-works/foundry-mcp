@@ -1,12 +1,13 @@
 """Deep research workflow models (multi-phase iterative research)."""
 
 import logging
+import threading
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, ClassVar, Literal, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ DEFAULT_MAX_SUPERVISION_ROUNDS: int = 6
 MAX_SOURCES: int = 500
 MAX_TOPIC_RESEARCH_RESULTS: int = 50
 MAX_SUPERVISION_MESSAGES: int = 100
+MAX_RAW_NOTE_ENTRY_CHARS: int = 100_000  # 100 KB per entry — truncate before aggregate caps
 
 
 class TopicResearchResult(BaseModel):
@@ -1615,6 +1617,14 @@ class DeepResearchState(BaseModel):
         description="Next citation number to assign (auto-maintained).",
     )
 
+    # Threading lock for cross-thread collection mutations.
+    # The daemon thread running the async workflow shares this state with the
+    # main thread (status checks, flush).  Individual attribute writes are GIL-
+    # protected, but composite read-modify-write on mutable containers needs
+    # explicit synchronization.  All collection-mutating helpers on this class
+    # acquire this lock.
+    _state_lock: threading.Lock = PrivateAttr(default_factory=threading.Lock)
+
     # Deprecated phase values — log a warning when loaded from persisted state.
     _DEPRECATED_PHASES: ClassVar[set[DeepResearchPhase]] = {
         DeepResearchPhase.PLANNING,
@@ -1702,8 +1712,9 @@ class DeepResearchState(BaseModel):
             The created SubQuery instance
         """
         sub_query = SubQuery(query=query, rationale=rationale, priority=priority)
-        self.sub_queries.append(sub_query)
-        self.updated_at = datetime.now(timezone.utc)
+        with self._state_lock:
+            self.sub_queries.append(sub_query)
+            self.updated_at = datetime.now(timezone.utc)
         return sub_query
 
     def get_sub_query(self, sub_query_id: str) -> Optional[SubQuery]:
@@ -1770,21 +1781,22 @@ class DeepResearchState(BaseModel):
         # Citation numbering uses a running counter (O(1) per add).
         # This is the SINGLE source of truth — callers must NOT assign
         # citation_number manually.
-        next_citation = self.next_citation_number
-        self.next_citation_number += 1
-        source = ResearchSource(
-            title=title,
-            url=url,
-            source_type=source_type,
-            snippet=snippet,
-            sub_query_id=sub_query_id,
-            citation_number=next_citation,
-            **kwargs,
-        )
-        self.sources.append(source)
-        self.total_sources_examined += 1
-        self._evict_oldest_source_content()
-        self.updated_at = datetime.now(timezone.utc)
+        with self._state_lock:
+            next_citation = self.next_citation_number
+            self.next_citation_number += 1
+            source = ResearchSource(
+                title=title,
+                url=url,
+                source_type=source_type,
+                snippet=snippet,
+                sub_query_id=sub_query_id,
+                citation_number=next_citation,
+                **kwargs,
+            )
+            self.sources.append(source)
+            self.total_sources_examined += 1
+            self._evict_oldest_source_content()
+            self.updated_at = datetime.now(timezone.utc)
         return source
 
     def append_source(self, source: ResearchSource) -> ResearchSource:
@@ -1799,12 +1811,13 @@ class DeepResearchState(BaseModel):
         Returns:
             The same source instance, with citation_number set
         """
-        source.citation_number = self.next_citation_number
-        self.next_citation_number += 1
-        self.sources.append(source)
-        self.total_sources_examined += 1
-        self._evict_oldest_source_content()
-        self.updated_at = datetime.now(timezone.utc)
+        with self._state_lock:
+            source.citation_number = self.next_citation_number
+            self.next_citation_number += 1
+            self.sources.append(source)
+            self.total_sources_examined += 1
+            self._evict_oldest_source_content()
+            self.updated_at = datetime.now(timezone.utc)
         return source
 
     def _evict_oldest_source_content(self) -> None:
@@ -1828,10 +1841,11 @@ class DeepResearchState(BaseModel):
         When ``MAX_SUPERVISION_MESSAGES`` is exceeded, the oldest entries are
         dropped to keep serialized size bounded.
         """
-        self.supervision_messages.append(message)
-        if len(self.supervision_messages) > MAX_SUPERVISION_MESSAGES:
-            overshoot = len(self.supervision_messages) - MAX_SUPERVISION_MESSAGES
-            self.supervision_messages = self.supervision_messages[overshoot:]
+        with self._state_lock:
+            self.supervision_messages.append(message)
+            if len(self.supervision_messages) > MAX_SUPERVISION_MESSAGES:
+                overshoot = len(self.supervision_messages) - MAX_SUPERVISION_MESSAGES
+                self.supervision_messages = self.supervision_messages[overshoot:]
 
     def add_topic_research_result(self, result: "TopicResearchResult") -> None:
         """Append a topic research result, enforcing the cap.
@@ -1839,10 +1853,11 @@ class DeepResearchState(BaseModel):
         When ``MAX_TOPIC_RESEARCH_RESULTS`` is exceeded, the oldest results
         are dropped to bound memory growth.
         """
-        self.topic_research_results.append(result)
-        if len(self.topic_research_results) > MAX_TOPIC_RESEARCH_RESULTS:
-            overshoot = len(self.topic_research_results) - MAX_TOPIC_RESEARCH_RESULTS
-            self.topic_research_results = self.topic_research_results[overshoot:]
+        with self._state_lock:
+            self.topic_research_results.append(result)
+            if len(self.topic_research_results) > MAX_TOPIC_RESEARCH_RESULTS:
+                overshoot = len(self.topic_research_results) - MAX_TOPIC_RESEARCH_RESULTS
+                self.topic_research_results = self.topic_research_results[overshoot:]
 
     def add_finding(
         self,
@@ -1871,8 +1886,9 @@ class DeepResearchState(BaseModel):
             sub_query_id=sub_query_id,
             category=category,
         )
-        self.findings.append(finding)
-        self.updated_at = datetime.now(timezone.utc)
+        with self._state_lock:
+            self.findings.append(finding)
+            self.updated_at = datetime.now(timezone.utc)
         return finding
 
     def add_gap(
@@ -1896,9 +1912,68 @@ class DeepResearchState(BaseModel):
             suggested_queries=suggested_queries or [],
             priority=priority,
         )
-        self.gaps.append(gap)
-        self.updated_at = datetime.now(timezone.utc)
+        with self._state_lock:
+            self.gaps.append(gap)
+            self.updated_at = datetime.now(timezone.utc)
         return gap
+
+    # =========================================================================
+    # Thread-safe Mutation Helpers
+    # =========================================================================
+
+    def append_raw_note(self, note: str) -> None:
+        """Thread-safe append to raw_notes.
+
+        Individual entries exceeding ``MAX_RAW_NOTE_ENTRY_CHARS`` are
+        truncated to prevent a single oversized entry from dominating
+        the aggregate budget.
+        """
+        if len(note) > MAX_RAW_NOTE_ENTRY_CHARS:
+            note = note[:MAX_RAW_NOTE_ENTRY_CHARS] + "... [truncated]"
+        with self._state_lock:
+            self.raw_notes.append(note)
+
+    def set_raw_notes(self, notes: list[str]) -> None:
+        """Thread-safe replacement of raw_notes list."""
+        with self._state_lock:
+            self.raw_notes = notes
+
+    def extend_directives(self, new_directives: list) -> None:
+        """Thread-safe extend + cap for directives."""
+        with self._state_lock:
+            self.directives.extend(new_directives)
+
+    def set_directives(self, directives: list) -> None:
+        """Thread-safe replacement of directives list."""
+        with self._state_lock:
+            self.directives = directives
+
+    def set_sub_queries(self, queries: list["SubQuery"]) -> None:
+        """Thread-safe replacement of sub_queries list."""
+        with self._state_lock:
+            self.sub_queries = queries
+
+    def update_metadata(self, key: str, value: Any) -> None:
+        """Thread-safe metadata key update."""
+        with self._state_lock:
+            self.metadata[key] = value
+
+    def pop_metadata(self, key: str, default: Any = None) -> Any:
+        """Thread-safe metadata key removal."""
+        with self._state_lock:
+            return self.metadata.pop(key, default)
+
+    def append_to_metadata_list(self, key: str, entry: Any) -> None:
+        """Thread-safe append to a list stored in metadata[key]."""
+        with self._state_lock:
+            lst = self.metadata.setdefault(key, [])
+            lst.append(entry)
+
+    def extend_metadata_list(self, key: str, entries: list) -> None:
+        """Thread-safe extend of a list stored in metadata[key]."""
+        with self._state_lock:
+            lst = self.metadata.setdefault(key, [])
+            lst.extend(entries)
 
     # =========================================================================
     # Query Helpers

@@ -34,8 +34,14 @@ from foundry_mcp.core.research.models.deep_research import (
     ClaimVerificationResult,
     DeepResearchState,
 )
+from foundry_mcp.core.research.workflows.deep_research._concurrency import (
+    check_gather_cancellation,
+)
 from foundry_mcp.core.research.workflows.deep_research._constants import (
     VERIFICATION_SOURCE_MAX_CHARS,
+)
+from foundry_mcp.core.research.workflows.deep_research._token_budget import (
+    CHARS_PER_TOKEN,
 )
 
 logger = logging.getLogger(__name__)
@@ -197,11 +203,16 @@ def _build_extraction_user_prompt(report: str) -> str:
     return f"## Research Report\n\n{report}\n\n## Task\n\nExtract all verifiable factual claims from the report above as a JSON array."
 
 
-def _parse_extracted_claims(response: str) -> list[ClaimVerdict]:
+def _parse_extracted_claims(response: str, max_claims: int = 0) -> list[ClaimVerdict]:
     """Parse LLM response into ClaimVerdict objects.
 
     Handles JSON wrapped in markdown code fences, truncated output,
     and malformed entries gracefully.
+
+    Args:
+        response: Raw LLM response text.
+        max_claims: When > 0, stop parsing after ``max_claims * 2`` entries
+            to bound memory usage from a hallucinating model.
     """
     text = response.strip()
 
@@ -243,6 +254,9 @@ def _parse_extracted_claims(response: str) -> list[ClaimVerdict]:
         logger.warning("Claim extraction: expected JSON array, got %s", type(data).__name__)
         return []
 
+    # Early cap to prevent memory pressure from hallucinating models.
+    parse_cap = max_claims * 2 if max_claims > 0 else 0
+
     claims: list[ClaimVerdict] = []
     for item in data:
         if not isinstance(item, dict):
@@ -266,6 +280,12 @@ def _parse_extracted_claims(response: str) -> list[ClaimVerdict]:
                 quote_context=item.get("quote_context"),
             )
         )
+        if parse_cap and len(claims) >= parse_cap:
+            logger.warning(
+                "Claim extraction: hit parse cap (%d); truncating to prevent memory pressure",
+                parse_cap,
+            )
+            break
     return claims
 
 
@@ -311,12 +331,16 @@ def _apply_token_budget(
 ) -> list[ClaimVerdict]:
     """Drop claims from the tail of the priority list when estimated tokens exceed budget.
 
-    Estimation uses sum(len(source_text) / 3.5) as a conservative char-to-token ratio.
+    Estimation uses CHARS_PER_TOKEN from _token_budget.py (canonical constant).
+    Includes a fixed overhead estimate for system prompt and JSON structure.
     """
+    # Fixed overhead for system prompt + JSON structure per verification call.
+    _SYSTEM_PROMPT_OVERHEAD_TOKENS = 500
+
     estimated_total = 0.0
     kept: list[ClaimVerdict] = []
     for claim in claims:
-        claim_tokens = 0.0
+        claim_tokens = float(_SYSTEM_PROMPT_OVERHEAD_TOKENS)
         for src_num in claim.cited_sources:
             source = citation_map.get(src_num)
             if source is None:
@@ -326,7 +350,7 @@ def _apply_token_budget(
                 continue
             # Truncated text length for estimation.
             text_len = min(len(text), VERIFICATION_SOURCE_MAX_CHARS)
-            claim_tokens += text_len / 3.5
+            claim_tokens += text_len / CHARS_PER_TOKEN
         if estimated_total + claim_tokens > max_input_tokens and kept:
             logger.info(
                 "Token budget: dropping %d claims (estimated %.0f tokens exceeds %d limit)",
@@ -494,10 +518,7 @@ async def _verify_claims_batch(
         for claim in claims
     ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    # Re-raise CancelledError to honour cancellation semantics
-    for r in results:
-        if isinstance(r, asyncio.CancelledError):
-            raise r
+    check_gather_cancellation(results)
     # Filter out any unexpected exceptions that bypassed _verify_single_claim's
     # internal try/except (e.g. BaseException subclasses).
     return [r for r in results if isinstance(r, ClaimVerdict)]
@@ -763,7 +784,10 @@ async def extract_and_verify_claims(
             state.metadata["claim_verification_skipped"] = "extraction_failed"
             return result
 
-        all_claims = _parse_extracted_claims(extraction_result.content)
+        all_claims = _parse_extracted_claims(
+            extraction_result.content,
+            max_claims=config.deep_research_claim_verification_max_claims,
+        )
     except Exception as exc:
         logger.warning("Claim extraction failed: %s", exc)
         state.metadata["claim_verification_skipped"] = "extraction_failed"

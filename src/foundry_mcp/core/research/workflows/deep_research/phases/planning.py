@@ -286,13 +286,13 @@ class PlanningPhaseMixin:
                     "Planning critique LLM call failed, proceeding without critique: %s",
                     critique_result.error,
                 )
-                state.metadata["planning_critique"] = {
+                state.update_metadata("planning_critique", {
                     "original_sub_queries": original_queries,
                     "critique_response": None,
                     "adjusted_sub_queries": original_queries,
                     "error": critique_result.error or "LLM call failed",
                     "applied": False,
-                }
+                })
             else:
                 critique_content = critique_result.result.content or ""
                 critique_parsed = self._parse_critique_response(critique_content)
@@ -311,13 +311,13 @@ class PlanningPhaseMixin:
                 adjusted_queries = [
                     {"query": sq.query, "rationale": sq.rationale, "priority": sq.priority} for sq in state.sub_queries
                 ]
-                state.metadata["planning_critique"] = {
+                state.update_metadata("planning_critique", {
                     "original_sub_queries": original_queries,
                     "critique_response": critique_content,
                     "critique_parsed": critique_parsed,
                     "adjusted_sub_queries": adjusted_queries,
                     "applied": critique_parsed["has_changes"],
-                }
+                })
 
             # Persist updated state with critique
             self.memory.save_deep_research(state)
@@ -780,7 +780,7 @@ Generate the research plan as JSON."""
             current_queries = [sq for i, sq in enumerate(current_queries) if i not in indices_to_remove]
 
         # Replace state.sub_queries with the filtered list BEFORE adding new ones
-        state.sub_queries = current_queries
+        state.set_sub_queries(current_queries)
 
         # Add merged queries via add_sub_query (generates proper IDs)
         for mq in merged_queries:
@@ -804,5 +804,6 @@ Generate the research plan as JSON."""
         # Final safety: ensure we don't exceed max_sub_queries
         if len(state.sub_queries) > state.max_sub_queries:
             # Keep highest-priority queries (lowest priority number)
-            state.sub_queries.sort(key=lambda sq: sq.priority)
-            state.sub_queries = state.sub_queries[: state.max_sub_queries]
+            with state._state_lock:
+                state.sub_queries.sort(key=lambda sq: sq.priority)
+                state.sub_queries = state.sub_queries[: state.max_sub_queries]

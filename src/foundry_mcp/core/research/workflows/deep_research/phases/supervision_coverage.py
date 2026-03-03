@@ -182,7 +182,6 @@ def store_coverage_snapshot(
             round key.  When ``None``, the key is the bare round number
             (backward-compatible).
     """
-    snapshots = state.metadata.setdefault("coverage_snapshots", {})
     snapshot: dict[str, dict[str, Any]] = {}
     for entry in coverage_data:
         snapshot[entry["sub_query_id"]] = {
@@ -193,7 +192,9 @@ def store_coverage_snapshot(
         }
     # Store with string key (JSON-safe)
     key = f"{state.supervision_round}_{suffix}" if suffix else str(state.supervision_round)
-    snapshots[key] = snapshot
+    with state._state_lock:
+        snapshots = state.metadata.setdefault("coverage_snapshots", {})
+        snapshots[key] = snapshot
 
 
 def compute_coverage_delta(

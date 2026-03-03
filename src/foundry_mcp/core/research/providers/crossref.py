@@ -108,9 +108,13 @@ def _parse_date_parts(date_obj: Optional[dict[str, Any]]) -> Optional[int]:
     if not parts or not parts[0]:
         return None
     try:
-        return int(parts[0][0])
+        year = int(parts[0][0])
     except (ValueError, IndexError, TypeError):
         return None
+    if not (1000 <= year <= 2100):
+        logger.warning("Crossref date-parts: year %d out of bounds (1000-2100), ignoring", year)
+        return None
+    return year
 
 
 class CrossrefProvider:

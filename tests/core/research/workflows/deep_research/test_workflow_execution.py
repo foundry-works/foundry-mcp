@@ -306,7 +306,7 @@ class TestCancellationBetweenPhases:
                 max_concurrent=3,
             )
 
-        assert state.metadata.get("rollback_note") == "partial_iteration_data_retained"
+        assert "rollback_counts" in state.metadata
         assert state.metadata.get("discarded_iteration") == 2
         assert state.iteration == 1
         # After the finally block, cancellation_state transitions to "cancelled"
@@ -344,7 +344,7 @@ class TestCancellationBetweenPhases:
 
     @pytest.mark.asyncio
     async def test_cancellation_first_iteration_marks_for_discard(self):
-        """First iteration cancellation sets rollback_note without safe checkpoint.
+        """First iteration cancellation sets rollback_counts without safe checkpoint.
         CancelledError propagates after cleanup."""
         stub = StubWorkflow()
 
@@ -365,7 +365,7 @@ class TestCancellationBetweenPhases:
                 max_concurrent=3,
             )
 
-        assert state.metadata.get("rollback_note") == "partial_iteration_data_retained"
+        assert "rollback_counts" in state.metadata
         assert state.metadata.get("discarded_iteration") == 1
 
 

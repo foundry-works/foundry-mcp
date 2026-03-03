@@ -21,38 +21,40 @@ Track progress by replacing `[ ]` with `[x]` as items are completed.
 
 ## Phase 1 — High Priority (Fast-follow after merge)
 
-- [ ] **1.1** Use `CHARS_PER_TOKEN` constant in `claim_verification.py:325` instead of magic `3.5`
-  - [ ] Import from `_token_budget.py`
-  - [ ] Add system prompt overhead estimate (~500 tokens)
-- [ ] **1.2** Cap `_parse_extracted_claims()` at `max_claims * 2` in `claim_verification.py:200-269`
-  - [ ] Pass `max_claims` into parsing function
-  - [ ] Log warning when cap triggers
-- [ ] **1.3** Add `isinstance(pos, int) and pos >= 0` guard in `openalex.py:138-155`
-  - [ ] Log warning on invalid positions
-- [ ] **1.4** Add year bounds check `1000 <= year <= 2100` in `crossref.py:110`
-- [ ] **1.5** Decide threading fix strategy for `background_tasks.py` shared state
-  - [ ] Option A: `threading.Lock` around collection mutations
-  - [ ] Option B: `queue.Queue` message passing
-  - [ ] Audit all mutation sites (~15 across 4-5 files)
-  - [ ] Implement chosen option
-  - [ ] Add concurrency test
+- [x] **1.1** Use `CHARS_PER_TOKEN` constant in `claim_verification.py:325` instead of magic `3.5`
+  - [x] Import from `_token_budget.py`
+  - [x] Add system prompt overhead estimate (~500 tokens)
+- [x] **1.2** Cap `_parse_extracted_claims()` at `max_claims * 2` in `claim_verification.py:200-269`
+  - [x] Pass `max_claims` into parsing function
+  - [x] Log warning when cap triggers
+- [x] **1.3** Add `isinstance(pos, int) and pos >= 0` guard in `openalex.py:138-155`
+  - [x] Log warning on invalid positions
+- [x] **1.4** Add year bounds check `1000 <= year <= 2100` in `crossref.py:110`
+- [x] **1.5** Decide threading fix strategy for `background_tasks.py` shared state
+  - [x] Option A: `threading.Lock` around collection mutations (chosen)
+  - [ ] ~~Option B: `queue.Queue` message passing~~ (not needed)
+  - [x] Audit all mutation sites (~15 across 4-5 files)
+  - [x] Implement chosen option
+  - [x] Add thread-safe helpers to DeepResearchState
 
 ---
 
 ## Phase 2 — Medium Priority (Next sprint)
 
-- [ ] **2.1** Replace `except Exception: pass` with logging in `background_tasks.py:217-233`
-- [ ] **2.2** Track per-iteration source/finding IDs for rollback in `workflow_execution.py:545-572`
-  - [ ] Add `iteration_N_source_ids` to state metadata
-  - [ ] Remove partial items on rollback
-  - [ ] Validate counts on resume
-- [ ] **2.3** Add per-entry size cap (100KB) to raw notes in `supervision.py:685-741`
-- [ ] **2.4** Add decompression ratio limit to `docx_extractor.py`
-  - [ ] Track cumulative decompressed bytes
-  - [ ] Abort if ratio exceeds 100:1
-- [ ] **2.5** Extract `check_gather_cancellation()` shared helper
-  - [ ] Create helper in `_helpers.py` or similar
-  - [ ] Replace manual checks in `supervision.py`, `compression.py`, `claim_verification.py`, `citation_network.py`
+- [x] **2.1** Replace `except Exception: pass` with logging in `background_tasks.py:217-233`
+- [x] **2.2** Track per-iteration source/finding IDs for rollback in `workflow_execution.py:545-572`
+  - [x] Snapshot source/finding/topic_result counts at iteration entry via `_snapshot_iteration_counts()`
+  - [x] Remove partial items on rollback via `_rollback_partial_iteration()`
+  - [x] Store `rollback_counts` in metadata for resume validation
+- [x] **2.3** Add per-entry size cap (100KB) to raw notes in `supervision.py:685-741`
+  - [x] Added `MAX_RAW_NOTE_ENTRY_CHARS = 100_000` constant in `models/deep_research.py`
+  - [x] Enforce truncation in `append_raw_note()` before aggregate caps
+- [x] **2.4** Add decompression ratio limit to `docx_extractor.py`
+  - [x] Check declared decompressed sizes from ZIP infolist
+  - [x] Abort if ratio exceeds `MAX_DECOMPRESSION_RATIO` (100:1)
+- [x] **2.5** Extract `check_gather_cancellation()` shared helper
+  - [x] Created `_concurrency.py` module with `check_gather_cancellation()`
+  - [x] Replaced manual checks in `supervision.py` (2 sites), `compression.py`, `claim_verification.py`
 
 ---
 

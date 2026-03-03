@@ -33,6 +33,9 @@ from foundry_mcp.core.research.models.deep_research import (
 )
 from foundry_mcp.core.research.models.sources import SubQuery
 from foundry_mcp.core.research.workflows.base import WorkflowResult
+from foundry_mcp.core.research.workflows.deep_research._concurrency import (
+    check_gather_cancellation,
+)
 from foundry_mcp.core.research.workflows.deep_research._injection_protection import (
     sanitize_external_content,
 )
@@ -99,12 +102,13 @@ _MAX_THINK_OUTPUT_STORED_CHARS = 2000
 
 def _trim_supervision_history(state: Any) -> None:
     """Cap supervision_history to the most recent entries and truncate think fields."""
-    history = state.metadata.get("supervision_history")
-    if not history:
-        return
-    # Trim to most recent entries
-    if len(history) > _MAX_SUPERVISION_HISTORY_ENTRIES:
-        state.metadata["supervision_history"] = history[-_MAX_SUPERVISION_HISTORY_ENTRIES:]
+    with state._state_lock:
+        history = state.metadata.get("supervision_history")
+        if not history:
+            return
+        # Trim to most recent entries
+        if len(history) > _MAX_SUPERVISION_HISTORY_ENTRIES:
+            state.metadata["supervision_history"] = history[-_MAX_SUPERVISION_HISTORY_ENTRIES:]
 
 
 class SupervisionPhaseMixin:
@@ -425,8 +429,7 @@ class SupervisionPhaseMixin:
         if extra_data:
             entry.update(extra_data)
 
-        history = state.metadata.setdefault("supervision_history", [])
-        history.append(entry)
+        state.append_to_metadata_list("supervision_history", entry)
         _trim_supervision_history(state)
         self._advance_supervision_round(state)
 
@@ -507,11 +510,11 @@ class SupervisionPhaseMixin:
             wall_clock_limit,
             state.supervision_round,
         )
-        state.metadata["supervision_wall_clock_exit"] = {
+        state.update_metadata("supervision_wall_clock_exit", {
             "elapsed_seconds": round(elapsed, 1),
             "limit_seconds": wall_clock_limit,
             "rounds_completed": state.supervision_round,
-        }
+        })
         self._write_audit_event(
             state,
             "supervision_wall_clock_timeout",
@@ -652,8 +655,9 @@ class SupervisionPhaseMixin:
             Tuple of (directive_results, round_new_sources, inline_stats)
         """
         # Store directives for audit (capped to limit state serialization growth)
-        state.directives.extend(directives)
-        state.directives = state.directives[-_MAX_STORED_DIRECTIVES:]
+        state.extend_directives(directives)
+        with state._state_lock:
+            state.directives = state.directives[-_MAX_STORED_DIRECTIVES:]
 
         self._check_cancellation(state)
         directive_results = await self._execute_directives_async(
@@ -693,7 +697,7 @@ class SupervisionPhaseMixin:
         # Aggregate raw notes
         for result in directive_results:
             if result.raw_notes:
-                state.raw_notes.append(result.raw_notes)
+                state.append_raw_note(result.raw_notes)
 
         # Trim raw_notes if they exceed the cap
         self._trim_raw_notes(state)
@@ -718,20 +722,21 @@ class SupervisionPhaseMixin:
     def _trim_raw_notes(self, state: DeepResearchState) -> None:
         """Trim raw_notes if they exceed count or character caps."""
         notes_trimmed = 0
-        # Trim by count — drop oldest entries via slice instead of O(n²) pop(0)
-        if len(state.raw_notes) > _MAX_RAW_NOTES:
-            excess = len(state.raw_notes) - _MAX_RAW_NOTES
-            state.raw_notes = state.raw_notes[excess:]
-            notes_trimmed += excess
-        # Trim by total character count — compute drop count, then slice
-        total_chars = sum(len(n) for n in state.raw_notes)
-        if total_chars > _MAX_RAW_NOTES_CHARS:
-            drop_count = 0
-            while drop_count < len(state.raw_notes) and total_chars > _MAX_RAW_NOTES_CHARS:
-                total_chars -= len(state.raw_notes[drop_count])
-                drop_count += 1
-            state.raw_notes = state.raw_notes[drop_count:]
-            notes_trimmed += drop_count
+        with state._state_lock:
+            # Trim by count — drop oldest entries via slice instead of O(n²) pop(0)
+            if len(state.raw_notes) > _MAX_RAW_NOTES:
+                excess = len(state.raw_notes) - _MAX_RAW_NOTES
+                state.raw_notes = state.raw_notes[excess:]
+                notes_trimmed += excess
+            # Trim by total character count — compute drop count, then slice
+            total_chars = sum(len(n) for n in state.raw_notes)
+            if total_chars > _MAX_RAW_NOTES_CHARS:
+                drop_count = 0
+                while drop_count < len(state.raw_notes) and total_chars > _MAX_RAW_NOTES_CHARS:
+                    total_chars -= len(state.raw_notes[drop_count])
+                    drop_count += 1
+                state.raw_notes = state.raw_notes[drop_count:]
+                notes_trimmed += drop_count
         if notes_trimmed > 0:
             logger.warning(
                 "Trimmed %d oldest raw_notes entries (count cap=%d, char cap=%d). %d entries remain (%d chars).",
@@ -795,8 +800,8 @@ class SupervisionPhaseMixin:
                 )
 
         # Record history and advance round
-        history = state.metadata.setdefault("supervision_history", [])
-        history.append(
+        state.append_to_metadata_list(
+            "supervision_history",
             {
                 "round": state.supervision_round,
                 "method": "delegation",
@@ -808,7 +813,7 @@ class SupervisionPhaseMixin:
                 "post_execution_think": (post_think_output or "")[:_MAX_THINK_OUTPUT_STORED_CHARS],
                 "directive_topics": [d.research_topic[:100] for d in directives],
                 "inline_compression": inline_stats,
-            }
+            },
         )
         _trim_supervision_history(state)
 
@@ -1315,11 +1320,7 @@ class SupervisionPhaseMixin:
 
         tasks = [run_directive_researcher(sq) for sq in directive_sub_queries]
         gather_results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Propagate cancellation if any task was cancelled
-        for r in gather_results:
-            if isinstance(r, asyncio.CancelledError):
-                raise r
+        check_gather_cancellation(gather_results)
 
         # Separate successful results from unexpected exceptions
         results: list[TopicResearchResult] = []
@@ -1444,11 +1445,7 @@ class SupervisionPhaseMixin:
 
         tasks = [compress_one(r) for r in results_to_compress]
         gather_results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Propagate cancellation if any task was cancelled
-        for r in gather_results:
-            if isinstance(r, asyncio.CancelledError):
-                raise r
+        check_gather_cancellation(gather_results)
 
         for result in gather_results:
             if isinstance(result, BaseException) or not result:

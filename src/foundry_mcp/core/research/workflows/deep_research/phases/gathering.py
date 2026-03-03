@@ -480,7 +480,7 @@ class GatheringPhaseMixin(CompressionMixin):
                     state.add_topic_research_result(result)
                     # Aggregate raw notes for session-level access (Phase 1 ODR alignment)
                     if result.raw_notes:
-                        state.raw_notes.append(result.raw_notes)
+                        state.append_raw_note(result.raw_notes)
                     if result.sources_found == 0:
                         failed_queries += 1
 
