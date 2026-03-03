@@ -24,6 +24,7 @@ Example usage:
     sources = await provider.search("transformer architecture", max_results=10)
 """
 
+import json
 import logging
 import os
 import re
@@ -534,7 +535,15 @@ class OpenAlexProvider(SearchProvider):
                         retryable=response.status_code >= 500,
                         status_code=response.status_code,
                     )
-                return response.json()
+                try:
+                    return response.json()
+                except json.JSONDecodeError as e:
+                    raise SearchProviderError(
+                        provider="openalex",
+                        message="Invalid JSON in API response",
+                        retryable=False,
+                        original_error=e,
+                    ) from e
 
         executor = create_resilience_executor(
             "openalex",

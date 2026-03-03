@@ -565,6 +565,32 @@ class TestCrossrefErrorHandling:
             with pytest.raises(SearchProviderError):
                 await provider.get_work("10.1234/test.2024")
 
+    @pytest.mark.asyncio
+    async def test_non_json_response_raises_provider_error(self, provider):
+        """Test non-JSON response body raises SearchProviderError(retryable=False)."""
+        import json as _json
+
+        from foundry_mcp.core.errors.search import SearchProviderError
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "<html>Service Unavailable</html>"
+        mock_response.headers = {}
+        mock_response.json.side_effect = _json.JSONDecodeError("Expecting value", "<html>", 0)
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            with pytest.raises(SearchProviderError, match="Invalid JSON") as exc_info:
+                await provider.get_work("10.1234/test.2024")
+
+            assert exc_info.value.retryable is False
+            assert exc_info.value.provider == "crossref"
+
     def test_error_classifiers(self, provider):
         """Test ERROR_CLASSIFIERS maps 429 and 503 correctly."""
         from foundry_mcp.core.research.providers.resilience import ErrorType

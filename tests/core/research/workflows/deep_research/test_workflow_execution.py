@@ -570,3 +570,36 @@ class TestCancelledErrorPropagation:
         # State cleanup still happened
         assert state.metadata.get("cancelled") is True
         assert stub.memory.save_deep_research.called
+
+
+class TestValidateReportOutputPath:
+    """0.1: Path traversal protection for report_output_path."""
+
+    def test_rejects_dotdot_segments(self, tmp_path):
+        """Paths containing '..' are rejected before resolution."""
+        from foundry_mcp.core.research.workflows.deep_research.workflow_execution import (
+            _validate_report_output_path,
+        )
+
+        malicious = str(tmp_path / ".." / ".." / "etc" / "cron.d" / "backdoor")
+        with pytest.raises(ValueError, match="Path traversal detected"):
+            _validate_report_output_path(malicious)
+
+    def test_accepts_valid_path(self, tmp_path):
+        """A plain path within an existing directory passes validation."""
+        from foundry_mcp.core.research.workflows.deep_research.workflow_execution import (
+            _validate_report_output_path,
+        )
+
+        valid = str(tmp_path / "report.md")
+        result = _validate_report_output_path(valid)
+        assert result.parent == tmp_path
+
+    def test_rejects_nonexistent_parent(self):
+        """Path whose parent directory doesn't exist is rejected."""
+        from foundry_mcp.core.research.workflows.deep_research.workflow_execution import (
+            _validate_report_output_path,
+        )
+
+        with pytest.raises(ValueError, match="Parent directory does not exist"):
+            _validate_report_output_path("/nonexistent_dir_abc123/report.md")

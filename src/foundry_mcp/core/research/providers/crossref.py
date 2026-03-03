@@ -27,6 +27,7 @@ Example usage:
     enriched = await provider.enrich_source(some_research_source)
 """
 
+import json
 import logging
 import os
 import re
@@ -360,7 +361,15 @@ class CrossrefProvider:
                         retryable=response.status_code >= 500,
                         status_code=response.status_code,
                     )
-                return response.json()
+                try:
+                    return response.json()
+                except json.JSONDecodeError as e:
+                    raise SearchProviderError(
+                        provider="crossref",
+                        message="Invalid JSON in API response",
+                        retryable=False,
+                        original_error=e,
+                    ) from e
 
         executor = create_resilience_executor(
             "crossref",

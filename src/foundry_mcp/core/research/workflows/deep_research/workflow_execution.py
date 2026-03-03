@@ -14,6 +14,7 @@ import logging
 import threading
 import time
 import traceback
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
@@ -33,6 +34,37 @@ from foundry_mcp.core.research.workflows.deep_research.source_quality import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_report_output_path(path: str) -> Path:
+    """Validate a report output path, blocking directory traversal.
+
+    Args:
+        path: The report output path to validate.
+
+    Returns:
+        The resolved ``Path`` if it passes all checks.
+
+    Raises:
+        ValueError: If the path contains ``..`` segments or resolves
+            outside its own parent directory.
+    """
+    raw = Path(path)
+
+    # Belt-and-suspenders: reject ".." segments before resolution
+    if ".." in raw.parts:
+        raise ValueError(f"Path traversal detected in report output path: {path}")
+
+    resolved = raw.resolve()
+
+    # Ensure the resolved path still lives under the same parent directory
+    # that the un-resolved path claimed.  This catches symlink-based escapes.
+    if not resolved.parent.is_dir():
+        raise ValueError(
+            f"Parent directory does not exist for report output path: {resolved}"
+        )
+
+    return resolved
 
 
 class WorkflowExecutionMixin:
@@ -373,8 +405,6 @@ class WorkflowExecutionMixin:
                     and getattr(state.research_profile, "enable_claim_verification", False)
                 )
                 if _cv_enabled and not state.claim_verification:
-                    from pathlib import Path
-
                     from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification import (
                         apply_corrections,
                         extract_and_verify_claims,
@@ -407,7 +437,8 @@ class WorkflowExecutionMixin:
                             # Re-save report after corrections using the same path
                             # synthesis wrote to (avoids _save_report_markdown collision logic).
                             if state.report_output_path:
-                                Path(state.report_output_path).write_text(state.report or "", encoding="utf-8")
+                                validated = _validate_report_output_path(state.report_output_path)
+                                validated.write_text(state.report or "", encoding="utf-8")
 
                         # Persist corrected report + verification result.
                         self.memory.save_deep_research(state)
