@@ -219,6 +219,29 @@ class TestExtractCitedNumbers:
         )
         assert extract_cited_numbers(report) == {1, 2}
 
+    # --- max_citation filtering ---
+
+    def test_max_citation_filters_year_references(self):
+        """Year references like [2025] and [2026] are excluded when max_citation is set."""
+        report = "published in [2025] and updated [2026]"
+        assert extract_cited_numbers(report, max_citation=61) == set()
+
+    def test_max_citation_keeps_valid_citations(self):
+        """Valid citations below max_citation are kept while years are filtered."""
+        report = "[1] and [2] and [2025]"
+        assert extract_cited_numbers(report, max_citation=61) == {1, 2}
+
+    def test_max_citation_boundary_value(self):
+        """Citation equal to max_citation is kept; one above is excluded."""
+        report = "[5] and [6] and [7]"
+        assert extract_cited_numbers(report, max_citation=6) == {5, 6}
+
+    def test_max_citation_none_preserves_all(self):
+        """Without max_citation, behavior is unchanged (backward-compatible)."""
+        report = "[1] and [2025]"
+        assert extract_cited_numbers(report) == {1, 2025}
+        assert extract_cited_numbers(report, max_citation=None) == {1, 2025}
+
 
 # =============================================================================
 # remove_dangling_citations
@@ -424,6 +447,23 @@ class TestPostprocessCitations:
         # The dangling [99] is removed
         assert "[99]" not in body
         assert meta["dangling_citations_removed"] == 1
+
+    def test_year_references_not_reported_as_dangling(self, state_with_sources: DeepResearchState):
+        """Year references like [2025] are not treated as dangling citations."""
+        report = "# Report\n\nFinding [1] is from [2025] and updated in [2026].\n"
+        processed, meta = postprocess_citations(report, state_with_sources)
+
+        body = processed.split("## Sources")[0]
+
+        # Valid citation preserved
+        assert "[1]" in body
+        # Year references left intact (not stripped as dangling)
+        assert "[2025]" in body
+        assert "[2026]" in body
+        # No dangling citations reported
+        assert meta["dangling_citations_removed"] == 0
+        # Only [1] counted as a citation
+        assert meta["total_citations_in_report"] == 1
 
 
 # =============================================================================

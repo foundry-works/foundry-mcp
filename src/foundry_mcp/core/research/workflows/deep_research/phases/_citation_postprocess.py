@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 _CITATION_RE = re.compile(r"\[(\d+)\](?!\()")
 
 
-def extract_cited_numbers(report: str) -> set[int]:
+def extract_cited_numbers(report: str, *, max_citation: int | None = None) -> set[int]:
     """Extract all citation numbers referenced in the report.
 
     Finds all ``[N]`` patterns in the report text. Ignores markdown
@@ -34,11 +34,17 @@ def extract_cited_numbers(report: str) -> set[int]:
 
     Args:
         report: The markdown report text.
+        max_citation: If provided, exclude numbers above this value.
+            Pass ``len(state.sources)`` or ``max(valid_numbers)`` to
+            filter out year references like ``[2025]``.
 
     Returns:
         Set of cited integer citation numbers.
     """
-    return {int(m.group(1)) for m in _CITATION_RE.finditer(report)}
+    numbers = {int(m.group(1)) for m in _CITATION_RE.finditer(report)}
+    if max_citation is not None:
+        numbers = {n for n in numbers if n <= max_citation}
+    return numbers
 
 
 # ---------------------------------------------------------------------------
@@ -170,14 +176,22 @@ def build_sources_section(
     return "\n".join(lines)
 
 
-def remove_dangling_citations(report: str, valid_numbers: set[int]) -> str:
+def remove_dangling_citations(
+    report: str,
+    valid_numbers: set[int],
+    *,
+    max_citation: int | None = None,
+) -> str:
     """Remove citation markers that reference non-existent sources.
 
-    Replaces ``[N]`` with empty string when N is not in *valid_numbers*.
+    Replaces ``[N]`` with empty string when N is not in *valid_numbers*
+    and N is within the plausible citation range.
 
     Args:
         report: The markdown report text.
         valid_numbers: Set of citation numbers that exist in state.
+        max_citation: If provided, numbers above this are preserved
+            (assumed to be year references like ``[2025]``, not citations).
 
     Returns:
         Report with dangling citations removed.
@@ -185,6 +199,10 @@ def remove_dangling_citations(report: str, valid_numbers: set[int]) -> str:
 
     def _replace(match: re.Match) -> str:
         num = int(match.group(1))
+        # Preserve numbers above the plausible citation range
+        # (likely year references like [2025], not citations)
+        if max_citation is not None and num > max_citation:
+            return match.group(0)
         if num in valid_numbers:
             return match.group(0)
         return ""
@@ -286,8 +304,18 @@ def postprocess_citations(
     citation_map = state.get_citation_map()
     valid_numbers = set(citation_map.keys())
 
+    # Upper bound for plausible citation numbers.  Numbers above this
+    # threshold are assumed to be year references (e.g. [2025]) rather
+    # than citations.  We use max(actual_max, 999) so that hallucinated
+    # citation numbers like [99] are still caught as dangling while year
+    # references are left intact.  When there are no sources at all,
+    # max_cn is None (no filtering — every [N] is dangling).
+    max_cn: int | None = None
+    if valid_numbers:
+        max_cn = max(max(valid_numbers), 999)
+
     # 1. Extract cited numbers
-    cited_numbers = extract_cited_numbers(report)
+    cited_numbers = extract_cited_numbers(report, max_citation=max_cn)
 
     # 2. Strip any LLM-generated sources section
     report = strip_llm_sources_section(report)
@@ -300,9 +328,9 @@ def postprocess_citations(
             len(dangling),
             sorted(dangling),
         )
-        report = remove_dangling_citations(report, valid_numbers)
+        report = remove_dangling_citations(report, valid_numbers, max_citation=max_cn)
         # Recompute after removal
-        cited_numbers = extract_cited_numbers(report)
+        cited_numbers = extract_cited_numbers(report, max_citation=max_cn)
 
     # 4. Resolve format style and append deterministic section
     format_style = _resolve_format_style(state, query_type)
