@@ -795,8 +795,8 @@ class TestThinkToolIntegration:
 
         assert result.success is True
         assert result.metadata["model"] == "delegation"
-        # No LLM calls at all — heuristic path, so think step was skipped
-        assert call_phases == []
+        # No LLM calls at all — heuristic delegation bypasses the think step entirely
+        assert call_phases == []  # empty: confirms zero LLM round-trips on heuristic path
         # History records heuristic early-exit, NOT think_output
         history = state.metadata["supervision_history"]
         assert history[0]["method"] == "delegation_heuristic"
@@ -865,6 +865,8 @@ class TestThinkToolIntegration:
         assert history[0]["method"] == "delegation_complete"
         # think_output is None/not present since think step failed
         assert not history[0].get("think_output")
+
+    # --- Reflection role routing ---
 
     @pytest.mark.asyncio
     async def test_think_step_uses_reflection_role(self):
@@ -2350,6 +2352,7 @@ class TestSupervisionMessageAccumulation:
         """1.1: DeepResearchState has supervision_messages field."""
         state = DeepResearchState(original_query="test")
         assert hasattr(state, "supervision_messages")
+        # Fresh state starts with no accumulated supervisor conversation
         assert state.supervision_messages == []
 
     def test_supervision_messages_serializable(self):
@@ -2534,6 +2537,7 @@ class TestSupervisionMessageAccumulation:
         """1.4: Coverage data is still present when no prior messages exist."""
         stub = StubSupervision(delegation_model=True)
         state = _make_state(num_completed=2, sources_per_query=2, supervision_round=0)
+        # Round 0 has no prior conversation — messages start empty
         assert state.supervision_messages == []
 
         coverage = stub._build_per_query_coverage(state)

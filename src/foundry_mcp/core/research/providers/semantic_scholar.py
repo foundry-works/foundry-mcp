@@ -204,6 +204,11 @@ class SemanticScholarProvider(SearchProvider):
                 defaults from PROVIDER_CONFIGS["semantic_scholar"].
         """
         self._api_key = api_key or os.environ.get("SEMANTIC_SCHOLAR_API_KEY")
+        if self._api_key is not None and not self._api_key.strip():
+            raise ValueError(
+                "Semantic Scholar API key is empty or whitespace-only. "
+                "Provide a valid key or omit it to use unauthenticated access."
+            )
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
         self._max_retries = max_retries

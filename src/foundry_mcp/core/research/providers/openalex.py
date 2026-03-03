@@ -104,8 +104,10 @@ def _build_filter_string(filters: dict[str, Any]) -> str:
     parts: list[str] = []
     for key, value in filters.items():
         if key not in _ALLOWED_FILTER_KEYS:
-            logger.warning("Ignoring unknown OpenAlex filter key: %s", key)
-            continue
+            raise ValueError(
+                f"Unknown OpenAlex filter key: {key!r}. "
+                f"Allowed keys: {sorted(_ALLOWED_FILTER_KEYS)}"
+            )
         if isinstance(value, bool):
             safe_value = str(value).lower()
         else:

@@ -203,12 +203,21 @@ def sanitize_external_content(text: str) -> str:
     )
     # Decode HTML entities so entity-encoded tags are caught.
     # Loop until stable to defeat multi-layer encoding (e.g. &amp;lt; → &lt; → <).
-    _MAX_UNESCAPE_ROUNDS = 5
+    # Each round decodes one encoding layer; convergence is guaranteed since
+    # html.unescape is idempotent on fully-decoded text.  The safety cap
+    # guards against pathological inputs (e.g. thousands of &amp; layers).
+    _MAX_UNESCAPE_ROUNDS = 20
     for _ in range(_MAX_UNESCAPE_ROUNDS):
         unescaped = html_module.unescape(sanitized)
         if unescaped == sanitized:
             break
         sanitized = unescaped
+    else:
+        logger.warning(
+            "HTML unescape did not stabilize after %d rounds; "
+            "input may contain pathologically deep entity encoding",
+            _MAX_UNESCAPE_ROUNDS,
+        )
     # Strip XML-like instruction/override tags
     sanitized = _INJECTION_TAG_PATTERN.sub("", sanitized)
     # Strip OpenAI-family special tokens

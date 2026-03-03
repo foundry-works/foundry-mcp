@@ -60,6 +60,10 @@ DEFAULT_TIMEOUT = 30.0
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_RATE_LIMIT = 1.0  # requests per second
 
+# Maximum length (in characters) for extracted content (e.g. DOCX text).
+# Prevents unbounded memory usage from very large documents.
+MAX_EXTRACTED_CONTENT_LENGTH = 500_000  # ~500 KB of text
+
 # Valid parameter values
 VALID_SEARCH_DEPTHS = frozenset(["basic", "advanced", "fast", "ultra_fast"])
 VALID_TOPICS = frozenset(["general", "news"])
@@ -489,8 +493,16 @@ class TavilySearchProvider(SearchProvider):
             raw_bytes = content.encode("latin-1")
             result = await extractor.extract(raw_bytes)
             if result.success:
-                logger.info("Extracted %d chars from DOCX content", len(result.text))
-                return result.text
+                text = result.text
+                if len(text) > MAX_EXTRACTED_CONTENT_LENGTH:
+                    logger.warning(
+                        "Extracted DOCX text (%d chars) exceeds MAX_EXTRACTED_CONTENT_LENGTH (%d), truncating",
+                        len(text),
+                        MAX_EXTRACTED_CONTENT_LENGTH,
+                    )
+                    text = text[:MAX_EXTRACTED_CONTENT_LENGTH]
+                logger.info("Extracted %d chars from DOCX content", len(text))
+                return text
             logger.warning("DOCX extraction returned no text")
             return None
         except RuntimeError:

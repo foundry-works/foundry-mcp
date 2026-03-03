@@ -241,6 +241,12 @@ def _parse_extracted_claims(response: str, max_claims: int = 0) -> list[ClaimVer
         end = text.rfind("]")
         if end == -1 or end <= start:
             # Truncated output — try adding a closing bracket.
+            # This may produce semantically incorrect JSON if the truncation
+            # split a nested object, but it recovers the parseable prefix.
+            logger.warning(
+                "Claim extraction: JSON array appears truncated; "
+                "appending ']' to attempt recovery — parsed claims may be incomplete"
+            )
             text = text[start:] + "]"
         else:
             text = text[start : end + 1]
