@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -38,19 +39,148 @@ _MIN_COMPRESSION_RATIO = 0.10
 # (e.g. "[1]", "[source", "http://", "https://").
 _SOURCE_REFERENCE_INDICATORS = ("[", "http://", "https://")
 
+# Regex for definition-style bullet lists containing numeric data.
+# Matches lines like "- **Term**: value 1:1" or "* Term — $95/year".
+# Leading hyphen in the character class [-:—–] avoids range ambiguity;
+# \*{0,2} matches 0-2 asterisks for optional markdown bold.
+_DEFINITION_LIST_RE = re.compile(r"^[-*]\s+\*{0,2}.+?\*{0,2}\s*[-:—–]\s+.*\d.*", re.MULTILINE)
+
+# Regex for extracting numeric data tokens from structured blocks.
+_NUMERIC_TOKEN_RE = re.compile(r"\d[\d,./:]+")
+
+# Minimum consecutive pipe-delimited rows to qualify as a table.
+_MIN_TABLE_ROWS = 2
+
+
+def _detect_structured_blocks(text: str) -> list[str]:
+    """Detect markdown tables and definition-style bullet lists in *text*.
+
+    Returns a list of detected blocks as raw text strings.  Detection is
+    deliberately permissive — false positives are harmless because the
+    real correctness gate is :func:`_validate_structured_data_survival`.
+
+    Detected structures:
+
+    * **Markdown tables**: Consecutive lines matching ``|...|...|``
+      patterns (2+ pipe-delimited rows, including header separator
+      lines with ``---``).
+    * **Definition-style bullet lists**: Lines matching
+      ``- **Term**: value`` or ``- Term — value`` where the value
+      contains a digit (number, ratio, price, date).
+    """
+    blocks: list[str] = []
+
+    # --- Markdown tables ---
+    lines = text.split("\n")
+    table_lines: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("|") and stripped.endswith("|") and stripped.count("|") >= 2:
+            table_lines.append(line)
+        else:
+            if len(table_lines) >= _MIN_TABLE_ROWS:
+                blocks.append("\n".join(table_lines))
+            table_lines = []
+    # Flush any trailing table
+    if len(table_lines) >= _MIN_TABLE_ROWS:
+        blocks.append("\n".join(table_lines))
+
+    # --- Definition-style bullet lists ---
+    defn_lines: list[str] = []
+    for line in lines:
+        if _DEFINITION_LIST_RE.match(line.strip()):
+            defn_lines.append(line)
+        else:
+            if defn_lines:
+                blocks.append("\n".join(defn_lines))
+                defn_lines = []
+    if defn_lines:
+        blocks.append("\n".join(defn_lines))
+
+    return blocks
+
+
+def _validate_structured_data_survival(
+    original: str,
+    compressed: str,
+    blocks: list[str],
+) -> bool:
+    """Check whether structured data in *blocks* survived compression.
+
+    Returns ``False`` if either:
+
+    1. The compressed output has fewer markdown table rows (``|...|``
+       lines) than the detected blocks contained.  Only rows from
+       *blocks* are counted (not the entire original), avoiding false
+       positives from unrelated tables the model legitimately dropped.
+    2. Numeric data tokens extracted from *blocks* are missing from the
+       compressed output.
+
+    Returns ``True`` if all checks pass (or if *blocks* is empty).
+    """
+    if not blocks:
+        return True
+
+    # --- Table row count check ---
+    block_table_rows = 0
+    for block in blocks:
+        for line in block.split("\n"):
+            stripped = line.strip()
+            if stripped.startswith("|") and stripped.endswith("|") and stripped.count("|") >= 2:
+                # Skip header separator lines (e.g. |---|---|)
+                cell_content = stripped.strip("|").replace("-", "").replace(" ", "")
+                if cell_content:  # Has non-separator content
+                    block_table_rows += 1
+
+    if block_table_rows > 0:
+        compressed_table_rows = 0
+        for line in compressed.split("\n"):
+            stripped = line.strip()
+            if stripped.startswith("|") and stripped.endswith("|") and stripped.count("|") >= 2:
+                cell_content = stripped.strip("|").replace("-", "").replace(" ", "")
+                if cell_content:
+                    compressed_table_rows += 1
+
+        if compressed_table_rows < block_table_rows:
+            logger.warning(
+                "Structured data loss: compressed has %d table data rows vs %d in detected blocks",
+                compressed_table_rows,
+                block_table_rows,
+            )
+            return False
+
+    # --- Numeric token presence check ---
+    block_text = "\n".join(blocks)
+    numeric_tokens = set(_NUMERIC_TOKEN_RE.findall(block_text))
+    if numeric_tokens:
+        missing = [t for t in numeric_tokens if t not in compressed]
+        if missing:
+            logger.warning(
+                "Structured data loss: %d/%d numeric tokens missing from compressed output: %s",
+                len(missing),
+                len(numeric_tokens),
+                missing[:10],  # Log first 10 for brevity
+            )
+            return False
+
+    return True
+
 
 def _compression_output_is_valid(
     compressed: str | None,
     message_history: list[dict[str, str]],
     topic_id: str,
+    structured_blocks: list[str] | None = None,
 ) -> bool:
     """Check whether compression output is non-trivial before discarding raw history.
 
-    Returns True if ``compressed`` passes both checks:
+    Returns True if ``compressed`` passes all checks:
     1. Its length is at least ``_MIN_COMPRESSION_RATIO`` of the raw history text.
     2. It contains at least one source reference indicator.
+    3. When *structured_blocks* is provided and non-empty, structured data
+       (tables, numeric tokens) survived compression.
 
-    If either check fails, a warning is logged and False is returned so that
+    If any check fails, a warning is logged and False is returned so that
     the caller retains ``message_history`` as a recovery fallback.
     """
     if not compressed:
@@ -79,6 +209,16 @@ def _compression_output_is_valid(
             topic_id,
         )
         return False
+
+    # Structured data survival check (when blocks were detected in the input)
+    if structured_blocks:
+        raw_text = "\n".join(m.get("content", "") for m in message_history)
+        if not _validate_structured_data_survival(raw_text, compressed, structured_blocks):
+            logger.warning(
+                "Compression output for topic %s lost structured data; retaining message_history.",
+                topic_id,
+            )
+            return False
 
     return True
 
@@ -574,6 +714,14 @@ class CompressionMixin:
             "  [1] Source Title: URL\n"
             "  [2] Source Title: URL\n"
             "</Citation Rules>\n\n"
+            "<Structured Data Preservation>\n"
+            "- Markdown tables MUST be reproduced VERBATIM in your output. "
+            "Do not paraphrase tables into prose.\n"
+            "- Bulleted lists containing proper nouns with numeric values "
+            "(prices, ratios, dates) must be preserved exactly as written. "
+            "These contain precise factual data that cannot be safely "
+            "rephrased.\n"
+            "</Structured Data Preservation>\n\n"
             "Critical Reminder: It is extremely important that any "
             "information that is even remotely relevant to the research "
             "topic is preserved verbatim (e.g. don't rewrite it, don't "
@@ -821,6 +969,16 @@ class CompressionMixin:
         if not results_to_compress:
             return {"topics_compressed": 0, "topics_failed": 0, "total_compression_tokens": 0}
 
+        # Detect structured blocks per topic before compression runs,
+        # so we can validate their survival after compression completes.
+        structured_blocks_by_topic: dict[str, list[str]] = {}
+        for tr in results_to_compress:
+            if tr.message_history:
+                combined = "\n".join(m.get("content", "") for m in tr.message_history)
+                blocks = _detect_structured_blocks(combined)
+                if blocks:
+                    structured_blocks_by_topic[tr.sub_query_id] = blocks
+
         semaphore = asyncio.Semaphore(max_concurrent)
 
         async def compress_one(
@@ -869,6 +1027,7 @@ class CompressionMixin:
                         topic.compressed_findings,
                         topic.message_history,
                         topic.sub_query_id,
+                        structured_blocks=structured_blocks_by_topic.get(topic.sub_query_id),
                     ):
                         # compressed_findings now captures essential content —
                         # free message_history to bound state memory growth.

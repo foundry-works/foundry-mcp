@@ -2,57 +2,57 @@
 
 ## Layer 2: Synthesis Prompt Grounding Enhancement
 
-- [ ] Add `## Factual Grounding` section to `_build_synthesis_system_prompt()` in `phases/synthesis.py`
-  - [ ] Insert into the **base prompt** between `## Writing Quality` and `## Citations` (NOT in conditional blocks)
-  - [ ] Negative claim guardrail (never claim absence without explicit source evidence)
-  - [ ] Comparative claim guardrail (verify both sides against sources)
-  - [ ] Conflict acknowledgment instruction
-  - [ ] Quantitative claim traceability instruction
+- [x] Add `## Factual Grounding` section to `_build_synthesis_system_prompt()` in `phases/synthesis.py`
+  - [x] Insert into the **base prompt** between `## Writing Quality` and `## Citations` (NOT in conditional blocks)
+  - [x] Negative claim guardrail (never claim absence without explicit source evidence)
+  - [x] Comparative claim guardrail (verify both sides against sources)
+  - [x] Conflict acknowledgment instruction
+  - [x] Quantitative claim traceability instruction
 - [ ] Manual regression test: re-run credit card research query, verify Aeroplan claim is correct
 
 ## Layer 1: Structured Data Preservation in Compression
 
-- [ ] Add `_detect_structured_blocks(text: str) -> list[str]` to `phases/compression.py`
-  - [ ] Detect markdown tables: consecutive `|...|...|` lines (2+ pipe-delimited rows, including `---` header separators)
-  - [ ] Detect definition-style bullet lists: `- **Term**: value` or `- Term — value` patterns where value contains a number/ratio/price/date (regex: `r'^[-*]\s+\*{0,2}.+?\*{0,2}\s*[-:—–]\s+.*\d.*'` — leading `-` in char class avoids range ambiguity, `\*{0,2}` matches 0-2 asterisks for optional bold)
-  - [ ] Return list of detected blocks as raw text strings (for validation, not extraction)
-  - [ ] Do NOT attempt general "proper noun" detection — focus on mechanically-detectable structures
-  - [ ] Accept that false positives are harmless — detection feeds into validation, which is the real correctness gate
-- [ ] Add structured data preservation instruction to the **per-topic compression system prompt** (inline in `_compress_single_topic_async()`, after `</Citation Rules>` and before the "Critical Reminder" paragraph)
-  - [ ] `<Structured Data Preservation>` section with verbatim table and list preservation rules
-- [ ] Add `_validate_structured_data_survival(original: str, compressed: str, blocks: list[str]) -> bool`
-  - [ ] Count markdown table rows (`|...|` lines) **within detected blocks only** (not the entire original) vs compressed — fail if compressed < block-sourced count. This avoids false positives from unrelated tables the model legitimately dropped.
-  - [ ] Extract numeric data tokens from detected blocks via regex `r'\d[\d,./:]+'` and check literal presence in compressed output
-  - [ ] Return False if either check fails (table row loss OR missing numeric tokens)
-- [ ] Wire structured block detection into `_compress_topic_findings_async()` (NOT `_compress_single_topic_async` — no return type change needed)
-  - [ ] Before the `compress_one()` coroutines are gathered, detect structured blocks for each topic by calling `_detect_structured_blocks()` on the concatenated `topic.message_history` content
-  - [ ] Store detected blocks per topic in a local `dict[str, list[str]]` keyed by `sub_query_id`
-  - [ ] After gather completes, pass the topic's blocks to `_compression_output_is_valid()` at the validation call site
-  - [ ] `_compress_single_topic_async` return type stays `tuple[int, int, bool]` — no interface change
-- [ ] Update **module-level** function `_compression_output_is_valid()` (top of `compression.py`, NOT a method on `CompressionMixin`)
-  - [ ] Current sig: `(compressed: str | None, message_history: list[dict[str, str]], topic_id: str) -> bool`
-  - [ ] New sig: `(compressed: str | None, message_history: list[dict[str, str]], topic_id: str, structured_blocks: list[str] | None = None) -> bool`
-  - [ ] Call `_validate_structured_data_survival()` when blocks are provided (additional check alongside existing length-ratio and source-reference checks)
-  - [ ] On validation failure, retain `message_history` (existing behavior — `topic.message_history.clear()` is skipped)
-- [ ] Write unit tests for `_detect_structured_blocks()`
-  - [ ] Test with markdown table input
-  - [ ] Test with bulleted list containing ratios (e.g., "1:1", "$95")
-  - [ ] Test with mixed content (tables + prose)
-  - [ ] Test with no structured data (returns empty list)
-- [ ] Write unit tests for `_validate_structured_data_survival()`
-  - [ ] Test with tables preserved (returns True)
-  - [ ] Test with tables paraphrased into prose (returns False)
-  - [ ] Test with partial survival (key tokens present but structure lost)
-- [ ] Mock-based integration test: detection → compression → validation → message_history retention
-  - [ ] Mock LLM to return compressed text that drops a table
-  - [ ] Verify `_detect_structured_blocks` detects the table in input
-  - [ ] Verify `_compression_output_is_valid` returns False (blocks not preserved)
-  - [ ] Verify `message_history` is NOT cleared (fallback behavior)
-- [ ] Wiring integration test: verify `_compress_topic_findings_async` calls `_detect_structured_blocks` and passes results to `_compression_output_is_valid`
-  - [ ] Patch both inner functions and assert they are called with correct arguments
-  - [ ] Verify blocks detected from `topic.message_history` are forwarded to validation
-- [ ] Integration test: structured table survives full compression pipeline
-- [ ] Test prompt assembly: verify `<Structured Data Preservation>` block appears after `</Citation Rules>` and before "Critical Reminder" in the assembled per-topic compression system prompt
+- [x] Add `_detect_structured_blocks(text: str) -> list[str]` to `phases/compression.py`
+  - [x] Detect markdown tables: consecutive `|...|...|` lines (2+ pipe-delimited rows, including `---` header separators)
+  - [x] Detect definition-style bullet lists: `- **Term**: value` or `- Term — value` patterns where value contains a number/ratio/price/date (regex: `r'^[-*]\s+\*{0,2}.+?\*{0,2}\s*[-:—–]\s+.*\d.*'` — leading `-` in char class avoids range ambiguity, `\*{0,2}` matches 0-2 asterisks for optional bold)
+  - [x] Return list of detected blocks as raw text strings (for validation, not extraction)
+  - [x] Do NOT attempt general "proper noun" detection — focus on mechanically-detectable structures
+  - [x] Accept that false positives are harmless — detection feeds into validation, which is the real correctness gate
+- [x] Add structured data preservation instruction to the **per-topic compression system prompt** (inline in `_compress_single_topic_async()`, after `</Citation Rules>` and before the "Critical Reminder" paragraph)
+  - [x] `<Structured Data Preservation>` section with verbatim table and list preservation rules
+- [x] Add `_validate_structured_data_survival(original: str, compressed: str, blocks: list[str]) -> bool`
+  - [x] Count markdown table rows (`|...|` lines) **within detected blocks only** (not the entire original) vs compressed — fail if compressed < block-sourced count. This avoids false positives from unrelated tables the model legitimately dropped.
+  - [x] Extract numeric data tokens from detected blocks via regex `r'\d[\d,./:]+'` and check literal presence in compressed output
+  - [x] Return False if either check fails (table row loss OR missing numeric tokens)
+- [x] Wire structured block detection into `_compress_topic_findings_async()` (NOT `_compress_single_topic_async` — no return type change needed)
+  - [x] Before the `compress_one()` coroutines are gathered, detect structured blocks for each topic by calling `_detect_structured_blocks()` on the concatenated `topic.message_history` content
+  - [x] Store detected blocks per topic in a local `dict[str, list[str]]` keyed by `sub_query_id`
+  - [x] After gather completes, pass the topic's blocks to `_compression_output_is_valid()` at the validation call site
+  - [x] `_compress_single_topic_async` return type stays `tuple[int, int, bool]` — no interface change
+- [x] Update **module-level** function `_compression_output_is_valid()` (top of `compression.py`, NOT a method on `CompressionMixin`)
+  - [x] Current sig: `(compressed: str | None, message_history: list[dict[str, str]], topic_id: str) -> bool`
+  - [x] New sig: `(compressed: str | None, message_history: list[dict[str, str]], topic_id: str, structured_blocks: list[str] | None = None) -> bool`
+  - [x] Call `_validate_structured_data_survival()` when blocks are provided (additional check alongside existing length-ratio and source-reference checks)
+  - [x] On validation failure, retain `message_history` (existing behavior — `topic.message_history.clear()` is skipped)
+- [x] Write unit tests for `_detect_structured_blocks()`
+  - [x] Test with markdown table input
+  - [x] Test with bulleted list containing ratios (e.g., "1:1", "$95")
+  - [x] Test with mixed content (tables + prose)
+  - [x] Test with no structured data (returns empty list)
+- [x] Write unit tests for `_validate_structured_data_survival()`
+  - [x] Test with tables preserved (returns True)
+  - [x] Test with tables paraphrased into prose (returns False)
+  - [x] Test with partial survival (key tokens present but structure lost)
+- [x] Mock-based integration test: detection → compression → validation → message_history retention
+  - [x] Mock LLM to return compressed text that drops a table
+  - [x] Verify `_detect_structured_blocks` detects the table in input
+  - [x] Verify `_compression_output_is_valid` returns False (blocks not preserved)
+  - [x] Verify `message_history` is NOT cleared (fallback behavior)
+- [x] Wiring integration test: verify `_compress_topic_findings_async` calls `_detect_structured_blocks` and passes results to `_compression_output_is_valid`
+  - [x] Patch both inner functions and assert they are called with correct arguments
+  - [x] Verify blocks detected from `topic.message_history` are forwarded to validation
+- [x] Integration test: structured table survives full compression pipeline
+- [x] Test prompt assembly: verify `<Structured Data Preservation>` block appears after `</Citation Rules>` and before "Critical Reminder" in the assembled per-topic compression system prompt
 
 ## Layer 3: Post-Synthesis Claim Verification Phase
 
