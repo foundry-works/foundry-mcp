@@ -886,7 +886,7 @@ class TestDeepResearchTimeoutConfig:
             assert result["success"] is True
 
     def test_config_default_fallback(self, mock_memory):
-        """Config default timeout (2400s) used when task_timeout param omitted."""
+        """Config default timeout (3600s) used when task_timeout param omitted."""
         import foundry_mcp.tools.unified.research_handlers._helpers as _helpers
         from foundry_mcp.tools.unified.research import _handle_deep_research
 
@@ -894,7 +894,7 @@ class TestDeepResearchTimeoutConfig:
             mock_cfg = MagicMock()
             mock_cfg.research.enabled = True
             # Use the actual default value
-            mock_cfg.research.deep_research_timeout = 2400.0
+            mock_cfg.research.deep_research_timeout = 3600.0
             mock_get_config.return_value = mock_cfg
 
             with patch(
@@ -917,7 +917,7 @@ class TestDeepResearchTimeoutConfig:
 
                 # Verify config default is used in the start call
                 start_call_kwargs = mock_workflow.execute.call_args_list[0].kwargs
-                assert start_call_kwargs["task_timeout"] == 2400.0
+                assert start_call_kwargs["task_timeout"] == 3600.0
                 assert result["success"] is True
 
 

@@ -367,8 +367,12 @@ class OpenAlexProvider(SearchProvider):
         if not referenced_ids:
             return []
 
-        # Limit and fetch via filter
-        referenced_ids = referenced_ids[:max_results]
+        # Limit, validate, and fetch via filter
+        referenced_ids = [
+            rid for rid in referenced_ids[:max_results] if _OPENALEX_WORK_ID_RE.match(rid)
+        ]
+        if not referenced_ids:
+            return []
         openalex_filter = "|".join(referenced_ids)
         params: dict[str, Any] = {
             "filter": f"openalex:{openalex_filter}",
@@ -402,7 +406,11 @@ class OpenAlexProvider(SearchProvider):
         if not related_ids:
             return []
 
-        related_ids = related_ids[:max_results]
+        related_ids = [
+            rid for rid in related_ids[:max_results] if _OPENALEX_WORK_ID_RE.match(rid)
+        ]
+        if not related_ids:
+            return []
         openalex_filter = "|".join(related_ids)
         params: dict[str, Any] = {
             "filter": f"openalex:{openalex_filter}",

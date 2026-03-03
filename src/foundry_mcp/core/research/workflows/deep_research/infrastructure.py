@@ -188,8 +188,7 @@ def _sigterm_handler(signum: int, frame: Optional[FrameType]) -> None:
         for research_id in session_keys:
             bg_task = task_registry.get(research_id)
             if bg_task is not None:
-                # Set the cancel event so workflow checks pick it up
-                bg_task._cancel_event.set()
+                bg_task.cancel(timeout=0)
                 cancelled_ids.append(research_id)
     except Exception as exc:
         logger.error("Failed to cancel background tasks via registry: %s", exc)

@@ -27,21 +27,21 @@ from foundry_mcp.core.research.workflows.deep_research._token_budget import (
 
 
 class TestTruncateToTokenEstimateZeroBudget:
-    """truncate_to_token_estimate returns full text on zero/negative budgets."""
+    """truncate_to_token_estimate returns empty string on zero/negative budgets."""
 
-    def test_zero_max_tokens_returns_full_text(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_zero_max_tokens_returns_empty_string(self, caplog: pytest.LogCaptureFixture) -> None:
         text = "Some meaningful content that should not be erased."
         with caplog.at_level(logging.WARNING):
             result = truncate_to_token_estimate(text, 0)
-        assert result == text
+        assert result == ""
         assert "max_tokens=0" in caplog.text
-        assert "returning full text" in caplog.text
+        assert "budget exhausted" in caplog.text
 
-    def test_negative_max_tokens_returns_full_text(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_negative_max_tokens_returns_empty_string(self, caplog: pytest.LogCaptureFixture) -> None:
         text = "Another piece of content."
         with caplog.at_level(logging.WARNING):
             result = truncate_to_token_estimate(text, -5)
-        assert result == text
+        assert result == ""
         assert "max_tokens=-5" in caplog.text
 
     def test_positive_budget_still_truncates(self) -> None:

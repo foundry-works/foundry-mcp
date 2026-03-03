@@ -819,5 +819,7 @@ async def extract_and_verify_claims(
             result.claims_contradicted += 1
         elif claim.verdict == "UNSUPPORTED":
             result.claims_unsupported += 1
+        elif claim.verdict == "PARTIALLY_SUPPORTED":
+            result.claims_partially_supported += 1
 
     return result

@@ -233,17 +233,20 @@ class BackgroundTask:
         Returns:
             True if cancellation was requested, False if already done.
         """
+        # Always signal the cooperative cancellation event so that workflow
+        # checks see the request regardless of the execution model.
+        self._cancel_event.set()
+
         # Handle thread-based execution
         if self.thread is not None:
             if not self.thread.is_alive():
                 return False
 
-            # Phase 1: Signal cancellation and wait for cooperative shutdown
+            # Phase 1: Wait for cooperative shutdown (event already set above)
             logger.debug(
                 "Cancellation phase 1 (cooperative): signaling thread %s to stop",
                 self.thread.name,
             )
-            self._cancel_event.set()
             self.thread.join(timeout=timeout)
 
             # Phase 2: Check if thread is still alive

@@ -41,6 +41,7 @@ from foundry_mcp.core.research.workflows.deep_research._injection_protection imp
 )
 from foundry_mcp.core.research.workflows.deep_research.phases.compression import (
     _compression_output_is_valid,
+    _detect_structured_blocks,
 )
 from foundry_mcp.core.research.workflows.deep_research.source_quality import (
     _extract_domain,
@@ -1540,10 +1541,17 @@ class TopicResearchMixin:
                 timeout=timeout,
             )
             if comp_ok:
+                structured_blocks: list[str] | None = None
+                if result.message_history:
+                    combined = "\n".join(m.get("content", "") for m in result.message_history)
+                    blocks = _detect_structured_blocks(combined)
+                    if blocks:
+                        structured_blocks = blocks
                 if _compression_output_is_valid(
                     result.compressed_findings,
                     result.message_history,
                     sub_query.id,
+                    structured_blocks=structured_blocks,
                 ):
                     # compressed_findings now captures the essential content —
                     # free the raw message_history to bound state memory growth.

@@ -76,10 +76,10 @@ def truncate_to_token_estimate(text: str, max_tokens: int) -> str:
     """
     if max_tokens <= 0:
         logger.warning(
-            "truncate_to_token_estimate called with max_tokens=%d; returning full text (budget exhausted upstream)",
+            "truncate_to_token_estimate called with max_tokens=%d; budget exhausted, returning empty string",
             max_tokens,
         )
-        return text
+        return ""
     max_chars = max_tokens * CHARS_PER_TOKEN
     if len(text) <= max_chars:
         return text

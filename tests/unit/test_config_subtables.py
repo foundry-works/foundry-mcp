@@ -349,7 +349,7 @@ class TestSubTableEdgeCases:
 # Baseline defaults for timeout fields (must match ResearchConfig defaults).
 _TIMEOUT_DEFAULTS = {
     "default_timeout": 360.0,
-    "deep_research_timeout": 2400.0,
+    "deep_research_timeout": 3600.0,
     "deep_research_planning_timeout": 360.0,
     "deep_research_synthesis_timeout": 600.0,
     "deep_research_reflection_timeout": 60.0,

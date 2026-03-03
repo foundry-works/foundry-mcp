@@ -87,10 +87,10 @@ class TestStatusResponseStalenessMetadata:
 
         # Create a task and make it stale by backdating last_activity
         bg_task = BackgroundTask(research_id="test-stale-status")
-        # Backdate last_activity to make it stale (more than 300s ago)
-        bg_task.last_activity = time.time() - 400
+        # Backdate last_activity to exceed deep_research_stale_task_seconds (default 900s)
+        bg_task.last_activity = time.time() - 1000
 
-        assert bg_task.is_stale(300.0)
+        assert bg_task.is_stale(config.deep_research_stale_task_seconds)
 
         with patch.object(workflow, "get_background_task", return_value=bg_task):
             with patch.object(workflow.memory, "load_deep_research", return_value=None):

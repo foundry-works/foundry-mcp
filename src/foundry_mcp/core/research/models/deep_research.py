@@ -1338,6 +1338,9 @@ class ClaimVerificationResult(BaseModel):
     claims_supported: int = Field(default=0, description="Claims verified as SUPPORTED")
     claims_contradicted: int = Field(default=0, description="Claims verified as CONTRADICTED")
     claims_unsupported: int = Field(default=0, description="Claims verified as UNSUPPORTED")
+    claims_partially_supported: int = Field(
+        default=0, description="Claims verified as PARTIALLY_SUPPORTED"
+    )
     corrections_applied: int = Field(default=0, description="Number of corrections applied to report")
     details: list[ClaimVerdict] = Field(
         default_factory=list,

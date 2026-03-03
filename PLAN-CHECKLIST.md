@@ -34,11 +34,11 @@
 
 ## P2: Medium — Correctness & Security
 
-- [ ] Validate OpenAlex reference/related IDs against `_OPENALEX_WORK_ID_RE` before filter join (`openalex.py:372-377, 406-411`)
-- [ ] Route SIGTERM handler through public `cancel()` API (`infrastructure.py:192`)
-- [ ] Add `claims_partially_supported` counter to `ClaimVerificationResult` (`claim_verification.py:808-815`)
-- [ ] Pass `structured_blocks` to `_compression_output_is_valid` in inline compression path (`topic_research.py:1543-1547`)
-- [ ] Fix `budget_truncate_text` to return empty string when budget <= 0 (`_token_budget.py:77-82`)
+- [x] Validate OpenAlex reference/related IDs against `_OPENALEX_WORK_ID_RE` before filter join (`openalex.py:372-377, 406-411`)
+- [x] Route SIGTERM handler through public `cancel()` API (`infrastructure.py:192`)
+- [x] Add `claims_partially_supported` counter to `ClaimVerificationResult` (`claim_verification.py:808-815`)
+- [x] Pass `structured_blocks` to `_compression_output_is_valid` in inline compression path (`topic_research.py:1543-1547`)
+- [x] Fix `budget_truncate_text` to return empty string when budget <= 0 (`_token_budget.py:77-82`)
 
 ## P3: Low — Hygiene & Hardening
 
