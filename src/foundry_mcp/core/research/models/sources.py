@@ -308,6 +308,12 @@ class ResearchSource(BaseModel):
         description="Stable 1-indexed citation number assigned when the source enters state",
     )
     discovered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    relevance_score: Optional[float] = Field(
+        default=None,
+        description="Topical relevance score [0.0, 1.0] against the research query. "
+        "None = not yet scored. Sources below the configured threshold are "
+        "deprioritized during compression but retained for provenance.",
+    )
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @property

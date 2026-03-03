@@ -644,6 +644,31 @@ class CompressionMixin:
         if not topic_sources:
             return (0, 0, True)
 
+        # Filter out low-relevance sources from compression input.
+        # They remain in state.sources for provenance/audit but are
+        # excluded from the compression prompt to reduce noise.
+        _raw_threshold = getattr(
+            self.config, "deep_research_source_relevance_threshold", 0.05
+        )
+        relevance_threshold: float = float(_raw_threshold) if isinstance(_raw_threshold, (int, float)) else 0.05
+        if relevance_threshold > 0.0:
+            relevant_sources = [
+                s for s in topic_sources
+                if s.relevance_score is None or s.relevance_score >= relevance_threshold
+            ]
+            excluded_count = len(topic_sources) - len(relevant_sources)
+            if excluded_count > 0:
+                logger.info(
+                    "Compression: excluded %d/%d low-relevance sources (threshold=%.3f) for topic %s",
+                    excluded_count,
+                    len(topic_sources),
+                    relevance_threshold,
+                    topic_result.sub_query_id,
+                )
+            # Only use filtered list if we still have sources to compress
+            if relevant_sources:
+                topic_sources = relevant_sources
+
         # Look up the sub-query text for context
         sub_query = state.get_sub_query(topic_result.sub_query_id)
         query_text = sub_query.query if sub_query else "Unknown query"

@@ -143,6 +143,7 @@ class ResearchConfig:
     deep_research_topic_reflection_provider: Optional[str] = None  # Uses default_provider if not set
     deep_research_enable_content_dedup: bool = True  # Cross-researcher content-similarity deduplication
     deep_research_content_dedup_threshold: float = 0.8  # Jaccard similarity threshold for content dedup
+    deep_research_source_relevance_threshold: float = 0.05  # Sources below this are deprioritized in compression (0.0 disables)
 
     # Per-topic URL extraction during gathering (Phase 3 PLAN)
     deep_research_enable_extract: bool = True  # Allow researchers to extract full content from promising URLs
@@ -659,6 +660,7 @@ class ResearchConfig:
             deep_research_topic_reflection_provider=data.get("deep_research_topic_reflection_provider"),
             deep_research_enable_content_dedup=_parse_bool(data.get("deep_research_enable_content_dedup", True)),
             deep_research_content_dedup_threshold=float(data.get("deep_research_content_dedup_threshold", 0.8)),
+            deep_research_source_relevance_threshold=float(data.get("deep_research_source_relevance_threshold", 0.05)),
             # Per-topic URL extraction during gathering
             deep_research_enable_extract=_parse_bool(data.get("deep_research_enable_extract", True)),
             deep_research_extract_max_per_iteration=int(data.get("deep_research_extract_max_per_iteration", 2)),
@@ -1119,6 +1121,14 @@ class ResearchConfig:
                 self.deep_research_content_dedup_threshold,
             )
             self.deep_research_content_dedup_threshold = 0.8
+
+        # --- source_relevance_threshold (must be in [0.0, 1.0]) ---
+        if not (0.0 <= self.deep_research_source_relevance_threshold <= 1.0):
+            logger.warning(
+                "deep_research_source_relevance_threshold=%s out of [0, 1] range, reset to 0.05",
+                self.deep_research_source_relevance_threshold,
+            )
+            self.deep_research_source_relevance_threshold = 0.05
 
         # --- compression_max_content_length (must be positive) ---
         if self.deep_research_compression_max_content_length <= 0:

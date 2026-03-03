@@ -46,6 +46,7 @@ from foundry_mcp.core.research.workflows.deep_research.phases.compression import
 from foundry_mcp.core.research.workflows.deep_research.source_quality import (
     _extract_domain,
     _normalize_title,
+    compute_source_relevance,
     get_domain_quality,
 )
 
@@ -422,6 +423,29 @@ async def _dedup_and_add_source(
             seen_urls.add(source.url)
             if source.quality == SourceQuality.UNKNOWN:
                 source.quality = get_domain_quality(source.url, state.research_mode)
+
+        # Compute relevance against sub-query + brief
+        reference_text = sub_query.query if isinstance(sub_query.query, str) else ""
+        brief = getattr(state, "research_brief", None)
+        if isinstance(brief, str) and brief:
+            reference_text = brief + "\n" + reference_text
+        source_type_str = "web"
+        try:
+            source_type_str = source.source_type.value if source.source_type else "web"
+        except AttributeError:
+            pass
+        source.relevance_score = compute_source_relevance(
+            source_title=source.title or "",
+            source_content=(source.content or "")[:2000],
+            reference_text=reference_text,
+            source_type=source_type_str,
+        )
+        logger.debug(
+            "Relevance score %.3f for %r (type=%s)",
+            source.relevance_score,
+            source.url or source.title,
+            source.source_type,
+        )
 
         state.append_source(source)
         sub_query.source_ids.append(source.id)
