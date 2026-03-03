@@ -411,6 +411,7 @@ class BriefPhaseMixin:
     # case-insensitively against the brief text.  Each tuple maps a set
     # of discipline signals to a recommended search provider.
     _DISCIPLINE_PROVIDER_MAP: list[tuple[list[str], str]] = [
+        # --- Semantic Scholar groups ---
         (
             # No PubMed MCP integration — route biomedical queries to
             # Semantic Scholar which covers biomedical literature via PubMed IDs.
@@ -422,11 +423,36 @@ class BriefPhaseMixin:
             "semantic_scholar",
         ),
         (
+            ["physics", "chemistry", "biology", "ecology", "geology", "environmental science", "climate"],
+            "semantic_scholar",
+        ),
+        (
+            ["mathematics", "statistics", "operations research"],
+            "semantic_scholar",
+        ),
+        (
+            ["psychology", "cognitive science", "neuroscience", "behavioral science"],
+            "semantic_scholar",
+        ),
+        (
+            ["engineering", "robotics", "materials science", "electrical engineering"],
+            "semantic_scholar",
+        ),
+        # --- OpenAlex groups ---
+        (
             ["education", "pedagogy", "curriculum", "teaching", "learning outcomes"],
             "openalex",
         ),
         (
             ["social science", "sociology", "economics", "political science", "anthropology"],
+            "openalex",
+        ),
+        (
+            ["law", "jurisprudence", "legal analysis", "regulation", "policy analysis"],
+            "openalex",
+        ),
+        (
+            ["history", "philosophy", "literature review", "systematic review", "meta-analysis"],
             "openalex",
         ),
     ]

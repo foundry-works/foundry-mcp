@@ -16,24 +16,27 @@
 ## Phase 1: Selective Academic Provider Usage
 
 ### 1a. Profile default change
-- [ ] Change `PROFILE_GENERAL.providers` from `["tavily", "semantic_scholar"]` to `["tavily"]` in `deep_research.py`
-- [ ] Verify `PROFILE_TECHNICAL` already excludes academic providers (currently `["tavily", "google"]` — no change needed)
-- [ ] Verify `PROFILE_ACADEMIC`, `PROFILE_SYSTEMATIC_REVIEW`, `PROFILE_BIBLIOMETRIC` still include academic providers (no change needed)
+- [x] Change `PROFILE_GENERAL.providers` from `["tavily", "semantic_scholar"]` to `["tavily"]` in `deep_research.py`
+- [x] Change `ResearchProfile` default_factory from `["tavily", "semantic_scholar"]` to `["tavily"]`
+- [x] Verify `PROFILE_TECHNICAL` already excludes academic providers (currently `["tavily", "google"]` — no change needed)
+- [x] Verify `PROFILE_ACADEMIC`, `PROFILE_SYSTEMATIC_REVIEW`, `PROFILE_BIBLIOMETRIC` still include academic providers (no change needed)
 
 ### 1b. Expand discipline keyword map
-- [ ] Add physics/chemistry/biology/ecology/environmental science group → `semantic_scholar`
-- [ ] Add mathematics/statistics/operations research group → `semantic_scholar`
-- [ ] Add psychology/cognitive science/neuroscience group → `semantic_scholar`
-- [ ] Add engineering/robotics/materials science group → `semantic_scholar`
-- [ ] Add law/jurisprudence/policy analysis group → `openalex`
-- [ ] Add history/philosophy/literature review/systematic review group → `openalex`
+- [x] Add physics/chemistry/biology/ecology/environmental science group → `semantic_scholar`
+- [x] Add mathematics/statistics/operations research group → `semantic_scholar`
+- [x] Add psychology/cognitive science/neuroscience group → `semantic_scholar`
+- [x] Add engineering/robotics/materials science group → `semantic_scholar`
+- [x] Add law/jurisprudence/policy analysis group → `openalex`
+- [x] Add history/philosophy/literature review/systematic review group → `openalex`
 
 ### 1c. Tests
-- [ ] Unit test: `PROFILE_GENERAL.providers` does not contain `semantic_scholar` or `openalex`
-- [ ] Unit test: `_extract_provider_hints` returns `["semantic_scholar"]` for academic brief text
-- [ ] Unit test: `_extract_provider_hints` returns `[]` for consumer/general brief text
-- [ ] Unit test: `_apply_provider_hints` adds `semantic_scholar` to general profile when hint present
-- [ ] Unit test: `_apply_provider_hints` does NOT modify custom profiles
+- [x] Unit test: `PROFILE_GENERAL.providers` does not contain `semantic_scholar` or `openalex`
+- [x] Unit test: `_extract_provider_hints` returns `["semantic_scholar"]` for academic brief text (9 new discipline tests)
+- [x] Unit test: `_extract_provider_hints` returns `[]` for consumer/general brief text
+- [x] Unit test: `_apply_provider_hints` adds `semantic_scholar` to general profile when hint present
+- [x] Unit test: `_apply_provider_hints` does NOT modify custom profiles
+- [x] Updated existing tests that assumed `semantic_scholar` in general profile defaults
+- [x] Full test suite: 7779 passed, 0 failures
 
 ## Phase 3: Default Claim Verification to True
 

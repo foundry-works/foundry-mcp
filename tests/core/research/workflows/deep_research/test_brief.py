@@ -633,6 +633,80 @@ class TestExtractProviderHints:
         hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
         assert "semantic_scholar" in hints
 
+    # -- New discipline groups (Phase 1b) --
+
+    def test_physics_brief_triggers_semantic_scholar(self):
+        """Physics/chemistry/biology keywords trigger Semantic Scholar hint."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
+
+        brief = "Investigating the physics of superconducting materials at low temperatures."
+        hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
+        assert "semantic_scholar" in hints
+
+    def test_ecology_brief_triggers_semantic_scholar(self):
+        """Ecology keyword triggers Semantic Scholar hint."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
+
+        brief = "Impact of climate change on marine ecology and biodiversity loss."
+        hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
+        assert "semantic_scholar" in hints
+
+    def test_mathematics_brief_triggers_semantic_scholar(self):
+        """Mathematics/statistics keywords trigger Semantic Scholar hint."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
+
+        brief = "Recent advances in statistics and operations research for supply chain optimization."
+        hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
+        assert "semantic_scholar" in hints
+
+    def test_psychology_brief_triggers_semantic_scholar(self):
+        """Psychology/neuroscience keywords trigger Semantic Scholar hint."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
+
+        brief = "Neuroscience of decision-making in cognitive science and behavioral science."
+        hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
+        assert "semantic_scholar" in hints
+
+    def test_engineering_brief_triggers_semantic_scholar(self):
+        """Engineering/robotics keywords trigger Semantic Scholar hint."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
+
+        brief = "Advances in robotics and materials science for prosthetic limb engineering."
+        hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
+        assert "semantic_scholar" in hints
+
+    def test_law_brief_triggers_openalex(self):
+        """Law/jurisprudence keywords trigger OpenAlex hint."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
+
+        brief = "Analysis of jurisprudence and regulation governing AI-generated content."
+        hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
+        assert "openalex" in hints
+
+    def test_history_brief_triggers_openalex(self):
+        """History/philosophy keywords trigger OpenAlex hint."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
+
+        brief = "A history of philosophy of science and its influence on modern epistemology."
+        hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
+        assert "openalex" in hints
+
+    def test_systematic_review_keyword_triggers_openalex(self):
+        """Systematic review / meta-analysis keywords trigger OpenAlex hint."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
+
+        brief = "Conducting a systematic review and meta-analysis of remote work productivity."
+        hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
+        assert "openalex" in hints
+
+    def test_consumer_query_produces_no_hints(self):
+        """Consumer query about credit cards produces no academic provider hints."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_GENERAL
+
+        brief = "Best credit card for travel rewards maximizing business class flights in 2024."
+        hints = BriefPhaseMixin._extract_provider_hints(brief, PROFILE_GENERAL)
+        assert hints == []
+
 
 class TestApplyProviderHints:
     """Tests for _apply_provider_hints() — merging hints into active providers."""
@@ -640,11 +714,10 @@ class TestApplyProviderHints:
     def test_hints_are_additive(self):
         """Hints add new providers without removing existing ones."""
         state = _make_state()
-        # Default general profile has ["tavily", "semantic_scholar"]
-        active = BriefPhaseMixin._apply_provider_hints(state, ["openalex"])
+        # Default general profile has ["tavily"] (academic providers are demand-driven)
+        active = BriefPhaseMixin._apply_provider_hints(state, ["semantic_scholar"])
         assert "tavily" in active
         assert "semantic_scholar" in active
-        assert "openalex" in active
 
     def test_existing_providers_preserved_in_order(self):
         """Existing providers remain at the front of the list."""
@@ -652,14 +725,13 @@ class TestApplyProviderHints:
         active = BriefPhaseMixin._apply_provider_hints(state, ["openalex"])
         # Original providers come first
         assert active.index("tavily") < active.index("openalex")
-        assert active.index("semantic_scholar") < active.index("openalex")
 
     def test_no_duplicate_providers(self):
         """Hints that match existing providers don't create duplicates."""
         state = _make_state()
-        # semantic_scholar is already in the general profile
-        active = BriefPhaseMixin._apply_provider_hints(state, ["semantic_scholar"])
-        assert active.count("semantic_scholar") == 1
+        # tavily is already in the general profile
+        active = BriefPhaseMixin._apply_provider_hints(state, ["tavily"])
+        assert active.count("tavily") == 1
 
     def test_unknown_providers_silently_dropped(self):
         """Provider hints not in the known set are silently dropped."""

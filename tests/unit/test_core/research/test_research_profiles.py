@@ -47,7 +47,7 @@ class TestResearchProfileModel:
         assert p.citation_style == "default"
         assert p.synthesis_template is None
         assert p.enable_citation_tools is False
-        assert p.providers == ["tavily", "semantic_scholar"]
+        assert p.providers == ["tavily"]
 
     def test_custom_profile(self):
         p = ResearchProfile(
@@ -102,6 +102,12 @@ class TestBuiltinProfiles:
         assert p.source_quality_mode == ResearchMode.GENERAL
         assert p.citation_style == "default"
         assert p.enable_citation_tools is False
+        # General profile should NOT include academic providers by default;
+        # they are added dynamically by the adaptive hint system when the
+        # research brief contains academic discipline keywords.
+        assert "semantic_scholar" not in p.providers
+        assert "openalex" not in p.providers
+        assert p.providers == ["tavily"]
 
     def test_academic_profile(self):
         p = PROFILE_ACADEMIC

@@ -917,7 +917,7 @@ class ResearchProfile(BaseModel):
         description="Profile identifier (must match a built-in or config-defined name)",
     )
     providers: list[str] = Field(
-        default_factory=lambda: ["tavily", "semantic_scholar"],
+        default_factory=lambda: ["tavily"],
         description="Ordered list of search providers to use",
     )
     source_quality_mode: ResearchMode = Field(
@@ -982,7 +982,7 @@ class ResearchProfile(BaseModel):
 
 PROFILE_GENERAL = ResearchProfile(
     name="general",
-    providers=["tavily", "semantic_scholar"],
+    providers=["tavily"],
     source_quality_mode=ResearchMode.GENERAL,
     citation_style="default",
     enable_claim_verification=True,
