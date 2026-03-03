@@ -54,9 +54,9 @@ class BackgroundTaskMixin:
             data: dict[str, Any] | None = ...,
             level: str = ...,
         ) -> None: ...
-        def _record_workflow_error(self, *args: Any, **kwargs: Any) -> None: ...
-        def _flush_state(self, state: DeepResearchState) -> None: ...
-        async def _execute_workflow_async(self, *args: Any, **kwargs: Any) -> Any: ...
+        def _record_workflow_error(self, *_args: Any, **_kwargs: Any) -> None: ...
+        def _flush_state(self, _state: DeepResearchState) -> None: ...
+        async def _execute_workflow_async(self, *_args: Any, **_kwargs: Any) -> Any: ...
 
     def _start_background_task(
         self,
@@ -94,7 +94,17 @@ class BackgroundTaskMixin:
         workflow = self
 
         def run_in_thread() -> None:
-            """Thread target that runs the async workflow."""
+            """Thread target that runs the async workflow.
+
+            WARNING — Shared-state constraint:
+            ``DeepResearchState`` is shared between this daemon thread and
+            the main thread. CPython's GIL protects individual attribute
+            writes, but composite read-modify-write operations on mutable
+            containers inside state (e.g. appending to lists, updating
+            dicts) can produce inconsistent views. A full lock-based or
+            message-passing fix is out of scope; callers that mutate
+            state collections should be aware of this limitation.
+            """
             try:
 
                 async def run_workflow() -> WorkflowResult:

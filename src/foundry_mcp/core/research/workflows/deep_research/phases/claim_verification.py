@@ -493,7 +493,14 @@ async def _verify_claims_batch(
         _verify_single_claim(claim, citation_map, execute_fn, provider_id, timeout, semaphore)
         for claim in claims
     ]
-    return list(await asyncio.gather(*tasks, return_exceptions=False))
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    # Re-raise CancelledError to honour cancellation semantics
+    for r in results:
+        if isinstance(r, asyncio.CancelledError):
+            raise r
+    # Filter out any unexpected exceptions that bypassed _verify_single_claim's
+    # internal try/except (e.g. BaseException subclasses).
+    return [r for r in results if isinstance(r, ClaimVerdict)]
 
 
 # ---------------------------------------------------------------------------

@@ -659,7 +659,7 @@ class WorkflowExecutionMixin:
             # Close any open search provider connections
             # (Currently search providers don't maintain persistent connections,
             # but this is in place for future stateful provider implementations)
-            for provider in self._search_providers.values():
+            for provider in list(self._search_providers.values()):
                 try:
                     # Check if provider has async close method
                     if hasattr(provider, "aclose"):
