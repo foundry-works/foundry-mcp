@@ -327,7 +327,7 @@ class ResearchConfig:
     deep_research_methodology_assessment_min_content_length: int = 200  # Min chars to trigger assessment
 
     # Claim verification (post-synthesis validation of factual claims)
-    deep_research_claim_verification_enabled: bool = False  # Opt-in until battle-tested
+    deep_research_claim_verification_enabled: bool = True  # On by default; set to False to disable
     deep_research_claim_verification_sample_rate: float = 0.3  # Sample 30% of positive claims
     deep_research_claim_verification_provider: Optional[str] = None  # Override verification provider
     deep_research_claim_verification_model: Optional[str] = None  # Override verification model
@@ -811,7 +811,7 @@ class ResearchConfig:
             ),
             # Claim verification configuration
             deep_research_claim_verification_enabled=_parse_bool(
-                data.get("deep_research_claim_verification_enabled", False)
+                data.get("deep_research_claim_verification_enabled", True)
             ),
             deep_research_claim_verification_sample_rate=float(
                 data.get("deep_research_claim_verification_sample_rate", 0.3)

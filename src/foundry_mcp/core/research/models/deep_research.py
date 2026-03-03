@@ -969,8 +969,8 @@ class ResearchProfile(BaseModel):
         description="Preferred methodologies (e.g. ['RCT', 'meta-analysis', 'qualitative'])",
     )
     enable_claim_verification: bool = Field(
-        default=False,
-        description="Enable post-synthesis claim verification (opt-in, adds 15-45s latency)",
+        default=True,
+        description="Post-synthesis claim verification (enabled by default, adds 15-45s latency; set to False to disable)",
     )
 
     model_config = {"extra": "forbid"}
@@ -985,6 +985,7 @@ PROFILE_GENERAL = ResearchProfile(
     providers=["tavily", "semantic_scholar"],
     source_quality_mode=ResearchMode.GENERAL,
     citation_style="default",
+    enable_claim_verification=True,
 )
 
 PROFILE_ACADEMIC = ResearchProfile(
@@ -994,6 +995,7 @@ PROFILE_ACADEMIC = ResearchProfile(
     citation_style="apa",
     export_formats=["bibtex", "ris"],
     enable_citation_tools=True,
+    enable_claim_verification=True,
     source_type_hierarchy=[
         "peer-reviewed",
         "meta-analysis",
@@ -1013,6 +1015,7 @@ PROFILE_SYSTEMATIC_REVIEW = ResearchProfile(
     enable_citation_tools=True,
     enable_methodology_assessment=True,
     enable_pdf_extraction=True,
+    enable_claim_verification=True,
     source_type_hierarchy=[
         "peer-reviewed",
         "meta-analysis",
@@ -1030,6 +1033,7 @@ PROFILE_BIBLIOMETRIC = ResearchProfile(
     export_formats=["bibtex", "ris"],
     enable_citation_tools=True,
     enable_citation_network=True,
+    enable_claim_verification=True,
 )
 
 PROFILE_TECHNICAL = ResearchProfile(
@@ -1037,6 +1041,7 @@ PROFILE_TECHNICAL = ResearchProfile(
     providers=["tavily", "google"],
     source_quality_mode=ResearchMode.TECHNICAL,
     citation_style="default",
+    enable_claim_verification=True,
 )
 
 BUILTIN_PROFILES: dict[str, ResearchProfile] = {

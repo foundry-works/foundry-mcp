@@ -24,7 +24,7 @@ _ACTION_SUMMARY = {
     "consensus": "Multi-model parallel consultation with synthesis",
     "thinkdeep": "Hypothesis-driven systematic investigation",
     "ideate": "Creative brainstorming with idea clustering",
-    "deep-research": "Multi-phase iterative deep research with query decomposition. Supports opt-in post-synthesis claim verification via config or profile (enable_claim_verification)",
+    "deep-research": "Multi-phase iterative deep research with query decomposition. Includes post-synthesis claim verification by default (disable via config or profile enable_claim_verification=false)",
     "deep-research-status": "Get status of deep research session",
     "deep-research-report": "Get final report from deep research",
     "deep-research-list": "List deep research sessions",

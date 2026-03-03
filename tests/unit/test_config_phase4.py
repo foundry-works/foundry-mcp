@@ -325,7 +325,7 @@ class TestClaimVerificationConfigParsing:
     def test_defaults_from_direct_construction(self):
         """Direct construction has correct claim verification defaults."""
         config = ResearchConfig()
-        assert config.deep_research_claim_verification_enabled is False
+        assert config.deep_research_claim_verification_enabled is True
         assert config.deep_research_claim_verification_sample_rate == 0.3
         assert config.deep_research_claim_verification_provider is None
         assert config.deep_research_claim_verification_model is None
@@ -387,6 +387,14 @@ class TestClaimVerificationConfigParsing:
         assert config.deep_research_claim_verification_enabled is True
         assert config.deep_research_claim_verification_sample_rate == 0.8
         assert config.deep_research_claim_verification_max_claims == 25
+
+
+    def test_from_toml_dict_explicit_false_disables(self):
+        """TOML override deep_research_claim_verification_enabled = false disables verification."""
+        config = ResearchConfig.from_toml_dict({
+            "deep_research_claim_verification_enabled": False,
+        })
+        assert config.deep_research_claim_verification_enabled is False
 
 
 class TestClaimVerificationConfigValidation:

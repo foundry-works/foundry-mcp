@@ -1414,48 +1414,79 @@ class TestPostCorrectionPersistence:
 class TestProfileClaimVerification:
     """Tests for the enable_claim_verification field on ResearchProfile."""
 
-    def test_profile_field_default_false(self):
+    def test_profile_field_default_true(self):
         from foundry_mcp.core.research.models.deep_research import ResearchProfile
 
         profile = ResearchProfile()
-        assert profile.enable_claim_verification is False
-
-    def test_profile_field_set_true(self):
-        from foundry_mcp.core.research.models.deep_research import ResearchProfile
-
-        profile = ResearchProfile(enable_claim_verification=True)
         assert profile.enable_claim_verification is True
 
+    def test_profile_field_set_false(self):
+        from foundry_mcp.core.research.models.deep_research import ResearchProfile
+
+        profile = ResearchProfile(enable_claim_verification=False)
+        assert profile.enable_claim_verification is False
+
     def test_profile_overrides_apply(self):
-        """Profile overrides can enable claim verification."""
+        """Profile overrides can disable claim verification."""
         from foundry_mcp.core.research.models.deep_research import ResearchProfile
 
         base = ResearchProfile(name="general")
-        overridden = base.model_copy(update={"enable_claim_verification": True})
-        assert overridden.enable_claim_verification is True
-        assert base.enable_claim_verification is False
+        overridden = base.model_copy(update={"enable_claim_verification": False})
+        assert overridden.enable_claim_verification is False
+        assert base.enable_claim_verification is True
 
-    def test_verification_guard_respects_profile(self):
-        """Simulate the workflow_execution.py guard logic that checks both
-        config and profile for claim verification enablement."""
+    def test_verification_guard_config_disables(self):
+        """Config=False acts as master switch, disabling even if profile=True."""
         config = _make_config(deep_research_claim_verification_enabled=False)
 
         from foundry_mcp.core.research.models.deep_research import ResearchProfile
 
         profile = ResearchProfile(enable_claim_verification=True)
 
-        # Simulate the guard from workflow_execution.py.
-        cv_enabled = config.deep_research_claim_verification_enabled or (
-            profile is not None
-            and getattr(profile, "enable_claim_verification", False)
+        # Simulate the guard from workflow_execution.py (and-based).
+        cv_enabled = config.deep_research_claim_verification_enabled and (
+            profile is None
+            or getattr(profile, "enable_claim_verification", True)
+        )
+        assert cv_enabled is False
+
+    def test_verification_guard_profile_disables(self):
+        """Profile can disable verification even when config=True."""
+        config = _make_config(deep_research_claim_verification_enabled=True)
+
+        from foundry_mcp.core.research.models.deep_research import ResearchProfile
+
+        profile = ResearchProfile(enable_claim_verification=False)
+
+        cv_enabled = config.deep_research_claim_verification_enabled and (
+            profile is None
+            or getattr(profile, "enable_claim_verification", True)
+        )
+        assert cv_enabled is False
+
+    def test_verification_guard_config_only(self):
+        """Config alone enables verification without profile (no profile = allowed)."""
+        config = _make_config(deep_research_claim_verification_enabled=True)
+
+        profile = None
+        cv_enabled = config.deep_research_claim_verification_enabled and (
+            profile is None
+            or getattr(profile, "enable_claim_verification", True)
         )
         assert cv_enabled is True
 
-    def test_verification_guard_config_only(self):
-        """Config alone can enable verification without profile."""
+    def test_verification_guard_both_enabled(self):
+        """Both config and profile enabled (the new default)."""
         config = _make_config(deep_research_claim_verification_enabled=True)
 
-        cv_enabled = config.deep_research_claim_verification_enabled or False
+        from foundry_mcp.core.research.models.deep_research import ResearchProfile
+
+        profile = ResearchProfile(enable_claim_verification=True)
+
+        cv_enabled = config.deep_research_claim_verification_enabled and (
+            profile is None
+            or getattr(profile, "enable_claim_verification", True)
+        )
         assert cv_enabled is True
 
     def test_verification_guard_both_disabled(self):
@@ -1466,8 +1497,8 @@ class TestProfileClaimVerification:
 
         profile = ResearchProfile(enable_claim_verification=False)
 
-        cv_enabled = config.deep_research_claim_verification_enabled or (
-            profile is not None
-            and getattr(profile, "enable_claim_verification", False)
+        cv_enabled = config.deep_research_claim_verification_enabled and (
+            profile is None
+            or getattr(profile, "enable_claim_verification", True)
         )
         assert cv_enabled is False

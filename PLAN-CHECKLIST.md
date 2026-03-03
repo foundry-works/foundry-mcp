@@ -38,19 +38,19 @@
 ## Phase 3: Default Claim Verification to True
 
 ### 3a. Config default
-- [ ] Change `deep_research_claim_verification_enabled` default from `False` to `True` in `research.py`
+- [x] Change `deep_research_claim_verification_enabled` default from `False` to `True` in `research.py`
 
 ### 3b. ResearchProfile default
-- [ ] Change `enable_claim_verification` default from `False` to `True` in `ResearchProfile` class
+- [x] Change `enable_claim_verification` default from `False` to `True` in `ResearchProfile` class
 
 ### 3c. Built-in profiles
-- [ ] Review all 5 built-in profiles — confirm all should have claim verification enabled
-- [ ] Add explicit `enable_claim_verification=True` to any profile that currently inherits the default (for clarity)
+- [x] Review all 5 built-in profiles — confirm all should have claim verification enabled
+- [x] Add explicit `enable_claim_verification=True` to any profile that currently inherits the default (for clarity)
 
 ### 3d. Tests
-- [ ] Update tests asserting `enable_claim_verification == False` as default
-- [ ] Verify TOML config `deep_research_claim_verification_enabled = false` still disables
-- [ ] Run existing claim verification test suite — confirm no regressions
+- [x] Update tests asserting `enable_claim_verification == False` as default
+- [x] Verify TOML config `deep_research_claim_verification_enabled = false` still disables
+- [x] Run existing claim verification test suite — confirm no regressions
 
 ## Phase 2: Source Relevance Filtering
 
