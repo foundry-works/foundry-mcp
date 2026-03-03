@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0a4] - 2026-03-03
+
+### Added
+
+- **Post-synthesis claim verification pipeline**: New Layer 3 verification phase that extracts factual claims from synthesized reports and validates them against source evidence. Includes claim extraction, source matching, confidence scoring, dispute flagging, and report annotation with verification badges. Configurable via `[research.claim_verification]` TOML section.
+- **Profile-based claim verification enablement**: Research profiles can now enable/disable claim verification and set confidence thresholds per-profile. Academic profiles enable verification by default.
+- **Factual grounding guardrails in synthesis**: Synthesis prompts now include explicit instructions to ground claims in source evidence, cite sources inline, and flag low-confidence assertions.
+- **Structured data preservation in compression**: Compression pipeline now detects and preserves structured data (tables, lists, key-value pairs, code blocks) during cross-phase compression, preventing data loss from aggressive summarization.
+
+### Fixed
+
+- **P0 critical security and robustness**: Fixed unvalidated regex in URL patterns, unsafe `shutil.rmtree` on symlinks, missing `httpx` timeout enforcement, unbounded retry loops, and TOML config silently dropping claim verification settings.
+- **P1 concurrency and error handling**: Fixed background task `asyncio.shield` misuse, added proper cancellation token propagation, fixed race conditions in session state updates.
+- **P2 correctness and security**: Fixed zip bomb size check using compressed vs uncompressed size, added rollback-on-failure for claim verification, improved cleanup logging, added shared test helpers.
+- **P3 hygiene and hardening**: Fixed HTML unescape depth limit, added truncation warnings for oversized inputs, tightened input validation on verification parameters, improved test clarity.
+- **Report auto-save simplified**: Auto-save now uses the working directory instead of requiring explicit path configuration.
+
 ## [0.18.0a3] - 2026-03-02
 
 ### Fixed
