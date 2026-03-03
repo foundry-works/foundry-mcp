@@ -394,6 +394,23 @@ class ActionHandlersMixin:
                         "last_heartbeat_at": state.last_heartbeat_at.isoformat() if state.last_heartbeat_at else None,
                     }
                 )
+                # Include claim verification metadata when available
+                if state.claim_verification:
+                    cv = state.claim_verification
+                    metadata["claim_verification"] = {
+                        "claims_extracted": cv.claims_extracted,
+                        "claims_verified": cv.claims_verified,
+                        "claims_supported": cv.claims_supported,
+                        "claims_contradicted": cv.claims_contradicted,
+                        "claims_unsupported": cv.claims_unsupported,
+                        "corrections_applied": cv.corrections_applied,
+                    }
+                elif state.metadata.get("claim_verification_skipped"):
+                    metadata["claim_verification"] = {
+                        "skipped": True,
+                        "reason": state.metadata["claim_verification_skipped"],
+                    }
+
                 # Build detailed status content when state is available
                 status_lines = [
                     f"Research ID: {state.id}",
@@ -402,6 +419,8 @@ class ActionHandlersMixin:
                     f"Phase: {state.phase.value}",
                     f"Iteration: {state.iteration}/{state.max_iterations}",
                 ]
+                if state.metadata.get("claim_verification_in_progress"):
+                    status_lines.append("Status: Verifying claims...")
                 content = "\n".join(status_lines)
             else:
                 content = f"Task status: {bg_task.status.value}"
@@ -500,6 +519,20 @@ class ActionHandlersMixin:
                 "cancelled": bool(state.metadata.get("cancelled")),
                 "status_check_count": state.status_check_count,
                 "last_heartbeat_at": state.last_heartbeat_at.isoformat() if state.last_heartbeat_at else None,
+                **(
+                    {
+                        "claim_verification": {
+                            "claims_extracted": state.claim_verification.claims_extracted,
+                            "claims_verified": state.claim_verification.claims_verified,
+                            "claims_supported": state.claim_verification.claims_supported,
+                            "claims_contradicted": state.claim_verification.claims_contradicted,
+                            "claims_unsupported": state.claim_verification.claims_unsupported,
+                            "corrections_applied": state.claim_verification.corrections_applied,
+                        }
+                    }
+                    if state.claim_verification
+                    else {}
+                ),
             },
         )
 

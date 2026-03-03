@@ -326,6 +326,18 @@ class ResearchConfig:
     deep_research_methodology_assessment_timeout: float = 60.0  # Timeout per LLM extraction call (seconds)
     deep_research_methodology_assessment_min_content_length: int = 200  # Min chars to trigger assessment
 
+    # Claim verification (post-synthesis validation of factual claims)
+    deep_research_claim_verification_enabled: bool = False  # Opt-in until battle-tested
+    deep_research_claim_verification_sample_rate: float = 0.3  # Sample 30% of positive claims
+    deep_research_claim_verification_provider: Optional[str] = None  # Override verification provider
+    deep_research_claim_verification_model: Optional[str] = None  # Override verification model
+    deep_research_claim_verification_timeout: int = 120  # Seconds (overall verification phase)
+    deep_research_claim_verification_max_claims: int = 50  # Max claims to verify per report
+    deep_research_claim_verification_max_concurrent: int = 10  # Max parallel verification LLM calls
+    deep_research_claim_verification_max_corrections: int = 5  # Max correction LLM calls per report
+    deep_research_claim_verification_annotate_unsupported: bool = False  # Inline (unverified) annotations
+    deep_research_claim_verification_max_input_tokens: int = 200_000  # Total token budget escape hatch
+
     deep_research_archive_content: bool = False  # Archive canonical text for digested sources
     deep_research_archive_retention_days: int = 30  # Days to retain archived digest content (0 = keep indefinitely)
     # Digest LLM provider configuration (uses default provider if not set)

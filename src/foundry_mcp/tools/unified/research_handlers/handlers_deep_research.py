@@ -304,6 +304,27 @@ def _handle_deep_research_report(
                 response_data["structured"] = state.extensions.structured_output.model_dump(
                     mode="json",
                 )
+            if state.claim_verification is not None:
+                cv = state.claim_verification
+                response_data["claim_verification"] = {
+                    "claims_extracted": cv.claims_extracted,
+                    "claims_verified": cv.claims_verified,
+                    "claims_supported": cv.claims_supported,
+                    "claims_contradicted": cv.claims_contradicted,
+                    "claims_unsupported": cv.claims_unsupported,
+                    "corrections_applied": cv.corrections_applied,
+                    "summary": (
+                        f"Verified {cv.claims_verified} claims: "
+                        f"{cv.claims_supported} supported, "
+                        f"{cv.claims_contradicted} corrected, "
+                        f"{cv.claims_unsupported} unsupported"
+                    ),
+                }
+            elif state.metadata.get("claim_verification_skipped"):
+                response_data["claim_verification"] = {
+                    "skipped": True,
+                    "reason": state.metadata["claim_verification_skipped"],
+                }
 
         return asdict(
             success_response(

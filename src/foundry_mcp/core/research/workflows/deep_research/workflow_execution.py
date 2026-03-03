@@ -319,44 +319,126 @@ class WorkflowExecutionMixin:
 
             # SYNTHESIS
             if state.phase == DeepResearchPhase.SYNTHESIS:
-                err = await self._run_phase(
-                    state,
-                    DeepResearchPhase.SYNTHESIS,
-                    self._execute_synthesis_async(
-                        state=state,
-                        provider_id=state.synthesis_provider,
-                        timeout=self.config.get_phase_timeout("synthesis"),
-                    ),
-                    skip_transition=True,
-                )
-                if err:
-                    return err
-
-                # Phase-specific: custom orchestrator + iteration decision
-                try:
-                    self.orchestrator.evaluate_phase_completion(state, DeepResearchPhase.SYNTHESIS)
-                    self.orchestrator.decide_iteration(state)
-                    prompt = self.orchestrator.get_reflection_prompt(state, DeepResearchPhase.SYNTHESIS)
-                    self.hooks.think_pause(state, prompt)
-                    self.orchestrator.record_to_state(state)
-                except Exception as exc:
-                    logger.exception(
-                        "Orchestrator transition failed for synthesis, research %s: %s",
-                        state.id,
-                        exc,
-                    )
-                    self._write_audit_event(
+                # Resume guard: skip synthesis if report exists and verification was in progress
+                _skip_to_verification = False
+                if state.report and state.metadata.get("claim_verification_started") and not state.claim_verification:
+                    logger.info("Resuming claim verification (synthesis already complete) for research %s", state.id)
+                    _skip_to_verification = True
+                elif state.report and state.claim_verification:
+                    logger.info("Claim verification already complete for research %s, skipping", state.id)
+                    # Both synthesis and verification done — skip to completion.
+                else:
+                    err = await self._run_phase(
                         state,
-                        "orchestrator_error",
-                        data={
-                            "phase": "synthesis",
-                            "error": str(exc),
-                            "traceback": traceback.format_exc(),
-                        },
-                        level="error",
+                        DeepResearchPhase.SYNTHESIS,
+                        self._execute_synthesis_async(
+                            state=state,
+                            provider_id=state.synthesis_provider,
+                            timeout=self.config.get_phase_timeout("synthesis"),
+                        ),
+                        skip_transition=True,
                     )
-                    self._record_workflow_error(exc, state, "orchestrator_synthesis")
-                    raise
+                    if err:
+                        return err
+
+                    # Phase-specific: custom orchestrator + iteration decision
+                    try:
+                        self.orchestrator.evaluate_phase_completion(state, DeepResearchPhase.SYNTHESIS)
+                        self.orchestrator.decide_iteration(state)
+                        prompt = self.orchestrator.get_reflection_prompt(state, DeepResearchPhase.SYNTHESIS)
+                        self.hooks.think_pause(state, prompt)
+                        self.orchestrator.record_to_state(state)
+                    except Exception as exc:
+                        logger.exception(
+                            "Orchestrator transition failed for synthesis, research %s: %s",
+                            state.id,
+                            exc,
+                        )
+                        self._write_audit_event(
+                            state,
+                            "orchestrator_error",
+                            data={
+                                "phase": "synthesis",
+                                "error": str(exc),
+                                "traceback": traceback.format_exc(),
+                            },
+                            level="error",
+                        )
+                        self._record_workflow_error(exc, state, "orchestrator_synthesis")
+                        raise
+
+                # --- CLAIM VERIFICATION ---
+                if (
+                    self.config.deep_research_claim_verification_enabled
+                    and not state.claim_verification
+                ):
+                    from pathlib import Path
+
+                    from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification import (
+                        apply_corrections,
+                        extract_and_verify_claims,
+                    )
+
+                    state.metadata["claim_verification_started"] = True
+                    state.metadata["claim_verification_in_progress"] = True
+                    self.memory.save_deep_research(state)
+
+                    # Snapshot report before corrections for rollback on exception.
+                    report_snapshot = state.report
+
+                    try:
+                        verification_result = await extract_and_verify_claims(
+                            state=state,
+                            config=self.config,
+                            provider_id=resolve_phase_provider(self.config, "claim_verification", "synthesis"),
+                            execute_fn=self._execute_provider_async,
+                            timeout=self.config.deep_research_claim_verification_timeout,
+                        )
+                        state.claim_verification = verification_result
+
+                        if verification_result.claims_contradicted > 0:
+                            await apply_corrections(
+                                state=state,
+                                config=self.config,
+                                verification_result=verification_result,
+                                execute_fn=self._execute_provider_async,
+                            )
+                            # Re-save report after corrections using the same path
+                            # synthesis wrote to (avoids _save_report_markdown collision logic).
+                            if state.report_output_path:
+                                Path(state.report_output_path).write_text(state.report or "", encoding="utf-8")
+
+                        # Persist corrected report + verification result.
+                        self.memory.save_deep_research(state)
+
+                        self._write_audit_event(
+                            state,
+                            "claim_verification_complete",
+                            data={
+                                "claims_extracted": verification_result.claims_extracted,
+                                "claims_verified": verification_result.claims_verified,
+                                "claims_contradicted": verification_result.claims_contradicted,
+                                "corrections_applied": verification_result.corrections_applied,
+                            },
+                        )
+                    except Exception as exc:
+                        # Rollback to pre-correction report.
+                        state.report = report_snapshot
+                        logger.warning(
+                            "Claim verification failed for research %s, delivering unverified report: %s",
+                            state.id,
+                            exc,
+                        )
+                        state.metadata["claim_verification_skipped"] = str(exc)
+                        self._write_audit_event(
+                            state,
+                            "claim_verification_failed",
+                            data={"error": str(exc)},
+                            level="warning",
+                        )
+                    finally:
+                        state.metadata.pop("claim_verification_in_progress", None)
+                # --- END CLAIM VERIFICATION ---
 
                 # No refinement — workflow complete
                 state.metadata["iteration_in_progress"] = False

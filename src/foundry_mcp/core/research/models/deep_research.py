@@ -1284,6 +1284,63 @@ class CitationNetwork(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class ClaimVerdict(BaseModel):
+    """Verification result for a single claim extracted from the report."""
+
+    claim: str = Field(..., description="The extracted claim text")
+    claim_type: str = Field(
+        ...,
+        description="Claim type: negative, quantitative, comparative, or positive",
+    )
+    cited_sources: list[int] = Field(
+        default_factory=list,
+        description="Citation numbers referenced by this claim",
+    )
+    report_section: Optional[str] = Field(
+        default=None,
+        description="Report section where the claim appears",
+    )
+    quote_context: Optional[str] = Field(
+        default=None,
+        description="Exact quote from report containing the claim (for locating corrections)",
+    )
+    verdict: str = Field(
+        default="UNSUPPORTED",
+        description="Verification verdict: SUPPORTED, CONTRADICTED, UNSUPPORTED, PARTIALLY_SUPPORTED",
+    )
+    evidence_quote: Optional[str] = Field(
+        default=None,
+        description="Quote from source material supporting the verdict",
+    )
+    explanation: Optional[str] = Field(
+        default=None,
+        description="Explanation of why the verdict was reached",
+    )
+    correction_applied: bool = Field(
+        default=False,
+        description="Whether a correction was applied to the report for this claim",
+    )
+    corrected_text: Optional[str] = Field(
+        default=None,
+        description="The corrected text that replaced the original (if correction was applied)",
+    )
+
+
+class ClaimVerificationResult(BaseModel):
+    """Aggregated result of post-synthesis claim verification."""
+
+    claims_extracted: int = Field(default=0, description="Total claims extracted from report")
+    claims_verified: int = Field(default=0, description="Claims that were verified against sources")
+    claims_supported: int = Field(default=0, description="Claims verified as SUPPORTED")
+    claims_contradicted: int = Field(default=0, description="Claims verified as CONTRADICTED")
+    claims_unsupported: int = Field(default=0, description="Claims verified as UNSUPPORTED")
+    corrections_applied: int = Field(default=0, description="Number of corrections applied to report")
+    details: list[ClaimVerdict] = Field(
+        default_factory=list,
+        description="Per-claim verification details",
+    )
+
+
 class ResearchExtensions(BaseModel):
     """Container for extended research capabilities.
 
@@ -1534,6 +1591,14 @@ class DeepResearchState(BaseModel):
     extensions: ResearchExtensions = Field(
         default_factory=ResearchExtensions,
         description="Extended research capabilities",
+    )
+
+    # Post-synthesis claim verification result (populated when enabled).
+    # Placed on DeepResearchState directly (not ResearchExtensions) because
+    # ResearchExtensions uses extra="forbid" which would break forward compat.
+    claim_verification: Optional[ClaimVerificationResult] = Field(
+        default=None,
+        description="Result of post-synthesis claim verification (when enabled)",
     )
 
     # Citation counter — maintained by add_source()/append_source().
