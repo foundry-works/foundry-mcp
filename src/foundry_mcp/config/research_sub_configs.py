@@ -247,3 +247,15 @@ class DeepResearchSettings:
     evaluation_provider: Optional[str] = None
     evaluation_model: Optional[str] = None
     evaluation_timeout: float = 360.0
+
+    # Claim verification configuration
+    claim_verification_enabled: bool = False
+    claim_verification_sample_rate: float = 0.3
+    claim_verification_provider: Optional[str] = None
+    claim_verification_model: Optional[str] = None
+    claim_verification_timeout: float = 120.0
+    claim_verification_max_claims: int = 50
+    claim_verification_max_concurrent: int = 10
+    claim_verification_max_corrections: int = 5
+    claim_verification_annotate_unsupported: bool = False
+    claim_verification_max_input_tokens: int = 200_000

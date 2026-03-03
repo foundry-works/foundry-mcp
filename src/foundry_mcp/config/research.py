@@ -156,7 +156,7 @@ class ResearchConfig:
     deep_research_max_content_length: int = (
         50000  # Max chars per source before L1 summarization (matches open_deep_research)
     )
-    deep_research_summarization_timeout: int = 60  # Per-result summarization timeout in seconds
+    deep_research_summarization_timeout: float = 60.0  # Per-result summarization timeout in seconds
     deep_research_summarization_min_content_length: int = (
         300  # Min chars to trigger per-result summarization (shorter content kept as-is)
     )
@@ -331,7 +331,7 @@ class ResearchConfig:
     deep_research_claim_verification_sample_rate: float = 0.3  # Sample 30% of positive claims
     deep_research_claim_verification_provider: Optional[str] = None  # Override verification provider
     deep_research_claim_verification_model: Optional[str] = None  # Override verification model
-    deep_research_claim_verification_timeout: int = 120  # Seconds (overall verification phase)
+    deep_research_claim_verification_timeout: float = 120.0  # Seconds (overall verification phase)
     deep_research_claim_verification_max_claims: int = 50  # Max claims to verify per report
     deep_research_claim_verification_max_concurrent: int = 10  # Max parallel verification LLM calls
     deep_research_claim_verification_max_corrections: int = 5  # Max correction LLM calls per report
@@ -484,6 +484,7 @@ class ResearchConfig:
             "deep_research_supervision_wall_clock_timeout": 1800.0,
             "deep_research_summarization_timeout": 60.0,
             "deep_research_digest_timeout": 120.0,
+            "deep_research_claim_verification_timeout": 120.0,
             "summarization_timeout": 60.0,
         }
         _TIMEOUT_PRESETS: Dict[str, float] = {
@@ -665,7 +666,7 @@ class ResearchConfig:
             deep_research_summarization_provider=data.get("deep_research_summarization_provider"),
             deep_research_summarization_model=data.get("deep_research_summarization_model"),
             deep_research_max_content_length=int(data.get("deep_research_max_content_length", 50000)),
-            deep_research_summarization_timeout=int(data.get("deep_research_summarization_timeout", 60)),
+            deep_research_summarization_timeout=float(data.get("deep_research_summarization_timeout", 60.0)),
             deep_research_summarization_min_content_length=int(
                 data.get("deep_research_summarization_min_content_length", 300)
             ),
@@ -808,6 +809,33 @@ class ResearchConfig:
             deep_research_methodology_assessment_min_content_length=int(
                 data.get("deep_research_methodology_assessment_min_content_length", 200)
             ),
+            # Claim verification configuration
+            deep_research_claim_verification_enabled=_parse_bool(
+                data.get("deep_research_claim_verification_enabled", False)
+            ),
+            deep_research_claim_verification_sample_rate=float(
+                data.get("deep_research_claim_verification_sample_rate", 0.3)
+            ),
+            deep_research_claim_verification_provider=data.get("deep_research_claim_verification_provider"),
+            deep_research_claim_verification_model=data.get("deep_research_claim_verification_model"),
+            deep_research_claim_verification_timeout=float(
+                data.get("deep_research_claim_verification_timeout", 120)
+            ),
+            deep_research_claim_verification_max_claims=int(
+                data.get("deep_research_claim_verification_max_claims", 50)
+            ),
+            deep_research_claim_verification_max_concurrent=int(
+                data.get("deep_research_claim_verification_max_concurrent", 10)
+            ),
+            deep_research_claim_verification_max_corrections=int(
+                data.get("deep_research_claim_verification_max_corrections", 5)
+            ),
+            deep_research_claim_verification_annotate_unsupported=_parse_bool(
+                data.get("deep_research_claim_verification_annotate_unsupported", False)
+            ),
+            deep_research_claim_verification_max_input_tokens=int(
+                data.get("deep_research_claim_verification_max_input_tokens", 200_000)
+            ),
             # Academic coverage weights
             deep_research_academic_coverage_weights=data.get("deep_research_academic_coverage_weights"),
             # Influence scoring thresholds
@@ -873,6 +901,7 @@ class ResearchConfig:
         self._validate_status_persistence_config()
         self._validate_audit_verbosity_config()
         self._validate_digest_config()
+        self._validate_claim_verification_config()
         self._validate_model_tiers()
 
     def _validate_deep_research_mode(self) -> None:
@@ -1447,6 +1476,44 @@ class ResearchConfig:
             raise ValueError(
                 f"Invalid deep_research_archive_retention_days: {self.deep_research_archive_retention_days!r}. "
                 "Must be >= 0."
+            )
+
+    def _validate_claim_verification_config(self) -> None:
+        """Validate claim verification configuration fields.
+
+        Raises:
+            ValueError: If any claim verification config field has an invalid value.
+        """
+        sr = self.deep_research_claim_verification_sample_rate
+        if not (0.0 <= sr <= 1.0):
+            raise ValueError(
+                f"Invalid deep_research_claim_verification_sample_rate: {sr!r}. "
+                "Must be in [0.0, 1.0]."
+            )
+        if self.deep_research_claim_verification_timeout <= 0:
+            raise ValueError(
+                f"Invalid deep_research_claim_verification_timeout: "
+                f"{self.deep_research_claim_verification_timeout!r}. Must be > 0."
+            )
+        if self.deep_research_claim_verification_max_claims < 1:
+            raise ValueError(
+                f"Invalid deep_research_claim_verification_max_claims: "
+                f"{self.deep_research_claim_verification_max_claims!r}. Must be >= 1."
+            )
+        if self.deep_research_claim_verification_max_concurrent < 1:
+            raise ValueError(
+                f"Invalid deep_research_claim_verification_max_concurrent: "
+                f"{self.deep_research_claim_verification_max_concurrent!r}. Must be >= 1."
+            )
+        if self.deep_research_claim_verification_max_corrections < 0:
+            raise ValueError(
+                f"Invalid deep_research_claim_verification_max_corrections: "
+                f"{self.deep_research_claim_verification_max_corrections!r}. Must be >= 0."
+            )
+        if self.deep_research_claim_verification_max_input_tokens < 1:
+            raise ValueError(
+                f"Invalid deep_research_claim_verification_max_input_tokens: "
+                f"{self.deep_research_claim_verification_max_input_tokens!r}. Must be > 0."
             )
 
     def get_provider_rate_limit(self, provider: str) -> int:
@@ -2227,4 +2294,14 @@ class ResearchConfig:
             evaluation_provider=self.deep_research_evaluation_provider,
             evaluation_model=self.deep_research_evaluation_model,
             evaluation_timeout=self.deep_research_evaluation_timeout,
+            claim_verification_enabled=self.deep_research_claim_verification_enabled,
+            claim_verification_sample_rate=self.deep_research_claim_verification_sample_rate,
+            claim_verification_provider=self.deep_research_claim_verification_provider,
+            claim_verification_model=self.deep_research_claim_verification_model,
+            claim_verification_timeout=self.deep_research_claim_verification_timeout,
+            claim_verification_max_claims=self.deep_research_claim_verification_max_claims,
+            claim_verification_max_concurrent=self.deep_research_claim_verification_max_concurrent,
+            claim_verification_max_corrections=self.deep_research_claim_verification_max_corrections,
+            claim_verification_annotate_unsupported=self.deep_research_claim_verification_annotate_unsupported,
+            claim_verification_max_input_tokens=self.deep_research_claim_verification_max_input_tokens,
         )

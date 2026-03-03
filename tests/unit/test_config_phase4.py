@@ -6,6 +6,7 @@ Covers:
 - 4.3: Gemini 2.0 model entries in token limits
 - 4.4: Unknown TOML key warnings
 - 4.5: deep_research_enable_planning_critique config field
+- P0: Claim verification config parsing, validation, and field coverage regression
 """
 
 from __future__ import annotations
@@ -311,3 +312,196 @@ class TestCitationInfluenceThresholdValidation:
                 "deep_research_influence_medium_citation_threshold": 20,
                 "deep_research_influence_high_citation_threshold": 10,
             })
+
+
+# ===========================================================================
+# P0 — Claim verification config fields parsed from TOML
+# ===========================================================================
+
+
+class TestClaimVerificationConfigParsing:
+    """Claim verification fields must be parsed from TOML into ResearchConfig."""
+
+    def test_defaults_from_direct_construction(self):
+        """Direct construction has correct claim verification defaults."""
+        config = ResearchConfig()
+        assert config.deep_research_claim_verification_enabled is False
+        assert config.deep_research_claim_verification_sample_rate == 0.3
+        assert config.deep_research_claim_verification_provider is None
+        assert config.deep_research_claim_verification_model is None
+        assert config.deep_research_claim_verification_timeout == 120.0
+        assert config.deep_research_claim_verification_max_claims == 50
+        assert config.deep_research_claim_verification_max_concurrent == 10
+        assert config.deep_research_claim_verification_max_corrections == 5
+        assert config.deep_research_claim_verification_annotate_unsupported is False
+        assert config.deep_research_claim_verification_max_input_tokens == 200_000
+
+    def test_from_toml_dict_defaults_match_direct(self):
+        """from_toml_dict({}) must produce same claim verification defaults as direct construction."""
+        direct = ResearchConfig()
+        from_toml = ResearchConfig.from_toml_dict({})
+        for suffix in (
+            "enabled", "sample_rate", "provider", "model", "timeout",
+            "max_claims", "max_concurrent", "max_corrections",
+            "annotate_unsupported", "max_input_tokens",
+        ):
+            field_name = f"deep_research_claim_verification_{suffix}"
+            assert getattr(from_toml, field_name) == getattr(direct, field_name), (
+                f"Mismatch for {field_name}"
+            )
+
+    def test_from_toml_dict_overrides(self):
+        """from_toml_dict correctly picks up claim verification overrides."""
+        config = ResearchConfig.from_toml_dict({
+            "deep_research_claim_verification_enabled": True,
+            "deep_research_claim_verification_sample_rate": 0.5,
+            "deep_research_claim_verification_provider": "openai",
+            "deep_research_claim_verification_model": "gpt-4o",
+            "deep_research_claim_verification_timeout": 300,
+            "deep_research_claim_verification_max_claims": 100,
+            "deep_research_claim_verification_max_concurrent": 20,
+            "deep_research_claim_verification_max_corrections": 10,
+            "deep_research_claim_verification_annotate_unsupported": True,
+            "deep_research_claim_verification_max_input_tokens": 500_000,
+        })
+        assert config.deep_research_claim_verification_enabled is True
+        assert config.deep_research_claim_verification_sample_rate == 0.5
+        assert config.deep_research_claim_verification_provider == "openai"
+        assert config.deep_research_claim_verification_model == "gpt-4o"
+        assert config.deep_research_claim_verification_timeout == 300.0
+        assert config.deep_research_claim_verification_max_claims == 100
+        assert config.deep_research_claim_verification_max_concurrent == 20
+        assert config.deep_research_claim_verification_max_corrections == 10
+        assert config.deep_research_claim_verification_annotate_unsupported is True
+        assert config.deep_research_claim_verification_max_input_tokens == 500_000
+
+    def test_from_toml_dict_subtable_flattening(self):
+        """[research.deep_research] claim_verification_enabled = true flattens correctly."""
+        config = ResearchConfig.from_toml_dict({
+            "deep_research": {
+                "claim_verification_enabled": True,
+                "claim_verification_sample_rate": 0.8,
+                "claim_verification_max_claims": 25,
+            }
+        })
+        assert config.deep_research_claim_verification_enabled is True
+        assert config.deep_research_claim_verification_sample_rate == 0.8
+        assert config.deep_research_claim_verification_max_claims == 25
+
+
+class TestClaimVerificationConfigValidation:
+    """Claim verification validation rules in __post_init__."""
+
+    def test_sample_rate_below_zero_raises(self):
+        with pytest.raises(ValueError, match="sample_rate"):
+            ResearchConfig(deep_research_claim_verification_sample_rate=-0.1)
+
+    def test_sample_rate_above_one_raises(self):
+        with pytest.raises(ValueError, match="sample_rate"):
+            ResearchConfig(deep_research_claim_verification_sample_rate=1.1)
+
+    def test_sample_rate_zero_accepted(self):
+        config = ResearchConfig(deep_research_claim_verification_sample_rate=0.0)
+        assert config.deep_research_claim_verification_sample_rate == 0.0
+
+    def test_sample_rate_one_accepted(self):
+        config = ResearchConfig(deep_research_claim_verification_sample_rate=1.0)
+        assert config.deep_research_claim_verification_sample_rate == 1.0
+
+    def test_timeout_zero_raises(self):
+        with pytest.raises(ValueError, match="timeout"):
+            ResearchConfig(deep_research_claim_verification_timeout=0)
+
+    def test_max_claims_zero_raises(self):
+        with pytest.raises(ValueError, match="max_claims"):
+            ResearchConfig(deep_research_claim_verification_max_claims=0)
+
+    def test_max_concurrent_zero_raises(self):
+        with pytest.raises(ValueError, match="max_concurrent"):
+            ResearchConfig(deep_research_claim_verification_max_concurrent=0)
+
+    def test_max_corrections_negative_raises(self):
+        with pytest.raises(ValueError, match="max_corrections"):
+            ResearchConfig(deep_research_claim_verification_max_corrections=-1)
+
+    def test_max_corrections_zero_accepted(self):
+        config = ResearchConfig(deep_research_claim_verification_max_corrections=0)
+        assert config.deep_research_claim_verification_max_corrections == 0
+
+    def test_max_input_tokens_zero_raises(self):
+        with pytest.raises(ValueError, match="max_input_tokens"):
+            ResearchConfig(deep_research_claim_verification_max_input_tokens=0)
+
+
+class TestClaimVerificationTimeoutTypes:
+    """Timeout fields must be float, not int (P2.6 / P0 checklist)."""
+
+    def test_summarization_timeout_is_float(self):
+        import dataclasses
+        field_map = {f.name: f for f in dataclasses.fields(ResearchConfig)}
+        assert field_map["deep_research_summarization_timeout"].type == "float"
+
+    def test_claim_verification_timeout_is_float(self):
+        import dataclasses
+        field_map = {f.name: f for f in dataclasses.fields(ResearchConfig)}
+        assert field_map["deep_research_claim_verification_timeout"].type == "float"
+
+    def test_timeout_preset_multiplier_produces_float(self):
+        """Timeout preset multiplier should not truncate claim_verification_timeout."""
+        config = ResearchConfig.from_toml_dict({
+            "timeouts": {"preset": "fast"},
+        })
+        # fast = 0.5x multiplier; 120.0 * 0.5 = 60.0
+        assert config.deep_research_claim_verification_timeout == 60.0
+        assert isinstance(config.deep_research_claim_verification_timeout, float)
+
+
+class TestClaimVerificationInDeepResearchSettings:
+    """Claim verification fields must be accessible via deep_research_config sub-config."""
+
+    def test_sub_config_has_claim_verification_fields(self):
+        config = ResearchConfig(
+            deep_research_claim_verification_enabled=True,
+            deep_research_claim_verification_sample_rate=0.7,
+            deep_research_claim_verification_max_claims=30,
+        )
+        drc = config.deep_research_config
+        assert drc.claim_verification_enabled is True
+        assert drc.claim_verification_sample_rate == 0.7
+        assert drc.claim_verification_max_claims == 30
+
+
+# ===========================================================================
+# Regression: from_toml_dict field coverage
+# ===========================================================================
+
+
+class TestFromTomlDictFieldCoverage:
+    """Every dataclass field must appear in from_toml_dict() constructor call.
+
+    This is a regression guard against the exact class of bug found in P0:
+    a field added to the dataclass but never wired into from_toml_dict().
+    """
+
+    def test_all_fields_present_in_from_toml_dict(self):
+        """Assert every init-eligible field is passed in from_toml_dict constructor."""
+        import dataclasses
+        import inspect
+
+        # Fields that from_toml_dict must pass to cls(...)
+        all_fields = dataclasses.fields(ResearchConfig)
+        init_fields = {f.name for f in all_fields if f.init}
+
+        # Get from_toml_dict source and look for field names in the cls(...) call
+        source = inspect.getsource(ResearchConfig.from_toml_dict)
+
+        missing = []
+        for field_name in sorted(init_fields):
+            # The field must appear as a keyword argument: `field_name=`
+            if f"{field_name}=" not in source:
+                missing.append(field_name)
+
+        assert not missing, (
+            f"Fields declared on ResearchConfig but missing from from_toml_dict() "
+            f"constructor call:\n  " + "\n  ".join(missing)
+        )

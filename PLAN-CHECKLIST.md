@@ -2,28 +2,28 @@
 
 ## P0: Critical — Silent Config Data Loss
 
-- [ ] Add 10 missing claim verification fields to `from_toml_dict()` constructor in `config/research.py`
-  - [ ] `deep_research_claim_verification_enabled`
-  - [ ] `deep_research_claim_verification_sample_rate`
-  - [ ] `deep_research_claim_verification_provider`
-  - [ ] `deep_research_claim_verification_model`
-  - [ ] `deep_research_claim_verification_timeout`
-  - [ ] `deep_research_claim_verification_max_claims`
-  - [ ] `deep_research_claim_verification_max_concurrent`
-  - [ ] `deep_research_claim_verification_max_corrections`
-  - [ ] `deep_research_claim_verification_annotate_unsupported`
-  - [ ] `deep_research_claim_verification_max_input_tokens`
-- [ ] Add `_validate_claim_verification_config()` to `__post_init__` in `config/research.py`
-  - [ ] Validate `sample_rate` in `[0.0, 1.0]`
-  - [ ] Validate `timeout` > 0
-  - [ ] Validate `max_claims` >= 1
-  - [ ] Validate `max_concurrent` >= 1
-  - [ ] Validate `max_corrections` >= 0
-  - [ ] Validate `max_input_tokens` > 0
-- [ ] Add claim verification fields to `DeepResearchSettings` in `config/research_sub_configs.py`
-- [ ] Add regression test: assert all `dataclasses.fields(ResearchConfig)` names appear in `from_toml_dict`
-- [ ] Fix timeout type: `deep_research_claim_verification_timeout` from `int` to `float`
-- [ ] Fix timeout type: `deep_research_summarization_timeout` from `int` to `float`
+- [x] Add 10 missing claim verification fields to `from_toml_dict()` constructor in `config/research.py`
+  - [x] `deep_research_claim_verification_enabled`
+  - [x] `deep_research_claim_verification_sample_rate`
+  - [x] `deep_research_claim_verification_provider`
+  - [x] `deep_research_claim_verification_model`
+  - [x] `deep_research_claim_verification_timeout`
+  - [x] `deep_research_claim_verification_max_claims`
+  - [x] `deep_research_claim_verification_max_concurrent`
+  - [x] `deep_research_claim_verification_max_corrections`
+  - [x] `deep_research_claim_verification_annotate_unsupported`
+  - [x] `deep_research_claim_verification_max_input_tokens`
+- [x] Add `_validate_claim_verification_config()` to `__post_init__` in `config/research.py`
+  - [x] Validate `sample_rate` in `[0.0, 1.0]`
+  - [x] Validate `timeout` > 0
+  - [x] Validate `max_claims` >= 1
+  - [x] Validate `max_concurrent` >= 1
+  - [x] Validate `max_corrections` >= 0
+  - [x] Validate `max_input_tokens` > 0
+- [x] Add claim verification fields to `DeepResearchSettings` in `config/research_sub_configs.py`
+- [x] Add regression test: assert all `dataclasses.fields(ResearchConfig)` names appear in `from_toml_dict`
+- [x] Fix timeout type: `deep_research_claim_verification_timeout` from `int` to `float`
+- [x] Fix timeout type: `deep_research_summarization_timeout` from `int` to `float`
 
 ## P1: High — Concurrency & Error Handling
 
@@ -58,6 +58,6 @@
 
 ## Verification
 
-- [ ] Run full test suite: `python -m pytest tests/ -x --timeout=60`
-- [ ] Run config tests specifically: `python -m pytest tests/unit/test_config_*.py -v`
-- [ ] Verify no new test failures introduced
+- [x] Run full test suite: `python -m pytest tests/ -x --timeout=60`
+- [x] Run config tests specifically: `python -m pytest tests/unit/test_config_*.py -v`
+- [x] Verify no new test failures introduced
