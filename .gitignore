@@ -75,3 +75,7 @@ specs/.backups
 compare-*.md
 test-*-heartbeat*.md
 what-are-the-*.md
+*_research.md
+
+# Autonomy runtime state
+.autonomy/

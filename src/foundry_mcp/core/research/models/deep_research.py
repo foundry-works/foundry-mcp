@@ -702,7 +702,7 @@ def parse_researcher_response(content: str) -> ResearcherResponse:
     try:
         data = _json.loads(json_str)
         return ResearcherResponse.model_validate(data)
-    except (_json.JSONDecodeError, ValueError, TypeError):
+    except (_json.JSONDecodeError, ValueError):
         return ResearcherResponse(parse_failed=True)
 
 

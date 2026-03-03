@@ -288,8 +288,6 @@ class BackgroundTaskMixin:
         Returns:
             Number of tasks removed
         """
-        import time
-
         now = time.time()
         removed = 0
         with self._tasks_lock:

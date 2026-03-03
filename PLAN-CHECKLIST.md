@@ -43,18 +43,18 @@
 ## P3: Low — Hygiene & Hardening
 
 ### Repo cleanup
-- [ ] Delete `conversation_assessment_research.md` and add gitignore pattern
-- [ ] Delete `dev_docs/plans/specs/.autonomy/context/context.json` and add `.autonomy/` to `.gitignore`
+- [x] Delete `conversation_assessment_research.md` and add gitignore pattern
+- [x] Delete `dev_docs/plans/specs/.autonomy/context/context.json` and add `.autonomy/` to `.gitignore`
 
 ### CI
-- [ ] Update `softprops/action-gh-release@v1` to `@v2` or pin to SHA (`.github/workflows/publish-alpha.yml`)
-- [ ] Narrow tag pattern from `v*a*` to `v*a[0-9]*` (`.github/workflows/publish-alpha.yml`)
+- [x] Update `softprops/action-gh-release@v1` to `@v2` or pin to SHA (`.github/workflows/publish-alpha.yml`)
+- [x] Narrow tag pattern from `v*a*` to `v*a[0-9]*` (`.github/workflows/publish-alpha.yml`)
 
 ### Code quality
-- [ ] Remove `TypeError` from catch clause in `parse_researcher_response` (`models/deep_research.py:702-706`)
-- [ ] Remove redundant `import time` in `background_tasks.py:281`
-- [ ] Change f-string logger calls to `%s` formatting in `docx_extractor.py:421, 471-474, 519`
-- [ ] Change `int(raw_score)` to `round(raw_score)` in `evaluator.py:206`
+- [x] Remove `TypeError` from catch clause in `parse_researcher_response` (`models/deep_research.py:702-706`)
+- [x] Remove redundant `import time` in `background_tasks.py:281`
+- [x] Change f-string logger calls to `%s` formatting in `docx_extractor.py:421, 471-474, 519`
+- [x] Change `int(raw_score)` to `round(raw_score)` in `evaluator.py:206`
 
 ## Verification
 

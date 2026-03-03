@@ -418,7 +418,7 @@ class DocxExtractor:
         try:
             doc = docx_mod.Document(io.BytesIO(data))  # type: ignore[union-attr]
         except Exception as e:
-            logger.warning(f"Failed to read DOCX: {e}")
+            logger.warning("Failed to read DOCX: %s", e)
             duration = time.perf_counter() - start_time
             _record_extraction_metrics(duration, 0, "failure")
             return DocxExtractionResult(
@@ -469,8 +469,8 @@ class DocxExtractor:
         extracted_paragraphs = len(paragraph_texts)
 
         logger.debug(
-            f"Extracted {extracted_paragraphs} paragraphs, "
-            f"{table_count} tables, {len(full_text)} chars"
+            "Extracted %d paragraphs, %d tables, %d chars",
+            extracted_paragraphs, table_count, len(full_text),
         )
 
         status = "success" if full_text.strip() else "failure"
@@ -516,7 +516,7 @@ class DocxExtractor:
                 "httpx is required for URL fetching. Install with: pip install httpx"
             ) from e
 
-        logger.debug(f"Fetching DOCX from URL: {url}")
+        logger.debug("Fetching DOCX from URL: %s", url)
 
         current_url = url
         visited: set[str] = set()

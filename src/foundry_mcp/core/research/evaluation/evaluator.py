@@ -203,7 +203,7 @@ def _parse_evaluation_response(
             raw_score = 3
         rationale = str(dim_data.get("rationale", ""))
 
-        dimension_scores.append(build_dimension_score(dim.name, int(raw_score), rationale))
+        dimension_scores.append(build_dimension_score(dim.name, round(raw_score), rationale))
 
     # Compute composite
     composite, variance, weights = compute_composite(dimension_scores)
