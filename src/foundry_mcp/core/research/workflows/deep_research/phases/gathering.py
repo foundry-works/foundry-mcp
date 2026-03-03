@@ -337,10 +337,10 @@ class GatheringPhaseMixin(CompressionMixin):
             },
         )
 
-        provider_names = getattr(
+        provider_names = state.metadata.get("active_providers") or getattr(
             self.config,
             "deep_research_providers",
-            ["tavily", "google", "semantic_scholar"],
+            ["tavily"],
         )
         available_providers: list[SearchProvider] = []
         unavailable_providers: list[str] = []

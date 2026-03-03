@@ -1228,10 +1228,10 @@ class SupervisionPhaseMixin:
         sorted_directives = sorted(directives, key=lambda d: d.priority)
 
         # Initialize search providers
-        provider_names = getattr(
+        provider_names = state.metadata.get("active_providers") or getattr(
             self.config,
             "deep_research_providers",
-            ["tavily", "google", "semantic_scholar"],
+            ["tavily"],
         )
         available_providers = []
         for name in provider_names:
