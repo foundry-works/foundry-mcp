@@ -156,7 +156,7 @@ def build_sources_section(
 
     use_apa = format_style == "apa"
     heading = "## References" if use_apa else "## Sources"
-    lines = ["", heading, ""]
+    entries: list[str] = []
 
     for cn in sorted(citation_map):
         if cited_only and (cited_numbers is None or cn not in cited_numbers):
@@ -164,16 +164,18 @@ def build_sources_section(
         source = citation_map[cn]
 
         if use_apa:
-            lines.append(f"[{cn}] {format_source_apa(source)}")
+            entries.append(f"[{cn}] {format_source_apa(source)}")
         else:
             title = source.title or "Untitled"
             if source.url:
-                lines.append(f"[{cn}] [{title}]({source.url})")
+                entries.append(f"[{cn}] [{title}]({source.url})")
             else:
-                lines.append(f"[{cn}] {title}")
+                entries.append(f"[{cn}] {title}")
 
-    lines.append("")
-    return "\n".join(lines)
+    if not entries:
+        return ""
+
+    return "\n".join(["", heading, ""] + entries + [""])
 
 
 def remove_dangling_citations(
@@ -334,7 +336,12 @@ def postprocess_citations(
 
     # 4. Resolve format style and append deterministic section
     format_style = _resolve_format_style(state, query_type)
-    sources_section = build_sources_section(state, format_style=format_style)
+    sources_section = build_sources_section(
+        state,
+        cited_only=True,
+        cited_numbers=cited_numbers,
+        format_style=format_style,
+    )
     if sources_section:
         report = report.rstrip() + "\n" + sources_section
 

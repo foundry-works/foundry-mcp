@@ -368,10 +368,11 @@ class TestPostprocessCitations:
 
         # LLM sources section should be stripped
         assert "Old LLM sources" not in processed
-        # Deterministic sources section should be appended
+        # Deterministic sources section should be appended — only cited sources
         assert "[1] [Alpha Source](https://alpha.example.com)" in processed
         assert "[2] [Beta Source](https://beta.example.com)" in processed
-        assert "[3] [Gamma Source](https://gamma.example.com)" in processed
+        # Uncited source [3] should NOT appear in bibliography
+        assert "[3] [Gamma Source]" not in processed
         # Valid citations should be preserved
         assert "[1]" in processed.split("## Sources")[0]
         assert "[2]" in processed.split("## Sources")[0]
@@ -390,7 +391,8 @@ class TestPostprocessCitations:
     def test_no_citations(self, state_with_sources: DeepResearchState):
         report = "# Report\n\nNo citations at all."
         processed, meta = postprocess_citations(report, state_with_sources)
-        assert "## Sources" in processed
+        # With cited_only filtering, no sources section when nothing is cited
+        assert "## Sources" not in processed
         assert meta["total_citations_in_report"] == 0
         assert meta["unreferenced_sources"] == 3
 
@@ -426,12 +428,12 @@ class TestPostprocessCitations:
         report = "# Report\n\nSee [Alpha Source](https://alpha.example.com) [1] for details.\n"
         processed, meta = postprocess_citations(report, state_with_sources)
 
-        # Sources section is appended
+        # Sources section is appended with only cited sources
         assert "## Sources" in processed
-        # All sources listed in the appended section
         assert "[1] [Alpha Source](https://alpha.example.com)" in processed
-        assert "[2] [Beta Source](https://beta.example.com)" in processed
-        assert "[3] [Gamma Source](https://gamma.example.com)" in processed
+        # Uncited sources should NOT appear in bibliography
+        assert "[2] [Beta Source]" not in processed
+        assert "[3] [Gamma Source]" not in processed
         # Unreferenced sources counted
         assert meta["unreferenced_sources"] == 2  # [2] and [3] not cited
 
@@ -823,7 +825,7 @@ class TestPostprocessCitationsWithProfile:
 
     def test_apa_entries_in_final_output(self, academic_state):
         """Verify APA-formatted entries appear in the final processed report."""
-        report = "# Report\n\nAttention mechanisms [1] are foundational.\n"
+        report = "# Report\n\nAttention mechanisms [1] and transformers [2] are foundational.\n"
         processed, _meta = postprocess_citations(
             report, academic_state, query_type="literature_review",
         )
@@ -831,7 +833,7 @@ class TestPostprocessCitationsWithProfile:
         assert "Ashish Vaswani, Noam Shazeer, & Niki Parmar (2017)" in processed
         assert "*NeurIPS*." in processed
         assert "https://doi.org/10.5555/3295222.3295349" in processed
-        # Source 2: 4 authors without DOI
+        # Source 2: 4 authors without DOI (now explicitly cited in report)
         assert "Jacob Devlin, Ming-Wei Chang, Kenton Lee, & Kristina Toutanova (2019)" in processed
         assert "*NAACL*." in processed
 
@@ -847,3 +849,88 @@ class TestPostprocessCitationsWithProfile:
         assert "[2] [Beta Source](https://beta.example.com)" in processed
         assert "## Sources" in processed
         assert meta["format_style"] == "default"
+
+
+# =============================================================================
+# Phase 2: Bibliography filtered to cited-only sources
+# =============================================================================
+
+
+class TestBibliographyCitedOnly:
+    """Tests verifying bibliography only includes sources actually cited in the report."""
+
+    def test_bibliography_contains_only_cited_sources(self):
+        """Bibliography includes cited sources and excludes uncited ones."""
+        state = DeepResearchState(original_query="test query")
+        state.add_source(title="Cited A", url="https://a.example.com")
+        state.add_source(title="Uncited B", url="https://b.example.com")
+        state.add_source(title="Cited C", url="https://c.example.com")
+        state.add_source(title="Uncited D", url="https://d.example.com")
+        state.add_source(title="Cited E", url="https://e.example.com")
+
+        report = "# Report\n\nEvidence from [1], [3], and [5] supports the thesis.\n"
+        processed, meta = postprocess_citations(report, state)
+
+        # Cited sources appear in bibliography
+        assert "[1] [Cited A](https://a.example.com)" in processed
+        assert "[3] [Cited C](https://c.example.com)" in processed
+        assert "[5] [Cited E](https://e.example.com)" in processed
+        # Uncited sources do NOT appear in bibliography
+        assert "[2] [Uncited B]" not in processed
+        assert "[4] [Uncited D]" not in processed
+        # Metadata reflects correct counts
+        assert meta["total_citations_in_report"] == 3
+        assert meta["unreferenced_sources"] == 2
+
+    def test_apa_format_with_cited_only(self):
+        """APA-formatted bibliography respects cited_only filtering."""
+        from foundry_mcp.core.research.models.deep_research import PROFILE_ACADEMIC
+
+        state = DeepResearchState(original_query="literature review")
+        state.extensions.research_profile = PROFILE_ACADEMIC
+        state.add_source(
+            title="Cited Paper",
+            url="https://doi.org/10.1234/cited",
+            metadata={"authors": "Alice Smith", "year": 2023, "venue": "Nature", "doi": "10.1234/cited"},
+        )
+        state.add_source(
+            title="Uncited Paper",
+            url="https://doi.org/10.1234/uncited",
+            metadata={"authors": "Bob Jones", "year": 2022, "venue": "Science", "doi": "10.1234/uncited"},
+        )
+
+        report = "# Report\n\nKey finding from [1] confirms the hypothesis.\n"
+        processed, meta = postprocess_citations(
+            report, state, query_type="literature_review",
+        )
+
+        # APA heading used
+        assert "## References" in processed
+        assert meta["format_style"] == "apa"
+        # Cited source appears in APA format
+        assert "Alice Smith (2023). Cited Paper." in processed
+        assert "*Nature*." in processed
+        # Uncited source does NOT appear
+        assert "Bob Jones" not in processed
+        assert "Uncited Paper" not in processed
+
+    def test_provenance_still_has_all_sources(self):
+        """state.sources retains all sources regardless of bibliography filtering."""
+        state = DeepResearchState(original_query="test query")
+        state.add_source(title="Cited A", url="https://a.example.com")
+        state.add_source(title="Uncited B", url="https://b.example.com")
+        state.add_source(title="Cited C", url="https://c.example.com")
+
+        report = "# Report\n\nEvidence [1] and [3].\n"
+        processed, meta = postprocess_citations(report, state)
+
+        # Bibliography only has cited sources
+        assert "[2] [Uncited B]" not in processed
+        # But state.sources still contains ALL sources (for provenance/export)
+        assert len(state.sources) == 3
+        assert state.sources[0].title == "Cited A"
+        assert state.sources[1].title == "Uncited B"
+        assert state.sources[2].title == "Cited C"
+        # Citation map still has all numbered sources
+        citation_map = state.get_citation_map()
+        assert set(citation_map.keys()) == {1, 2, 3}

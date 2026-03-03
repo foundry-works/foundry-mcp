@@ -12,11 +12,11 @@
 
 ## Phase 2: Filter bibliography to cited-only sources
 
-- [ ] Update `_citation_postprocess.py:337` to pass `cited_only=True` and `cited_numbers=cited_numbers`
-- [ ] Add unit test: bibliography only contains sources cited in body text
-- [ ] Add unit test: APA format mode works with cited_only filtering
-- [ ] Add unit test: provenance/export still returns all sources regardless of citation status
-- [ ] Verify existing citation postprocess tests still pass
+- [x] Update `_citation_postprocess.py:337` to pass `cited_only=True` and `cited_numbers=cited_numbers`
+- [x] Add unit test: bibliography only contains sources cited in body text
+- [x] Add unit test: APA format mode works with cited_only filtering
+- [x] Add unit test: provenance/export still returns all sources regardless of citation status
+- [x] Verify existing citation postprocess tests still pass
 
 ## Phase 3: Fix claim verification timeout on large reports
 
