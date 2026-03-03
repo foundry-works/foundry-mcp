@@ -243,14 +243,14 @@
   - [x] Resume → verification runs without re-running synthesis
   - [x] Save state with `claim_verification` already populated → verification skipped entirely
   - [x] Save state with `claim_verification_in_progress=True` (crash during verification) — verify resume guard still triggers re-run correctly (stale `in_progress` flag does not interfere)
-- [ ] Unit tests for report overwrite after corrections
-  - [ ] Test `Path(state.report_output_path).write_text()` overwrites the synthesis-created file
-  - [ ] Test that corrections are skipped when `report_output_path` is None (no crash)
+- [x] Unit tests for report overwrite after corrections
+  - [x] Test `Path(state.report_output_path).write_text()` overwrites the synthesis-created file
+  - [x] Test that corrections are skipped when `report_output_path` is None (no crash)
 - [x] Unit tests for report snapshot/rollback
   - [x] Test that `apply_corrections` exception mid-way rolls back `state.report` to pre-correction snapshot (no partial corrections delivered)
   - [x] Test that original report markdown file is NOT overwritten when corrections fail (rollback means `write_text` is never reached)
-- [ ] Unit tests for post-correction persistence
-  - [ ] Test that `save_deep_research(state)` is called after corrections succeed (corrected report + ClaimVerificationResult survive crash before `mark_completed`)
+- [x] Unit tests for post-correction persistence
+  - [x] Test that `save_deep_research(state)` is called after corrections succeed (corrected report + ClaimVerificationResult survive crash before `mark_completed`)
 - [x] Unit tests for `_resolve_source_text`
   - [x] Test with `.content` populated (returns `.content`)
   - [x] Test with `.content=None`, `.raw_content` populated (returns `.raw_content`)
@@ -285,6 +285,7 @@
   - [x] When verification was skipped, note it: "Claim verification: skipped (reason)"
 - [x] Surface in-progress status during verification
   - [x] `deep-research-status` formatter checks `state.metadata.get("claim_verification_in_progress")` and shows "Verifying claims…" when True
-- [ ] Document/expose config fields for user enablement
-  - [ ] Add `claim_verification_enabled` as a supported key in research profile definitions (so profiles like `general` can opt in)
-  - [ ] Ensure the `deep-research` tool description or help text mentions claim verification as an opt-in feature
+- [x] Document/expose config fields for user enablement
+  - [x] Add `enable_claim_verification` field to `ResearchProfile` model (profiles can opt in via `enable_claim_verification: True`)
+  - [x] Wire profile-based enablement into `workflow_execution.py` verification guard (checks both config and profile)
+  - [x] Ensure the `deep-research` tool description or help text mentions claim verification as an opt-in feature

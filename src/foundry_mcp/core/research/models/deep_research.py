@@ -966,6 +966,10 @@ class ResearchProfile(BaseModel):
         default=None,
         description="Preferred methodologies (e.g. ['RCT', 'meta-analysis', 'qualitative'])",
     )
+    enable_claim_verification: bool = Field(
+        default=False,
+        description="Enable post-synthesis claim verification (opt-in, adds 15-45s latency)",
+    )
 
     model_config = {"extra": "forbid"}
 

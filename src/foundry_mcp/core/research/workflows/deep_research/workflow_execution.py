@@ -368,10 +368,11 @@ class WorkflowExecutionMixin:
                         raise
 
                 # --- CLAIM VERIFICATION ---
-                if (
-                    self.config.deep_research_claim_verification_enabled
-                    and not state.claim_verification
-                ):
+                _cv_enabled = self.config.deep_research_claim_verification_enabled or (
+                    state.research_profile is not None
+                    and getattr(state.research_profile, "enable_claim_verification", False)
+                )
+                if _cv_enabled and not state.claim_verification:
                     from pathlib import Path
 
                     from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification import (
