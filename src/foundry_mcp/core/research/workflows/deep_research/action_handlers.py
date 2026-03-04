@@ -16,6 +16,9 @@ if TYPE_CHECKING:
     from foundry_mcp.core.research.memory import ResearchMemory
 
 from foundry_mcp.core import task_registry
+from foundry_mcp.core.research.workflows.deep_research.phases._citation_postprocess import (
+    needs_renumber,
+)
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
     DeepResearchState,
@@ -580,6 +583,15 @@ class ActionHandlersMixin:
         # Add any warnings from allocation metadata
         if allocation_meta.get("warnings"):
             warnings.extend(allocation_meta["warnings"])
+
+        # Diagnostic: warn if citations are out of sequential order
+        if needs_renumber(state.report, max_citation=len(state.sources) or None):
+            logger.warning(
+                "Report citations are out of sequential order (research_id=%s). "
+                "This may indicate finalize_citations was not run after claim verification.",
+                state.id,
+            )
+            warnings.append("Citation numbering is not sequential — report may need re-finalization")
 
         return WorkflowResult(
             success=True,
