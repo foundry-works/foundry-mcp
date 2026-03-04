@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0a7] - 2026-03-04
+
+### Added
+
+- **Chunked citation-anchored claim verification**: Replaced monolithic claim extraction with a parallel chunked pipeline. Reports are split into sections, each chunk is processed independently with citation-anchored prompts, and results are merged with an uncited-claims filter. Dramatically improves accuracy and throughput on large reports.
+- **Multi-window truncation for claim verification**: Reports exceeding context limits are now truncated using a multi-window strategy that preserves both the beginning and end of the document, improving coverage of claims across the full report.
+- **Deep research cancel action**: New `deep-research-cancel` action allows cancelling running deep research sessions. The `deep-research-delete` action also now cancels any active background task before deletion to prevent orphaned tasks.
+
+### Fixed
+
+- **Tightened CONTRADICTED gate**: The claim verification gate for marking claims as CONTRADICTED now requires stronger counter-evidence, reducing false negatives where claims were incorrectly flagged as contradicted.
+
 ## [0.18.0a6] - 2026-03-03
 
 ### Fixed
