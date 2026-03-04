@@ -1371,12 +1371,18 @@ class ClaimVerificationResult(BaseModel):
     def fidelity_score(self) -> Optional[float]:
         """Weighted fidelity score from verdict distribution.
 
-        Weights: SUPPORTED=1.0, PARTIALLY_SUPPORTED=0.5, UNSUPPORTED=0.0, CONTRADICTED=0.0.
-        Returns None if no claims were verified.
+        Weights: SUPPORTED=1.0, PARTIALLY_SUPPORTED=0.5, UNSUPPORTED=0.0,
+        CONTRADICTED=-0.5 (penalty — actively wrong is worse than missing evidence).
+        Floored at 0.0. Returns None if no claims were verified.
         """
         if self.claims_verified == 0:
             return None
-        return (self.claims_supported + 0.5 * self.claims_partially_supported) / self.claims_verified
+        score = (
+            self.claims_supported
+            + 0.5 * self.claims_partially_supported
+            - 0.5 * self.claims_contradicted
+        ) / self.claims_verified
+        return max(0.0, score)
 
 
 class ResearchExtensions(BaseModel):

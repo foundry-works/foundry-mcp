@@ -1053,6 +1053,38 @@ class TestFidelityScore:
         data = json.loads(result.model_dump_json())
         assert data["fidelity_score"] == pytest.approx(0.5)
 
+    def test_contradicted_scores_lower_than_unsupported(self):
+        """Contradicted claims (actively wrong) should score worse than unsupported (missing evidence)."""
+        with_unsupported = ClaimVerificationResult(
+            claims_verified=12, claims_supported=10, claims_unsupported=2,
+        )
+        with_contradicted = ClaimVerificationResult(
+            claims_verified=12, claims_supported=10, claims_contradicted=2,
+        )
+        # unsupported: (10) / 12 = 0.833
+        # contradicted: (10 - 0.5*2) / 12 = 9/12 = 0.75
+        assert with_unsupported.fidelity_score > with_contradicted.fidelity_score
+
+    def test_score_floors_at_zero(self):
+        """Many contradictions should floor at 0.0, not go negative."""
+        result = ClaimVerificationResult(
+            claims_verified=4, claims_supported=1, claims_contradicted=3,
+        )
+        # Raw: (1 - 0.5*3) / 4 = -0.5/4 = -0.125 → floored to 0.0
+        assert result.fidelity_score == 0.0
+
+    def test_mixed_with_contradicted(self):
+        """Verify the full formula with all verdict types."""
+        result = ClaimVerificationResult(
+            claims_verified=10,
+            claims_supported=5,
+            claims_partially_supported=2,
+            claims_unsupported=1,
+            claims_contradicted=2,
+        )
+        expected = (5 + 0.5 * 2 - 0.5 * 2) / 10  # 5/10 = 0.5
+        assert result.fidelity_score == pytest.approx(expected, abs=1e-6)
+
 
 # ---------------------------------------------------------------------------
 # Integration test: extract_and_verify_claims

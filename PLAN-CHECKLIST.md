@@ -23,11 +23,11 @@
 - [x] Add test: heading text legitimately modified by correction
 
 ## Fix 5: Recalibrate fidelity_score
-- [ ] Update `fidelity_score` property in `ClaimVerificationResult` to apply `-0.5` weight for contradicted claims
-- [ ] Add `max(0.0, ...)` floor
-- [ ] Update existing test expectations for fidelity_score
-- [ ] Add test: contradicted claims reduce score below what unsupported would
-- [ ] Add test: score floors at 0.0 with many contradictions
+- [x] Update `fidelity_score` property in `ClaimVerificationResult` to apply `-0.5` weight for contradicted claims
+- [x] Add `max(0.0, ...)` floor
+- [x] Update existing test expectations for fidelity_score
+- [x] Add test: contradicted claims reduce score below what unsupported would
+- [x] Add test: score floors at 0.0 with many contradictions
 
 ## Fix 4: Strengthen synthesis prompt to reduce citation misattribution
 - [x] In `_build_synthesis_tail()`, add 1-sentence topic summary per source in the source reference list
