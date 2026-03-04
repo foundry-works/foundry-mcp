@@ -64,6 +64,20 @@ logger = logging.getLogger(__name__)
 from pathlib import Path
 
 
+_SECTION_NUMBERING_RE = re.compile(
+    r"^(#{1,6})\s*(?:Section|Part)\s+\d+\s*:\s*",
+    re.MULTILINE,
+)
+
+
+def _strip_section_numbering(report: str) -> str:
+    """Remove 'Section N:' or 'Part N:' prefixes from markdown headings.
+
+    E.g., '## Section 1: Transfer Partners' → '## Transfer Partners'
+    """
+    return _SECTION_NUMBERING_RE.sub(r"\1 ", report)
+
+
 def _slugify_query(query: str, max_len: int = 80) -> str:
     """Convert a research query into a filesystem-safe slug."""
     slug = query.lower().strip()
@@ -884,6 +898,9 @@ class SynthesisPhaseMixin:
             # Use raw content as fallback
             report = result.content
 
+        # Strip spontaneous "Section N:" / "Part N:" prefixes from headings
+        report = _strip_section_numbering(report)
+
         # Post-process citations: remove dangling refs, append Sources/References
         report, citation_metadata = postprocess_citations(
             report, state, query_type=query_type,
@@ -1213,6 +1230,7 @@ Include analysis of Conflicting Information and Limitations where they exist, bu
 ## Section Writing Rules
 
 - Use ## for each section title (Markdown format). Consistent heading levels enable downstream rendering and table-of-contents generation.
+- Do NOT prefix section titles with numbering such as "Section 1:", "Section 2:", "Part 1:", "Part 2:", etc. Write clean descriptive titles (e.g., "## Transfer Partner Landscape" not "## Section 1: Transfer Partner Landscape").
 - Write in paragraph form by default; use bullet points only when listing discrete items. Paragraph form supports nuanced argumentation and flowing analysis; bullet points fragment reasoning into disconnected pieces that lose causal connections.
 - Each section should be as long as necessary to deeply answer the question with the information gathered. Sections are expected to be thorough and detailed. You are writing a deep research report and users expect comprehensive answers.
 - Do not refer to yourself or comment on the report itself — just write the report.

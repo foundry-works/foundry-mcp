@@ -31,6 +31,7 @@ from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
     _SUPPLEMENTARY_MAX_FRACTION,
     SynthesisPhaseMixin,
     _classify_query_type,
+    _strip_section_numbering,
 )
 
 # =============================================================================
@@ -652,3 +653,64 @@ class TestDegradedModeFallback:
         prompt = stub._build_synthesis_user_prompt(state, degraded_mode=False)
         assert "Research Notes (uncompressed)" not in prompt
         assert "Findings to Synthesize" in prompt
+
+
+# =============================================================================
+# Section Numbering Strip
+# =============================================================================
+
+
+class TestStripSectionNumbering:
+    """Tests for _strip_section_numbering helper."""
+
+    def test_strips_section_prefix(self):
+        assert _strip_section_numbering("## Section 1: Foo Bar") == "## Foo Bar"
+
+    def test_strips_part_prefix(self):
+        assert _strip_section_numbering("## Part 2: Bar Baz") == "## Bar Baz"
+
+    def test_strips_h3_section_prefix(self):
+        assert _strip_section_numbering("### Section 3: Details") == "### Details"
+
+    def test_leaves_plain_heading_untouched(self):
+        text = "## Executive Summary"
+        assert _strip_section_numbering(text) == text
+
+    def test_leaves_year_heading_untouched(self):
+        text = "## 2025 Market Overview"
+        assert _strip_section_numbering(text) == text
+
+    def test_multiline_mixed(self):
+        text = (
+            "## Section 1: Introduction\n"
+            "\n"
+            "Some body text.\n"
+            "\n"
+            "## Key Findings\n"
+            "\n"
+            "## Part 3: Conclusions\n"
+        )
+        expected = (
+            "## Introduction\n"
+            "\n"
+            "Some body text.\n"
+            "\n"
+            "## Key Findings\n"
+            "\n"
+            "## Conclusions\n"
+        )
+        assert _strip_section_numbering(text) == expected
+
+    def test_body_text_with_section_word_untouched(self):
+        text = "This Section 1: overview covers the basics."
+        assert _strip_section_numbering(text) == text
+
+
+class TestSynthesisPromptNoNumberingInstruction:
+    """Verify the system prompt includes the no-numbering instruction."""
+
+    def test_system_prompt_contains_no_numbering_rule(self):
+        state = _make_state()
+        stub = SynthesisPhaseMixin()
+        prompt = stub._build_synthesis_system_prompt(state, query_type="explanation")
+        assert "Do NOT prefix section titles with numbering" in prompt
