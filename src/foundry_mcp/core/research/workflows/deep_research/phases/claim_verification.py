@@ -297,6 +297,70 @@ def _split_report_into_sections(report: str) -> list[dict[str, str]]:
     return merged if merged else [{"section": "", "content": report}]
 
 
+async def _extract_claims_from_chunk(
+    chunk: dict[str, str],
+    execute_fn: ExecuteFn,
+    system_prompt: str,
+    provider_id: str,
+    timeout: float,
+    max_claims_per_chunk: int,
+) -> list[ClaimVerdict]:
+    """Extract claims from a single report section chunk.
+
+    Args:
+        chunk: Dict with ``"section"`` and ``"content"`` keys.
+        execute_fn: LLM execution callable.
+        system_prompt: Extraction system prompt.
+        provider_id: LLM provider to use.
+        timeout: Per-call timeout in seconds.
+        max_claims_per_chunk: Max claims to parse from this chunk.
+
+    Returns:
+        List of :class:`ClaimVerdict` objects extracted from this chunk.
+    """
+    chunk_prompt = (
+        f"## Section\n\n{chunk['content']}\n\n"
+        f"## Task\n\n"
+        f"Extract cited factual claims from the section above as a JSON array."
+    )
+    try:
+        extraction_result: "WorkflowResult" = await execute_fn(
+            prompt=chunk_prompt,
+            system_prompt=system_prompt,
+            provider_id=provider_id,
+            timeout=timeout,
+            phase="claim_extraction",
+            max_tokens=4096,
+            max_retries=1,
+            retry_delay=2.0,
+        )
+        if not extraction_result.success or not extraction_result.content:
+            logger.warning(
+                "Chunk extraction failed for section %r: LLM call unsuccessful",
+                chunk.get("section", "")[:60],
+            )
+            return []
+
+        claims = _parse_extracted_claims(
+            extraction_result.content,
+            max_claims=max_claims_per_chunk,
+        )
+        # Tag each claim with the chunk's section heading.
+        section_heading = chunk.get("section", "")
+        for claim in claims:
+            if not claim.report_section and section_heading:
+                claim.report_section = section_heading
+        return claims
+
+    except Exception as exc:
+        logger.warning(
+            "Chunk extraction failed for section %r: %s",
+            chunk.get("section", "")[:60],
+            exc,
+        )
+        return []
+
+
 def _parse_extracted_claims(response: str, max_claims: int = 0) -> list[ClaimVerdict]:
     """Parse LLM response into ClaimVerdict objects.
 

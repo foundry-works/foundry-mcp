@@ -20,15 +20,15 @@
 
 ## Phase 3: Per-Chunk Extraction Function
 
-- [ ] Add `_extract_claims_from_chunk()` async function
-- [ ] Build per-chunk user prompt: `"## Section\n\n{chunk_content}\n\n## Task\n\nExtract cited factual claims..."` (distinct from old full-report prompt)
-- [ ] Set `max_tokens=4096` (reduced from 16384)
-- [ ] Set `max_retries=1` (reduced from default 2)
-- [ ] Set `retry_delay=2.0` (reduced from default 5.0)
-- [ ] Parse response with existing `_parse_extracted_claims()`, passing `max_claims_per_chunk` as `max_claims`
+- [x] Add `_extract_claims_from_chunk()` async function
+- [x] Build per-chunk user prompt: `"## Section\n\n{chunk_content}\n\n## Task\n\nExtract cited factual claims..."` (distinct from old full-report prompt)
+- [x] Set `max_tokens=4096` (reduced from 16384)
+- [x] Set `max_retries=1` (reduced from default 2)
+- [x] Set `retry_delay=2.0` (reduced from default 5.0)
+- [x] Parse response with existing `_parse_extracted_claims()`, passing `max_claims_per_chunk` as `max_claims`
 - [ ] Compute `max_claims_per_chunk` as `max(10, max_claims // len(chunks))` in caller
-- [ ] Tag extracted claims with chunk's section heading as `report_section`
-- [ ] Graceful degradation: log warning and return empty list on failure
+- [x] Tag extracted claims with chunk's section heading as `report_section`
+- [x] Graceful degradation: log warning and return empty list on failure
 
 ## Phase 4: Parallel Chunk Orchestrator
 
