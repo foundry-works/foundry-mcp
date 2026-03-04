@@ -75,7 +75,7 @@ Total: 550s → extraction_failed, 0 claims
 Verification (Pass 2) already uses divide-and-conquer — each claim is verified independently against its sources, running in parallel with `asyncio.Semaphore(max_concurrent=10)`. This completes efficiently.
 
 Extraction (Pass 1) should follow the same pattern:
-- A 30K report has 5–10 `##` sections
+- A 30K report has 5–10 `##`/`###` sections
 - Each section is 2K–6K chars — small enough for a 60s extraction call
 - Each section's claims are independent (no cross-section dependencies)
 - Running 5–10 sections in parallel with bounded concurrency yields ~30–60s total wall time vs. 550s of failures
@@ -93,7 +93,7 @@ Before (monolithic, times out):
   [30K report] → single LLM call (180s timeout) → [all claims]
 
 After (chunked, citation-anchored, parallelized):
-  [30K report] → split by ## headings → [chunk1, chunk2, ..., chunkN]
+  [30K report] → split by ##/### headings → [chunk1, chunk2, ..., chunkN]
                                               ↓         ↓           ↓
                                     "For each [N],  "For each [N],  ...  (bounded concurrency)
                                      what claim?"   what claim?"
@@ -125,11 +125,12 @@ def _split_report_into_sections(report: str) -> list[dict[str, str]]:
 ```
 
 **Rules:**
-- Split on `\n## ` boundaries (level-2 headings)
+- Split on `\n## ` or `\n### ` boundaries (level-2 and level-3 headings) using regex `(?:^|\n)#{2,3} ` (handles both start-of-string and mid-string headings)
 - Keep each section's heading as metadata for `report_section` field
 - Merge consecutive small sections (< 500 chars) with the next section to avoid trivially small chunks
-- If the report has no `##` headings (unusual), fall back to single-chunk behavior
-- The bibliography/sources section (if present in the truncated report) is excluded from extraction since it contains no verifiable claims
+- If the report has no `##`/`###` headings (unusual), fall back to single-chunk behavior
+- Exclude bibliography/sources sections from extraction chunks — detect via heading text match `(?i)^(bibliography|references|sources|works cited)$` (anchored to avoid false positives on headings like "Data Sources and Methodology")
+- **Truncation boundary handling:** If the report was truncated (30K cap), the last chunk may be incomplete (cut mid-sentence). Discard the final chunk if it does not start with a `##`/`###` heading — this indicates it's a truncation fragment, not a complete section. Exception: if there is only one chunk total (no headings found), keep it as the single-chunk fallback.
 
 **Location:** Insert after `_build_extraction_user_prompt()` (after line 203).
 
@@ -229,12 +230,30 @@ async def _extract_claims_from_chunk(
 ```
 
 **Details:**
-- Builds a focused extraction prompt using the chunk content (not the full report)
+- Builds a per-chunk user prompt: `"## Section\n\n{chunk_content}\n\n## Task\n\nExtract cited factual claims from the section above as a JSON array."` (distinct from the old full-report prompt)
 - Sets `max_tokens=4096` (proportional to chunk size — much less output needed per chunk)
-- Uses `max_retries=1` via execute_fn parameter to reduce total retry wall time
-- Parses response with existing `_parse_extracted_claims()`
+- Sets `max_retries=1` (2 total attempts, reduced from default 2 = 3 attempts)
+- Sets `retry_delay=2.0` (reduced from default 5.0 — chunks fail fast, no need for long backoff)
+- Parses response with existing `_parse_extracted_claims()`, passing `max_claims_per_chunk` as the `max_claims` argument
 - On failure, logs warning and returns empty list (graceful per-chunk degradation)
 - Tags each claim with the chunk's section heading as `report_section`
+- `max_claims_per_chunk` is computed by the caller (`_extract_claims_chunked`) as `max(10, max_claims // len(chunks))` — proportional to total budget, with a floor of 10 to avoid starving small-chunk reports
+
+**Kwargs forwarding note:** `ExecuteFn = Callable[..., Any]` (line 51). The actual binding site passes `self._execute_provider_async` which accepts `max_retries` and `retry_delay` as explicit kwargs (base.py:330-331). The `...` parameter spec ensures these forward correctly. Verified: no intermediate `functools.partial` or lambda wrapper strips kwargs.
+
+**execute_fn call:**
+```python
+extraction_result = await execute_fn(
+    prompt=chunk_prompt,
+    system_prompt=_EXTRACTION_SYSTEM_PROMPT,
+    provider_id=provider_id,
+    timeout=timeout,           # Same per-call timeout from config (180s)
+    phase="claim_extraction",
+    max_tokens=4096,           # Reduced from 16384 — chunks need less output
+    max_retries=1,             # Reduced from default 2 — less total wait on failure
+    retry_delay=2.0,           # Reduced from default 5.0 — fast backoff for small chunks
+)
+```
 
 **Location:** Insert after `_split_report_into_sections()`.
 
@@ -250,6 +269,7 @@ async def _extract_claims_chunked(
     timeout: float,
     max_claims: int,
     max_concurrent: int,
+    metadata: Optional[dict[str, Any]] = None,
 ) -> list[ClaimVerdict]:
     """Extract claims from report using parallel section-level chunking.
 
@@ -263,6 +283,7 @@ async def _extract_claims_chunked(
         timeout: Per-call timeout in seconds.
         max_claims: Max total claims to return.
         max_concurrent: Max parallel extraction calls.
+        metadata: Optional state metadata dict to populate with extraction stats.
 
     Returns:
         Merged, deduplicated list of ClaimVerdict objects.
@@ -271,12 +292,14 @@ async def _extract_claims_chunked(
 
 **Details:**
 - Calls `_split_report_into_sections()` to get chunks
-- If only 1 chunk (no headings or very short report), falls back to existing single-call extraction to avoid overhead
+- If only 1 chunk (no headings or very short report), still processes via `_extract_claims_from_chunk()` — same code path, no special case
 - Creates `asyncio.Semaphore(max_concurrent)` for bounded concurrency
 - Gathers all chunk extraction tasks with `asyncio.gather(*tasks, return_exceptions=True)`
 - Uses existing `check_gather_cancellation()` for cancellation safety
-- Merges all claim lists, deduplicates by claim text (exact match), and caps at `max_claims`
-- Logs per-chunk extraction results for observability
+- Merges all claim lists, deduplicates by **normalized** claim text (lowercase, strip whitespace, remove citation brackets via regex `\[\d+\]` — only numeric citation references, not arbitrary square brackets), and caps at `max_claims`
+- Calls `_filter_uncited_claims()` after merge+dedup, before returning
+- Logs per-chunk extraction results for observability (chunk index, success/fail, claim count)
+- Updates `state.metadata` with extraction stats: `extraction_strategy: "chunked"`, `extraction_chunks_attempted: N`, `extraction_chunks_succeeded: M`, `extraction_claims_per_chunk: [c1, c2, ...]`
 
 **Location:** Insert after `_extract_claims_from_chunk()`.
 
@@ -323,6 +346,7 @@ try:
         timeout=timeout,
         max_claims=config.deep_research_claim_verification_max_claims,
         max_concurrent=config.deep_research_claim_verification_max_concurrent,
+        metadata=state.metadata,
     )
 except Exception as exc:
     logger.warning("Claim extraction failed: %s", exc)
@@ -330,31 +354,13 @@ except Exception as exc:
     return result
 ```
 
-The `extraction_failed` metadata is now set inside `_extract_claims_chunked()` only when **all** chunks fail. If some chunks succeed and others fail, the successful claims still proceed through the pipeline.
+The caller (`extract_and_verify_claims()`) owns the `extraction_failed` metadata — it sets the metadata in its except block when `_extract_claims_chunked()` raises, and in the `not all_claims` check when the function returns an empty list. `_extract_claims_chunked()` itself handles partial failure silently (some chunks fail, successful ones still return claims) and only returns an empty list when all chunks produce zero claims.
 
-### Phase 6: Reduce Per-Call Timeout and Retries for Extraction
+**Cleanup:** Remove `_build_extraction_user_prompt()` (line 201-203) — it is no longer called after this change. The per-chunk prompt is built inline by `_extract_claims_from_chunk()` (Phase 3).
 
-**File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/claim_verification.py`
+**No config changes needed** — the `deep_research_claim_verification_timeout` still applies as the per-call timeout. Per-chunk timeout and retry parameters are set in `_extract_claims_from_chunk()` (Phase 3). The overall wall time drops dramatically because chunks are smaller and parallel.
 
-In `_extract_claims_from_chunk()`, pass reduced timeout and retries to the execute_fn:
-
-```python
-extraction_result = await execute_fn(
-    prompt=chunk_prompt,
-    system_prompt=_EXTRACTION_SYSTEM_PROMPT,
-    provider_id=provider_id,
-    timeout=timeout,           # Same per-call timeout from config (180s)
-    phase="claim_extraction",
-    max_tokens=4096,           # Reduced from 16384 — chunks need less output
-    max_retries=1,             # Reduced from default 2 — less total wait on failure
-)
-```
-
-With `max_retries=1` (2 attempts total) and a chunk that's 3-6K chars instead of 30K, each chunk either succeeds quickly (~20-40s) or fails after at most 2 × 180s + 5s = 365s. But in practice, chunks are small enough that they'll either succeed well within timeout or fail fast.
-
-**No config changes needed** — the `deep_research_claim_verification_timeout` still applies as the per-call timeout. The overall wall time drops dramatically because chunks are smaller and parallel.
-
-### Phase 7: Post-Extraction Citation Filter
+### Phase 6: Post-Extraction Citation Filter
 
 **File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/claim_verification.py`
 
@@ -388,7 +394,7 @@ def _filter_uncited_claims(claims: list[ClaimVerdict]) -> list[ClaimVerdict]:
 - Clear observability (logs dropped count)
 - Defense in depth — even if the prompt changes, the structural filter remains
 
-### Phase 8: Improve Verification Source Coverage (Multi-Window Truncation)
+### Phase 7: Improve Verification Source Coverage (Multi-Window Truncation)
 
 **File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/claim_verification.py`
 
@@ -422,20 +428,23 @@ def _multi_window_truncate(
 
 **Algorithm:**
 1. Extract keywords from claim (same as current: words >= 4 chars, not in stopwords)
-2. Find **all** positions of each keyword in the source text (not just the first)
-3. Score candidate windows by keyword density (how many distinct keywords appear in each window)
-4. Select top `max_windows` non-overlapping windows by score (greedy — highest score first, skip if overlaps with already-selected window)
-5. Concatenate selected windows in document order with `\n[...]\n` separators
-6. Allocate `max_chars` budget across windows (equal split, or proportional to score)
-7. **Fallback:** If no keywords match, prefix-truncate (same as current)
+2. Find **all** positions of each keyword in the source text (case-insensitive, not just the first)
+3. **Cluster** keyword positions by proximity: positions within `cluster_radius` (`max_chars // max_windows`) chars of each other belong to the same cluster. Use a simple sweep: sort all positions, walk through them, start a new cluster when the gap exceeds `cluster_radius`.
+4. **Score** each cluster by the number of **distinct** keywords it contains (not total occurrences — prevents a single repeated keyword from dominating)
+5. **Select** top `max_windows` clusters by score (greedy — highest score first)
+6. **Adaptive window sizing:** Compute `window_size = max_chars // len(selected_clusters)`. This ensures the full character budget is used — if only 1 cluster is selected, it gets the full 8K budget (same as current behavior). If 3 clusters are selected, each gets ~2.7K. This avoids wasting budget when fewer clusters exist than `max_windows`.
+7. For each selected cluster, extract a window of `window_size` chars centered on the cluster's median position
+8. Ensure windows are **non-overlapping** — if a selected window overlaps a previously selected one, shift it to be adjacent or skip if no room
+9. **Concatenate** selected windows in document order with `\n[...]\n` separators
+10. **Fallback:** If no keywords match, prefix-truncate (same as current)
 
 **Why this works:**
 - A claim citing "annual fee is $550 with 3x dining" has keywords: annual, dining. Current code finds "annual" once. New code finds every occurrence of both "annual" and "dining," picks the 2-3 most keyword-dense windows, and the verification LLM sees the fee table AND the dining multiplier section.
-- Budget stays the same (8K total) — just distributed across multiple windows instead of one contiguous block.
+- Budget stays the same (8K total) — distributed across windows adaptively. A single-cluster claim still gets 8K (no regression from current behavior).
 
 **Update `_build_verification_user_prompt()`** (line 413) to call `_multi_window_truncate()` instead of `_keyword_proximity_truncate()`.
 
-### Phase 9: Tighten CONTRADICTED Definition in Verification Prompt
+### Phase 8: Tighten CONTRADICTED Definition in Verification Prompt
 
 **File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/claim_verification.py`
 
@@ -489,9 +498,9 @@ Return ONLY the JSON object, no other text.
 - "Absence of information does NOT mean the source contradicts" — addresses the root cause directly
 - "When in doubt between CONTRADICTED and UNSUPPORTED, choose UNSUPPORTED" — bias toward safety
 - "You are seeing excerpts, not the full source" — reminds the model about truncation
-- evidence_quote is REQUIRED for CONTRADICTED — structural coupling with Phase 10
+- evidence_quote is REQUIRED for CONTRADICTED — structural coupling with Phase 9
 
-### Phase 10: Require Contradicting Evidence Quote (Structural Gate)
+### Phase 9: Require Contradicting Evidence Quote (Structural Gate)
 
 **File:** `src/foundry_mcp/core/research/workflows/deep_research/phases/claim_verification.py`
 
@@ -512,11 +521,11 @@ if claim.verdict == "CONTRADICTED" and not claim.evidence_quote:
 ```
 
 **Why this matters:**
-- This is defense in depth — even if the prompt improvements (Phase 9) aren't perfectly followed, the structural gate catches CONTRADICTED verdicts that lack evidence
+- This is defense in depth — even if the prompt improvements (Phase 8) aren't perfectly followed, the structural gate catches CONTRADICTED verdicts that lack evidence
 - Only CONTRADICTED triggers corrections (rewrites). SUPPORTED, UNSUPPORTED, and PARTIALLY_SUPPORTED are informational only. So this gate specifically protects against the most consequential false positive: an unjustified rewrite.
 - The original explanation is preserved in the downgraded explanation for observability
 
-### Phase 11: Tests
+### Phase 10: Tests
 
 **File:** `tests/core/research/workflows/deep_research/test_claim_verification.py`
 
@@ -527,9 +536,12 @@ Add tests for chunked extraction, citation-anchored prompt, citation filter, and
 1. **`test_split_report_into_sections`** — Verify section splitting:
    - Report with multiple `##` headings → correct number of chunks
    - Each chunk contains its heading text
+   - Report starting with `## Executive Summary` (no preceding newline) → first heading captured
    - Small sections (< 500 chars) are merged with next
    - Report with no headings → single chunk (full report)
    - Bibliography/sources section excluded from extraction chunks
+   - Heading "Data Sources and Methodology" is NOT excluded (anchored regex)
+   - Truncated report (last chunk lacks heading) → final fragment discarded
 
 2. **`test_extraction_prompt_is_citation_anchored`** — Verify new prompt:
    - Extraction system prompt contains "For each inline citation [N]"
@@ -577,7 +589,8 @@ Add tests for chunked extraction, citation-anchored prompt, citation filter, and
    - Total output within `max_chars` budget
    - No keyword matches → prefix-truncate fallback
    - Source text shorter than `max_chars` → returned unchanged
-   - Single keyword match → single window (same as before)
+   - Single keyword match → single window with full `max_chars` budget (adaptive sizing)
+   - Two clusters selected → each window gets `max_chars // 2` (not `max_chars // max_windows`)
 
 10. **`test_verification_prompt_contradicted_definition`** — Verify new prompt:
     - Prompt contains "explicitly state something that DIRECTLY CONFLICTS"
@@ -591,6 +604,20 @@ Add tests for chunked extraction, citation-anchored prompt, citation filter, and
     - SUPPORTED + empty evidence_quote → remains SUPPORTED (gate only applies to CONTRADICTED)
     - Original explanation preserved in downgraded explanation
 
+**Negative-behavior tests:**
+
+12. **`test_monolithic_extraction_removed`** — Verify old code path is gone:
+    - `_build_extraction_user_prompt()` function is removed from module
+    - No direct `execute_fn()` call with `max_tokens=16384` in the orchestrator
+
+13. **`test_cancelled_error_during_gather`** — Verify `asyncio.CancelledError` handling:
+    - `CancelledError` raised mid-gather propagates correctly (not swallowed)
+    - `check_gather_cancellation()` re-raises `CancelledError` from gather results
+
+14. **`test_many_small_sections`** — Verify behavior with pathological input:
+    - Report with 50+ tiny sections → merged into reasonable chunk count (< 20)
+    - No memory issues or excessive LLM call count
+
 ---
 
 ## Behavioral Changes
@@ -599,15 +626,16 @@ Add tests for chunked extraction, citation-anchored prompt, citation filter, and
 |--------|--------|-------|
 | Extraction strategy | "Find all claims in this text" | "For each [N] citation, extract the claim it supports" |
 | Extraction calls | 1 call on 30K chars, 16K output tokens | N calls on 2-6K chunks, 4K output tokens each |
-| Timeout per call | 180s × 3 attempts = 550s max | 300s × 2 attempts per chunk, N chunks in parallel |
+| Timeout per call | 180s × 3 attempts = 550s max | 180s × 2 attempts per chunk (retry_delay=2s), N chunks in parallel |
 | Typical wall time | 550s (all timeouts) | 30-60s (parallel small chunks) |
 | Failure mode | All-or-nothing (0 claims if extraction fails) | Graceful per-chunk (claims from successful chunks preserved) |
 | Output token usage | 16K max (often truncated) | ~4K × N chunks (more headroom per chunk) |
 | Concurrency | 1 serial call | Bounded by `max_concurrent` (default 10) |
-| Deduplication | N/A | By exact claim text match |
+| Deduplication | N/A | By normalized claim text (lowercase, stripped, citation brackets removed) |
 | False positives | Opinions, recommendations, tautologies extracted | Only citation-anchored claims; uncited claims dropped |
 | Claim-source linking | LLM guesses which sources are "near" the claim | Citations are explicit in the claim's `[N]` reference |
-| Source truncation | Single 8K window around first keyword match | Up to 3 non-overlapping windows by keyword density, same 8K budget |
+| Source truncation | Single 8K window around first keyword match | Up to 3 non-overlapping windows by keyword density, adaptive sizing within same 8K budget |
+| Claims extracted count | Higher (all "verifiable" claims including uncited) | Lower (only citation-anchored claims) — **expected regression in raw count**, not a quality regression |
 | CONTRADICTED threshold | Ambiguous — absence of info can trigger CONTRADICTED | Explicit definition: requires direct conflicting statement + evidence quote |
 | False CONTRADICTED → correction | No guard — any CONTRADICTED triggers rewrite | CONTRADICTED without evidence quote downgraded to UNSUPPORTED |
 
@@ -622,8 +650,8 @@ Add tests for chunked extraction, citation-anchored prompt, citation filter, and
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Report with no `##` headings | Falls back to single-chunk (current behavior) | Explicit fallback path tested |
-| Duplicate claims across chunk boundaries | Over-counting claims | Exact-text dedup before filtering |
+| Report with no `##`/`###` headings | Falls back to single-chunk (current behavior) | Explicit fallback path tested |
+| Duplicate claims across chunk boundaries | Over-counting claims | Normalized-text dedup (lowercase, strip whitespace, remove `[N]` brackets) before filtering |
 | Section splitting drops content between headings | Lost claims | Split regex preserves all text between headings |
 | Higher total LLM token usage (N calls vs 1) | Cost increase | Chunks are small, output tokens reduced per-call; net token usage similar or lower since no wasted timeout retries |
 | Claim `report_section` accuracy | Chunks carry their own heading, but cross-section claims could be misattributed | Claims are extracted from within their section context; edge case is acceptable |
@@ -632,3 +660,5 @@ Add tests for chunked extraction, citation-anchored prompt, citation filter, and
 | Multi-window truncation picks low-quality windows | Windows with keyword matches but irrelevant content | Keyword density scoring favors windows with multiple distinct keywords; fallback to prefix truncation |
 | Tighter CONTRADICTED definition reduces true CONTRADICTED count | Real contradictions might get classified as UNSUPPORTED | Acceptable — a missed correction is less harmful than a false correction. The prompt still allows CONTRADICTED when evidence is clear |
 | Evidence quote gate is too aggressive | Model provides a verdict explanation but forgets the quote field | The prompt explicitly marks evidence_quote as REQUIRED for CONTRADICTED; if the model can't quote a conflicting passage, the contradiction is likely spurious |
+| 30K truncation creates incomplete final section | LLM extracts garbled claims from truncation fragment | `_split_report_into_sections()` discards final chunk if it lacks a heading (truncation indicator) |
+| `claims_extracted` count drops (expected) | May look like regression in dashboards/metrics | Document as expected behavioral change; the raw count drops because uncited claims are excluded by design |
