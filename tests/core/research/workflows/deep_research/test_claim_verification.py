@@ -2432,3 +2432,81 @@ class TestCancelledErrorDuringGather:
                 max_claims=50,
                 max_concurrent=5,
             )
+
+
+# ---------------------------------------------------------------------------
+# Phase 9 tests: claims_filtered reporting invariant
+# ---------------------------------------------------------------------------
+
+
+class TestClaimsFilteredInvariant:
+    """Verify claims_extracted >= claims_filtered >= claims_verified."""
+
+    def test_claims_filtered_field_exists(self):
+        """ClaimVerificationResult has claims_filtered with default 0."""
+        result = ClaimVerificationResult()
+        assert result.claims_filtered == 0
+
+    def test_invariant_holds_on_populated_result(self):
+        """Manually constructed result respects the invariant."""
+        result = ClaimVerificationResult(
+            claims_extracted=10,
+            claims_filtered=7,
+            claims_verified=5,
+            claims_supported=3,
+            claims_contradicted=1,
+            claims_unsupported=1,
+        )
+        assert result.claims_extracted >= result.claims_filtered >= result.claims_verified
+
+    @pytest.mark.asyncio
+    async def test_pipeline_sets_claims_filtered(self):
+        """extract_and_verify_claims populates claims_filtered between extracted and verified."""
+        report = "The study found that X is true [1]. Also Y happened [2]."
+        state = _make_state_with_sources(report, [_make_source(1), _make_source(2)])
+        config = _make_config()
+
+        call_count = 0
+
+        async def mock_execute(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            prompt = kwargs.get("prompt", "")
+            if "Extract" in kwargs.get("system_prompt", "") or "extract" in kwargs.get("system_prompt", ""):
+                return MockWorkflowResult(
+                    success=True,
+                    content=json.dumps({
+                        "claims": [
+                            {"claim": "X is true", "claim_type": "statistical", "cited_sources": [1]},
+                            {"claim": "Y happened", "claim_type": "factual", "cited_sources": [2]},
+                        ]
+                    }),
+                )
+            # Verification response
+            return MockWorkflowResult(
+                success=True,
+                content=json.dumps({
+                    "verdict": "SUPPORTED",
+                    "evidence_quote": "evidence",
+                    "explanation": "matches source",
+                }),
+            )
+
+        result = await extract_and_verify_claims(
+            state=state, config=config, provider_id="test",
+            execute_fn=mock_execute, timeout=30,
+        )
+
+        assert result.claims_extracted >= result.claims_filtered
+        assert result.claims_filtered >= result.claims_verified
+
+    def test_serialization_roundtrip_includes_claims_filtered(self):
+        """claims_filtered survives JSON serialization."""
+        result = ClaimVerificationResult(
+            claims_extracted=10,
+            claims_filtered=7,
+            claims_verified=5,
+        )
+        data = result.model_dump()
+        restored = ClaimVerificationResult.model_validate(data)
+        assert restored.claims_filtered == 7

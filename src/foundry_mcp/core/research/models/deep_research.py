@@ -1341,6 +1341,10 @@ class ClaimVerificationResult(BaseModel):
     """Aggregated result of post-synthesis claim verification."""
 
     claims_extracted: int = Field(default=0, description="Total claims extracted from report")
+    claims_filtered: int = Field(
+        default=0,
+        description="Claims remaining after filtering and token budget (input to verification)",
+    )
     claims_verified: int = Field(default=0, description="Claims that were verified against sources")
     claims_supported: int = Field(default=0, description="Claims verified as SUPPORTED")
     claims_contradicted: int = Field(default=0, description="Claims verified as CONTRADICTED")

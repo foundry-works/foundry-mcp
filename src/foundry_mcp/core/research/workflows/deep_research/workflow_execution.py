@@ -492,6 +492,7 @@ class WorkflowExecutionMixin:
                             "claim_verification_complete",
                             data={
                                 "claims_extracted": verification_result.claims_extracted,
+                                "claims_filtered": verification_result.claims_filtered,
                                 "claims_verified": verification_result.claims_verified,
                                 "claims_contradicted": verification_result.claims_contradicted,
                                 "corrections_applied": verification_result.corrections_applied,

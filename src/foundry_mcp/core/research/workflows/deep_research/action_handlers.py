@@ -399,6 +399,7 @@ class ActionHandlersMixin:
                     cv = state.claim_verification
                     metadata["claim_verification"] = {
                         "claims_extracted": cv.claims_extracted,
+                        "claims_filtered": cv.claims_filtered,
                         "claims_verified": cv.claims_verified,
                         "claims_supported": cv.claims_supported,
                         "claims_contradicted": cv.claims_contradicted,
@@ -523,6 +524,7 @@ class ActionHandlersMixin:
                     {
                         "claim_verification": {
                             "claims_extracted": state.claim_verification.claims_extracted,
+                            "claims_filtered": state.claim_verification.claims_filtered,
                             "claims_verified": state.claim_verification.claims_verified,
                             "claims_supported": state.claim_verification.claims_supported,
                             "claims_contradicted": state.claim_verification.claims_contradicted,

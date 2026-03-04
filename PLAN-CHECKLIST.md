@@ -30,12 +30,12 @@
 - [x] Add test: bibliography section uses renumbered citations in order
 
 ## Phase 3: Fix `claims_extracted` reporting inconsistency
-- [ ] Add `claims_filtered: int = 0` field to `ClaimVerificationResult` in `models/deep_research.py`
-- [ ] Set `result.claims_filtered = len(to_verify)` after `_apply_token_budget` in claim_verification.py
-- [ ] Verify `result.claims_extracted` is set from raw extraction count (pre-filter) — confirm existing code is correct
-- [ ] Include `claims_filtered` in response builder output (`builders.py`)
-- [ ] Update audit event `claim_verification_complete` to include `claims_filtered`
-- [ ] Add/update test asserting `claims_extracted >= claims_filtered >= claims_verified`
+- [x] Add `claims_filtered: int = 0` field to `ClaimVerificationResult` in `models/deep_research.py`
+- [x] Set `result.claims_filtered = len(to_verify)` after `_apply_token_budget` in claim_verification.py
+- [x] Verify `result.claims_extracted` is set from raw extraction count (pre-filter) — confirm existing code is correct
+- [x] Include `claims_filtered` in response builder output (`builders.py`) — N/A, builders.py had no claim verification references; output is in action_handlers.py and workflow_execution.py
+- [x] Update audit event `claim_verification_complete` to include `claims_filtered`
+- [x] Add/update test asserting `claims_extracted >= claims_filtered >= claims_verified`
 
 ## Phase 4: Remove dead `report_sections` and `content_fidelity` fields
 - [ ] Grep for all references to `report_sections` across codebase — confirm no write callers

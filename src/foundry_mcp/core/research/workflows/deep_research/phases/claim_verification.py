@@ -1216,6 +1216,8 @@ async def extract_and_verify_claims(
         max_input_tokens=config.deep_research_claim_verification_max_input_tokens,
     )
 
+    result.claims_filtered = len(to_verify)
+
     if not to_verify:
         logger.info("All claims dropped by token budget")
         return result
