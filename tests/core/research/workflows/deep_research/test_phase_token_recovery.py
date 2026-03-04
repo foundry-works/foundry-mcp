@@ -528,7 +528,7 @@ class TestCompressionRetry:
 _SYNTHESIS_LLM_PATCH = "foundry_mcp.core.research.workflows.deep_research.phases.synthesis.execute_llm_call"
 _SYNTHESIS_BUDGET_PATCH = "foundry_mcp.core.research.workflows.deep_research.phases.synthesis.allocate_synthesis_budget"
 _SYNTHESIS_FIT_PATCH = "foundry_mcp.core.research.workflows.deep_research.phases.synthesis.final_fit_validate"
-_SYNTHESIS_CITE_PATCH = "foundry_mcp.core.research.workflows.deep_research.phases.synthesis.postprocess_citations"
+_SYNTHESIS_CITE_PATCH = "foundry_mcp.core.research.workflows.deep_research.phases.synthesis.cleanup_citations"
 
 
 class TestSynthesisRetry:
