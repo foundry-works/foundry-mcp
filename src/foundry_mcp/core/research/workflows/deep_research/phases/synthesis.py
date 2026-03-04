@@ -22,7 +22,7 @@ from foundry_mcp.core.research.models.deep_research import (
     ResearchLandscape,
     StructuredResearchOutput,
 )
-from foundry_mcp.core.research.models.sources import ResearchMode, SourceType
+from foundry_mcp.core.research.models.sources import ResearchMode, ResearchSource, SourceType
 from foundry_mcp.core.research.workflows.deep_research.phases.methodology_assessment import (
     format_methodology_context,
 )
@@ -371,6 +371,24 @@ def _estimate_findings_section_length(user_prompt: str) -> int:
         return len(user_prompt)
 
     return source_ref_idx - findings_start
+
+
+def _source_topic_summary(source: "ResearchSource", max_words: int = 15) -> str:
+    """Derive a brief topic summary for a source from its content.
+
+    Uses the source's snippet or content field to extract the first
+    ``max_words`` words as a quick-reference topic tag.  Falls back to
+    an empty string when no usable content is available.
+    """
+    text = source.snippet or source.content or source.raw_content or ""
+    if not text:
+        return ""
+    # Take first max_words words, joining back into a single line
+    words = text.split()[:max_words]
+    summary = " ".join(words)
+    if len(text.split()) > max_words:
+        summary += "..."
+    return summary
 
 
 class SynthesisPhaseMixin:
@@ -1268,6 +1286,8 @@ Include analysis of Conflicting Information and Limitations where they exist, bu
 - Only cite a source for a specific fact if that fact actually appears in the source's content provided to you. Do not guess or infer which source a fact came from.
 - If you are uncertain which source supports a claim, omit the citation rather than citing the wrong source.
 - Never attribute a fact from one source to a different source based on topical similarity.
+- Before citing a source, verify the specific fact appears in that source's content above. If the fact came from your general knowledge rather than a specific source, do not cite any source for it.
+- Use the topic summaries in the Source Reference list below to quickly identify which source covers which topic. Do not rely on topical similarity alone — confirm the specific fact is in the source content.
 
 ## Language
 
@@ -1604,7 +1624,9 @@ This is a **literature review** synthesis. Follow these additional guidelines:
                 label = f"[{cn}]" if cn is not None else f"[{source.id}]"
                 quality = source.quality.value if hasattr(source.quality, "value") else str(source.quality)
                 safe_title = sanitize_external_content(source.title)
-                prompt_parts.append(f"- **{label}**: {safe_title} [{quality}]")
+                topic = _source_topic_summary(source)
+                topic_suffix = f" — {sanitize_external_content(topic)}" if topic else ""
+                prompt_parts.append(f"- **{label}**: {safe_title}{topic_suffix} [{quality}]")
                 if source.url:
                     prompt_parts.append(f"  URL: {sanitize_external_content(source.url)}")
 
@@ -1641,7 +1663,9 @@ This is a **literature review** synthesis. Follow these additional guidelines:
                 label = f"[{cn}]" if cn is not None else f"[{source.id}]"
                 quality = source.quality.value if hasattr(source.quality, "value") else str(source.quality)
                 safe_title = sanitize_external_content(source.title)
-                prompt_parts.append(f"- {label}: {safe_title} [{quality}]")
+                topic = _source_topic_summary(source)
+                topic_suffix = f" — {sanitize_external_content(topic)}" if topic else ""
+                prompt_parts.append(f"- {label}: {safe_title}{topic_suffix} [{quality}]")
                 if source.url:
                     prompt_parts.append(f"  URL: {sanitize_external_content(source.url)}")
 

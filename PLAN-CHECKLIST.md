@@ -30,12 +30,12 @@
 - [ ] Add test: score floors at 0.0 with many contradictions
 
 ## Fix 4: Strengthen synthesis prompt to reduce citation misattribution
-- [ ] In `_build_synthesis_tail()`, add 1-sentence topic summary per source in the source reference list
-- [ ] Derive summary from source title + first ~15 words of content (no LLM call)
-- [ ] Respect token budget — truncate summaries if total exceeds allocation headroom
-- [ ] Add explicit instruction: "verify the specific fact appears in that source's content before citing"
-- [ ] Add test: source summaries appear in synthesis prompt
-- [ ] Add test: summaries are truncated when token budget is tight
+- [x] In `_build_synthesis_tail()`, add 1-sentence topic summary per source in the source reference list
+- [x] Derive summary from source title + first ~15 words of content (no LLM call)
+- [x] Respect token budget — truncate summaries if total exceeds allocation headroom
+- [x] Add explicit instruction: "verify the specific fact appears in that source's content before citing"
+- [x] Add test: source summaries appear in synthesis prompt
+- [x] Add test: summaries are truncated when token budget is tight
 
 ## Fix 3: Citation remapping for UNSUPPORTED claims
 - [x] Add `citations_remapped: int = 0` field to `ClaimVerificationResult`

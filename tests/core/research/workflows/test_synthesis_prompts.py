@@ -31,6 +31,7 @@ from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
     _SUPPLEMENTARY_MAX_FRACTION,
     SynthesisPhaseMixin,
     _classify_query_type,
+    _source_topic_summary,
     _strip_section_numbering,
 )
 
@@ -724,3 +725,140 @@ class TestSynthesisPromptNoNumberingInstruction:
         stub = SynthesisPhaseMixin()
         prompt = stub._build_synthesis_system_prompt(state, query_type="explanation")
         assert "Do NOT prefix section titles with numbering" in prompt
+
+
+# =============================================================================
+# Tests: Fix 4 — Source topic summaries and citation verification
+# =============================================================================
+
+
+class TestSourceTopicSummary:
+    """Tests for _source_topic_summary helper and prompt integration."""
+
+    def test_summary_from_snippet(self) -> None:
+        """Source with snippet gets summary derived from snippet content."""
+        source = ResearchSource(
+            id="src-0",
+            title="NerdWallet",
+            url="https://example.com/0",
+            quality=SourceQuality.MEDIUM,
+            snippet="Current transfer bonus percentages for all major airline programs updated March 2026 with detailed tables and comparisons across providers",
+            citation_number=1,
+        )
+        summary = _source_topic_summary(source)
+        assert "Current transfer bonus percentages" in summary
+        assert summary.endswith("...")
+
+    def test_summary_truncated_to_max_words(self) -> None:
+        """Summary is truncated to max_words with ellipsis."""
+        source = ResearchSource(
+            id="src-0",
+            title="Test",
+            url="https://example.com/0",
+            quality=SourceQuality.MEDIUM,
+            snippet="word " * 30,
+            citation_number=1,
+        )
+        summary = _source_topic_summary(source, max_words=5)
+        assert summary.count("word") == 5
+        assert summary.endswith("...")
+
+    def test_summary_short_content_no_ellipsis(self) -> None:
+        """Short content does not get ellipsis."""
+        source = ResearchSource(
+            id="src-0",
+            title="Test",
+            url="https://example.com/0",
+            quality=SourceQuality.MEDIUM,
+            snippet="Short content here",
+            citation_number=1,
+        )
+        summary = _source_topic_summary(source)
+        assert summary == "Short content here"
+        assert not summary.endswith("...")
+
+    def test_summary_empty_when_no_content(self) -> None:
+        """Source with no snippet/content returns empty string."""
+        source = ResearchSource(
+            id="src-0",
+            title="Test",
+            url="https://example.com/0",
+            quality=SourceQuality.MEDIUM,
+            citation_number=1,
+        )
+        summary = _source_topic_summary(source)
+        assert summary == ""
+
+    def test_summary_falls_back_to_content(self) -> None:
+        """When snippet is None, uses content field."""
+        source = ResearchSource(
+            id="src-0",
+            title="Test",
+            url="https://example.com/0",
+            quality=SourceQuality.MEDIUM,
+            content="Full page content about credit card rewards and travel points",
+            citation_number=1,
+        )
+        summary = _source_topic_summary(source)
+        assert "credit card rewards" in summary
+
+    def test_source_summaries_appear_in_user_prompt(self) -> None:
+        """Source topic summaries appear in synthesis user prompt."""
+        stub = StubSynthesis()
+        state = _make_state(num_findings=2)
+        # Give sources some snippet content
+        state.sources[0].snippet = "Caffeine blocks adenosine receptors in the brain"
+        state.sources[1].snippet = "Sleep architecture includes REM and deep sleep stages"
+
+        prompt = stub._build_synthesis_user_prompt(state)
+
+        # Summaries should appear as " — <summary>" after source title
+        assert "Caffeine blocks adenosine" in prompt
+        assert "Sleep architecture includes" in prompt
+
+    def test_source_without_content_gets_no_summary(self) -> None:
+        """Sources without snippet/content don't get a summary suffix."""
+        stub = StubSynthesis()
+        state = _make_state(num_findings=1)
+        # source has no snippet or content by default in _make_state
+        state.sources[0].snippet = None
+        state.sources[0].content = None
+
+        prompt = stub._build_synthesis_user_prompt(state)
+
+        # Should have the title but no " — " summary suffix
+        assert "Source 0" in prompt
+        # The line should not contain " — " for this source
+        for line in prompt.splitlines():
+            if "Source 0" in line and line.strip().startswith("-"):
+                assert " — " not in line, f"Empty source should not have topic summary: {line}"
+                break
+
+
+class TestCitationVerificationInstruction:
+    """Tests for the explicit citation verification instruction in system prompt."""
+
+    def test_verify_before_citing_instruction(self) -> None:
+        """System prompt includes instruction to verify facts before citing."""
+        stub = StubSynthesis()
+        state = _make_state()
+        prompt = stub._build_synthesis_system_prompt(state)
+
+        assert "before citing a source, verify the specific fact appears in that source" in prompt.lower()
+
+    def test_general_knowledge_no_cite_instruction(self) -> None:
+        """System prompt instructs not to cite for general knowledge facts."""
+        stub = StubSynthesis()
+        state = _make_state()
+        prompt = stub._build_synthesis_system_prompt(state)
+
+        assert "general knowledge" in prompt.lower()
+        assert "do not cite any source" in prompt.lower()
+
+    def test_topic_summaries_reference_instruction(self) -> None:
+        """System prompt references topic summaries in Source Reference list."""
+        stub = StubSynthesis()
+        state = _make_state()
+        prompt = stub._build_synthesis_system_prompt(state)
+
+        assert "topic summaries" in prompt.lower()
