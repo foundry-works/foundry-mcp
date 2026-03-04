@@ -39,12 +39,12 @@
 
 ## Phase 5: Tests
 
-- [ ] **5.1** Unit test `cleanup_citations`: strips LLM sources, removes dangling, does NOT renumber, does NOT append bibliography
-- [ ] **5.2** Unit test `finalize_citations`: renumbers to reading order, appends bibliography
-- [ ] **5.3** Unit test `needs_renumber`: True for `[3] then [1]`, False for `[1] then [2]`, False for no citations
-- [ ] **5.4** Integration test: `cleanup_citations` → simulate claim verification mutations (remove some `[N]`, remap others) → `finalize_citations` → verify sequential `[1,2,3,...]` output
-- [ ] **5.5** Backward compat test: `postprocess_citations` still produces identical output to pre-refactor behavior
-- [ ] **5.6** Verify existing `test_citation_tracking.py` and `test_citation_postprocess.py` tests pass without modification
+- [x] **5.1** Unit test `cleanup_citations`: strips LLM sources, removes dangling, does NOT renumber, does NOT append bibliography
+- [x] **5.2** Unit test `finalize_citations`: renumbers to reading order, appends bibliography
+- [x] **5.3** Unit test `needs_renumber`: True for `[3] then [1]`, False for `[1] then [2]`, False for no citations
+- [x] **5.4** Integration test: `cleanup_citations` → simulate claim verification mutations (remove some `[N]`, remap others) → `finalize_citations` → verify sequential `[1,2,3,...]` output
+- [x] **5.5** Backward compat test: `postprocess_citations` still produces identical output to pre-refactor behavior
+- [x] **5.6** Verify existing `test_citation_tracking.py` and `test_citation_postprocess.py` tests pass without modification
 
 ## Phase 6: Validation
 

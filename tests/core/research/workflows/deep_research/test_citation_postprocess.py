@@ -11,7 +11,9 @@ Covers:
 
 from __future__ import annotations
 
+from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.workflows.deep_research.phases._citation_postprocess import (
+    cleanup_citations,
     strip_llm_sources_section,
 )
 
@@ -186,3 +188,83 @@ class TestNoSources:
         )
         result = strip_llm_sources_section(report)
         assert "We consulted multiple sources" in result
+
+
+# ---------------------------------------------------------------------------
+# cleanup_citations: strip-only behavior (no renumber, no bibliography)
+# ---------------------------------------------------------------------------
+
+
+class TestCleanupCitationsStripOnly:
+    """Verify cleanup_citations strips LLM sources and dangling but does NOT
+    renumber or append bibliography."""
+
+    @staticmethod
+    def _make_state(n: int = 3) -> DeepResearchState:
+        state = DeepResearchState(original_query="test")
+        for i in range(n):
+            state.add_source(title=f"Source {i+1}", url=f"https://s{i+1}.example.com")
+        return state
+
+    def test_strips_heading_sources_section(self):
+        state = self._make_state()
+        report = (
+            "# Report\n\n"
+            "Finding [1] and [2].\n\n"
+            "## Sources\n\n"
+            "[1] [Source 1](https://s1.example.com)\n"
+            "[2] [Source 2](https://s2.example.com)\n"
+        )
+        cleaned, _ = cleanup_citations(report, state)
+        assert "## Sources" not in cleaned
+        assert "Finding [1] and [2]." in cleaned
+
+    def test_strips_inline_sources(self):
+        state = self._make_state()
+        report = (
+            "# Report\n\n"
+            "Analysis [1].\n\n"
+            "*Sources: [1] [Source 1](https://s1.example.com)*\n"
+        )
+        cleaned, _ = cleanup_citations(report, state)
+        assert "*Sources:" not in cleaned
+        assert "Analysis [1]." in cleaned
+
+    def test_removes_dangling_keeps_valid(self):
+        state = self._make_state(2)
+        report = "Finding [1], [2], and [99]."
+        cleaned, meta = cleanup_citations(report, state)
+        assert "[1]" in cleaned
+        assert "[2]" in cleaned
+        assert "[99]" not in cleaned
+        assert meta["dangling_citations_removed"] == 1
+
+    def test_no_renumber_out_of_order(self):
+        """Out-of-order citations remain out of order after cleanup."""
+        state = self._make_state(3)
+        report = "First [3] then [1]."
+        cleaned, _ = cleanup_citations(report, state)
+        assert "First [3] then [1]." in cleaned
+
+    def test_no_bibliography_appended(self):
+        state = self._make_state(2)
+        report = "Finding [1]."
+        cleaned, _ = cleanup_citations(report, state)
+        assert "## Sources" not in cleaned
+        assert "## References" not in cleaned
+
+    def test_combined_strip_and_dangling(self):
+        """Both LLM sources section AND dangling citations are handled."""
+        state = self._make_state(2)
+        report = (
+            "# Report\n\n"
+            "Finding [1] and [50] are important.\n\n"
+            "## Sources\n\n"
+            "- LLM generated sources\n"
+        )
+        cleaned, meta = cleanup_citations(report, state)
+        assert "## Sources" not in cleaned
+        assert "LLM generated" not in cleaned
+        assert "[1]" in cleaned
+        assert "[50]" not in cleaned
+        assert meta["dangling_citations_removed"] == 1

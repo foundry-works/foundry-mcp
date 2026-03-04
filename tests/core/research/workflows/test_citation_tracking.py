@@ -20,8 +20,11 @@ from foundry_mcp.core.research.models.sources import (
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._citation_postprocess import (
     build_sources_section,
+    cleanup_citations,
     extract_cited_numbers,
+    finalize_citations,
     format_source_apa,
+    needs_renumber,
     postprocess_citations,
     remove_dangling_citations,
     renumber_citations,
@@ -1126,3 +1129,297 @@ class TestPostprocessCitationsRenumbering:
         assert "[2025]" in body
         assert "[1]" in body
         assert meta["renumbered_count"] == 0
+
+
+# =============================================================================
+# cleanup_citations (Phase 5.1)
+# =============================================================================
+
+
+class TestCleanupCitations:
+    """Tests for cleanup_citations — strips LLM sources, removes dangling, does NOT renumber."""
+
+    def test_strips_llm_sources_section(self, state_with_sources: DeepResearchState):
+        report = "# Report\n\nFinding [1].\n\n## Sources\n\n- LLM generated\n"
+        cleaned, meta = cleanup_citations(report, state_with_sources)
+        assert "## Sources" not in cleaned
+        assert "LLM generated" not in cleaned
+        assert "[1]" in cleaned
+
+    def test_removes_dangling_citations(self, state_with_sources: DeepResearchState):
+        report = "Finding [1] and [99] are mentioned."
+        cleaned, meta = cleanup_citations(report, state_with_sources)
+        assert "[1]" in cleaned
+        assert "[99]" not in cleaned
+        assert meta["dangling_citations_removed"] == 1
+
+    def test_does_not_renumber(self, state_with_sources: DeepResearchState):
+        """cleanup_citations must NOT renumber — citations stay as-is."""
+        report = "First [3] then [1]."
+        cleaned, meta = cleanup_citations(report, state_with_sources)
+        assert "[3]" in cleaned
+        assert "[1]" in cleaned
+        # No renumber keys in metadata
+        assert "renumbered_count" not in meta
+
+    def test_does_not_append_bibliography(self, state_with_sources: DeepResearchState):
+        """cleanup_citations must NOT append a Sources/References section."""
+        report = "Finding [1] and [2]."
+        cleaned, meta = cleanup_citations(report, state_with_sources)
+        assert "## Sources" not in cleaned
+        assert "## References" not in cleaned
+
+    def test_metadata_keys(self, state_with_sources: DeepResearchState):
+        report = "Finding [1] and [2]."
+        _, meta = cleanup_citations(report, state_with_sources)
+        assert "total_citations_in_report" in meta
+        assert "total_sources_with_numbers" in meta
+        assert "dangling_citations_removed" in meta
+        assert meta["total_citations_in_report"] == 2
+        assert meta["total_sources_with_numbers"] == 3
+        assert meta["dangling_citations_removed"] == 0
+
+    def test_year_references_preserved(self, state_with_sources: DeepResearchState):
+        report = "Finding [1] from [2025]."
+        cleaned, _ = cleanup_citations(report, state_with_sources)
+        assert "[2025]" in cleaned
+        assert "[1]" in cleaned
+
+
+# =============================================================================
+# finalize_citations (Phase 5.2)
+# =============================================================================
+
+
+class TestFinalizeCitations:
+    """Tests for finalize_citations — renumbers to reading order, appends bibliography."""
+
+    def test_renumbers_to_reading_order(self):
+        state = DeepResearchState(original_query="test")
+        state.add_source(title="Alpha", url="https://alpha.example.com")
+        state.add_source(title="Beta", url="https://beta.example.com")
+        state.add_source(title="Gamma", url="https://gamma.example.com")
+
+        report = "First [3] then [1]."
+        finalized, meta = finalize_citations(report, state)
+
+        body = finalized.split("## Sources")[0]
+        assert "First [1] then [2]." in body
+        assert meta["renumbered_count"] == 2
+
+    def test_appends_bibliography(self):
+        state = DeepResearchState(original_query="test")
+        state.add_source(title="Alpha", url="https://alpha.example.com")
+        state.add_source(title="Beta", url="https://beta.example.com")
+
+        report = "Finding [1] and [2]."
+        finalized, meta = finalize_citations(report, state)
+
+        assert "## Sources" in finalized
+        assert "[1] [Alpha](https://alpha.example.com)" in finalized
+        assert "[2] [Beta](https://beta.example.com)" in finalized
+
+    def test_bibliography_only_cited_sources(self):
+        state = DeepResearchState(original_query="test")
+        state.add_source(title="Alpha", url="https://alpha.example.com")
+        state.add_source(title="Beta", url="https://beta.example.com")
+        state.add_source(title="Gamma", url="https://gamma.example.com")
+
+        report = "Finding [1]."
+        finalized, meta = finalize_citations(report, state)
+
+        assert "[1] [Alpha](https://alpha.example.com)" in finalized
+        assert "[2] [Beta]" not in finalized
+        assert "[3] [Gamma]" not in finalized
+        assert meta["unreferenced_sources"] == 2
+
+    def test_metadata_keys(self):
+        state = DeepResearchState(original_query="test")
+        state.add_source(title="S1", url="https://1.example.com")
+        report = "Finding [1]."
+        _, meta = finalize_citations(report, state)
+
+        assert "renumbered_count" in meta
+        assert "unreferenced_sources" in meta
+        assert "format_style" in meta
+        assert "total_citations_in_report" in meta
+
+    def test_apa_format_for_literature_review(self):
+        state = DeepResearchState(original_query="test")
+        state.add_source(title="Alpha", url="https://alpha.example.com")
+        report = "Finding [1]."
+        finalized, meta = finalize_citations(report, state, query_type="literature_review")
+
+        assert "## References" in finalized
+        assert meta["format_style"] == "apa"
+
+    def test_year_references_preserved(self):
+        state = DeepResearchState(original_query="test")
+        state.add_source(title="S1", url="https://1.example.com")
+
+        report = "In [2025], finding [1] was published."
+        finalized, _ = finalize_citations(report, state)
+
+        body = finalized.split("## Sources")[0]
+        assert "[2025]" in body
+        assert "[1]" in body
+
+
+# =============================================================================
+# needs_renumber (Phase 5.3)
+# =============================================================================
+
+
+class TestNeedsRenumber:
+    """Tests for needs_renumber helper."""
+
+    def test_out_of_order_returns_true(self):
+        assert needs_renumber("Finding [3] then [1].") is True
+
+    def test_gaps_returns_true(self):
+        assert needs_renumber("Finding [1] and [3].") is True
+
+    def test_sequential_returns_false(self):
+        assert needs_renumber("Finding [1] then [2].") is False
+
+    def test_single_citation_1_returns_false(self):
+        assert needs_renumber("Finding [1].") is False
+
+    def test_single_citation_not_1_returns_true(self):
+        assert needs_renumber("Finding [5].") is True
+
+    def test_no_citations_returns_false(self):
+        assert needs_renumber("No citations here.") is False
+
+    def test_empty_report_returns_false(self):
+        assert needs_renumber("") is False
+
+    def test_year_references_ignored_with_max_citation(self):
+        # [2025] should be ignored; [1] [2] are sequential
+        assert needs_renumber("Finding [1] from [2025] and [2].", max_citation=999) is False
+
+    def test_markdown_links_not_counted(self):
+        # [text](url) should not be counted as a citation
+        assert needs_renumber("[Example](https://example.com) and [1] then [2].") is False
+
+
+# =============================================================================
+# Integration: cleanup → mutations → finalize (Phase 5.4)
+# =============================================================================
+
+
+class TestCleanupMutateFinalize:
+    """Integration test: cleanup → simulate claim verification mutations → finalize.
+
+    Verifies the full pipeline produces sequential [1,2,3,...] output even after
+    claim verification removes and remaps citations.
+    """
+
+    def test_full_pipeline_with_mutations(self):
+        """Simulate: cleanup → remove [2], remap [5]→[3] → finalize → sequential."""
+        state = DeepResearchState(original_query="test")
+        for i in range(5):
+            state.add_source(title=f"Source {i+1}", url=f"https://s{i+1}.example.com")
+
+        report = (
+            "# Report\n\n"
+            "Finding [1] supports claim A. "
+            "Finding [2] supports claim B. "
+            "Finding [3] is related. "
+            "Finding [4] contradicts. "
+            "Finding [5] confirms [1].\n\n"
+            "## Sources\n\n"
+            "- LLM generated sources\n"
+        )
+
+        # Step 1: cleanup (strips LLM sources, removes dangling)
+        cleaned, cleanup_meta = cleanup_citations(report, state)
+        assert "## Sources" not in cleaned  # LLM section stripped
+        assert cleanup_meta["dangling_citations_removed"] == 0
+
+        # Step 2: simulate claim verification mutations
+        # Remove [2] (UNSUPPORTED claim)
+        cleaned = cleaned.replace("[2]", "")
+        # Remap [5] → [3] (verified with different source)
+        cleaned = cleaned.replace("[5]", "[3]")
+
+        # At this point, citations are: [1], [3], [4], [3], [1] — out of order with gaps
+        assert needs_renumber(cleaned, max_citation=999) is True
+
+        # Step 3: finalize (renumber + bibliography)
+        finalized, finalize_meta = finalize_citations(cleaned, state)
+
+        body = finalized.split("## Sources")[0]
+
+        # Should be renumbered to sequential: [1], [2], [3], [2], [1]
+        # First-appearance: [1]→1, [3]→2, [4]→3
+        assert "[1]" in body
+        assert "[2]" in body
+        assert "[3]" in body
+        # No gaps — [4] or [5] shouldn't appear in body after renumbering
+        assert "[4]" not in body
+        assert "[5]" not in body
+
+        # Bibliography should only have cited sources
+        assert "## Sources" in finalized
+        assert finalize_meta["renumbered_count"] > 0
+
+    def test_pipeline_no_mutations(self):
+        """When claim verification makes no changes, finalize still renumbers."""
+        state = DeepResearchState(original_query="test")
+        state.add_source(title="S1", url="https://1.example.com")
+        state.add_source(title="S2", url="https://2.example.com")
+        state.add_source(title="S3", url="https://3.example.com")
+
+        report = "Finding [3] then [1]."
+        cleaned, _ = cleanup_citations(report, state)
+
+        # No mutations — directly finalize
+        finalized, meta = finalize_citations(cleaned, state)
+
+        body = finalized.split("## Sources")[0]
+        assert "Finding [1] then [2]." in body
+        assert meta["renumbered_count"] == 2
+
+
+# =============================================================================
+# Backward compatibility: postprocess_citations (Phase 5.5)
+# =============================================================================
+
+
+class TestPostprocessCitationsBackwardCompat:
+    """Verify postprocess_citations produces identical output to cleanup+finalize."""
+
+    def test_combined_matches_split(self):
+        """postprocess_citations output must equal cleanup→finalize sequence."""
+        state1 = DeepResearchState(original_query="test")
+        state2 = DeepResearchState(original_query="test")
+        for i in range(5):
+            state1.add_source(title=f"S{i+1}", url=f"https://s{i+1}.example.com")
+            state2.add_source(title=f"S{i+1}", url=f"https://s{i+1}.example.com")
+
+        report = (
+            "# Report\n\n"
+            "First [3] and [1] then [5].\n\n"
+            "## Sources\n\n- LLM generated\n"
+        )
+
+        # Combined path
+        combined_report, combined_meta = postprocess_citations(report, state1)
+
+        # Split path
+        cleaned, _ = cleanup_citations(report, state2)
+        split_report, _ = finalize_citations(cleaned, state2)
+
+        assert combined_report == split_report
+
+    def test_existing_tests_still_valid(self, state_with_sources: DeepResearchState):
+        """Smoke test: postprocess_citations still works as before."""
+        report = "# Report\n\nFinding [1] and [2].\n\n## Sources\n\n- Old\n"
+        processed, meta = postprocess_citations(report, state_with_sources)
+
+        assert "Old" not in processed
+        assert "## Sources" in processed
+        assert "[1] [Alpha Source](https://alpha.example.com)" in processed
+        assert meta["total_citations_in_report"] == 2
+        assert meta["dangling_citations_removed"] == 0
