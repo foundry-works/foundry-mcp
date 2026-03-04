@@ -253,6 +253,73 @@ def strip_llm_sources_section(report: str) -> str:
     return report[:start].rstrip() + report[end:]
 
 
+def renumber_citations(
+    report: str,
+    state: "DeepResearchState",
+    *,
+    max_citation: int | None = None,
+) -> tuple[str, dict[int, int]]:
+    """Renumber inline citations to reading order (1, 2, 3, ...).
+
+    Scans the report left-to-right for ``[N]`` citations in order of
+    first appearance and builds a mapping from old citation numbers to
+    new sequential numbers.  Updates the report text, ``source.citation_number``
+    on all state sources, and ``state.next_citation_number``.
+
+    Args:
+        report: The markdown report text (after dangling removal).
+        state: Research state — sources are mutated in place.
+        max_citation: Numbers above this are assumed to be year references
+            (e.g. ``[2025]``) and are left untouched.
+
+    Returns:
+        Tuple of (renumbered_report, renumber_map) where renumber_map
+        is ``{old_number: new_number}``.  Empty dict when no renumbering
+        was needed.
+    """
+    # 1. Collect citation numbers in first-appearance order
+    seen: dict[int, int] = {}  # old -> new
+    next_new = 1
+    for m in _CITATION_RE.finditer(report):
+        num = int(m.group(1))
+        if max_citation is not None and num > max_citation:
+            continue
+        if num not in seen:
+            seen[num] = next_new
+            next_new += 1
+
+    # Nothing to renumber — either no citations or already in order
+    if not seen or all(k == v for k, v in seen.items()):
+        return report, {}
+
+    # 2. Replace all [old] → [new] in the report
+    def _replace(match: re.Match) -> str:
+        num = int(match.group(1))
+        if num in seen:
+            return f"[{seen[num]}]"
+        return match.group(0)
+
+    report = _CITATION_RE.sub(_replace, report)
+
+    # 3. Update source citation numbers on state.
+    # Cited sources get their new numbers from the map.
+    # Uncited sources are reassigned sequential numbers after the cited
+    # ones to avoid collisions (e.g., uncited source with cn=2 clashing
+    # with a cited source renumbered to cn=2).
+    next_uncited = next_new  # continues from where cited numbering left off
+    for source in state.sources:
+        if source.citation_number is not None and source.citation_number in seen:
+            source.citation_number = seen[source.citation_number]
+        elif source.citation_number is not None:
+            source.citation_number = next_uncited
+            next_uncited += 1
+
+    # 4. Update next_citation_number
+    state.next_citation_number = next_uncited
+
+    return report, seen
+
+
 def _resolve_format_style(
     state: "DeepResearchState",
     query_type: str | None = None,
@@ -286,7 +353,8 @@ def postprocess_citations(
     1. Extract all cited ``[N]`` numbers from the report.
     2. Remove any LLM-generated Sources section.
     3. Remove dangling citations (referencing non-existent sources).
-    4. Append a deterministic Sources/References section from state.
+    4. Renumber citations to reading order (1, 2, 3, ...).
+    5. Append a deterministic Sources/References section from state.
 
     The ``format_style`` for the appended section is resolved from the
     research profile's ``citation_style`` and the detected ``query_type``.
@@ -334,7 +402,18 @@ def postprocess_citations(
         # Recompute after removal
         cited_numbers = extract_cited_numbers(report, max_citation=max_cn)
 
-    # 4. Resolve format style and append deterministic section
+    # 4. Renumber citations to reading order (1, 2, 3, ...)
+    report, renumber_map = renumber_citations(report, state, max_citation=max_cn)
+    if renumber_map:
+        logger.info(
+            "Renumbered %d citation(s) to reading order: %s",
+            len(renumber_map),
+            renumber_map,
+        )
+        # Recompute cited numbers after renumbering
+        cited_numbers = extract_cited_numbers(report, max_citation=max_cn)
+
+    # 5. Resolve format style and append deterministic section
     format_style = _resolve_format_style(state, query_type)
     sources_section = build_sources_section(
         state,
@@ -360,6 +439,7 @@ def postprocess_citations(
         "dangling_citations_removed": len(dangling),
         "unreferenced_sources": len(unreferenced),
         "format_style": format_style,
+        "renumbered_count": len(renumber_map),
     }
 
     return report, metadata

@@ -24,6 +24,7 @@ from foundry_mcp.core.research.workflows.deep_research.phases._citation_postproc
     format_source_apa,
     postprocess_citations,
     remove_dangling_citations,
+    renumber_citations,
     strip_llm_sources_section,
 )
 
@@ -507,8 +508,10 @@ class TestCitationStabilityAcrossRefinement:
         report2 = "Finding [1] is key. New insight from [4]."
         processed2, meta2 = postprocess_citations(report2, state_with_sources)
 
-        assert "[1]" in processed2.split("## Sources")[0]
-        assert "[4]" in processed2.split("## Sources")[0]
+        body2 = processed2.split("## Sources")[0]
+        # After renumbering: [1]→[1], [4]→[2] (reading order)
+        assert "[1]" in body2
+        assert "[2]" in body2
         assert meta2["total_citations_in_report"] == 2
         assert meta2["dangling_citations_removed"] == 0
 
@@ -871,13 +874,14 @@ class TestBibliographyCitedOnly:
         report = "# Report\n\nEvidence from [1], [3], and [5] supports the thesis.\n"
         processed, meta = postprocess_citations(report, state)
 
-        # Cited sources appear in bibliography
+        # After renumbering: [1]→[1], [3]→[2], [5]→[3]
+        # Cited sources appear in bibliography with renumbered citations
         assert "[1] [Cited A](https://a.example.com)" in processed
-        assert "[3] [Cited C](https://c.example.com)" in processed
-        assert "[5] [Cited E](https://e.example.com)" in processed
+        assert "[2] [Cited C](https://c.example.com)" in processed
+        assert "[3] [Cited E](https://e.example.com)" in processed
         # Uncited sources do NOT appear in bibliography
-        assert "[2] [Uncited B]" not in processed
-        assert "[4] [Uncited D]" not in processed
+        assert "Uncited B" not in processed.split("## Sources")[1]
+        assert "Uncited D" not in processed.split("## Sources")[1]
         # Metadata reflects correct counts
         assert meta["total_citations_in_report"] == 3
         assert meta["unreferenced_sources"] == 2
@@ -924,13 +928,201 @@ class TestBibliographyCitedOnly:
         report = "# Report\n\nEvidence [1] and [3].\n"
         processed, meta = postprocess_citations(report, state)
 
-        # Bibliography only has cited sources
-        assert "[2] [Uncited B]" not in processed
+        # Bibliography only has cited sources (renumbered: [1]→[1], [3]→[2])
+        assert "Uncited B" not in processed.split("## Sources")[1]
         # But state.sources still contains ALL sources (for provenance/export)
         assert len(state.sources) == 3
         assert state.sources[0].title == "Cited A"
         assert state.sources[1].title == "Uncited B"
         assert state.sources[2].title == "Cited C"
-        # Citation map still has all numbered sources
+        # Citation map has renumbered keys: Cited A=1, Cited C=2, Uncited B=3
         citation_map = state.get_citation_map()
-        assert set(citation_map.keys()) == {1, 2, 3}
+        assert len(citation_map) == 3
+        assert citation_map[1].title == "Cited A"
+        assert citation_map[2].title == "Cited C"
+        assert citation_map[3].title == "Uncited B"
+
+
+# =============================================================================
+# renumber_citations (unit tests)
+# =============================================================================
+
+
+class TestRenumberCitations:
+    """Tests for renumber_citations() — reading-order citation renumbering."""
+
+    def test_out_of_order_citations(self):
+        """Out-of-order citations [5] [2] [5] → [1] [2] [1]."""
+        state = DeepResearchState(original_query="test")
+        state.add_source(title="S1", url="https://1.example.com")
+        state.add_source(title="S2", url="https://2.example.com")
+        state.add_source(title="S3", url="https://3.example.com")
+        state.add_source(title="S4", url="https://4.example.com")
+        state.add_source(title="S5", url="https://5.example.com")
+
+        report = "Finding [5] foo [2] bar [5] baz."
+        result, rmap = renumber_citations(report, state, max_citation=999)
+
+        assert result == "Finding [1] foo [2] bar [1] baz."
+        assert rmap == {5: 1, 2: 2}
+
+    def test_gaps_eliminated(self):
+        """Gaps in citation numbers [1], [3], [7] → [1], [2], [3]."""
+        state = DeepResearchState(original_query="test")
+        for i in range(7):
+            state.add_source(title=f"S{i+1}", url=f"https://{i+1}.example.com")
+
+        report = "Sources [1], [3], and [7] support the claim."
+        result, rmap = renumber_citations(report, state, max_citation=999)
+
+        assert "[1]" in result
+        assert "[2]" in result
+        assert "[3]" in result
+        assert "[7]" not in result
+        assert rmap == {1: 1, 3: 2, 7: 3}
+
+    def test_state_sources_updated(self):
+        """Source citation_number values are updated after renumbering."""
+        state = DeepResearchState(original_query="test")
+        state.add_source(title="S1")  # cn=1
+        state.add_source(title="S2")  # cn=2
+        state.add_source(title="S3")  # cn=3
+        state.add_source(title="S4")  # cn=4
+        state.add_source(title="S5")  # cn=5
+
+        report = "See [5] and [3]."
+        renumber_citations(report, state, max_citation=999)
+
+        # S5 (originally cn=5) → cn=1, S3 (originally cn=3) → cn=2
+        cn_map = {s.title: s.citation_number for s in state.sources}
+        assert cn_map["S5"] == 1
+        assert cn_map["S3"] == 2
+
+    def test_next_citation_number_updated(self):
+        """state.next_citation_number accounts for all sources (cited + uncited)."""
+        state = DeepResearchState(original_query="test")
+        for i in range(5):
+            state.add_source(title=f"S{i+1}")
+        assert state.next_citation_number == 6
+
+        report = "Cite [5] then [3]."
+        renumber_citations(report, state, max_citation=999)
+
+        # 2 cited (cn 1,2) + 3 uncited (cn 3,4,5) → next is 6
+        assert state.next_citation_number == 6
+
+    def test_year_references_preserved(self):
+        """Year references like [2025] are not renumbered."""
+        state = DeepResearchState(original_query="test")
+        state.add_source(title="S1")
+        state.add_source(title="S2")
+
+        report = "Finding [2] from [2025] and [1]."
+        result, rmap = renumber_citations(report, state, max_citation=999)
+
+        # [2] appears first → becomes [1], [1] appears second → becomes [2]
+        assert "[2025]" in result
+        assert rmap == {2: 1, 1: 2}
+
+    def test_markdown_links_not_affected(self):
+        """Markdown links [text](url) are not treated as citations."""
+        state = DeepResearchState(original_query="test")
+        state.add_source(title="S1")
+        state.add_source(title="S2")
+        state.add_source(title="S3")
+
+        report = "See [Example](https://example.com) and [3] then [1]."
+        result, rmap = renumber_citations(report, state, max_citation=999)
+
+        assert "[Example](https://example.com)" in result
+        assert rmap == {3: 1, 1: 2}
+
+    def test_already_ordered_is_noop(self):
+        """An already-ordered report returns empty map (no-op)."""
+        state = DeepResearchState(original_query="test")
+        state.add_source(title="S1")
+        state.add_source(title="S2")
+        state.add_source(title="S3")
+
+        report = "Sources [1], [2], and [3]."
+        result, rmap = renumber_citations(report, state, max_citation=999)
+
+        assert result == report
+        assert rmap == {}
+
+    def test_no_citations_is_noop(self):
+        """Report with no citations returns empty map."""
+        state = DeepResearchState(original_query="test")
+        state.add_source(title="S1")
+
+        report = "No citations here."
+        result, rmap = renumber_citations(report, state)
+
+        assert result == report
+        assert rmap == {}
+
+
+# =============================================================================
+# postprocess_citations with renumbering (integration)
+# =============================================================================
+
+
+class TestPostprocessCitationsRenumbering:
+    """Integration tests for renumbering within the full pipeline."""
+
+    def test_bibliography_uses_renumbered_order(self):
+        """After renumbering, bibliography entries use new citation numbers."""
+        state = DeepResearchState(original_query="test")
+        state.add_source(title="Alpha", url="https://alpha.example.com")
+        state.add_source(title="Beta", url="https://beta.example.com")
+        state.add_source(title="Gamma", url="https://gamma.example.com")
+
+        # Report cites [3] first, then [1] — should renumber to [1], [2]
+        report = "# Report\n\nFirst [3] then [1]."
+        processed, meta = postprocess_citations(report, state)
+
+        body = processed.split("## Sources")[0]
+        assert "[1]" in body
+        assert "[2]" in body
+        assert "[3]" not in body
+
+        # Bibliography should list [1] Gamma, [2] Alpha (renumbered order)
+        assert "[1] [Gamma](https://gamma.example.com)" in processed
+        assert "[2] [Alpha](https://alpha.example.com)" in processed
+        assert meta["renumbered_count"] == 2
+
+    def test_renumbering_metadata_in_response(self):
+        """Renumber count appears in metadata."""
+        state = DeepResearchState(original_query="test")
+        state.add_source(title="S1", url="https://1.example.com")
+        state.add_source(title="S2", url="https://2.example.com")
+
+        report = "Finding [2] then [1]."
+        _, meta = postprocess_citations(report, state)
+
+        assert "renumbered_count" in meta
+        assert meta["renumbered_count"] == 2
+
+    def test_no_renumbering_when_already_ordered(self):
+        """Already-ordered citations produce renumbered_count=0."""
+        state = DeepResearchState(original_query="test")
+        state.add_source(title="S1", url="https://1.example.com")
+        state.add_source(title="S2", url="https://2.example.com")
+
+        report = "Finding [1] then [2]."
+        _, meta = postprocess_citations(report, state)
+
+        assert meta["renumbered_count"] == 0
+
+    def test_year_refs_survive_full_pipeline(self):
+        """Year references survive through renumbering in the full pipeline."""
+        state = DeepResearchState(original_query="test")
+        state.add_source(title="S1", url="https://1.example.com")
+
+        report = "In [2025], finding [1] was published."
+        processed, meta = postprocess_citations(report, state)
+
+        body = processed.split("## Sources")[0]
+        assert "[2025]" in body
+        assert "[1]" in body
+        assert meta["renumbered_count"] == 0

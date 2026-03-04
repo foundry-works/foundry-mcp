@@ -11,23 +11,23 @@
 - [ ] Add prompt assertion test: system prompt contains no-numbering instruction
 
 ## Phase 2: Renumber citations in reading order
-- [ ] Add `renumber_citations(report: str, state: DeepResearchState, *, max_citation: int | None) -> tuple[str, dict[int, int]]` to `_citation_postprocess.py`
-  - [ ] Scan report left-to-right with `_CITATION_RE.finditer()`, build `{old: new}` map in first-appearance order
-  - [ ] Skip numbers above `max_citation` (year references)
-  - [ ] Replace all `[old]` → `[new]` in report text
-  - [ ] Update `source.citation_number` on all `state.sources` using the map
-  - [ ] Update `state.next_citation_number` to `max(new_values) + 1`
-  - [ ] Return `(renumbered_report, renumber_map)`
-- [ ] Integrate into `postprocess_citations()` between step 3 (dangling removal) and step 4 (bibliography append)
-- [ ] Add renumber map to the returned metadata dict (e.g., `"renumbered_count": len(map)`)
-- [ ] Add test: out-of-order citations `[5] foo [2] bar [5]` → `[1] foo [2] bar [1]`
-- [ ] Add test: gaps eliminated `[1], [3], [7]` → `[1], [2], [3]`
-- [ ] Add test: state sources have updated `citation_number` values after renumbering
-- [ ] Add test: `state.next_citation_number` updated correctly
-- [ ] Add test: year references `[2025]` preserved (not renumbered)
-- [ ] Add test: markdown links `[text](url)` not affected
-- [ ] Add test: already-ordered report is a no-op (idempotent)
-- [ ] Add test: bibliography section uses renumbered citations in order
+- [x] Add `renumber_citations(report: str, state: DeepResearchState, *, max_citation: int | None) -> tuple[str, dict[int, int]]` to `_citation_postprocess.py`
+  - [x] Scan report left-to-right with `_CITATION_RE.finditer()`, build `{old: new}` map in first-appearance order
+  - [x] Skip numbers above `max_citation` (year references)
+  - [x] Replace all `[old]` → `[new]` in report text
+  - [x] Update `source.citation_number` on all `state.sources` using the map
+  - [x] Update `state.next_citation_number` to `max(new_values) + 1`
+  - [x] Return `(renumbered_report, renumber_map)`
+- [x] Integrate into `postprocess_citations()` between step 3 (dangling removal) and step 4 (bibliography append)
+- [x] Add renumber map to the returned metadata dict (e.g., `"renumbered_count": len(map)`)
+- [x] Add test: out-of-order citations `[5] foo [2] bar [5]` → `[1] foo [2] bar [1]`
+- [x] Add test: gaps eliminated `[1], [3], [7]` → `[1], [2], [3]`
+- [x] Add test: state sources have updated `citation_number` values after renumbering
+- [x] Add test: `state.next_citation_number` updated correctly
+- [x] Add test: year references `[2025]` preserved (not renumbered)
+- [x] Add test: markdown links `[text](url)` not affected
+- [x] Add test: already-ordered report is a no-op (idempotent)
+- [x] Add test: bibliography section uses renumbered citations in order
 
 ## Phase 3: Fix `claims_extracted` reporting inconsistency
 - [ ] Add `claims_filtered: int = 0` field to `ClaimVerificationResult` in `models/deep_research.py`
