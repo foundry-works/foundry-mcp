@@ -113,10 +113,13 @@ _VALID_CLAIM_TYPES: frozenset[str] = frozenset(
 def _resolve_source_text(source: "ResearchSource") -> Optional[str]:
     """Return the best available text content for a source.
 
-    Falls back through content → raw_content → snippet.
+    Falls back through raw_content → content → snippet.
+    Prefers raw_content (full page text) over content (compressed summary)
+    because summaries strip specific numbers and factual details that
+    claim verification needs.
     Returns None if no text is available.
     """
-    return source.content or source.raw_content or source.snippet
+    return source.raw_content or source.content or source.snippet
 
 
 def _multi_window_truncate(

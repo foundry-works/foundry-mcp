@@ -1,52 +1,48 @@
-# Plan Checklist: Post-Synthesis Quality Improvements
+# Plan Checklist: Claim Verification & Synthesis Fidelity Fixes
 
-## Phase 1: Remove "Section #:" prefix from synthesis output
-- [ ] Add no-numbering instruction to Section Writing Rules in `_build_synthesis_system_prompt` (synthesis.py ~line 1215)
-- [ ] Add `_strip_section_numbering(report: str) -> str` helper function with regex `r'^(#{1,6})\s*(?:Section|Part)\s+\d+\s*:\s*'` → `r'\1 '`
-- [ ] Call `_strip_section_numbering()` on report text in `execute()` after LLM response is captured
-- [ ] Add unit test: `_strip_section_numbering` correctly strips `## Section 1: Foo` → `## Foo`
-- [ ] Add unit test: `_strip_section_numbering` correctly strips `## Part 2: Bar` → `## Bar`
-- [ ] Add unit test: `_strip_section_numbering` leaves `## Executive Summary` untouched
-- [ ] Add unit test: `_strip_section_numbering` leaves `## 2025 Market Overview` untouched (year not stripped)
-- [ ] Add prompt assertion test: system prompt contains no-numbering instruction
+## Phase 1: Use raw_content for claim verification
+- [x] Change `_resolve_source_text()` in `claim_verification.py` (~line 119) to prefer `raw_content`: `return source.raw_content or source.content or source.snippet`
+- [x] Update docstring to say "Falls back through raw_content → content → snippet"
+- [x] Add unit test: returns `raw_content` when both `content` and `raw_content` are present
+- [x] Add unit test: falls back to `content` when `raw_content` is None/empty
+- [x] Add unit test: falls back to `snippet` when both `raw_content` and `content` are None/empty
+- [x] Add unit test: returns None when all three are None/empty
+- [x] Run existing claim verification tests — confirm no regressions from the preference flip (139 passed)
 
-## Phase 2: Renumber citations in reading order
-- [x] Add `renumber_citations(report: str, state: DeepResearchState, *, max_citation: int | None) -> tuple[str, dict[int, int]]` to `_citation_postprocess.py`
-  - [x] Scan report left-to-right with `_CITATION_RE.finditer()`, build `{old: new}` map in first-appearance order
-  - [x] Skip numbers above `max_citation` (year references)
-  - [x] Replace all `[old]` → `[new]` in report text
-  - [x] Update `source.citation_number` on all `state.sources` using the map
-  - [x] Update `state.next_citation_number` to `max(new_values) + 1`
-  - [x] Return `(renumbered_report, renumber_map)`
-- [x] Integrate into `postprocess_citations()` between step 3 (dangling removal) and step 4 (bibliography append)
-- [x] Add renumber map to the returned metadata dict (e.g., `"renumbered_count": len(map)`)
-- [x] Add test: out-of-order citations `[5] foo [2] bar [5]` → `[1] foo [2] bar [1]`
-- [x] Add test: gaps eliminated `[1], [3], [7]` → `[1], [2], [3]`
-- [x] Add test: state sources have updated `citation_number` values after renumbering
-- [x] Add test: `state.next_citation_number` updated correctly
-- [x] Add test: year references `[2025]` preserved (not renumbered)
-- [x] Add test: markdown links `[text](url)` not affected
-- [x] Add test: already-ordered report is a no-op (idempotent)
-- [x] Add test: bibliography section uses renumbered citations in order
+## Phase 2: Compute and store fidelity_score
+- [ ] Add `fidelity_score` computed property to `ClaimVerificationResult` in `models/deep_research.py` (~after line 1356)
+  - [ ] Weight: SUPPORTED=1.0, PARTIALLY_SUPPORTED=0.5, UNSUPPORTED=0.0, CONTRADICTED=0.0
+  - [ ] Return `None` if `claims_verified == 0`
+  - [ ] Return `float` otherwise: `(claims_supported + 0.5 * claims_partially_supported) / claims_verified`
+- [ ] Verify `fidelity_score` appears in `model_dump()` output (Pydantic `@computed_field` auto-serializes)
+- [ ] Verify action_handlers.py deep-research-status includes fidelity_score in claim_verification data (should be automatic)
+- [ ] Add test: all SUPPORTED → 1.0
+- [ ] Add test: all UNSUPPORTED → 0.0
+- [ ] Add test: all CONTRADICTED → 0.0
+- [ ] Add test: mixed (5 SUP, 1 PARTIAL, 29 UNSUP) → ≈0.157
+- [ ] Add test: 0 claims_verified → None
+- [ ] Add test: serializes correctly in JSON output
 
-## Phase 3: Fix `claims_extracted` reporting inconsistency
-- [x] Add `claims_filtered: int = 0` field to `ClaimVerificationResult` in `models/deep_research.py`
-- [x] Set `result.claims_filtered = len(to_verify)` after `_apply_token_budget` in claim_verification.py
-- [x] Verify `result.claims_extracted` is set from raw extraction count (pre-filter) — confirm existing code is correct
-- [x] Include `claims_filtered` in response builder output (`builders.py`) — N/A, builders.py had no claim verification references; output is in action_handlers.py and workflow_execution.py
-- [x] Update audit event `claim_verification_complete` to include `claims_filtered`
-- [x] Add/update test asserting `claims_extracted >= claims_filtered >= claims_verified`
+## Phase 3: Add citation-accuracy guardrails to synthesis prompt
+- [ ] Add citation-accuracy lines to `## Citations` section in `_build_synthesis_system_prompt` (~after line 1267, before `## Language`)
+  - [ ] Instruction: only cite a source for a fact if that fact appears in the source content provided
+  - [ ] Instruction: do not guess citation numbers — omit the citation rather than cite the wrong source
+  - [ ] Instruction: never attribute a fact from one source to a different source based on topical similarity
+- [ ] Add prompt assertion test: system prompt contains the new citation-accuracy text
 
-## Phase 4: Remove dead `report_sections` and `content_fidelity` fields
-- [x] Grep for all references to `report_sections` across codebase — confirm no write callers
-- [x] Grep for all references to `content_fidelity`, `ContentFidelityRecord`, `FidelityLevel` — confirm no workflow callers
-- [x] Remove `report_sections` field from `DeepResearchState`
-- [x] Remove `content_fidelity` field from `DeepResearchState`
-- [x] Remove `ContentFidelityRecord` class (if no other consumers)
-- [x] Remove `FidelityLevel` enum (if no other consumers)
-- [x] Remove helper methods: `record_fidelity_level`, `get_fidelity_record`, `get_items_at_fidelity_level`, `overall_fidelity_score`, `has_degraded_content`, and fidelity merge methods
-- [x] Update `state_migrations.py` — add migration to silently drop `report_sections` and `content_fidelity` keys from persisted state
-- [x] Update `builders.py` — remove serialization of removed fields — N/A, builders.py `content_fidelity` refers to response envelope (string), not the model dict
-- [x] Update `types.py` — remove type references if any — N/A, types.py `content_fidelity` refers to response envelope (string), not the model dict
-- [x] Remove/update any tests referencing removed fields
-- [x] Verify old session state files deserialize without error (backward compat)
+## Phase 4: Log claim verification source resolution for diagnostics
+- [ ] Add `source_resolution: Optional[str] = None` field to `ClaimVerdict` in `models/deep_research.py`
+  - [ ] Valid values: `"full_content"`, `"compressed_only"`, `"snippet_only"`, `"no_content"`, `"citation_not_found"`
+- [ ] In `_build_verification_user_prompt` (~line 773): track best content tier resolved across all cited sources
+  - [ ] If `raw_content` used → `"full_content"`
+  - [ ] If only `content` (compressed) used → `"compressed_only"`
+  - [ ] If only `snippet` used → `"snippet_only"`
+  - [ ] If all citations miss the map → `"citation_not_found"`
+  - [ ] Return the resolution tier alongside the prompt string (change return type to tuple or add to claim)
+- [ ] In `_verify_single_claim`: set `claim.source_resolution` from the resolution tier
+- [ ] When auto-assigning UNSUPPORTED (prompt is None), set `source_resolution = "no_content"`
+- [ ] Add test: `source_resolution` is `"full_content"` when `raw_content` available
+- [ ] Add test: `source_resolution` is `"compressed_only"` when only `content` available (after Phase 1 flip, this means `raw_content` was None)
+- [ ] Add test: `source_resolution` is `"no_content"` when no source text resolves
+- [ ] Add test: `source_resolution` is `"citation_not_found"` when citation number not in map
+- [ ] Add test: field serializes in `ClaimVerdict.model_dump()`

@@ -139,19 +139,23 @@ def _make_state_with_sources(
 
 
 class TestResolveSourceText:
-    def test_content_populated(self):
-        src = _make_source(1, content="Full content")
+    def test_prefers_raw_content_over_content(self):
+        """raw_content (full page text) is preferred over content (compressed summary)."""
+        src = _make_source(1, content="Compressed summary", raw_content="Full page text")
+        assert _resolve_source_text(src) == "Full page text"
+
+    def test_falls_back_to_content(self):
+        """Falls back to content when raw_content is None."""
+        src = _make_source(1, content="Full content", raw_content=None)
         assert _resolve_source_text(src) == "Full content"
 
-    def test_raw_content_fallback(self):
-        src = _make_source(1, content=None, raw_content="Raw content")
-        assert _resolve_source_text(src) == "Raw content"
-
-    def test_snippet_fallback(self):
+    def test_falls_back_to_snippet(self):
+        """Falls back to snippet when both raw_content and content are None."""
         src = _make_source(1, content=None, raw_content=None, snippet="Snippet")
         assert _resolve_source_text(src) == "Snippet"
 
     def test_all_none(self):
+        """Returns None when all three are None."""
         src = _make_source(1, content=None, raw_content=None, snippet=None)
         assert _resolve_source_text(src) is None
 
