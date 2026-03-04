@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0a6] - 2026-03-03
+
+### Fixed
+
+- **Claim verification timeout on large reports**: Added `max_tokens=16384` to the extraction LLM call, truncate reports exceeding 30K chars before extraction (preserving body over bibliography), and raised the default claim verification timeout from 120s to 180s.
+- **Bibliography included uncited sources**: The bibliography section listed all sources with citation numbers, even those never referenced in the report body. Now only actually cited sources appear, and an empty bibliography emits no heading.
+- **Provider leakage in gathering and supervision phases**: Gathering and supervision phases now read providers from `state.metadata["active_providers"]` (set by the brief phase) instead of always using the global config default, preventing academic providers from firing on general-profile sessions where they return zero results.
+
 ## [0.18.0a5] - 2026-03-03
 
 ### Added
