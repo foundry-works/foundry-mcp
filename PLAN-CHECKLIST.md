@@ -2,13 +2,13 @@
 
 ## Phase 1: Section Chunking Helper
 
-- [ ] Add `_split_report_into_sections()` function after `_build_extraction_user_prompt()` (line ~203)
-- [ ] Split on `(?:^|\n)#{2,3} ` boundaries (handles start-of-string and mid-string headings)
-- [ ] Preserve heading text in each chunk's `"section"` key
-- [ ] Merge small sections (< 500 chars) with next section
-- [ ] Exclude bibliography/sources sections via anchored heading regex `(?i)^(bibliography|references|sources|works cited)$`
-- [ ] Fall back to single chunk when no `##`/`###` headings found
-- [ ] Discard final chunk if it lacks a heading (truncation boundary fragment), unless it's the only chunk
+- [x] Add `_split_report_into_sections()` function after `_build_extraction_user_prompt()` (line ~203)
+- [x] Split on `(?:^|\n)#{2,3} ` boundaries (handles start-of-string and mid-string headings)
+- [x] Preserve heading text in each chunk's `"section"` key
+- [x] Merge small sections (< 500 chars) with next section
+- [x] Exclude bibliography/sources sections via anchored heading regex `(?i)^(bibliography|references|sources|works cited)$`
+- [x] Fall back to single chunk when no `##`/`###` headings found
+- [x] Discard final chunk if it lacks a heading (truncation boundary fragment), unless it's the only chunk
 
 ## Phase 2: Citation-Anchored Extraction Prompt
 

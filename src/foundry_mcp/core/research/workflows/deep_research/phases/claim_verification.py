@@ -203,6 +203,93 @@ def _build_extraction_user_prompt(report: str) -> str:
     return f"## Research Report\n\n{report}\n\n## Task\n\nExtract all verifiable factual claims from the report above as a JSON array."
 
 
+# Regex to detect bibliography/references headings (anchored to avoid false positives).
+_BIBLIOGRAPHY_HEADING_RE = re.compile(
+    r"(?i)^(bibliography|references|sources|works cited)$"
+)
+
+# Minimum section size before merging with the next section.
+_MIN_SECTION_CHARS = 500
+
+
+def _split_report_into_sections(report: str) -> list[dict[str, str]]:
+    """Split report into section-level chunks for parallel extraction.
+
+    Splits on ``## `` and ``### `` headings.  Each chunk includes its heading
+    and body text.  Sections smaller than :data:`_MIN_SECTION_CHARS` are merged
+    with the following section to avoid trivially small extraction calls.
+
+    Returns:
+        List of dicts with ``"section"`` (heading text) and ``"content"``
+        (full text including heading line).
+    """
+    # Split on level-2 and level-3 headings.  The regex matches headings at
+    # the start of the string or after a newline.
+    parts = re.split(r"(?:^|\n)(#{2,3} .+)", report)
+
+    # ``re.split`` with a capturing group interleaves non-match / match:
+    #   [preamble, heading1, body1, heading2, body2, ...]
+    # Build raw sections from these pairs.
+    raw_sections: list[dict[str, str]] = []
+
+    # If the first element is non-empty and not a heading, it's preamble text
+    # (content before any heading).
+    idx = 0
+    if parts and parts[0].strip():
+        raw_sections.append({"section": "", "content": parts[0]})
+        idx = 1
+    elif parts:
+        # Empty preamble — skip it.
+        idx = 1
+
+    # Walk heading/body pairs.
+    while idx < len(parts):
+        heading = parts[idx].strip() if idx < len(parts) else ""
+        body = parts[idx + 1] if idx + 1 < len(parts) else ""
+        # Heading text without the leading ## / ###.
+        heading_text = re.sub(r"^#{2,3}\s*", "", heading)
+
+        # Exclude bibliography/references sections.
+        if _BIBLIOGRAPHY_HEADING_RE.match(heading_text.strip()):
+            idx += 2
+            continue
+
+        raw_sections.append({
+            "section": heading_text,
+            "content": heading + body,
+        })
+        idx += 2
+
+    # Fallback: no headings found → single chunk with full report.
+    if not raw_sections:
+        return [{"section": "", "content": report}]
+
+    # Discard final chunk if it lacks a heading (truncation boundary fragment),
+    # unless it's the only chunk.
+    if len(raw_sections) > 1 and not raw_sections[-1]["section"]:
+        raw_sections.pop()
+
+    # Merge consecutive small sections (< _MIN_SECTION_CHARS) with the next.
+    merged: list[dict[str, str]] = []
+    for sec in raw_sections:
+        if merged and len(merged[-1]["content"]) < _MIN_SECTION_CHARS:
+            # Merge into previous (small) section.
+            merged[-1]["content"] += "\n" + sec["content"]
+            # Keep the first section's heading (it's the one that was too small).
+            if not merged[-1]["section"] and sec["section"]:
+                merged[-1]["section"] = sec["section"]
+        else:
+            merged.append(dict(sec))
+
+    # If the last section is still small after the forward pass, merge it
+    # backwards into the previous section (if one exists).
+    if len(merged) > 1 and len(merged[-1]["content"]) < _MIN_SECTION_CHARS:
+        merged[-2]["content"] += "\n" + merged[-1]["content"]
+        merged.pop()
+
+    return merged if merged else [{"section": "", "content": report}]
+
+
 def _parse_extracted_claims(response: str, max_claims: int = 0) -> list[ClaimVerdict]:
     """Parse LLM response into ClaimVerdict objects.
 
