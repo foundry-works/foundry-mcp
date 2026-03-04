@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0a11] - 2026-03-04
+
+### Changed
+
+- **Split citation pipeline into cleanup and finalize stages**: `postprocess_citations` has been decomposed into `cleanup_citations` (bracket normalization, section stripping, inline list removal) and `finalize_citations` (renumbering, bibliography generation). Cleanup runs immediately after synthesis, finalize runs after claim verification — ensuring claim verdicts reference correct citation numbers.
+- **Citation ordering diagnostic in report export**: Report export now logs a diagnostic comparing pre-renumber and post-renumber citation order, making it easier to debug renumbering issues.
+
+### Fixed
+
+- **Citation finalize step added after claim verification**: The finalize stage (renumbering + bibliography) now runs after claim verification completes, fixing a gap where reports could have unrenumbered citations when claim verification was enabled.
+
 ## [0.18.0a10] - 2026-03-04
 
 ### Added
