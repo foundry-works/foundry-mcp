@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0a8] - 2026-03-04
+
+### Added
+
+- **Citation renumbering in reading order**: Citations in deep research reports are now renumbered sequentially in the order they first appear in the text, making reports easier to read and follow.
+- **`claims_filtered` field in verification results**: Claim verification now tracks how many claims were removed by the uncited-claims filter, providing transparency into post-filter claim counts.
+
+### Changed
+
+- **Spontaneous section numbering stripped from synthesis**: LLM-generated section numbers (e.g., "1.", "1.1") are now automatically stripped from synthesis output headings, producing cleaner markdown reports.
+- **Removed dead `report_sections` and `content_fidelity` fields**: Cleaned up unused fields from the deep research data model that were never populated by the current pipeline.
+
 ## [0.18.0a7] - 2026-03-04
 
 ### Added
