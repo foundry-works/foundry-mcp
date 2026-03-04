@@ -342,6 +342,177 @@ def renumber_citations(
     return report, seen
 
 
+def _compute_max_citation(valid_numbers: set[int]) -> int | None:
+    """Compute the upper bound for plausible citation numbers.
+
+    Numbers above this threshold are assumed to be year references
+    (e.g. ``[2025]``) rather than citations.  Uses ``max(actual_max, 999)``
+    so hallucinated citation numbers like ``[99]`` are still caught as
+    dangling while year references are left intact.
+
+    Returns ``None`` when *valid_numbers* is empty (no filtering).
+    """
+    if not valid_numbers:
+        return None
+    return max(max(valid_numbers), 999)
+
+
+def cleanup_citations(
+    report: str,
+    state: "DeepResearchState",
+    *,
+    query_type: str | None = None,
+) -> tuple[str, dict]:
+    """Run the cleanup stage of citation post-processing.
+
+    Performs steps 1-3 of the pipeline:
+    1. Extract all cited ``[N]`` numbers from the report.
+    2. Remove any LLM-generated Sources section.
+    3. Remove dangling citations (referencing non-existent sources).
+
+    This stage does **not** renumber citations or append a bibliography.
+    It is intended to run after synthesis, before claim verification.
+
+    Args:
+        report: The synthesized markdown report.
+        state: Research state with all sources and citation numbers.
+        query_type: The classified query type (unused here, accepted for
+            API symmetry with ``finalize_citations``).
+
+    Returns:
+        Tuple of (cleaned_report, metadata_dict).
+    """
+    _ = query_type  # accepted for API symmetry, used only by finalize_citations
+    citation_map = state.get_citation_map()
+    valid_numbers = set(citation_map.keys())
+    max_cn = _compute_max_citation(valid_numbers)
+
+    # 1. Extract cited numbers
+    cited_numbers = extract_cited_numbers(report, max_citation=max_cn)
+
+    # 2. Strip any LLM-generated sources section
+    report = strip_llm_sources_section(report)
+
+    # 3. Remove dangling citations
+    dangling = cited_numbers - valid_numbers
+    if dangling:
+        logger.warning(
+            "Removing %d dangling citation(s): %s",
+            len(dangling),
+            sorted(dangling),
+        )
+        report = remove_dangling_citations(report, valid_numbers, max_citation=max_cn)
+        # Recompute after removal
+        cited_numbers = extract_cited_numbers(report, max_citation=max_cn)
+
+    metadata = {
+        "total_citations_in_report": len(cited_numbers),
+        "total_sources_with_numbers": len(valid_numbers),
+        "dangling_citations_removed": len(dangling),
+    }
+
+    return report, metadata
+
+
+def finalize_citations(
+    report: str,
+    state: "DeepResearchState",
+    *,
+    query_type: str | None = None,
+) -> tuple[str, dict]:
+    """Run the finalize stage of citation post-processing.
+
+    Performs steps 4-5 of the pipeline:
+    4. Renumber citations to reading order (1, 2, 3, ...).
+    5. Append a deterministic Sources/References section from state.
+
+    This stage is intended to run **after** claim verification has
+    finished mutating the report (removing/remapping citations).
+
+    Args:
+        report: The report after cleanup and any claim-verification mutations.
+        state: Research state with all sources and citation numbers.
+        query_type: The classified query type (e.g. ``"literature_review"``).
+            When ``"literature_review"``, forces APA formatting.
+
+    Returns:
+        Tuple of (finalized_report, metadata_dict).
+    """
+    citation_map = state.get_citation_map()
+    valid_numbers = set(citation_map.keys())
+    max_cn = _compute_max_citation(valid_numbers)
+
+    # 4. Renumber citations to reading order
+    report, renumber_map = renumber_citations(report, state, max_citation=max_cn)
+    if renumber_map:
+        logger.info(
+            "Renumbered %d citation(s) to reading order: %s",
+            len(renumber_map),
+            renumber_map,
+        )
+
+    # Recompute cited numbers after renumbering
+    cited_numbers = extract_cited_numbers(report, max_citation=max_cn)
+
+    # 5. Resolve format style and append deterministic section
+    format_style = _resolve_format_style(state, query_type)
+    sources_section = build_sources_section(
+        state,
+        cited_only=True,
+        cited_numbers=cited_numbers,
+        format_style=format_style,
+    )
+    if sources_section:
+        report = report.rstrip() + "\n" + sources_section
+
+    # Compute unreferenced sources
+    unreferenced = valid_numbers - cited_numbers
+    if unreferenced:
+        logger.info(
+            "%d source(s) have citation numbers but were not referenced in the report: %s",
+            len(unreferenced),
+            sorted(unreferenced),
+        )
+
+    metadata = {
+        "renumbered_count": len(renumber_map),
+        "unreferenced_sources": len(unreferenced),
+        "format_style": format_style,
+        "total_citations_in_report": len(cited_numbers),
+    }
+
+    return report, metadata
+
+
+def needs_renumber(report: str, *, max_citation: int | None = None) -> bool:
+    """Check if citations in the report are not in sequential reading order.
+
+    Scans for ``[N]`` patterns in first-appearance order and returns
+    ``True`` if the sequence is not ``1, 2, 3, ...``.
+
+    Args:
+        report: The markdown report text.
+        max_citation: If provided, ignore numbers above this value
+            (assumed to be year references).
+
+    Returns:
+        ``True`` if citations need renumbering, ``False`` otherwise.
+        Returns ``False`` when the report has no citations.
+    """
+    seen: list[int] = []
+    for m in _CITATION_RE.finditer(report):
+        num = int(m.group(1))
+        if max_citation is not None and num > max_citation:
+            continue
+        if num not in seen:
+            seen.append(num)
+
+    if not seen:
+        return False
+
+    return seen != list(range(1, len(seen) + 1))
+
+
 def _resolve_format_style(
     state: "DeepResearchState",
     query_type: str | None = None,
@@ -378,9 +549,9 @@ def postprocess_citations(
     4. Renumber citations to reading order (1, 2, 3, ...).
     5. Append a deterministic Sources/References section from state.
 
-    The ``format_style`` for the appended section is resolved from the
-    research profile's ``citation_style`` and the detected ``query_type``.
-    Literature-review queries always produce APA references.
+    This is a convenience wrapper that calls :func:`cleanup_citations`
+    followed by :func:`finalize_citations`.  Use the split functions
+    directly when claim verification runs between cleanup and finalize.
 
     Args:
         report: The synthesized markdown report.
@@ -393,75 +564,10 @@ def postprocess_citations(
         Tuple of (processed_report, metadata_dict) where metadata contains
         citation statistics for audit logging.
     """
-    citation_map = state.get_citation_map()
-    valid_numbers = set(citation_map.keys())
+    report, cleanup_meta = cleanup_citations(report, state, query_type=query_type)
+    report, finalize_meta = finalize_citations(report, state, query_type=query_type)
 
-    # Upper bound for plausible citation numbers.  Numbers above this
-    # threshold are assumed to be year references (e.g. [2025]) rather
-    # than citations.  We use max(actual_max, 999) so that hallucinated
-    # citation numbers like [99] are still caught as dangling while year
-    # references are left intact.  When there are no sources at all,
-    # max_cn is None (no filtering — every [N] is dangling).
-    max_cn: int | None = None
-    if valid_numbers:
-        max_cn = max(max(valid_numbers), 999)
-
-    # 1. Extract cited numbers
-    cited_numbers = extract_cited_numbers(report, max_citation=max_cn)
-
-    # 2. Strip any LLM-generated sources section
-    report = strip_llm_sources_section(report)
-
-    # 3. Remove dangling citations
-    dangling = cited_numbers - valid_numbers
-    if dangling:
-        logger.warning(
-            "Removing %d dangling citation(s): %s",
-            len(dangling),
-            sorted(dangling),
-        )
-        report = remove_dangling_citations(report, valid_numbers, max_citation=max_cn)
-        # Recompute after removal
-        cited_numbers = extract_cited_numbers(report, max_citation=max_cn)
-
-    # 4. Renumber citations to reading order (1, 2, 3, ...)
-    report, renumber_map = renumber_citations(report, state, max_citation=max_cn)
-    if renumber_map:
-        logger.info(
-            "Renumbered %d citation(s) to reading order: %s",
-            len(renumber_map),
-            renumber_map,
-        )
-        # Recompute cited numbers after renumbering
-        cited_numbers = extract_cited_numbers(report, max_citation=max_cn)
-
-    # 5. Resolve format style and append deterministic section
-    format_style = _resolve_format_style(state, query_type)
-    sources_section = build_sources_section(
-        state,
-        cited_only=True,
-        cited_numbers=cited_numbers,
-        format_style=format_style,
-    )
-    if sources_section:
-        report = report.rstrip() + "\n" + sources_section
-
-    # Compute unreferenced sources (have citation number but never cited)
-    unreferenced = valid_numbers - cited_numbers
-    if unreferenced:
-        logger.info(
-            "%d source(s) have citation numbers but were not referenced in the report: %s",
-            len(unreferenced),
-            sorted(unreferenced),
-        )
-
-    metadata = {
-        "total_citations_in_report": len(cited_numbers),
-        "total_sources_with_numbers": len(valid_numbers),
-        "dangling_citations_removed": len(dangling),
-        "unreferenced_sources": len(unreferenced),
-        "format_style": format_style,
-        "renumbered_count": len(renumber_map),
-    }
+    # Merge metadata — finalize values take precedence for shared keys
+    metadata = {**cleanup_meta, **finalize_meta}
 
     return report, metadata
