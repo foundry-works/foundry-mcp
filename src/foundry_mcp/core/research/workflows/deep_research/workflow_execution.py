@@ -538,6 +538,48 @@ class WorkflowExecutionMixin:
                         state.pop_metadata("claim_verification_in_progress")
                 # --- END CLAIM VERIFICATION ---
 
+                # --- CITATION FINALIZE ---
+                # Renumber citations to reading order and append deterministic
+                # bibliography.  This runs after claim verification (which may
+                # remove/remap citations) so the final report has a clean
+                # sequential [1], [2], [3], ... sequence.
+                from foundry_mcp.core.research.workflows.deep_research.phases._citation_postprocess import (
+                    finalize_citations,
+                )
+
+                try:
+                    report, finalize_meta = finalize_citations(
+                        state.report or "",
+                        state,
+                        query_type=state.metadata.get("_query_type"),
+                    )
+                    state.report = report
+
+                    # Re-save markdown file with finalized citations
+                    if state.report_output_path:
+                        validated = _validate_report_output_path(state.report_output_path)
+                        validated.write_text(state.report, encoding="utf-8")
+
+                    self._write_audit_event(
+                        state,
+                        "citation_finalize_complete",
+                        data=finalize_meta,
+                    )
+                except Exception as exc:
+                    # Citation finalize is non-fatal — deliver the report as-is
+                    logger.warning(
+                        "Citation finalize failed for research %s, delivering report with unrenumbered citations: %s",
+                        state.id,
+                        exc,
+                    )
+                    self._write_audit_event(
+                        state,
+                        "citation_finalize_failed",
+                        data={"error": str(exc)},
+                        level="warning",
+                    )
+                # --- END CITATION FINALIZE ---
+
                 # No refinement — workflow complete
                 state.metadata["iteration_in_progress"] = False
                 state.metadata["last_completed_iteration"] = state.iteration
