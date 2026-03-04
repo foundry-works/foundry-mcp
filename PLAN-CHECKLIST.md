@@ -62,90 +62,90 @@
 
 ## Phase 7: Multi-Window Source Truncation
 
-- [ ] Replace `_keyword_proximity_truncate()` with `_multi_window_truncate()`
-- [ ] Find all keyword positions (case-insensitive, not just first match)
-- [ ] Cluster keyword positions by proximity (gap > `cluster_radius` starts new cluster, `cluster_radius = max_chars // max_windows`)
-- [ ] Score clusters by distinct keyword count (not total occurrences)
-- [ ] Select top N clusters by score (default max_windows=3)
-- [ ] **Adaptive window sizing:** `window_size = max_chars // len(selected_clusters)` (full budget when 1 cluster, split when multiple)
-- [ ] Extract `window_size` char window centered on each cluster's median position
-- [ ] Ensure non-overlapping windows (shift or skip if overlap)
-- [ ] Concatenate windows in document order with `\n[...]\n` separators
-- [ ] Preserve prefix-truncate fallback when no keywords match
-- [ ] Update `_build_verification_user_prompt()` to call `_multi_window_truncate()`
+- [x] Replace `_keyword_proximity_truncate()` with `_multi_window_truncate()`
+- [x] Find all keyword positions (case-insensitive, not just first match)
+- [x] Cluster keyword positions by proximity (gap > `cluster_radius` starts new cluster, `cluster_radius = max_chars // max_windows`)
+- [x] Score clusters by distinct keyword count (not total occurrences)
+- [x] Select top N clusters by score (default max_windows=3)
+- [x] **Adaptive window sizing:** `window_size = max_chars // len(selected_clusters)` (full budget when 1 cluster, split when multiple)
+- [x] Extract `window_size` char window centered on each cluster's median position
+- [x] Ensure non-overlapping windows (shift or skip if overlap)
+- [x] Concatenate windows in document order with `\n[...]\n` separators
+- [x] Preserve prefix-truncate fallback when no keywords match
+- [x] Update `_build_verification_user_prompt()` to call `_multi_window_truncate()`
 
 ## Phase 8: Tighten CONTRADICTED Definition in Verification Prompt
 
-- [ ] Replace `_VERIFICATION_SYSTEM_PROMPT` with version containing explicit verdict definitions
-- [ ] Add "explicitly state something that DIRECTLY CONFLICTS" for CONTRADICTED
-- [ ] Add "Absence of information does NOT mean the source contradicts"
-- [ ] Add "When in doubt between CONTRADICTED and UNSUPPORTED, choose UNSUPPORTED"
-- [ ] Add "You are seeing excerpts, not the full source"
-- [ ] Mark evidence_quote as REQUIRED for CONTRADICTED verdicts
+- [x] Replace `_VERIFICATION_SYSTEM_PROMPT` with version containing explicit verdict definitions
+- [x] Add "explicitly state something that DIRECTLY CONFLICTS" for CONTRADICTED
+- [x] Add "Absence of information does NOT mean the source contradicts"
+- [x] Add "When in doubt between CONTRADICTED and UNSUPPORTED, choose UNSUPPORTED"
+- [x] Add "You are seeing excerpts, not the full source"
+- [x] Mark evidence_quote as REQUIRED for CONTRADICTED verdicts
 
 ## Phase 9: Require Contradicting Evidence Quote (Structural Gate)
 
-- [ ] Add post-parse check in `_verify_single_claim()`: CONTRADICTED + no evidence_quote → UNSUPPORTED
-- [ ] Preserve original explanation in downgraded claim
-- [ ] Log downgrade events at INFO level
+- [x] Add post-parse check in `_verify_single_claim()`: CONTRADICTED + no evidence_quote → UNSUPPORTED
+- [x] Preserve original explanation in downgraded claim
+- [x] Log downgrade events at INFO level
 
 ## Phase 10: Tests
 
 **Extraction tests:**
-- [ ] `test_split_report_into_sections`: multiple headings (## and ###) → correct chunks
-- [ ] `test_split_report_into_sections`: report starting with `##` (no preceding newline) → first heading captured
-- [ ] `test_split_report_into_sections`: small sections merged
-- [ ] `test_split_report_into_sections`: no headings → single chunk fallback
-- [ ] `test_split_report_into_sections`: bibliography section excluded
-- [ ] `test_split_report_into_sections`: heading "Data Sources and Methodology" NOT excluded (anchored regex)
-- [ ] `test_split_report_into_sections`: truncated report (last chunk lacks heading) → fragment discarded
-- [ ] `test_extraction_prompt_is_citation_anchored`: prompt contains citation-anchor language
-- [ ] `test_extraction_prompt_is_citation_anchored`: per-chunk prompt uses chunk content (not full report)
-- [ ] `test_extract_claims_from_chunk`: successful extraction returns claims
-- [ ] `test_extract_claims_from_chunk`: failed extraction returns empty list
-- [ ] `test_extract_claims_from_chunk`: claims tagged with correct report_section
-- [ ] `test_extract_claims_from_chunk`: max_tokens=4096, max_retries=1, retry_delay=2.0 passed
-- [ ] `test_filter_uncited_claims`: claims with cited_sources kept
-- [ ] `test_filter_uncited_claims`: claims with empty/missing cited_sources dropped
-- [ ] `test_filter_uncited_claims`: all-uncited input returns empty list
-- [ ] `test_filter_uncited_claims`: logs dropped count
-- [ ] `test_extract_claims_chunked_parallel`: chunks extracted in parallel
-- [ ] `test_extract_claims_chunked_parallel`: claims merged and deduplicated (normalized text)
-- [ ] `test_extract_claims_chunked_parallel`: uncited claims filtered out
-- [ ] `test_extract_claims_chunked_parallel`: total claims capped at max_claims
-- [ ] `test_extract_claims_chunked_parallel`: partial failure preserves successful chunks
-- [ ] `test_extract_claims_chunked_parallel`: all chunks fail → empty list
-- [ ] `test_extract_claims_chunked_parallel`: single chunk uses same code path
-- [ ] `test_extract_and_verify_claims_uses_chunked`: end-to-end integration
-- [ ] `test_cancellation_safety`: check_gather_cancellation works in chunked extraction
-- [ ] Update existing extraction tests to match new prompt and chunked behavior
+- [x] `test_split_report_into_sections`: multiple headings (## and ###) → correct chunks
+- [x] `test_split_report_into_sections`: report starting with `##` (no preceding newline) → first heading captured
+- [x] `test_split_report_into_sections`: small sections merged
+- [x] `test_split_report_into_sections`: no headings → single chunk fallback
+- [x] `test_split_report_into_sections`: bibliography section excluded
+- [x] `test_split_report_into_sections`: heading "Data Sources and Methodology" NOT excluded (anchored regex)
+- [x] `test_split_report_into_sections`: truncated report (last chunk lacks heading) → fragment discarded
+- [x] `test_extraction_prompt_is_citation_anchored`: prompt contains citation-anchor language
+- [x] `test_extraction_prompt_is_citation_anchored`: per-chunk prompt uses chunk content (not full report)
+- [x] `test_extract_claims_from_chunk`: successful extraction returns claims
+- [x] `test_extract_claims_from_chunk`: failed extraction returns empty list
+- [x] `test_extract_claims_from_chunk`: claims tagged with correct report_section
+- [x] `test_extract_claims_from_chunk`: max_tokens=4096, max_retries=1, retry_delay=2.0 passed
+- [x] `test_filter_uncited_claims`: claims with cited_sources kept
+- [x] `test_filter_uncited_claims`: claims with empty/missing cited_sources dropped
+- [x] `test_filter_uncited_claims`: all-uncited input returns empty list
+- [x] `test_filter_uncited_claims`: logs dropped count
+- [x] `test_extract_claims_chunked_parallel`: chunks extracted in parallel
+- [x] `test_extract_claims_chunked_parallel`: claims merged and deduplicated (normalized text)
+- [x] `test_extract_claims_chunked_parallel`: uncited claims filtered out
+- [x] `test_extract_claims_chunked_parallel`: total claims capped at max_claims
+- [x] `test_extract_claims_chunked_parallel`: partial failure preserves successful chunks
+- [x] `test_extract_claims_chunked_parallel`: all chunks fail → empty list
+- [x] `test_extract_claims_chunked_parallel`: single chunk uses same code path
+- [x] `test_extract_and_verify_claims_uses_chunked`: end-to-end integration
+- [x] `test_cancellation_safety`: check_gather_cancellation works in chunked extraction
+- [x] Update existing extraction tests to match new prompt and chunked behavior
 
 **Verification improvement tests:**
-- [ ] `test_multi_window_truncate`: multiple keyword matches → multiple windows
-- [ ] `test_multi_window_truncate`: windows are non-overlapping
-- [ ] `test_multi_window_truncate`: windows ordered by document position
-- [ ] `test_multi_window_truncate`: total output within max_chars budget
-- [ ] `test_multi_window_truncate`: no keyword matches → prefix-truncate fallback
-- [ ] `test_multi_window_truncate`: source shorter than max_chars → returned unchanged
-- [ ] `test_multi_window_truncate`: single keyword match → single window with full max_chars budget (adaptive)
-- [ ] `test_multi_window_truncate`: two clusters → each gets max_chars // 2 (adaptive sizing)
-- [ ] `test_verification_prompt_contradicted_definition`: prompt contains tightened definition
-- [ ] `test_contradicted_without_quote_downgraded`: empty evidence_quote → UNSUPPORTED
-- [ ] `test_contradicted_without_quote_downgraded`: null evidence_quote → UNSUPPORTED
-- [ ] `test_contradicted_without_quote_downgraded`: valid evidence_quote → stays CONTRADICTED
-- [ ] `test_contradicted_without_quote_downgraded`: SUPPORTED + empty quote → unchanged
-- [ ] `test_contradicted_without_quote_downgraded`: original explanation preserved
-- [ ] Verify existing verification and correction tests still pass
+- [x] `test_multi_window_truncate`: multiple keyword matches → multiple windows
+- [x] `test_multi_window_truncate`: windows are non-overlapping
+- [x] `test_multi_window_truncate`: windows ordered by document position
+- [x] `test_multi_window_truncate`: total output within max_chars budget
+- [x] `test_multi_window_truncate`: no keyword matches → prefix-truncate fallback
+- [x] `test_multi_window_truncate`: source shorter than max_chars → returned unchanged
+- [x] `test_multi_window_truncate`: single keyword match → single window with full max_chars budget (adaptive)
+- [x] `test_multi_window_truncate`: two clusters → each gets max_chars // 2 (adaptive sizing)
+- [x] `test_verification_prompt_contradicted_definition`: prompt contains tightened definition
+- [x] `test_contradicted_without_quote_downgraded`: empty evidence_quote → UNSUPPORTED
+- [x] `test_contradicted_without_quote_downgraded`: null evidence_quote → UNSUPPORTED
+- [x] `test_contradicted_without_quote_downgraded`: valid evidence_quote → stays CONTRADICTED
+- [x] `test_contradicted_without_quote_downgraded`: SUPPORTED + empty quote → unchanged
+- [x] `test_contradicted_without_quote_downgraded`: original explanation preserved
+- [x] Verify existing verification and correction tests still pass
 
 **Negative-behavior tests:**
-- [ ] `test_monolithic_extraction_removed`: `_build_extraction_user_prompt` removed from module
-- [ ] `test_monolithic_extraction_removed`: no direct execute_fn call with max_tokens=16384 in orchestrator
-- [ ] `test_cancelled_error_during_gather`: CancelledError propagates correctly via check_gather_cancellation
-- [ ] `test_many_small_sections`: 50+ tiny sections merged to reasonable chunk count (< 20), no excessive LLM calls
+- [x] `test_monolithic_extraction_removed`: `_build_extraction_user_prompt` removed from module
+- [x] `test_monolithic_extraction_removed`: no direct execute_fn call with max_tokens=16384 in orchestrator
+- [x] `test_cancelled_error_during_gather`: CancelledError propagates correctly via check_gather_cancellation
+- [x] `test_many_small_sections`: 50+ tiny sections merged to reasonable chunk count (< 20), no excessive LLM calls
 
 ## Final Validation
 
-- [ ] Run full test suite (`pytest tests/`)
+- [x] Run full test suite (`pytest tests/`) — 7877 passed, 44 skipped
 - [ ] Run contract tests (`pytest tests/contract/`)
 - [ ] Smoke test: run general-profile deep research session with large report
 - [ ] Smoke test: confirm claim_verification object is populated with extracted claims

@@ -33,15 +33,22 @@ from foundry_mcp.core.research.models.sources import (
     SubQuery,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification import (
+    _EXTRACTION_SYSTEM_PROMPT,
+    _VERIFICATION_SYSTEM_PROMPT,
     _apply_token_budget,
     _build_verification_user_prompt,
+    _extract_claims_chunked,
+    _extract_claims_from_chunk,
     _extract_context_window,
     _filter_claims_for_verification,
-    _keyword_proximity_truncate,
+    _filter_uncited_claims,
+    _multi_window_truncate,
     _parse_extracted_claims,
     _parse_verification_response,
     _resolve_source_text,
     _sort_claims_by_priority,
+    _split_report_into_sections,
+    _verify_single_claim,
     apply_corrections,
     extract_and_verify_claims,
 )
@@ -150,48 +157,110 @@ class TestResolveSourceText:
 
 
 # ---------------------------------------------------------------------------
-# Unit tests: _keyword_proximity_truncate
+# Unit tests: _multi_window_truncate
 # ---------------------------------------------------------------------------
 
 
-class TestKeywordProximityTruncate:
+class TestMultiWindowTruncate:
     def test_short_text_returned_as_is(self):
         text = "Short text"
-        assert _keyword_proximity_truncate(text, "anything", 1000) == text
+        assert _multi_window_truncate(text, "anything", 1000) == text
 
-    def test_keyword_found_mid_document(self):
-        # Build a long document with the keyword "Aeroplan" in the middle.
+    def test_single_keyword_mid_document(self):
+        """Single keyword match gets full max_chars budget (adaptive sizing)."""
         before = "A" * 5000
         keyword_section = " Aeroplan transfer partner "
         after = "B" * 5000
         text = before + keyword_section + after
-        result = _keyword_proximity_truncate(text, "Aeroplan transfer ratio", 200)
-        assert len(result) == 200
+        result = _multi_window_truncate(text, "Aeroplan transfer ratio", 200)
+        assert len(result) <= 200
         assert "Aeroplan" in result
 
     def test_keyword_found_near_start(self):
         text = "Aeroplan is listed here" + "X" * 10000
-        result = _keyword_proximity_truncate(text, "Aeroplan partner", 200)
-        assert len(result) == 200
-        assert result.startswith("Aeroplan")
+        result = _multi_window_truncate(text, "Aeroplan partner", 200)
+        assert len(result) <= 200
+        assert "Aeroplan" in result
 
     def test_keyword_found_near_end(self):
         text = "X" * 10000 + "Aeroplan is at the end"
-        result = _keyword_proximity_truncate(text, "Aeroplan partner", 200)
-        assert len(result) == 200
+        result = _multi_window_truncate(text, "Aeroplan partner", 200)
+        assert len(result) <= 200
         assert "Aeroplan" in result
 
     def test_no_keyword_match_falls_back_to_prefix(self):
         text = "X" * 10000
-        result = _keyword_proximity_truncate(text, "Aeroplan", 200)
+        result = _multi_window_truncate(text, "Aeroplan", 200)
         assert len(result) == 200
         assert result == "X" * 200
 
     def test_stopwords_filtered(self):
-        # "with" and "from" are stopwords and < 4 chars words are filtered.
         text = "X" * 5000 + "transfer" + "Y" * 5000
-        result = _keyword_proximity_truncate(text, "with from the transfer", 200)
+        result = _multi_window_truncate(text, "with from the transfer", 200)
         assert "transfer" in result
+
+    def test_multiple_keyword_matches_multiple_windows(self):
+        """Multiple keyword matches at different positions → multiple windows."""
+        # Place "annual" near start and "dining" near end.
+        text = "X" * 100 + "annual fee is $550" + "Y" * 8000 + "dining earns 3x" + "Z" * 100
+        result = _multi_window_truncate(text, "annual fee dining earns", 8000)
+        assert "annual" in result
+        assert "dining" in result
+
+    def test_windows_non_overlapping(self):
+        """Windows should not overlap with each other."""
+        text = ("A" * 3000 + "keyword1" + "B" * 3000 +
+                "C" * 3000 + "keyword2" + "D" * 3000)
+        result = _multi_window_truncate(text, "keyword1 keyword2", 4000, max_windows=2)
+        # Both keywords should appear.
+        assert "keyword1" in result
+        assert "keyword2" in result
+        # Separator should be present between windows.
+        assert "[...]" in result
+
+    def test_windows_ordered_by_document_position(self):
+        """Windows returned in document order regardless of score."""
+        text = ("first_word" + "A" * 5000 + "second_word" + "B" * 5000 +
+                "third_word" + "C" * 2000)
+        result = _multi_window_truncate(text, "first_word second_word third_word", 6000, max_windows=3)
+        if "first_word" in result and "third_word" in result:
+            assert result.index("first_word") < result.index("third_word")
+
+    def test_total_output_within_max_chars_budget(self):
+        """Total output should stay within max_chars."""
+        text = "keyword1" + "A" * 10000 + "keyword2" + "B" * 10000 + "keyword3" + "C" * 10000
+        max_chars = 8000
+        result = _multi_window_truncate(text, "keyword1 keyword2 keyword3", max_chars, max_windows=3)
+        assert len(result) <= max_chars
+
+    def test_source_shorter_than_max_chars_returned_unchanged(self):
+        text = "Short source text with keyword1 and keyword2."
+        result = _multi_window_truncate(text, "keyword1 keyword2", 10000)
+        assert result == text
+
+    def test_single_keyword_gets_full_budget(self):
+        """Single keyword → single window with full max_chars budget (adaptive)."""
+        text = "A" * 5000 + "keyword" + "B" * 5000
+        result = _multi_window_truncate(text, "keyword", 8000, max_windows=3)
+        # With only 1 cluster, window should get the full budget.
+        assert len(result) == 8000
+        assert "keyword" in result
+
+    def test_two_clusters_adaptive_sizing(self):
+        """Two clusters → each gets roughly max_chars // 2 (adaptive sizing)."""
+        text = "A" * 5000 + "alpha" + "B" * 10000 + "bravo" + "C" * 5000
+        max_chars = 8000
+        result = _multi_window_truncate(text, "alpha bravo", max_chars, max_windows=3)
+        assert "alpha" in result
+        assert "bravo" in result
+        assert len(result) <= max_chars
+
+    def test_no_keywords_extracted(self):
+        """All words < 4 chars or stopwords → prefix truncation fallback."""
+        text = "X" * 10000
+        result = _multi_window_truncate(text, "the is a an", 200)
+        assert len(result) == 200
+        assert result == "X" * 200
 
 
 # ---------------------------------------------------------------------------
@@ -1267,7 +1336,7 @@ class TestEdgeCases:
     def test_source_truncation_boundary(self):
         """Source content truncated to VERIFICATION_SOURCE_MAX_CHARS."""
         long_content = "x" * 20000
-        result = _keyword_proximity_truncate(long_content, "nomatch", 8000)
+        result = _multi_window_truncate(long_content, "nomatch", 8000)
         assert len(result) == 8000
 
 
@@ -1669,3 +1738,697 @@ class TestProfileClaimVerification:
             or getattr(profile, "enable_claim_verification", True)
         )
         assert cv_enabled is False
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 tests: _split_report_into_sections
+# ---------------------------------------------------------------------------
+
+
+class TestSplitReportIntoSections:
+    def test_multiple_headings(self):
+        report = (
+            "## Executive Summary\n\n" + "Summary text with details. " * 30 + "\n\n"
+            "## Analysis\n\n" + "Analysis text with data points. " * 30 + "\n\n"
+            "## Conclusion\n\n" + "Conclusion and recommendations. " * 30
+        )
+        chunks = _split_report_into_sections(report)
+        assert len(chunks) >= 3
+        headings = [c["section"] for c in chunks]
+        assert "Executive Summary" in headings
+        assert "Analysis" in headings
+        assert "Conclusion" in headings
+
+    def test_report_starting_with_heading(self):
+        """Report starting with ## (no preceding newline) → first heading captured."""
+        report = (
+            "## Executive Summary\n\n" + "Summary text with content. " * 30 + "\n\n"
+            "## Details\n\n" + "Details about the analysis. " * 30
+        )
+        chunks = _split_report_into_sections(report)
+        assert len(chunks) >= 2
+        assert chunks[0]["section"] == "Executive Summary"
+
+    def test_small_sections_merged(self):
+        """Sections smaller than 500 chars are merged with the next."""
+        report = "## Tiny\n\nX\n\n## Also Tiny\n\nY\n\n## Big Section\n\n" + "Z" * 1000
+        chunks = _split_report_into_sections(report)
+        # The two tiny sections should be merged.
+        assert len(chunks) <= 2
+
+    def test_no_headings_single_chunk(self):
+        """Report with no ## headings → single chunk fallback."""
+        report = "Just a plain report without any markdown headings. " * 20
+        chunks = _split_report_into_sections(report)
+        assert len(chunks) == 1
+        assert chunks[0]["content"] == report
+
+    def test_bibliography_excluded(self):
+        """Bibliography/Sources sections are excluded from extraction chunks."""
+        report = (
+            "## Analysis\n\n" + "Analysis text with claims and data. " * 30 + "\n\n"
+            "## Bibliography\n\n" + "Source list entry. " * 30 + "\n\n"
+            "## References\n\n" + "Reference list entry. " * 30
+        )
+        chunks = _split_report_into_sections(report)
+        headings = [c["section"] for c in chunks]
+        assert "Bibliography" not in headings
+        assert "References" not in headings
+        assert "Analysis" in headings
+
+    def test_data_sources_heading_not_excluded(self):
+        """Heading 'Data Sources and Methodology' NOT excluded (anchored regex)."""
+        report = (
+            "## Data Sources and Methodology\n\n" + "Methodology description here. " * 30 + "\n\n"
+            "## Results\n\n" + "Results and findings details. " * 30
+        )
+        chunks = _split_report_into_sections(report)
+        headings = [c["section"] for c in chunks]
+        assert "Data Sources and Methodology" in headings
+
+    def test_truncated_report_last_chunk_discarded(self):
+        """Truncated report (last chunk lacks heading) → fragment discarded."""
+        report = (
+            "## Section One\n\n" + "Content for section one. " * 30 + "\n\n"
+            "## Section Two\n\n" + "Content for section two. " * 30 + "\n\n"
+            "Some trailing text without a heading that looks like truncation"
+        )
+        chunks = _split_report_into_sections(report)
+        # Trailing preamble-like fragment (no heading) should be discarded.
+        for chunk in chunks:
+            if chunk["section"]:
+                assert chunk["section"] in ("Section One", "Section Two")
+
+    def test_many_small_sections_merged_to_reasonable_count(self):
+        """50+ tiny sections merged to reasonable chunk count (< 20)."""
+        sections = "\n\n".join(f"## Section {i}\n\nTiny." for i in range(50))
+        chunks = _split_report_into_sections(sections)
+        assert len(chunks) < 20
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 tests: Extraction prompt
+# ---------------------------------------------------------------------------
+
+
+class TestExtractionPromptCitationAnchored:
+    def test_prompt_contains_citation_anchor_language(self):
+        assert "For each inline citation [N]" in _EXTRACTION_SYSTEM_PROMPT
+        assert "ONLY extract claims that have an explicit [N] citation" in _EXTRACTION_SYSTEM_PROMPT
+
+    def test_prompt_handles_empty_sections(self):
+        assert "return an empty array: []" in _EXTRACTION_SYSTEM_PROMPT.lower()
+
+    def test_prompt_dedup_rule(self):
+        assert "extract ONE claim" in _EXTRACTION_SYSTEM_PROMPT
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 tests: _extract_claims_from_chunk
+# ---------------------------------------------------------------------------
+
+
+class TestExtractClaimsFromChunk:
+    @pytest.mark.asyncio
+    async def test_successful_extraction(self):
+        chunk = {"section": "Analysis", "content": "## Analysis\n\nClaim text [1]."}
+        response = json.dumps([{
+            "claim": "Test claim",
+            "claim_type": "quantitative",
+            "cited_sources": [1],
+            "report_section": "Analysis",
+            "quote_context": "Claim text [1].",
+        }])
+        mock_execute = AsyncMock(return_value=MockWorkflowResult(
+            success=True, content=response,
+        ))
+        claims = await _extract_claims_from_chunk(
+            chunk=chunk,
+            execute_fn=mock_execute,
+            system_prompt=_EXTRACTION_SYSTEM_PROMPT,
+            provider_id="test",
+            timeout=30,
+            max_claims_per_chunk=10,
+        )
+        assert len(claims) == 1
+        assert claims[0].claim == "Test claim"
+
+    @pytest.mark.asyncio
+    async def test_failed_extraction_returns_empty(self):
+        chunk = {"section": "Test", "content": "## Test\n\nContent."}
+        mock_execute = AsyncMock(return_value=MockWorkflowResult(
+            success=False, content="",
+        ))
+        claims = await _extract_claims_from_chunk(
+            chunk=chunk,
+            execute_fn=mock_execute,
+            system_prompt=_EXTRACTION_SYSTEM_PROMPT,
+            provider_id="test",
+            timeout=30,
+            max_claims_per_chunk=10,
+        )
+        assert claims == []
+
+    @pytest.mark.asyncio
+    async def test_exception_returns_empty(self):
+        chunk = {"section": "Test", "content": "## Test\n\nContent."}
+        mock_execute = AsyncMock(side_effect=Exception("Network error"))
+        claims = await _extract_claims_from_chunk(
+            chunk=chunk,
+            execute_fn=mock_execute,
+            system_prompt=_EXTRACTION_SYSTEM_PROMPT,
+            provider_id="test",
+            timeout=30,
+            max_claims_per_chunk=10,
+        )
+        assert claims == []
+
+    @pytest.mark.asyncio
+    async def test_claims_tagged_with_section(self):
+        chunk = {"section": "Portfolio Analysis", "content": "## Portfolio Analysis\n\nData."}
+        response = json.dumps([{
+            "claim": "A claim",
+            "claim_type": "positive",
+            "cited_sources": [1],
+        }])
+        mock_execute = AsyncMock(return_value=MockWorkflowResult(
+            success=True, content=response,
+        ))
+        claims = await _extract_claims_from_chunk(
+            chunk=chunk,
+            execute_fn=mock_execute,
+            system_prompt=_EXTRACTION_SYSTEM_PROMPT,
+            provider_id="test",
+            timeout=30,
+            max_claims_per_chunk=10,
+        )
+        assert claims[0].report_section == "Portfolio Analysis"
+
+    @pytest.mark.asyncio
+    async def test_execute_fn_receives_correct_kwargs(self):
+        chunk = {"section": "Test", "content": "## Test\n\nContent."}
+        captured: dict = {}
+
+        async def mock_execute(**kwargs):
+            captured.update(kwargs)
+            return MockWorkflowResult(success=True, content="[]")
+
+        await _extract_claims_from_chunk(
+            chunk=chunk,
+            execute_fn=mock_execute,
+            system_prompt=_EXTRACTION_SYSTEM_PROMPT,
+            provider_id="test",
+            timeout=30,
+            max_claims_per_chunk=10,
+        )
+        assert captured["max_tokens"] == 4096
+        assert captured["max_retries"] == 1
+        assert captured["retry_delay"] == 2.0
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 tests: _filter_uncited_claims
+# ---------------------------------------------------------------------------
+
+
+class TestFilterUncitedClaims:
+    def test_claims_with_citations_kept(self):
+        claims = [ClaimVerdict(claim="A", claim_type="positive", cited_sources=[1, 2])]
+        result = _filter_uncited_claims(claims)
+        assert len(result) == 1
+
+    def test_claims_with_empty_citations_dropped(self):
+        claims = [ClaimVerdict(claim="A", claim_type="positive", cited_sources=[])]
+        result = _filter_uncited_claims(claims)
+        assert len(result) == 0
+
+    def test_mixed_claims(self):
+        claims = [
+            ClaimVerdict(claim="Cited", claim_type="positive", cited_sources=[1]),
+            ClaimVerdict(claim="Uncited", claim_type="positive", cited_sources=[]),
+        ]
+        result = _filter_uncited_claims(claims)
+        assert len(result) == 1
+        assert result[0].claim == "Cited"
+
+    def test_all_uncited_returns_empty(self):
+        claims = [
+            ClaimVerdict(claim="A", claim_type="positive", cited_sources=[]),
+            ClaimVerdict(claim="B", claim_type="negative", cited_sources=[]),
+        ]
+        result = _filter_uncited_claims(claims)
+        assert result == []
+
+    def test_logs_dropped_count(self, caplog):
+        claims = [
+            ClaimVerdict(claim="A", claim_type="positive", cited_sources=[1]),
+            ClaimVerdict(claim="B", claim_type="positive", cited_sources=[]),
+            ClaimVerdict(claim="C", claim_type="positive", cited_sources=[]),
+        ]
+        import logging
+        with caplog.at_level(logging.INFO):
+            _filter_uncited_claims(claims)
+        assert "Dropped 2 claims" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 tests: _extract_claims_chunked
+# ---------------------------------------------------------------------------
+
+
+class TestExtractClaimsChunkedParallel:
+    @pytest.mark.asyncio
+    async def test_chunks_extracted_in_parallel(self):
+        """Multiple chunks extracted; claims merged."""
+        report = (
+            "## Section A\n\n" + "Claim A text with details [1]. " * 25 + "\n\n"
+            "## Section B\n\n" + "Claim B text with details [2]. " * 25 + "\n\n"
+            "## Section C\n\n" + "Additional context and analysis. " * 25
+        )
+
+        async def mock_execute(**kwargs):
+            prompt = kwargs.get("prompt", "")
+            if "Section A" in prompt:
+                return MockWorkflowResult(success=True, content=json.dumps([
+                    {"claim": "Claim A", "claim_type": "positive", "cited_sources": [1]},
+                ]))
+            elif "Section B" in prompt:
+                return MockWorkflowResult(success=True, content=json.dumps([
+                    {"claim": "Claim B", "claim_type": "negative", "cited_sources": [2]},
+                ]))
+            return MockWorkflowResult(success=True, content="[]")
+
+        claims = await _extract_claims_chunked(
+            report=report,
+            execute_fn=mock_execute,
+            provider_id="test",
+            timeout=30,
+            max_claims=50,
+            max_concurrent=5,
+        )
+        claim_texts = {c.claim for c in claims}
+        assert "Claim A" in claim_texts
+        assert "Claim B" in claim_texts
+
+    @pytest.mark.asyncio
+    async def test_duplicate_claims_deduplicated(self):
+        """Identical claims from different chunks are deduplicated."""
+        report = (
+            "## A\n\nDuplicate claim [1]. " + "Padding text. " * 35 + "\n\n"
+            "## B\n\nDuplicate claim [1]. " + "Padding text. " * 35 + "\n\n"
+            "## C\n\n" + "More content. " * 40
+        )
+        response = json.dumps([{"claim": "Duplicate claim", "claim_type": "positive", "cited_sources": [1]}])
+
+        mock_execute = AsyncMock(return_value=MockWorkflowResult(success=True, content=response))
+
+        claims = await _extract_claims_chunked(
+            report=report,
+            execute_fn=mock_execute,
+            provider_id="test",
+            timeout=30,
+            max_claims=50,
+            max_concurrent=5,
+        )
+        assert len(claims) == 1
+
+    @pytest.mark.asyncio
+    async def test_uncited_claims_filtered(self):
+        """Claims without citations are filtered out after merge."""
+        report = (
+            "## A\n\n" + "Some text with content. " * 25 + "\n\n"
+            "## B\n\n" + "More content here. " * 25
+        )
+        response = json.dumps([
+            {"claim": "Cited claim", "claim_type": "positive", "cited_sources": [1]},
+            {"claim": "Uncited claim", "claim_type": "positive", "cited_sources": []},
+        ])
+        mock_execute = AsyncMock(return_value=MockWorkflowResult(success=True, content=response))
+
+        claims = await _extract_claims_chunked(
+            report=report,
+            execute_fn=mock_execute,
+            provider_id="test",
+            timeout=30,
+            max_claims=50,
+            max_concurrent=5,
+        )
+        assert all(c.cited_sources for c in claims)
+
+    @pytest.mark.asyncio
+    async def test_total_claims_capped(self):
+        """Total claims capped at max_claims."""
+        report = (
+            "## A\n\n" + "Text with content. " * 30 + "\n\n"
+            "## B\n\n" + "More content. " * 30
+        )
+        many_claims = json.dumps([
+            {"claim": f"Claim {i}", "claim_type": "positive", "cited_sources": [1]}
+            for i in range(30)
+        ])
+        mock_execute = AsyncMock(return_value=MockWorkflowResult(success=True, content=many_claims))
+
+        claims = await _extract_claims_chunked(
+            report=report,
+            execute_fn=mock_execute,
+            provider_id="test",
+            timeout=30,
+            max_claims=5,
+            max_concurrent=5,
+        )
+        assert len(claims) <= 5
+
+    @pytest.mark.asyncio
+    async def test_partial_failure_preserves_successful_chunks(self):
+        """Some chunks fail, successful ones still return claims."""
+        report = (
+            "## Success\n\nGood claim [1]. " + "Padding text. " * 35 + "\n\n"
+            "## Failure\n\n" + "Failure section content. " * 30
+        )
+        call_count = 0
+
+        async def mock_execute(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            prompt = kwargs.get("prompt", "")
+            if "Success" in prompt:
+                return MockWorkflowResult(success=True, content=json.dumps([
+                    {"claim": "Good claim", "claim_type": "positive", "cited_sources": [1]},
+                ]))
+            return MockWorkflowResult(success=False, content="")
+
+        claims = await _extract_claims_chunked(
+            report=report,
+            execute_fn=mock_execute,
+            provider_id="test",
+            timeout=30,
+            max_claims=50,
+            max_concurrent=5,
+        )
+        assert len(claims) == 1
+        assert claims[0].claim == "Good claim"
+
+    @pytest.mark.asyncio
+    async def test_all_chunks_fail_returns_empty(self):
+        """All chunks fail → empty list."""
+        report = (
+            "## A\n\n" + "Content for section A. " * 25 + "\n\n"
+            "## B\n\n" + "Content for section B. " * 25
+        )
+        mock_execute = AsyncMock(return_value=MockWorkflowResult(success=False, content=""))
+
+        claims = await _extract_claims_chunked(
+            report=report,
+            execute_fn=mock_execute,
+            provider_id="test",
+            timeout=30,
+            max_claims=50,
+            max_concurrent=5,
+        )
+        assert claims == []
+
+    @pytest.mark.asyncio
+    async def test_single_chunk_uses_same_path(self):
+        """Single chunk (no headings) uses same code path."""
+        report = "Just a plain report with claim [1]."
+        response = json.dumps([
+            {"claim": "Plain claim", "claim_type": "positive", "cited_sources": [1]},
+        ])
+        mock_execute = AsyncMock(return_value=MockWorkflowResult(success=True, content=response))
+
+        claims = await _extract_claims_chunked(
+            report=report,
+            execute_fn=mock_execute,
+            provider_id="test",
+            timeout=30,
+            max_claims=50,
+            max_concurrent=5,
+        )
+        assert len(claims) == 1
+
+    @pytest.mark.asyncio
+    async def test_metadata_populated(self):
+        """Metadata dict populated with extraction stats."""
+        report = (
+            "## A\n\nClaim [1]. " + "Padding text. " * 35 + "\n\n"
+            "## B\n\n" + "More content here. " * 30
+        )
+        response = json.dumps([{"claim": "C", "claim_type": "positive", "cited_sources": [1]}])
+        mock_execute = AsyncMock(return_value=MockWorkflowResult(success=True, content=response))
+
+        metadata: dict = {}
+        await _extract_claims_chunked(
+            report=report,
+            execute_fn=mock_execute,
+            provider_id="test",
+            timeout=30,
+            max_claims=50,
+            max_concurrent=5,
+            metadata=metadata,
+        )
+        assert metadata["extraction_strategy"] == "chunked"
+        assert metadata["extraction_chunks_attempted"] >= 1
+        assert metadata["extraction_chunks_succeeded"] >= 1
+        assert isinstance(metadata["extraction_claims_per_chunk"], list)
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 tests: Integration — extract_and_verify_claims uses chunked
+# ---------------------------------------------------------------------------
+
+
+class TestExtractAndVerifyClaimsUsesChunked:
+    @pytest.mark.asyncio
+    async def test_end_to_end_multi_section(self):
+        """Multi-section report → chunked extraction → filter → verification."""
+        report = (
+            "## Overview\n\nThe annual fee is $550 [1]. " + "Overview details. " * 30 + "\n\n"
+            "## Benefits\n\nDining earns 3x points [2]. " + "Benefits details. " * 30 + "\n\n"
+            "## Conclusion\n\nOverall a strong card. " + "Conclusion text. " * 30
+        )
+        sources = [
+            _make_source(1, content="The annual fee for this card is $550 per year."),
+            _make_source(2, content="Restaurants earn 3x points on all purchases."),
+        ]
+        state = _make_state_with_sources(report, sources)
+        config = _make_config()
+
+        async def mock_execute(**kwargs):
+            phase = kwargs.get("phase", "")
+            if phase == "claim_extraction":
+                prompt = kwargs.get("prompt", "")
+                if "annual fee" in prompt.lower():
+                    return MockWorkflowResult(success=True, content=json.dumps([
+                        {"claim": "The annual fee is $550", "claim_type": "quantitative",
+                         "cited_sources": [1], "report_section": "Overview",
+                         "quote_context": "The annual fee is $550 [1]."},
+                    ]))
+                elif "dining" in prompt.lower():
+                    return MockWorkflowResult(success=True, content=json.dumps([
+                        {"claim": "Dining earns 3x points", "claim_type": "quantitative",
+                         "cited_sources": [2], "report_section": "Benefits",
+                         "quote_context": "Dining earns 3x points [2]."},
+                    ]))
+                return MockWorkflowResult(success=True, content="[]")
+            elif phase == "claim_verification":
+                return MockWorkflowResult(success=True, content=json.dumps({
+                    "verdict": "SUPPORTED",
+                    "evidence_quote": "confirms the claim",
+                    "explanation": "Source confirms.",
+                }))
+            return MockWorkflowResult(success=True, content="")
+
+        result = await extract_and_verify_claims(
+            state=state, config=config, provider_id="test",
+            execute_fn=mock_execute, timeout=30,
+        )
+
+        assert result.claims_extracted >= 1
+        assert result.claims_verified >= 1
+        assert state.metadata.get("extraction_strategy") == "chunked"
+
+
+# ---------------------------------------------------------------------------
+# Phase 7 tests: Verification prompt
+# ---------------------------------------------------------------------------
+
+
+class TestVerificationPromptContradictedDefinition:
+    def test_explicit_conflict_language(self):
+        assert "explicitly state something that DIRECTLY CONFLICTS" in _VERIFICATION_SYSTEM_PROMPT
+
+    def test_absence_not_contradiction(self):
+        assert "Absence of information" in _VERIFICATION_SYSTEM_PROMPT
+        assert "does NOT mean the source contradicts" in _VERIFICATION_SYSTEM_PROMPT
+
+    def test_required_for_contradicted(self):
+        assert "REQUIRED" in _VERIFICATION_SYSTEM_PROMPT
+        assert "CONTRADICTED" in _VERIFICATION_SYSTEM_PROMPT
+
+    def test_excerpts_disclaimer(self):
+        assert "You are seeing excerpts, not the full source" in _VERIFICATION_SYSTEM_PROMPT
+
+    def test_doubt_bias(self):
+        assert "When in doubt between CONTRADICTED and UNSUPPORTED, choose UNSUPPORTED" in _VERIFICATION_SYSTEM_PROMPT
+
+
+# ---------------------------------------------------------------------------
+# Phase 9 tests: CONTRADICTED without evidence quote downgraded
+# ---------------------------------------------------------------------------
+
+
+class TestContradictedWithoutQuoteDowngraded:
+    @pytest.mark.asyncio
+    async def test_empty_evidence_quote_downgraded(self):
+        """CONTRADICTED + empty evidence_quote → UNSUPPORTED."""
+        claim = ClaimVerdict(claim="Test claim", claim_type="negative", cited_sources=[1])
+        source = _make_source(1, content="Source content about the topic.")
+        citation_map = {1: source}
+
+        verification_response = json.dumps({
+            "verdict": "CONTRADICTED",
+            "evidence_quote": "",
+            "explanation": "No direct evidence found",
+        })
+        mock_execute = AsyncMock(return_value=MockWorkflowResult(
+            success=True, content=verification_response,
+        ))
+        semaphore = asyncio.Semaphore(5)
+
+        result = await _verify_single_claim(
+            claim, citation_map, mock_execute, "test", 30, semaphore,
+        )
+        assert result.verdict == "UNSUPPORTED"
+        assert "Originally CONTRADICTED" in result.explanation
+
+    @pytest.mark.asyncio
+    async def test_null_evidence_quote_downgraded(self):
+        """CONTRADICTED + null evidence_quote → UNSUPPORTED."""
+        claim = ClaimVerdict(claim="Test claim", claim_type="negative", cited_sources=[1])
+        source = _make_source(1, content="Source content.")
+        citation_map = {1: source}
+
+        verification_response = json.dumps({
+            "verdict": "CONTRADICTED",
+            "evidence_quote": None,
+            "explanation": "Seems contradicted",
+        })
+        mock_execute = AsyncMock(return_value=MockWorkflowResult(
+            success=True, content=verification_response,
+        ))
+        semaphore = asyncio.Semaphore(5)
+
+        result = await _verify_single_claim(
+            claim, citation_map, mock_execute, "test", 30, semaphore,
+        )
+        assert result.verdict == "UNSUPPORTED"
+        assert "Originally CONTRADICTED" in result.explanation
+
+    @pytest.mark.asyncio
+    async def test_valid_evidence_quote_stays_contradicted(self):
+        """CONTRADICTED + valid evidence_quote → remains CONTRADICTED."""
+        claim = ClaimVerdict(claim="Test claim", claim_type="negative", cited_sources=[1])
+        source = _make_source(1, content="Source content says otherwise.")
+        citation_map = {1: source}
+
+        verification_response = json.dumps({
+            "verdict": "CONTRADICTED",
+            "evidence_quote": "Source says otherwise",
+            "explanation": "Direct contradiction",
+        })
+        mock_execute = AsyncMock(return_value=MockWorkflowResult(
+            success=True, content=verification_response,
+        ))
+        semaphore = asyncio.Semaphore(5)
+
+        result = await _verify_single_claim(
+            claim, citation_map, mock_execute, "test", 30, semaphore,
+        )
+        assert result.verdict == "CONTRADICTED"
+        assert result.evidence_quote == "Source says otherwise"
+
+    @pytest.mark.asyncio
+    async def test_supported_empty_quote_unchanged(self):
+        """SUPPORTED + empty evidence_quote → remains SUPPORTED (gate only for CONTRADICTED)."""
+        claim = ClaimVerdict(claim="Test claim", claim_type="positive", cited_sources=[1])
+        source = _make_source(1, content="Source confirms the claim.")
+        citation_map = {1: source}
+
+        verification_response = json.dumps({
+            "verdict": "SUPPORTED",
+            "evidence_quote": "",
+            "explanation": "Confirmed",
+        })
+        mock_execute = AsyncMock(return_value=MockWorkflowResult(
+            success=True, content=verification_response,
+        ))
+        semaphore = asyncio.Semaphore(5)
+
+        result = await _verify_single_claim(
+            claim, citation_map, mock_execute, "test", 30, semaphore,
+        )
+        assert result.verdict == "SUPPORTED"
+
+    @pytest.mark.asyncio
+    async def test_original_explanation_preserved(self):
+        """Downgraded claim preserves original explanation."""
+        claim = ClaimVerdict(claim="Test", claim_type="negative", cited_sources=[1])
+        source = _make_source(1, content="Content.")
+        citation_map = {1: source}
+
+        verification_response = json.dumps({
+            "verdict": "CONTRADICTED",
+            "evidence_quote": None,
+            "explanation": "I think it's wrong",
+        })
+        mock_execute = AsyncMock(return_value=MockWorkflowResult(
+            success=True, content=verification_response,
+        ))
+        semaphore = asyncio.Semaphore(5)
+
+        result = await _verify_single_claim(
+            claim, citation_map, mock_execute, "test", 30, semaphore,
+        )
+        assert "I think it's wrong" in result.explanation
+        assert "Originally CONTRADICTED" in result.explanation
+
+
+# ---------------------------------------------------------------------------
+# Negative-behavior tests
+# ---------------------------------------------------------------------------
+
+
+class TestMonolithicExtractionRemoved:
+    def test_build_extraction_user_prompt_removed(self):
+        """_build_extraction_user_prompt should not exist in the module."""
+        import foundry_mcp.core.research.workflows.deep_research.phases.claim_verification as cv_mod
+        assert not hasattr(cv_mod, "_build_extraction_user_prompt")
+
+    def test_no_max_tokens_16384_in_orchestrator(self):
+        """No direct execute_fn call with max_tokens=16384 in the orchestrator."""
+        import inspect
+        source = inspect.getsource(extract_and_verify_claims)
+        assert "16384" not in source
+
+
+class TestCancelledErrorDuringGather:
+    @pytest.mark.asyncio
+    async def test_cancelled_error_propagates(self):
+        """CancelledError raised mid-gather propagates correctly."""
+        report = (
+            "## A\n\nClaim [1]. " + "Padding text. " * 35 + "\n\n"
+            "## B\n\n" + "More content. " * 30
+        )
+
+        async def mock_execute(**kwargs):
+            raise asyncio.CancelledError()
+
+        with pytest.raises(asyncio.CancelledError):
+            await _extract_claims_chunked(
+                report=report,
+                execute_fn=mock_execute,
+                provider_id="test",
+                timeout=30,
+                max_claims=50,
+                max_concurrent=5,
+            )

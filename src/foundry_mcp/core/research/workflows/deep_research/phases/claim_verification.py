@@ -119,43 +119,120 @@ def _resolve_source_text(source: "ResearchSource") -> Optional[str]:
     return source.content or source.raw_content or source.snippet
 
 
-def _keyword_proximity_truncate(text: str, claim_text: str, max_chars: int) -> str:
-    """Truncate source text to a window centered on claim-relevant keywords.
+def _multi_window_truncate(
+    text: str,
+    claim_text: str,
+    max_chars: int,
+    max_windows: int = 3,
+) -> str:
+    """Truncate source text to multiple windows centered on claim-relevant keywords.
 
-    Extracts keywords from *claim_text* (words ≥ 4 chars, not in stopwords),
-    finds the first occurrence of any keyword in *text*, and returns a window
-    of *max_chars* centered on that position.  Falls back to prefix truncation
-    if no keywords match.
+    Instead of a single window around the first keyword match, finds all keyword
+    positions, scores candidate windows by keyword density, and returns the top
+    N non-overlapping windows concatenated with ``[...]`` separators.
+
+    Args:
+        text: Full source text.
+        claim_text: The claim being verified (used to extract keywords).
+        max_chars: Total character budget across all windows.
+        max_windows: Maximum number of non-overlapping windows.
+
+    Returns:
+        Concatenated windows with ``[...]`` separators, within *max_chars* budget.
     """
     if len(text) <= max_chars:
         return text
 
-    # Extract keywords from claim.
+    # Extract keywords from claim (words >= 4 chars, not stopwords).
     keywords = [
         w.lower()
         for w in re.split(r"\s+", claim_text)
         if len(w) >= 4 and w.lower() not in _STOPWORDS
     ]
 
-    text_lower = text.lower()
-    best_pos: Optional[int] = None
-    for kw in keywords:
-        pos = text_lower.find(kw)
-        if pos != -1:
-            best_pos = pos
-            break
+    if not keywords:
+        return text[:max_chars]
 
-    if best_pos is None:
+    text_lower = text.lower()
+
+    # Find ALL positions of each keyword (case-insensitive).
+    keyword_positions: list[tuple[int, str]] = []
+    for kw in keywords:
+        start = 0
+        while True:
+            pos = text_lower.find(kw, start)
+            if pos == -1:
+                break
+            keyword_positions.append((pos, kw))
+            start = pos + 1
+
+    if not keyword_positions:
         # Fallback: prefix truncation.
         return text[:max_chars]
 
-    # Center window on keyword position.
-    half = max_chars // 2
-    start = max(0, best_pos - half)
-    end = min(len(text), start + max_chars)
-    # Re-adjust start if we hit the end boundary.
-    start = max(0, end - max_chars)
-    return text[start:end]
+    # Sort positions by document order.
+    keyword_positions.sort(key=lambda x: x[0])
+
+    # Cluster keyword positions by proximity.
+    cluster_radius = max_chars // max_windows
+    clusters: list[list[tuple[int, str]]] = []
+    current_cluster: list[tuple[int, str]] = [keyword_positions[0]]
+
+    for pos, kw in keyword_positions[1:]:
+        if pos - current_cluster[-1][0] <= cluster_radius:
+            current_cluster.append((pos, kw))
+        else:
+            clusters.append(current_cluster)
+            current_cluster = [(pos, kw)]
+    clusters.append(current_cluster)
+
+    # Score clusters by distinct keyword count (not total occurrences).
+    def _cluster_score(cluster: list[tuple[int, str]]) -> int:
+        return len({kw for _, kw in cluster})
+
+    # Select top N clusters by score.
+    scored = sorted(clusters, key=_cluster_score, reverse=True)
+    selected = scored[:max_windows]
+
+    # Sort selected clusters by document position (median position).
+    selected.sort(key=lambda c: c[len(c) // 2][0])
+
+    # Adaptive window sizing: distribute full budget across selected clusters.
+    _SEPARATOR = "\n[...]\n"
+    num_separators = len(selected) - 1
+    total_separator_chars = len(_SEPARATOR) * num_separators
+    available_for_windows = max(1, max_chars - total_separator_chars)
+    window_size = max(1, available_for_windows // len(selected))
+
+    # Extract windows, ensuring non-overlap.
+    windows: list[str] = []
+    prev_end = -1
+
+    for cluster in selected:
+        positions = [p for p, _ in cluster]
+        median_pos = positions[len(positions) // 2]
+
+        # Center window on median position.
+        half = window_size // 2
+        w_start = max(0, median_pos - half)
+        w_end = min(len(text), w_start + window_size)
+        w_start = max(0, w_end - window_size)
+
+        # Ensure non-overlapping with previous window.
+        if w_start <= prev_end:
+            w_start = prev_end + 1
+            w_end = min(len(text), w_start + window_size)
+
+        if w_start >= len(text) or w_start >= w_end:
+            continue
+
+        windows.append(text[w_start:w_end])
+        prev_end = w_end
+
+    if not windows:
+        return text[:max_chars]
+
+    return _SEPARATOR.join(windows)
 
 
 def _sort_claims_by_priority(claims: list[ClaimVerdict]) -> list[ClaimVerdict]:
@@ -657,13 +734,29 @@ def _apply_token_budget(
 
 _VERIFICATION_SYSTEM_PROMPT = """\
 You are a claim verification assistant. You will be given a claim from a research \
-report and the source material it cites. Your task is to determine whether the \
-source material SUPPORTS, CONTRADICTS, or provides NO EVIDENCE for the claim.
+report and excerpts from the source material it cites. Your task is to determine \
+whether the source excerpts SUPPORT, CONTRADICT, or provide NO EVIDENCE for the claim.
+
+Verdict definitions:
+- SUPPORTED: The source excerpts explicitly confirm the claim or contain information \
+fully consistent with it.
+- CONTRADICTED: The source excerpts explicitly state something that DIRECTLY CONFLICTS \
+with the claim. The source must contain a clear counter-statement — not merely the \
+absence of confirming information.
+- PARTIALLY_SUPPORTED: The source excerpts confirm part of the claim but not all of it, \
+or confirm it with different specifics (e.g., different numbers, dates, or scope).
+- UNSUPPORTED: The source excerpts do not contain enough information to confirm or deny \
+the claim. This includes cases where the topic is not mentioned at all. When in doubt \
+between CONTRADICTED and UNSUPPORTED, choose UNSUPPORTED.
+
+IMPORTANT: You are seeing excerpts, not the full source. Absence of information in these \
+excerpts does NOT mean the source contradicts the claim.
 
 Return a JSON object with exactly these fields:
 - "verdict": one of "SUPPORTED", "CONTRADICTED", "UNSUPPORTED", "PARTIALLY_SUPPORTED"
-- "evidence_quote": the most relevant quote from the source material (or null if no evidence)
-- "explanation": a brief explanation of why you reached this verdict
+- "evidence_quote": the exact quote from the source that supports your verdict (REQUIRED \
+for CONTRADICTED — if you cannot quote a directly conflicting statement, use UNSUPPORTED)
+- "explanation": a brief explanation of your verdict
 
 Return ONLY the JSON object, no other text.
 """
@@ -691,7 +784,7 @@ def _build_verification_user_prompt(
                 source.title,
             )
             continue
-        truncated = _keyword_proximity_truncate(text, claim.claim, VERIFICATION_SOURCE_MAX_CHARS)
+        truncated = _multi_window_truncate(text, claim.claim, VERIFICATION_SOURCE_MAX_CHARS)
         header = f"### Source [{src_num}]: {source.title}"
         if source.url:
             header += f"\nURL: {source.url}"
@@ -780,6 +873,19 @@ async def _verify_single_claim(
                 claim.verdict = parsed["verdict"]
                 claim.evidence_quote = parsed.get("evidence_quote")
                 claim.explanation = parsed.get("explanation")
+                # Structural gate: CONTRADICTED without evidence quote
+                # is downgraded to UNSUPPORTED (defense in depth).
+                if claim.verdict == "CONTRADICTED" and not claim.evidence_quote:
+                    logger.info(
+                        "Downgrading CONTRADICTED to UNSUPPORTED for claim %r: "
+                        "no evidence quote provided",
+                        claim.claim[:80],
+                    )
+                    claim.verdict = "UNSUPPORTED"
+                    claim.explanation = (
+                        f"Originally CONTRADICTED but no contradicting quote provided. "
+                        f"Original explanation: {claim.explanation}"
+                    )
             else:
                 claim.verdict = "UNSUPPORTED"
                 claim.explanation = "Verification LLM call failed"
