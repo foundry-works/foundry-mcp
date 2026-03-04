@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0a10] - 2026-03-04
+
+### Added
+
+- **Citation remapping for UNSUPPORTED claims**: When claims are marked UNSUPPORTED due to citation misattribution, an LLM-based remapping step finds a better-matching source and replaces the citation number in the report. Low-confidence matches have their citation brackets removed, leaving facts uncited rather than miscited.
+- **Per-source topic summaries in synthesis prompt**: Source references now include a one-line topic summary, giving the LLM a quick-reference map to reduce citation misattribution by verifying facts against source content before citing.
+- **Inline LLM-generated source list stripping**: Citation postprocessing now strips inline source paragraphs (`*Sources: [N] ...*`) that the LLM generates as running text, in addition to the existing heading-based (`## Sources`) stripping.
+
+### Fixed
+
+- **CONTRADICTED claims now penalize fidelity_score**: Contradicted claims (actively wrong) are weighted at -0.5 instead of 0.0, dragging down the fidelity score rather than being treated the same as unsupported claims. Score is floored at 0.0.
+
 ## [0.18.0a9] - 2026-03-04
 
 ### Added
