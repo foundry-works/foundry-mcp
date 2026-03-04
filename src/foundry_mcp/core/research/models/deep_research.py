@@ -1332,6 +1332,13 @@ class ClaimVerdict(BaseModel):
         default=None,
         description="The corrected text that replaced the original (if correction was applied)",
     )
+    source_resolution: Optional[str] = Field(
+        default=None,
+        description=(
+            "Content tier used for verification: full_content, compressed_only, "
+            "snippet_only, no_content, or citation_not_found"
+        ),
+    )
 
 
 class ClaimVerificationResult(BaseModel):

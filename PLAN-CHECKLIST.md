@@ -1,48 +1,53 @@
-# Plan Checklist: Claim Verification & Synthesis Fidelity Fixes
+# Post-Synthesis Quality Fixes — Phase 2 Checklist
 
-## Phase 1: Use raw_content for claim verification
-- [x] Change `_resolve_source_text()` in `claim_verification.py` (~line 119) to prefer `raw_content`: `return source.raw_content or source.content or source.snippet`
-- [x] Update docstring to say "Falls back through raw_content → content → snippet"
-- [x] Add unit test: returns `raw_content` when both `content` and `raw_content` are present
-- [x] Add unit test: falls back to `content` when `raw_content` is None/empty
-- [x] Add unit test: falls back to `snippet` when both `raw_content` and `content` are None/empty
-- [x] Add unit test: returns None when all three are None/empty
-- [x] Run existing claim verification tests — confirm no regressions from the preference flip (139 passed)
+## Fix 2: Strip inline LLM-generated source lists
+- [x] Add regex pattern to match inline `*Sources: [N] ...` paragraphs in `strip_llm_sources_section()`
+- [x] Also match `Sources:` (non-italic) and `---` + `*Sources:` patterns
+- [x] Strip matched paragraph to next `\n\n` or end of string
+- [x] Clean up orphaned `---` horizontal rule preceding stripped paragraph
+- [x] Add test: report with only inline `*Sources: [1] [Title](url), ...*`
+- [x] Add test: report with both `## Sources` heading and inline sources paragraph
+- [x] Add test: report with `---` before inline sources (both stripped)
+- [x] Add test: report with no sources (no-op)
+- [x] Verify existing `strip_llm_sources_section` tests still pass
 
-## Phase 2: Compute and store fidelity_score
-- [x] Add `fidelity_score` computed property to `ClaimVerificationResult` in `models/deep_research.py` (~after line 1356)
-  - [x] Weight: SUPPORTED=1.0, PARTIALLY_SUPPORTED=0.5, UNSUPPORTED=0.0, CONTRADICTED=0.0
-  - [x] Return `None` if `claims_verified == 0`
-  - [x] Return `float` otherwise: `(claims_supported + 0.5 * claims_partially_supported) / claims_verified`
-- [x] Verify `fidelity_score` appears in `model_dump()` output (Pydantic `@computed_field` auto-serializes)
-- [x] Verify action_handlers.py deep-research-status includes fidelity_score in claim_verification data (added to both status and report serialization points)
-- [x] Add test: all SUPPORTED → 1.0
-- [x] Add test: all UNSUPPORTED → 0.0
-- [x] Add test: all CONTRADICTED → 0.0
-- [x] Add test: mixed (5 SUP, 1 PARTIAL, 29 UNSUP) → ≈0.157
-- [x] Add test: 0 claims_verified → None
-- [x] Add test: serializes correctly in JSON output (both model_dump and model_dump_json)
+## Fix 1: Preserve heading/body boundaries in correction application
+- [x] Add helper `_repair_heading_boundaries(original_window, corrected_text)` in `claim_verification.py`
+- [x] Regex: detect `^(#{1,6}\s+[^\n]*?[a-z0-9])([A-Z][a-z])` on same line (heading fused with body)
+- [x] Also detect heading line not followed by `\n` or `\n\n`
+- [x] Insert `\n\n` between heading and body text
+- [x] Call helper in `_correct_single_claim()` after line 1070, before replacement
+- [x] Add test: correction that concatenates heading and body → repaired
+- [x] Add test: correction that preserves heading/body boundary → no change
+- [x] Add test: multiple headings in single context window
+- [x] Add test: heading text legitimately modified by correction
 
-## Phase 3: Add citation-accuracy guardrails to synthesis prompt
-- [x] Add citation-accuracy lines to `## Citations` section in `_build_synthesis_system_prompt` (~after line 1267, before `## Language`)
-  - [x] Instruction: only cite a source for a fact if that fact appears in the source content provided
-  - [x] Instruction: do not guess citation numbers — omit the citation rather than cite the wrong source
-  - [x] Instruction: never attribute a fact from one source to a different source based on topical similarity
-- [x] Add prompt assertion test: system prompt contains the new citation-accuracy text
+## Fix 5: Recalibrate fidelity_score
+- [ ] Update `fidelity_score` property in `ClaimVerificationResult` to apply `-0.5` weight for contradicted claims
+- [ ] Add `max(0.0, ...)` floor
+- [ ] Update existing test expectations for fidelity_score
+- [ ] Add test: contradicted claims reduce score below what unsupported would
+- [ ] Add test: score floors at 0.0 with many contradictions
 
-## Phase 4: Log claim verification source resolution for diagnostics
-- [ ] Add `source_resolution: Optional[str] = None` field to `ClaimVerdict` in `models/deep_research.py`
-  - [ ] Valid values: `"full_content"`, `"compressed_only"`, `"snippet_only"`, `"no_content"`, `"citation_not_found"`
-- [ ] In `_build_verification_user_prompt` (~line 773): track best content tier resolved across all cited sources
-  - [ ] If `raw_content` used → `"full_content"`
-  - [ ] If only `content` (compressed) used → `"compressed_only"`
-  - [ ] If only `snippet` used → `"snippet_only"`
-  - [ ] If all citations miss the map → `"citation_not_found"`
-  - [ ] Return the resolution tier alongside the prompt string (change return type to tuple or add to claim)
-- [ ] In `_verify_single_claim`: set `claim.source_resolution` from the resolution tier
-- [ ] When auto-assigning UNSUPPORTED (prompt is None), set `source_resolution = "no_content"`
-- [ ] Add test: `source_resolution` is `"full_content"` when `raw_content` available
-- [ ] Add test: `source_resolution` is `"compressed_only"` when only `content` available (after Phase 1 flip, this means `raw_content` was None)
-- [ ] Add test: `source_resolution` is `"no_content"` when no source text resolves
-- [ ] Add test: `source_resolution` is `"citation_not_found"` when citation number not in map
-- [ ] Add test: field serializes in `ClaimVerdict.model_dump()`
+## Fix 4: Strengthen synthesis prompt to reduce citation misattribution
+- [ ] In `_build_synthesis_tail()`, add 1-sentence topic summary per source in the source reference list
+- [ ] Derive summary from source title + first ~15 words of content (no LLM call)
+- [ ] Respect token budget — truncate summaries if total exceeds allocation headroom
+- [ ] Add explicit instruction: "verify the specific fact appears in that source's content before citing"
+- [ ] Add test: source summaries appear in synthesis prompt
+- [ ] Add test: summaries are truncated when token budget is tight
+
+## Fix 3: Citation remapping for UNSUPPORTED claims
+- [ ] Add `citations_remapped: int = 0` field to `ClaimVerificationResult`
+- [ ] Add `remap_unsupported_citations()` function in `claim_verification.py`
+- [ ] For each UNSUPPORTED claim with `cited_sources`: search source contents for better match
+- [ ] Use LLM-based matching: send claim + candidate sources, ask which supports it
+- [ ] Batch claims per source to reduce LLM calls
+- [ ] Replace `[old_citation]` → `[new_citation]` within the claim's quote_context region only
+- [ ] If no source supports the claim, remove the citation (leave fact uncited)
+- [ ] Wire into `workflow_execution.py` after claim verification block
+- [ ] Add test: unsupported claim gets remapped to correct source
+- [ ] Add test: unsupported claim with no matching source → citation removed
+- [ ] Add test: partially_supported claim with citation mismatch → remapped
+- [ ] Add test: remapping stats tracked in verification result
+- [ ] Add token budget cap for remapping LLM calls

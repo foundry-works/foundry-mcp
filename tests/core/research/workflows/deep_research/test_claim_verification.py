@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from dataclasses import dataclass
 from typing import Optional
 from unittest.mock import AsyncMock
@@ -45,6 +46,7 @@ from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification
     _multi_window_truncate,
     _parse_extracted_claims,
     _parse_verification_response,
+    _repair_heading_boundaries,
     _resolve_source_text,
     _sort_claims_by_priority,
     _split_report_into_sections,
@@ -481,11 +483,12 @@ class TestBuildVerificationPrompt:
             1: _make_source(1, content="Source 1 content about X and Y"),
             2: _make_source(2, content="Source 2 content about X and Y"),
         }
-        prompt = _build_verification_user_prompt(claim, sources)
+        prompt, resolution = _build_verification_user_prompt(claim, sources)
         assert prompt is not None
         assert "Source [1]" in prompt
         assert "Source [2]" in prompt
         assert "X does not support Y" in prompt
+        assert resolution == "compressed_only"
 
     def test_dangling_citation_skipped(self):
         claim = ClaimVerdict(
@@ -494,10 +497,11 @@ class TestBuildVerificationPrompt:
             cited_sources=[1, 99],  # 99 doesn't exist
         )
         sources = {1: _make_source(1, content="Content")}
-        prompt = _build_verification_user_prompt(claim, sources)
+        prompt, resolution = _build_verification_user_prompt(claim, sources)
         assert prompt is not None
         assert "Source [1]" in prompt
         assert "Source [99]" not in prompt
+        assert resolution == "compressed_only"
 
     def test_no_resolvable_sources_returns_none(self):
         claim = ClaimVerdict(
@@ -505,8 +509,9 @@ class TestBuildVerificationPrompt:
             claim_type="positive",
             cited_sources=[99],  # Doesn't exist
         )
-        prompt = _build_verification_user_prompt(claim, {})
+        prompt, resolution = _build_verification_user_prompt(claim, {})
         assert prompt is None
+        assert resolution == "citation_not_found"
 
     def test_source_with_no_content_skipped(self):
         claim = ClaimVerdict(
@@ -515,8 +520,9 @@ class TestBuildVerificationPrompt:
             cited_sources=[1],
         )
         src = _make_source(1, content=None, raw_content=None, snippet=None)
-        prompt = _build_verification_user_prompt(claim, {1: src})
+        prompt, resolution = _build_verification_user_prompt(claim, {1: src})
         assert prompt is None
+        assert resolution == "no_content"
 
 
 # ---------------------------------------------------------------------------
@@ -2566,3 +2572,214 @@ class TestClaimsFilteredInvariant:
         data = result.model_dump()
         restored = ClaimVerificationResult.model_validate(data)
         assert restored.claims_filtered == 7
+
+
+# ---------------------------------------------------------------------------
+# Phase 10 tests: source_resolution diagnostic field
+# ---------------------------------------------------------------------------
+
+
+class TestSourceResolution:
+    """Verify source_resolution tracking on ClaimVerdict."""
+
+    def test_full_content_when_raw_content_available(self):
+        """source_resolution is 'full_content' when raw_content is present."""
+        claim = ClaimVerdict(
+            claim="Transfer ratio is 1:1",
+            claim_type="quantitative",
+            cited_sources=[1],
+        )
+        src = _make_source(1, content="compressed", raw_content="full raw page content")
+        prompt, resolution = _build_verification_user_prompt(claim, {1: src})
+        assert prompt is not None
+        assert resolution == "full_content"
+
+    def test_compressed_only_when_no_raw_content(self):
+        """source_resolution is 'compressed_only' when only content is available."""
+        claim = ClaimVerdict(
+            claim="Test claim",
+            claim_type="positive",
+            cited_sources=[1],
+        )
+        src = _make_source(1, content="compressed summary", raw_content=None)
+        prompt, resolution = _build_verification_user_prompt(claim, {1: src})
+        assert prompt is not None
+        assert resolution == "compressed_only"
+
+    def test_snippet_only_when_only_snippet(self):
+        """source_resolution is 'snippet_only' when only snippet is available."""
+        claim = ClaimVerdict(
+            claim="Test claim",
+            claim_type="positive",
+            cited_sources=[1],
+        )
+        src = _make_source(1, content=None, raw_content=None, snippet="a snippet")
+        prompt, resolution = _build_verification_user_prompt(claim, {1: src})
+        assert prompt is not None
+        assert resolution == "snippet_only"
+
+    def test_no_content_when_source_has_no_text(self):
+        """source_resolution is 'no_content' when source exists but has no text."""
+        claim = ClaimVerdict(
+            claim="Test claim",
+            claim_type="positive",
+            cited_sources=[1],
+        )
+        src = _make_source(1, content=None, raw_content=None, snippet=None)
+        prompt, resolution = _build_verification_user_prompt(claim, {1: src})
+        assert prompt is None
+        assert resolution == "no_content"
+
+    def test_citation_not_found_when_all_missing(self):
+        """source_resolution is 'citation_not_found' when citation numbers not in map."""
+        claim = ClaimVerdict(
+            claim="Test claim",
+            claim_type="positive",
+            cited_sources=[99],
+        )
+        prompt, resolution = _build_verification_user_prompt(claim, {})
+        assert prompt is None
+        assert resolution == "citation_not_found"
+
+    def test_best_tier_wins_across_multiple_sources(self):
+        """When multiple sources have different tiers, the best one is reported."""
+        claim = ClaimVerdict(
+            claim="Test claim",
+            claim_type="positive",
+            cited_sources=[1, 2],
+        )
+        src1 = _make_source(1, content="compressed only", raw_content=None)
+        src2 = _make_source(2, content="also compressed", raw_content="full raw content")
+        prompt, resolution = _build_verification_user_prompt(claim, {1: src1, 2: src2})
+        assert prompt is not None
+        assert resolution == "full_content"
+
+    def test_field_serializes_in_model_dump(self):
+        """source_resolution appears in ClaimVerdict.model_dump()."""
+        claim = ClaimVerdict(
+            claim="Test",
+            claim_type="positive",
+            source_resolution="full_content",
+        )
+        data = claim.model_dump()
+        assert data["source_resolution"] == "full_content"
+
+    def test_field_defaults_to_none(self):
+        """source_resolution defaults to None when not set."""
+        claim = ClaimVerdict(claim="Test", claim_type="positive")
+        assert claim.source_resolution is None
+
+    @pytest.mark.asyncio
+    async def test_verify_single_claim_sets_source_resolution(self):
+        """_verify_single_claim sets source_resolution on the claim."""
+        claim = ClaimVerdict(
+            claim="X is true",
+            claim_type="positive",
+            cited_sources=[1],
+        )
+        src = _make_source(1, content="Source content about X", raw_content="Full raw content about X")
+        citation_map = {1: src}
+
+        async def mock_execute(**kwargs):
+            return MockWorkflowResult(
+                success=True,
+                content=json.dumps({
+                    "verdict": "SUPPORTED",
+                    "evidence_quote": "X is true",
+                    "explanation": "Source confirms X",
+                }),
+            )
+
+        result = await _verify_single_claim(
+            claim=claim,
+            citation_map=citation_map,
+            execute_fn=mock_execute,
+            provider_id="test",
+            timeout=30,
+            semaphore=asyncio.Semaphore(5),
+        )
+        assert result.source_resolution == "full_content"
+
+    @pytest.mark.asyncio
+    async def test_verify_single_claim_no_content_sets_resolution(self):
+        """_verify_single_claim sets source_resolution='no_content' when prompt is None."""
+        claim = ClaimVerdict(
+            claim="X is true",
+            claim_type="positive",
+            cited_sources=[1],
+        )
+        src = _make_source(1, content=None, raw_content=None, snippet=None)
+        citation_map = {1: src}
+
+        result = await _verify_single_claim(
+            claim=claim,
+            citation_map=citation_map,
+            execute_fn=AsyncMock(),
+            provider_id="test",
+            timeout=30,
+            semaphore=asyncio.Semaphore(5),
+        )
+        assert result.source_resolution == "no_content"
+        assert result.verdict == "UNSUPPORTED"
+
+
+# ---------------------------------------------------------------------------
+# Heading-boundary repair
+# ---------------------------------------------------------------------------
+
+
+class TestRepairHeadingBoundaries:
+    """Tests for _repair_heading_boundaries()."""
+
+    def test_heading_concatenated_with_body_is_repaired(self):
+        """Heading fused with body text gets a blank line inserted."""
+        original = "### Chase Ultimate Rewards\n\nAs of February 2026, the program offers..."
+        corrected = "### Chase Ultimate RewardsAs of February–March 2026, the program offers..."
+        result = _repair_heading_boundaries(original, corrected)
+        assert "### Chase Ultimate Rewards\n\n" in result or "### Chase Ultimate Rewards\n\nAs" in result
+        # Heading must NOT be on the same line as body text.
+        for line in result.split("\n"):
+            if line.startswith("###"):
+                assert not re.search(r"^#{1,6}\s+[^\n]+?[A-Z][a-z]", line) or \
+                    line == line.split("\n")[0]
+
+    def test_heading_body_boundary_preserved_unchanged(self):
+        """When corrected text already has proper heading boundaries, no change."""
+        original = "### Program Details\n\nThe rewards program has several tiers."
+        corrected = "### Program Details\n\nThe rewards program has multiple tiers."
+        result = _repair_heading_boundaries(original, corrected)
+        assert result == corrected
+
+    def test_multiple_headings_in_single_window(self):
+        """Multiple headings with concatenated body text are all repaired."""
+        original = (
+            "## Overview\n\nThis section covers...\n\n"
+            "### Details\n\nThe specific details are..."
+        )
+        corrected = (
+            "## OverviewThis section covers...\n"
+            "### DetailsThe specific details are..."
+        )
+        result = _repair_heading_boundaries(original, corrected)
+        lines = result.split("\n")
+        heading_indices = [i for i, l in enumerate(lines) if re.match(r"^#{1,6}\s+", l)]
+        for idx in heading_indices:
+            # Line after heading should be blank.
+            if idx + 1 < len(lines):
+                assert lines[idx + 1].strip() == "", (
+                    f"Heading at line {idx} not followed by blank line: {lines[idx:]}"
+                )
+
+    def test_heading_text_modified_by_correction(self):
+        """Heading content can change — only structure (newlines) is enforced."""
+        original = "### Transfer Partners\n\nChase has 14 transfer partners."
+        corrected = "### Transfer Partners and Ratios\n\nChase has 13 transfer partners."
+        result = _repair_heading_boundaries(original, corrected)
+        assert result == corrected
+
+    def test_no_headings_in_original_returns_unchanged(self):
+        """If original window has no headings, corrected text is returned as-is."""
+        original = "The program offers great rewards for travel."
+        corrected = "The program offers excellent rewards for travel."
+        result = _repair_heading_boundaries(original, corrected)
+        assert result == corrected

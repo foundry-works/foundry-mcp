@@ -768,17 +768,43 @@ Return ONLY the JSON object, no other text.
 def _build_verification_user_prompt(
     claim: ClaimVerdict,
     citation_map: dict[int, "ResearchSource"],
-) -> Optional[str]:
+) -> tuple[Optional[str], str]:
     """Build the verification prompt for a single claim.
 
-    Returns None if no source text could be resolved for any cited source.
+    Returns a tuple of (prompt, source_resolution) where source_resolution
+    indicates the best content tier used across all cited sources:
+    - ``"full_content"``: raw_content was available for at least one source
+    - ``"compressed_only"``: only compressed content was available
+    - ``"snippet_only"``: only snippet text was available
+    - ``"no_content"``: no source text could be resolved
+    - ``"citation_not_found"``: all citation numbers were missing from the map
+
+    The prompt is None when no usable source text was found.
     """
     source_sections: list[str] = []
+    # Track best resolution tier across all cited sources.
+    # Priority: full_content > compressed_only > snippet_only
+    _TIER_RANK = {"full_content": 3, "compressed_only": 2, "snippet_only": 1}
+    best_tier: Optional[str] = None
+    all_citations_missing = True
+
     for src_num in claim.cited_sources:
         source = citation_map.get(src_num)
         if source is None:
             logger.warning("Claim verification: citation [%d] not in citation map, skipping", src_num)
             continue
+        all_citations_missing = False
+
+        # Determine which content tier this source resolved to.
+        if source.raw_content:
+            tier = "full_content"
+        elif source.content:
+            tier = "compressed_only"
+        elif source.snippet:
+            tier = "snippet_only"
+        else:
+            tier = None
+
         text = _resolve_source_text(source)
         if text is None:
             logger.warning(
@@ -787,6 +813,11 @@ def _build_verification_user_prompt(
                 source.title,
             )
             continue
+
+        # Update best tier.
+        if tier and (best_tier is None or _TIER_RANK.get(tier, 0) > _TIER_RANK.get(best_tier, 0)):
+            best_tier = tier
+
         truncated = _multi_window_truncate(text, claim.claim, VERIFICATION_SOURCE_MAX_CHARS)
         header = f"### Source [{src_num}]: {source.title}"
         if source.url:
@@ -794,10 +825,15 @@ def _build_verification_user_prompt(
         source_sections.append(f"{header}\n\n{truncated}")
 
     if not source_sections:
-        return None
+        if all_citations_missing and claim.cited_sources:
+            return None, "citation_not_found"
+        return None, "no_content"
+
+    # Determine final resolution (best_tier should be set if we have sections).
+    resolution = best_tier or "no_content"
 
     sources_text = "\n\n---\n\n".join(source_sections)
-    return (
+    prompt = (
         f"## Source Content\n\n{sources_text}\n\n"
         f"## Claim to Verify\n\n"
         f'"{claim.claim}"\n'
@@ -807,6 +843,7 @@ def _build_verification_user_prompt(
         f"Does the source content SUPPORT, CONTRADICT, or provide NO EVIDENCE for this claim?\n"
         f"Return a JSON object with: verdict, evidence_quote, explanation"
     )
+    return prompt, resolution
 
 
 def _parse_verification_response(response: str) -> dict[str, Any]:
@@ -855,7 +892,8 @@ async def _verify_single_claim(
     semaphore: asyncio.Semaphore,
 ) -> ClaimVerdict:
     """Verify a single claim against its cited sources."""
-    user_prompt = _build_verification_user_prompt(claim, citation_map)
+    user_prompt, source_resolution = _build_verification_user_prompt(claim, citation_map)
+    claim.source_resolution = source_resolution
     if user_prompt is None:
         claim.verdict = "UNSUPPORTED"
         claim.explanation = "No source content available for verification"
@@ -967,6 +1005,59 @@ def _extract_context_window(report: str, quote_context: str) -> Optional[tuple[s
     return report[window_start:window_end], window_start, window_end
 
 
+# ---------------------------------------------------------------------------
+# Heading-boundary repair
+# ---------------------------------------------------------------------------
+
+_HEADING_RE = re.compile(r"^(#{1,6}\s+[^\n]*?[a-z0-9])([A-Z][a-z])", re.MULTILINE)
+_HEADING_LINE_RE = re.compile(r"^#{1,6}\s+.+$", re.MULTILINE)
+
+
+def _repair_heading_boundaries(original_window: str, corrected_text: str) -> str:
+    """Ensure markdown headings are followed by a blank line in corrected text.
+
+    When the correction LLM rewrites a context window that contains markdown
+    headings, it sometimes concatenates the heading line with the following
+    body paragraph (e.g. ``### TitleBody text...``).  This helper detects
+    such fusions and inserts the missing ``\\n\\n`` separator.
+
+    Only structural whitespace after headings is enforced — heading *content*
+    may be legitimately modified by the correction.
+    """
+    if not _HEADING_LINE_RE.search(original_window):
+        # Original had no headings — nothing to repair.
+        return corrected_text
+
+    # Pattern: heading text immediately followed by an uppercase letter on the
+    # same line (no newline between heading and body).
+    repaired = _HEADING_RE.sub(r"\1\n\n\2", corrected_text)
+
+    # Also handle a heading line followed by a single \n (not \n\n) then body.
+    # Split into lines and check each heading.
+    lines = repaired.split("\n")
+    result: list[str] = []
+    i = 0
+    while i < len(lines):
+        result.append(lines[i])
+        if re.match(r"^#{1,6}\s+", lines[i]):
+            # This is a heading line.  If the next line is non-empty and not
+            # another heading, and there's no blank line between, insert one.
+            if (
+                i + 1 < len(lines)
+                and lines[i + 1].strip() != ""
+                and not re.match(r"^#{1,6}\s+", lines[i + 1])
+            ):
+                # Check if the next line is already blank (empty string).
+                result.append("")
+        i += 1
+    repaired = "\n".join(result)
+
+    # Collapse triple+ blank lines back to double.
+    repaired = re.sub(r"\n{3,}", "\n\n", repaired)
+
+    return repaired
+
+
 async def _correct_single_claim(
     claim: ClaimVerdict,
     state: DeepResearchState,
@@ -1030,6 +1121,13 @@ async def _correct_single_claim(
             return False
 
         corrected_text = result.content.strip()
+
+        # Repair heading/body concatenation caused by the LLM.
+        if window_result is not None:
+            original_window_for_repair, _, _ = window_result
+            corrected_text = _repair_heading_boundaries(
+                original_window_for_repair, corrected_text
+            )
 
         if window_result is not None:
             original_window, _, _ = window_result

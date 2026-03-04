@@ -231,26 +231,48 @@ def strip_llm_sources_section(report: str) -> str:
         re.MULTILINE | re.IGNORECASE,
     )
     match = pattern.search(report)
-    if not match:
-        return report
+    if match:
+        start = match.start()
+        heading_level = match.group(1).count("#")
 
-    start = match.start()
-    heading_level = match.group(1).count("#")
+        # Find the next heading of equal or higher level
+        rest = report[match.end() :]
+        next_heading = re.search(
+            rf"^#{{{1},{heading_level}}}\s+\S",
+            rest,
+            re.MULTILINE,
+        )
+        if next_heading:
+            end = match.end() + next_heading.start()
+        else:
+            end = len(report)
 
-    # Find the next heading of equal or higher level
-    rest = report[match.end() :]
-    next_heading = re.search(
-        rf"^#{{{1},{heading_level}}}\s+\S",
-        rest,
+        # Strip and clean up trailing whitespace
+        report = report[:start].rstrip() + report[end:]
+
+    # Second pass: strip inline source paragraphs that the LLM sometimes
+    # generates as running text, e.g.:
+    #   *Sources: [2] [LendingTree](...), [3] ...*
+    #   Sources: [1] ...
+    # These may be preceded by a horizontal rule (---).
+    inline_pattern = re.compile(
+        r"(?:^---[ \t]*\n+)?"  # optional preceding horizontal rule
+        r"^\*?Sources\s*:\s*\[.*",  # "Sources:" (optionally italic) followed by [
         re.MULTILINE,
     )
-    if next_heading:
-        end = match.end() + next_heading.start()
-    else:
-        end = len(report)
+    inline_match = inline_pattern.search(report)
+    if inline_match:
+        start = inline_match.start()
+        # Find end: next blank line or end of string
+        rest = report[inline_match.end() :]
+        blank_line = re.search(r"\n\s*\n", rest)
+        if blank_line:
+            end = inline_match.end() + blank_line.start()
+        else:
+            end = len(report)
+        report = report[:start].rstrip() + report[end:]
 
-    # Strip and clean up trailing whitespace
-    return report[:start].rstrip() + report[end:]
+    return report
 
 
 def renumber_citations(
