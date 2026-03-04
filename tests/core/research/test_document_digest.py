@@ -2118,13 +2118,6 @@ class TestContractFidelityEnvelope:
         data = json.loads(serialized)
         assert data["content_type"] == "digest/v1"
 
-    def test_fidelity_level_digest_exists_in_model(self):
-        """FidelityLevel.DIGEST is a valid fidelity level."""
-        from foundry_mcp.core.research.models.fidelity import FidelityLevel
-
-        assert FidelityLevel.DIGEST is not None
-        assert FidelityLevel.DIGEST.value == "digest"
-
     def test_compression_ratio_reflects_actual_compression(self):
         """compression_ratio = digest_chars / original_chars."""
         payload = DigestPayload(

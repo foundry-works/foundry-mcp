@@ -5,7 +5,8 @@ when loading persisted DeepResearchState from older schema versions.
 
 Schema Versions:
     v0: Original schema (implicit, pre-versioning)
-    v1: Adds content_fidelity, dropped_content_ids, content_archive_hashes
+    v1: Adds dropped_content_ids, content_archive_hashes
+    v2: Removes dead report_sections and content_fidelity fields
 
 Migration Strategy:
     - Each version bump has a dedicated migration function
@@ -37,7 +38,7 @@ from typing import Any, Callable, Optional
 logger = logging.getLogger(__name__)
 
 # Current schema version for DeepResearchState
-CURRENT_SCHEMA_VERSION = 1
+CURRENT_SCHEMA_VERSION = 2
 
 # Schema version field name in state dict
 SCHEMA_VERSION_KEY = "_schema_version"
@@ -110,7 +111,6 @@ def migrate_v0_to_v1(state: dict[str, Any]) -> dict[str, Any]:
     """Migrate state from v0 (pre-versioning) to v1.
 
     V1 adds content fidelity tracking fields:
-    - content_fidelity: Fidelity level of serialized content
     - dropped_content_ids: IDs of content items dropped during serialization
     - content_archive_hashes: Hashes for retrieving archived content
 
@@ -121,10 +121,6 @@ def migrate_v0_to_v1(state: dict[str, Any]) -> dict[str, Any]:
         State dict migrated to v1 schema
     """
     migrated = deepcopy(state)
-
-    # Add content fidelity fields with defaults
-    if "content_fidelity" not in migrated:
-        migrated["content_fidelity"] = "full"
 
     if "dropped_content_ids" not in migrated:
         migrated["dropped_content_ids"] = []
@@ -139,9 +135,36 @@ def migrate_v0_to_v1(state: dict[str, Any]) -> dict[str, Any]:
     return migrated
 
 
+def migrate_v1_to_v2(state: dict[str, Any]) -> dict[str, Any]:
+    """Migrate state from v1 to v2.
+
+    V2 removes dead fields that were never populated by any workflow phase:
+    - report_sections: Was defined but never written to
+    - content_fidelity: Per-item fidelity tracking dict, never populated
+      (synthesis uses content_allocation_metadata instead)
+
+    Args:
+        state: State dict at v1 schema
+
+    Returns:
+        State dict migrated to v2 schema
+    """
+    migrated = deepcopy(state)
+
+    # Drop dead fields
+    migrated.pop("report_sections", None)
+    migrated.pop("content_fidelity", None)
+
+    set_schema_version(migrated, 2)
+
+    logger.debug("Migrated state from v1 to v2: removed dead report_sections and content_fidelity fields")
+    return migrated
+
+
 # Registry of migration functions: (from_version, to_version) -> migration_fn
 MIGRATIONS: dict[tuple[int, int], Callable[[dict[str, Any]], dict[str, Any]]] = {
     (0, 1): migrate_v0_to_v1,
+    (1, 2): migrate_v1_to_v2,
 }
 
 
@@ -268,12 +291,15 @@ def _recover_state(
     # Apply all migrations' default values up to target version
     if target_version >= 1:
         # V1 defaults
-        if "content_fidelity" not in recovered:
-            recovered["content_fidelity"] = "full"
         if "dropped_content_ids" not in recovered:
             recovered["dropped_content_ids"] = []
         if "content_archive_hashes" not in recovered:
             recovered["content_archive_hashes"] = {}
+
+    if target_version >= 2:
+        # V2: drop dead fields
+        recovered.pop("report_sections", None)
+        recovered.pop("content_fidelity", None)
 
     # Set schema version
     set_schema_version(recovered, target_version)

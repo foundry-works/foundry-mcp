@@ -556,38 +556,11 @@ class TestStateFidelityTracking:
             original_query="test query",
         )
 
-        # Check default values - content_fidelity is now a dict
-        assert state.content_fidelity == {}
+        # content_fidelity dict was removed (dead field); dropped_content_ids and
+        # content_allocation_metadata remain
+        assert not hasattr(state, "content_fidelity")
         assert state.dropped_content_ids == []
         assert state.content_allocation_metadata == {}
-
-    def test_state_fidelity_updates(self):
-        """Test fidelity fields can be updated via record_item_fidelity."""
-        from foundry_mcp.core.research.models.fidelity import FidelityLevel
-
-        state = DeepResearchState(
-            id="test",
-            original_query="test query",
-        )
-
-        # Use the new record_item_fidelity method
-        state.record_item_fidelity(
-            item_id="src-1",
-            phase="analysis",
-            level=FidelityLevel.CONDENSED,
-            reason="budget_exceeded",
-        )
-        state.dropped_content_ids = ["src-2", "src-3"]
-        state.content_allocation_metadata = {
-            "tokens_used": 5000,
-            "fidelity": 0.75,
-        }
-
-        # Verify the new structure
-        assert "src-1" in state.content_fidelity
-        assert state.content_fidelity["src-1"].current_level == FidelityLevel.CONDENSED
-        assert len(state.dropped_content_ids) == 2
-        assert state.content_allocation_metadata["fidelity"] == 0.75
 
 
 # =============================================================================

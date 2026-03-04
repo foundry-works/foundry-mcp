@@ -51,9 +51,6 @@ from foundry_mcp.core.research.models.enums import (
     WorkflowType,
 )
 from foundry_mcp.core.research.models.fidelity import (
-    ContentFidelityRecord,
-    FidelityLevel,
-    PhaseContentFidelityRecord,
     PhaseMetrics,
 )
 from foundry_mcp.core.research.models.ideation import (
@@ -112,10 +109,7 @@ __all__ = [
     # Deep research config
     "DeepResearchConfig",
     "DeepResearchPhase",
-    # Fidelity models
-    "FidelityLevel",
-    "PhaseContentFidelityRecord",
-    "ContentFidelityRecord",
+    # Phase metrics
     "PhaseMetrics",
     # Source models
     "SourceType",

@@ -2665,7 +2665,7 @@ class TestBackwardCompatDeserialization:
     Covers:
     - Sessions without ``next_citation_number`` (added in Phase 1.5)
     - Sessions without ``topic_research_results`` (added in Phase 4)
-    - Sessions without ``content_fidelity`` / ``dropped_content_ids`` (added in Phase 5)
+    - Sessions without ``dropped_content_ids`` (added in Phase 5; ``content_fidelity`` was removed as dead code)
     - Sessions without provider tracking fields (added in Phase 6)
     """
 
@@ -2778,7 +2778,7 @@ class TestBackwardCompatDeserialization:
         # Collections default to empty
         assert state.topic_research_results == []
         assert state.contradictions == []
-        assert state.content_fidelity == {}
+        assert not hasattr(state, "content_fidelity")
         assert state.dropped_content_ids == []
         assert state.content_allocation_metadata == {}
         assert state.phase_metrics == []

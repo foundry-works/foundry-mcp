@@ -591,7 +591,6 @@ class ActionHandlersMixin:
                 "is_complete": state.completed_at is not None,
                 # Token management metadata
                 "content_fidelity_schema_version": "1.0",
-                "content_fidelity": state.content_fidelity,
                 "dropped_content_ids": state.dropped_content_ids,
                 "content_allocation_summary": {
                     "tokens_used": allocation_meta.get("tokens_used"),

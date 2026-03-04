@@ -38,15 +38,15 @@
 - [x] Add/update test asserting `claims_extracted >= claims_filtered >= claims_verified`
 
 ## Phase 4: Remove dead `report_sections` and `content_fidelity` fields
-- [ ] Grep for all references to `report_sections` across codebase — confirm no write callers
-- [ ] Grep for all references to `content_fidelity`, `ContentFidelityRecord`, `FidelityLevel` — confirm no workflow callers
-- [ ] Remove `report_sections` field from `DeepResearchState`
-- [ ] Remove `content_fidelity` field from `DeepResearchState`
-- [ ] Remove `ContentFidelityRecord` class (if no other consumers)
-- [ ] Remove `FidelityLevel` enum (if no other consumers)
-- [ ] Remove helper methods: `record_fidelity_level`, `get_fidelity_record`, `get_items_at_fidelity_level`, `overall_fidelity_score`, `has_degraded_content`, and fidelity merge methods
-- [ ] Update `state_migrations.py` — add migration to silently drop `report_sections` and `content_fidelity` keys from persisted state
-- [ ] Update `builders.py` — remove serialization of removed fields
-- [ ] Update `types.py` — remove type references if any
-- [ ] Remove/update any tests referencing removed fields
-- [ ] Verify old session state files deserialize without error (backward compat)
+- [x] Grep for all references to `report_sections` across codebase — confirm no write callers
+- [x] Grep for all references to `content_fidelity`, `ContentFidelityRecord`, `FidelityLevel` — confirm no workflow callers
+- [x] Remove `report_sections` field from `DeepResearchState`
+- [x] Remove `content_fidelity` field from `DeepResearchState`
+- [x] Remove `ContentFidelityRecord` class (if no other consumers)
+- [x] Remove `FidelityLevel` enum (if no other consumers)
+- [x] Remove helper methods: `record_fidelity_level`, `get_fidelity_record`, `get_items_at_fidelity_level`, `overall_fidelity_score`, `has_degraded_content`, and fidelity merge methods
+- [x] Update `state_migrations.py` — add migration to silently drop `report_sections` and `content_fidelity` keys from persisted state
+- [x] Update `builders.py` — remove serialization of removed fields — N/A, builders.py `content_fidelity` refers to response envelope (string), not the model dict
+- [x] Update `types.py` — remove type references if any — N/A, types.py `content_fidelity` refers to response envelope (string), not the model dict
+- [x] Remove/update any tests referencing removed fields
+- [x] Verify old session state files deserialize without error (backward compat)
