@@ -1233,6 +1233,314 @@ async def apply_corrections(
 
 
 # ---------------------------------------------------------------------------
+# Citation remapping for UNSUPPORTED claims
+# ---------------------------------------------------------------------------
+
+# Max sources to send per LLM remapping call to control token costs.
+_REMAP_MAX_CANDIDATE_SOURCES = 10
+
+# Max total remapping LLM calls per report.
+_REMAP_MAX_LLM_CALLS = 15
+
+_REMAP_SYSTEM_PROMPT = """\
+You are a citation-matching assistant. You will be given a factual claim from a \
+research report and excerpts from several candidate sources. Your task is to \
+determine which source, if any, contains evidence that supports the claim.
+
+Return a JSON object with exactly these fields:
+- "best_source": the citation number (integer) of the source that best supports \
+the claim, or null if none of the sources contain supporting evidence
+- "confidence": one of "high", "medium", or "low"
+- "evidence_quote": a brief quote from the matching source that supports the claim \
+(empty string if best_source is null)
+
+Return ONLY the JSON object, no other text.
+"""
+
+
+async def remap_unsupported_citations(
+    state: DeepResearchState,
+    verification_result: ClaimVerificationResult,
+    execute_fn: ExecuteFn,
+    provider_id: str,
+    timeout: float = 60.0,
+    max_concurrent: int = 5,
+) -> int:
+    """Remap citations for UNSUPPORTED claims to better-matching sources.
+
+    For each UNSUPPORTED claim that has ``cited_sources``, searches all available
+    sources for one whose content actually supports the claim. Uses LLM-based
+    matching for accuracy.
+
+    Mutates ``state.report`` in place (replacing ``[old]`` with ``[new]`` within
+    the claim's ``quote_context`` region). Also updates ``claim.cited_sources``
+    on the verdict objects.
+
+    Args:
+        state: Research state with populated report and sources.
+        verification_result: Verification result with per-claim details.
+        execute_fn: Async callable for LLM calls.
+        provider_id: LLM provider for remapping calls.
+        timeout: Per-call timeout in seconds.
+        max_concurrent: Maximum parallel remapping LLM calls.
+
+    Returns:
+        Number of citations successfully remapped.
+    """
+    if not state.report:
+        return 0
+
+    citation_map = state.get_citation_map()
+    if not citation_map:
+        return 0
+
+    # Collect UNSUPPORTED claims that have citations to remap.
+    candidates = [
+        claim
+        for claim in verification_result.details
+        if claim.verdict in ("UNSUPPORTED", "PARTIALLY_SUPPORTED")
+        and claim.cited_sources
+        and claim.quote_context
+    ]
+
+    if not candidates:
+        return 0
+
+    # Build source content snippets for candidate matching.
+    # Exclude sources with no usable content.
+    available_sources: dict[int, tuple[str, str]] = {}  # citation_num -> (title, text_snippet)
+    for cit_num, source in citation_map.items():
+        text = _resolve_source_text(source)
+        if not text:
+            continue
+        title = source.title or source.url or f"Source {cit_num}"
+        # Truncate to keep prompt size manageable.
+        snippet = text[:VERIFICATION_SOURCE_MAX_CHARS]
+        available_sources[cit_num] = (title, snippet)
+
+    if not available_sources:
+        return 0
+
+    semaphore = asyncio.Semaphore(max_concurrent)
+    remapped_count = 0
+    llm_calls_made = 0
+
+    async def _remap_single_claim(claim: ClaimVerdict) -> bool:
+        """Attempt to remap a single claim's citation. Returns True if remapped."""
+        nonlocal llm_calls_made
+
+        if llm_calls_made >= _REMAP_MAX_LLM_CALLS:
+            return False
+
+        # Build candidate source list, excluding the already-cited sources
+        # (which were already checked during verification and found lacking).
+        already_cited = set(claim.cited_sources)
+        candidate_nums = [
+            n for n in available_sources if n not in already_cited
+        ]
+
+        if not candidate_nums:
+            return False
+
+        # Limit candidates to control token costs.
+        candidate_nums = candidate_nums[:_REMAP_MAX_CANDIDATE_SOURCES]
+
+        # Build the prompt with source excerpts.
+        source_sections = []
+        for cit_num in candidate_nums:
+            title, snippet = available_sources[cit_num]
+            # Use multi-window truncation to focus on claim-relevant content.
+            focused = _multi_window_truncate(
+                snippet, claim.claim, max_chars=3000, max_windows=2
+            )
+            source_sections.append(
+                f"### Source [{cit_num}]: {title}\n\n{focused}"
+            )
+
+        user_prompt = (
+            f"## Claim\n\n\"{claim.claim}\"\n\n"
+            f"## Candidate Sources\n\n"
+            + "\n\n".join(source_sections)
+        )
+
+        async with semaphore:
+            llm_calls_made += 1
+            try:
+                result: "WorkflowResult" = await execute_fn(
+                    prompt=user_prompt,
+                    system_prompt=_REMAP_SYSTEM_PROMPT,
+                    provider_id=provider_id,
+                    timeout=timeout,
+                    phase="claim_verification_remap",
+                )
+                if not result.success or not result.content:
+                    return False
+
+                parsed = _parse_remap_response(result.content)
+                if parsed is None:
+                    return False
+
+                best_source, confidence, evidence_quote = parsed
+
+                if best_source is None or best_source not in available_sources:
+                    # No matching source found — remove the citation from the report.
+                    _remove_citations_from_report(state, claim)
+                    return False
+
+                if confidence == "low":
+                    # Low confidence — don't remap, just remove.
+                    _remove_citations_from_report(state, claim)
+                    return False
+
+                # Remap: replace old citation numbers with new one in the report.
+                success = _apply_citation_remap(
+                    state, claim, claim.cited_sources, best_source
+                )
+                if success:
+                    claim.cited_sources = [best_source]
+                    claim.evidence_quote = evidence_quote or claim.evidence_quote
+                    return True
+                return False
+
+            except Exception as exc:
+                logger.warning(
+                    "Citation remap failed for claim %r: %s",
+                    claim.claim[:60],
+                    exc,
+                )
+                return False
+
+    # Run remapping with bounded concurrency.
+    tasks = [_remap_single_claim(claim) for claim in candidates]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for r in results:
+        if r is True:
+            remapped_count += 1
+
+    verification_result.citations_remapped = remapped_count
+
+    if remapped_count > 0:
+        logger.info(
+            "Citation remapping: %d/%d UNSUPPORTED citations remapped",
+            remapped_count,
+            len(candidates),
+        )
+
+    return remapped_count
+
+
+def _parse_remap_response(
+    content: str,
+) -> Optional[tuple[Optional[int], str, str]]:
+    """Parse the LLM remapping response.
+
+    Returns (best_source, confidence, evidence_quote) or None on parse failure.
+    """
+    content = content.strip()
+    # Strip markdown code fences if present.
+    if content.startswith("```"):
+        lines = content.split("\n")
+        lines = [l for l in lines if not l.strip().startswith("```")]
+        content = "\n".join(lines).strip()
+
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        logger.warning("Citation remap: failed to parse JSON response")
+        return None
+
+    best_source = data.get("best_source")
+    if best_source is not None:
+        try:
+            best_source = int(best_source)
+        except (TypeError, ValueError):
+            best_source = None
+
+    confidence = data.get("confidence", "low")
+    if confidence not in ("high", "medium", "low"):
+        confidence = "low"
+
+    evidence_quote = data.get("evidence_quote", "")
+
+    return (best_source, confidence, evidence_quote)
+
+
+def _apply_citation_remap(
+    state: DeepResearchState,
+    claim: ClaimVerdict,
+    old_citations: list[int],
+    new_citation: int,
+) -> bool:
+    """Replace citation numbers in the report within the claim's quote_context region.
+
+    Only modifies the first occurrence of the quote_context to avoid unintended
+    changes elsewhere in the report.
+
+    Returns True if the replacement was made.
+    """
+    if not state.report or not claim.quote_context:
+        return False
+
+    if claim.quote_context not in state.report:
+        logger.info(
+            "Citation remap: quote_context not found in report for claim %r",
+            claim.claim[:60],
+        )
+        return False
+
+    # Build the modified quote_context with remapped citations.
+    modified_context = claim.quote_context
+    for old_cit in old_citations:
+        modified_context = modified_context.replace(
+            f"[{old_cit}]", f"[{new_citation}]"
+        )
+
+    if modified_context == claim.quote_context:
+        # No citation references found in the quote_context text.
+        return False
+
+    state.report = state.report.replace(
+        claim.quote_context, modified_context, 1
+    )
+    # Update quote_context to reflect the change (for subsequent operations).
+    claim.quote_context = modified_context
+    return True
+
+
+def _remove_citations_from_report(
+    state: DeepResearchState,
+    claim: ClaimVerdict,
+) -> None:
+    """Remove citation brackets from the claim's quote_context in the report.
+
+    Leaves the factual text intact but removes the ``[N]`` markers.
+    """
+    if not state.report or not claim.quote_context:
+        return
+
+    if claim.quote_context not in state.report:
+        return
+
+    import re as _re
+
+    modified_context = claim.quote_context
+    for cit in claim.cited_sources:
+        # Remove [N] (and optional trailing space).
+        modified_context = modified_context.replace(f"[{cit}]", "")
+
+    # Clean up double spaces left by removed citations.
+    modified_context = _re.sub(r"  +", " ", modified_context)
+
+    if modified_context != claim.quote_context:
+        state.report = state.report.replace(
+            claim.quote_context, modified_context, 1
+        )
+        claim.quote_context = modified_context
+        claim.cited_sources = []
+
+
+# ---------------------------------------------------------------------------
 # Top-level orchestrator
 # ---------------------------------------------------------------------------
 

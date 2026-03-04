@@ -1357,6 +1357,10 @@ class ClaimVerificationResult(BaseModel):
         default=0, description="Claims verified as PARTIALLY_SUPPORTED"
     )
     corrections_applied: int = Field(default=0, description="Number of corrections applied to report")
+    citations_remapped: int = Field(
+        default=0,
+        description="Number of UNSUPPORTED citations remapped to a better-matching source",
+    )
     details: list[ClaimVerdict] = Field(
         default_factory=list,
         description="Per-claim verification details",

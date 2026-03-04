@@ -38,16 +38,16 @@
 - [ ] Add test: summaries are truncated when token budget is tight
 
 ## Fix 3: Citation remapping for UNSUPPORTED claims
-- [ ] Add `citations_remapped: int = 0` field to `ClaimVerificationResult`
-- [ ] Add `remap_unsupported_citations()` function in `claim_verification.py`
-- [ ] For each UNSUPPORTED claim with `cited_sources`: search source contents for better match
-- [ ] Use LLM-based matching: send claim + candidate sources, ask which supports it
-- [ ] Batch claims per source to reduce LLM calls
-- [ ] Replace `[old_citation]` → `[new_citation]` within the claim's quote_context region only
-- [ ] If no source supports the claim, remove the citation (leave fact uncited)
-- [ ] Wire into `workflow_execution.py` after claim verification block
-- [ ] Add test: unsupported claim gets remapped to correct source
-- [ ] Add test: unsupported claim with no matching source → citation removed
-- [ ] Add test: partially_supported claim with citation mismatch → remapped
-- [ ] Add test: remapping stats tracked in verification result
-- [ ] Add token budget cap for remapping LLM calls
+- [x] Add `citations_remapped: int = 0` field to `ClaimVerificationResult`
+- [x] Add `remap_unsupported_citations()` function in `claim_verification.py`
+- [x] For each UNSUPPORTED claim with `cited_sources`: search source contents for better match
+- [x] Use LLM-based matching: send claim + candidate sources, ask which supports it
+- [x] Batch claims per source to reduce LLM calls
+- [x] Replace `[old_citation]` → `[new_citation]` within the claim's quote_context region only
+- [x] If no source supports the claim, remove the citation (leave fact uncited)
+- [x] Wire into `workflow_execution.py` after claim verification block
+- [x] Add test: unsupported claim gets remapped to correct source
+- [x] Add test: unsupported claim with no matching source → citation removed
+- [x] Add test: partially_supported claim with citation mismatch → remapped
+- [x] Add test: remapping stats tracked in verification result
+- [x] Add token budget cap for remapping LLM calls

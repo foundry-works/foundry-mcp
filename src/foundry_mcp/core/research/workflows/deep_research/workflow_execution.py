@@ -452,6 +452,7 @@ class WorkflowExecutionMixin:
                     from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification import (
                         apply_corrections,
                         extract_and_verify_claims,
+                        remap_unsupported_citations,
                     )
 
                     state.metadata["claim_verification_started"] = True
@@ -471,6 +472,8 @@ class WorkflowExecutionMixin:
                         )
                         state.claim_verification = verification_result
 
+                        report_modified = False
+
                         if verification_result.claims_contradicted > 0:
                             await apply_corrections(
                                 state=state,
@@ -478,11 +481,28 @@ class WorkflowExecutionMixin:
                                 verification_result=verification_result,
                                 execute_fn=self._execute_provider_async,
                             )
-                            # Re-save report after corrections using the same path
-                            # synthesis wrote to (avoids _save_report_markdown collision logic).
-                            if state.report_output_path:
-                                validated = _validate_report_output_path(state.report_output_path)
-                                validated.write_text(state.report or "", encoding="utf-8")
+                            report_modified = True
+
+                        if verification_result.claims_unsupported > 0:
+                            await remap_unsupported_citations(
+                                state=state,
+                                verification_result=verification_result,
+                                execute_fn=self._execute_provider_async,
+                                provider_id=resolve_phase_provider(
+                                    self.config, "claim_verification", "synthesis"
+                                ),
+                                timeout=self.config.deep_research_claim_verification_timeout,
+                                max_concurrent=self.config.deep_research_claim_verification_max_concurrent,
+                            )
+                            if verification_result.citations_remapped > 0:
+                                report_modified = True
+
+                        if report_modified and state.report_output_path:
+                            # Re-save report after corrections/remapping using the same
+                            # path synthesis wrote to (avoids _save_report_markdown
+                            # collision logic).
+                            validated = _validate_report_output_path(state.report_output_path)
+                            validated.write_text(state.report or "", encoding="utf-8")
 
                         # Persist corrected report + verification result.
                         self.memory.save_deep_research(state)
@@ -496,6 +516,7 @@ class WorkflowExecutionMixin:
                                 "claims_verified": verification_result.claims_verified,
                                 "claims_contradicted": verification_result.claims_contradicted,
                                 "corrections_applied": verification_result.corrections_applied,
+                                "citations_remapped": verification_result.citations_remapped,
                             },
                         )
                     except Exception as exc:

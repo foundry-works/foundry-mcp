@@ -36,6 +36,7 @@ from foundry_mcp.core.research.models.sources import (
 from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification import (
     _EXTRACTION_SYSTEM_PROMPT,
     _VERIFICATION_SYSTEM_PROMPT,
+    _apply_citation_remap,
     _apply_token_budget,
     _build_verification_user_prompt,
     _extract_claims_chunked,
@@ -45,7 +46,9 @@ from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification
     _filter_uncited_claims,
     _multi_window_truncate,
     _parse_extracted_claims,
+    _parse_remap_response,
     _parse_verification_response,
+    _remove_citations_from_report,
     _repair_heading_boundaries,
     _resolve_source_text,
     _sort_claims_by_priority,
@@ -53,6 +56,7 @@ from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification
     _verify_single_claim,
     apply_corrections,
     extract_and_verify_claims,
+    remap_unsupported_citations,
 )
 
 # ---------------------------------------------------------------------------
@@ -2783,3 +2787,455 @@ class TestRepairHeadingBoundaries:
         corrected = "The program offers excellent rewards for travel."
         result = _repair_heading_boundaries(original, corrected)
         assert result == corrected
+
+
+# ---------------------------------------------------------------------------
+# Citation remapping helpers
+# ---------------------------------------------------------------------------
+
+
+class TestParseRemapResponse:
+    def test_valid_response(self):
+        content = '{"best_source": 3, "confidence": "high", "evidence_quote": "Quote here"}'
+        result = _parse_remap_response(content)
+        assert result == (3, "high", "Quote here")
+
+    def test_null_best_source(self):
+        content = '{"best_source": null, "confidence": "low", "evidence_quote": ""}'
+        result = _parse_remap_response(content)
+        assert result == (None, "low", "")
+
+    def test_code_fenced_json(self):
+        content = '```json\n{"best_source": 5, "confidence": "medium", "evidence_quote": "x"}\n```'
+        result = _parse_remap_response(content)
+        assert result == (5, "medium", "x")
+
+    def test_invalid_json(self):
+        assert _parse_remap_response("not json") is None
+
+    def test_invalid_confidence_defaults_to_low(self):
+        content = '{"best_source": 1, "confidence": "maybe", "evidence_quote": ""}'
+        result = _parse_remap_response(content)
+        assert result is not None
+        assert result[1] == "low"
+
+
+class TestApplyCitationRemap:
+    def test_basic_remap(self):
+        report = "Introduction.\n\nThis fact is true [2]. More text.\n\nConclusion."
+        sources = [_make_source(1, content="Source 1"), _make_source(2, content="Source 2")]
+        state = _make_state_with_sources(report, sources)
+
+        claim = ClaimVerdict(
+            claim="This fact is true",
+            claim_type="positive",
+            cited_sources=[2],
+            verdict="UNSUPPORTED",
+            quote_context="This fact is true [2].",
+        )
+
+        success = _apply_citation_remap(state, claim, [2], 1)
+        assert success is True
+        assert "[1]" in state.report
+        assert "[2]" not in state.report
+        assert claim.quote_context == "This fact is true [1]."
+
+    def test_remap_no_quote_context(self):
+        state = _make_state_with_sources("Report text.", [_make_source(1)])
+        claim = ClaimVerdict(
+            claim="Claim",
+            claim_type="positive",
+            cited_sources=[1],
+            verdict="UNSUPPORTED",
+            quote_context=None,
+        )
+        assert _apply_citation_remap(state, claim, [1], 2) is False
+
+    def test_remap_quote_not_in_report(self):
+        state = _make_state_with_sources("Different text.", [_make_source(1)])
+        claim = ClaimVerdict(
+            claim="Claim",
+            claim_type="positive",
+            cited_sources=[1],
+            verdict="UNSUPPORTED",
+            quote_context="This is not in the report [1].",
+        )
+        assert _apply_citation_remap(state, claim, [1], 2) is False
+
+
+class TestRemoveCitationsFromReport:
+    def test_removes_citation_bracket(self):
+        report = "Some fact [3] is stated here.\n\nConclusion."
+        state = _make_state_with_sources(report, [_make_source(3)])
+        claim = ClaimVerdict(
+            claim="Some fact",
+            claim_type="positive",
+            cited_sources=[3],
+            verdict="UNSUPPORTED",
+            quote_context="Some fact [3] is stated here.",
+        )
+        _remove_citations_from_report(state, claim)
+        assert "[3]" not in state.report
+        assert "Some fact is stated here." in state.report
+        assert claim.cited_sources == []
+
+    def test_noop_when_quote_missing(self):
+        state = _make_state_with_sources("Different text.", [_make_source(1)])
+        claim = ClaimVerdict(
+            claim="Claim",
+            claim_type="positive",
+            cited_sources=[1],
+            verdict="UNSUPPORTED",
+            quote_context="Not in report [1].",
+        )
+        original_report = state.report
+        _remove_citations_from_report(state, claim)
+        assert state.report == original_report
+
+
+# ---------------------------------------------------------------------------
+# Full remapping integration tests
+# ---------------------------------------------------------------------------
+
+
+class TestRemapUnsupportedCitations:
+    @pytest.mark.asyncio
+    async def test_unsupported_claim_remapped_to_correct_source(self):
+        """UNSUPPORTED claim gets remapped when a better source exists."""
+        report = (
+            "Introduction.\n\n"
+            "Chase has 14 transfer partners [1]. This is notable.\n\n"
+            "Conclusion."
+        )
+        sources = [
+            _make_source(1, raw_content="Article about Amex rewards programs"),
+            _make_source(2, raw_content="Chase Ultimate Rewards has 14 airline and hotel transfer partners"),
+        ]
+        state = _make_state_with_sources(report, sources)
+
+        verification_result = ClaimVerificationResult(
+            claims_extracted=1,
+            claims_verified=1,
+            claims_unsupported=1,
+            details=[
+                ClaimVerdict(
+                    claim="Chase has 14 transfer partners",
+                    claim_type="quantitative",
+                    cited_sources=[1],
+                    verdict="UNSUPPORTED",
+                    quote_context="Chase has 14 transfer partners [1].",
+                ),
+            ],
+        )
+
+        async def mock_execute(**kwargs):
+            return MockWorkflowResult(
+                success=True,
+                content='{"best_source": 2, "confidence": "high", "evidence_quote": "14 airline and hotel transfer partners"}',
+            )
+
+        remapped = await remap_unsupported_citations(
+            state=state,
+            verification_result=verification_result,
+            execute_fn=mock_execute,
+            provider_id="test-provider",
+        )
+
+        assert remapped == 1
+        assert verification_result.citations_remapped == 1
+        assert "[2]" in state.report
+        assert "[1]" not in state.report
+        assert verification_result.details[0].cited_sources == [2]
+
+    @pytest.mark.asyncio
+    async def test_no_matching_source_removes_citation(self):
+        """When no source supports the claim, the citation bracket is removed."""
+        report = (
+            "Introduction.\n\n"
+            "The sky is blue [1]. This is well known.\n\n"
+            "Conclusion."
+        )
+        sources = [
+            _make_source(1, raw_content="Article about cooking recipes"),
+        ]
+        state = _make_state_with_sources(report, sources)
+
+        verification_result = ClaimVerificationResult(
+            claims_extracted=1,
+            claims_verified=1,
+            claims_unsupported=1,
+            details=[
+                ClaimVerdict(
+                    claim="The sky is blue",
+                    claim_type="positive",
+                    cited_sources=[1],
+                    verdict="UNSUPPORTED",
+                    quote_context="The sky is blue [1].",
+                ),
+            ],
+        )
+
+        async def mock_execute(**kwargs):
+            # No candidate sources to check (source 1 is excluded as already-cited),
+            # so this should not be called. But if called, return null.
+            return MockWorkflowResult(
+                success=True,
+                content='{"best_source": null, "confidence": "low", "evidence_quote": ""}',
+            )
+
+        remapped = await remap_unsupported_citations(
+            state=state,
+            verification_result=verification_result,
+            execute_fn=mock_execute,
+            provider_id="test-provider",
+        )
+
+        # Only 1 source exists and it's the already-cited one, so no candidates.
+        # No LLM call should be made, and no remap happens.
+        assert remapped == 0
+
+    @pytest.mark.asyncio
+    async def test_partially_supported_with_citation_mismatch_remapped(self):
+        """PARTIALLY_SUPPORTED claim with wrong citation gets remapped."""
+        report = (
+            "Introduction.\n\n"
+            "The rate is approximately 3.5% [1]. Details follow.\n\n"
+            "Conclusion."
+        )
+        sources = [
+            _make_source(1, raw_content="General market overview with no specific rates"),
+            _make_source(2, raw_content="Current mortgage rate is 3.48% as of March 2026"),
+        ]
+        state = _make_state_with_sources(report, sources)
+
+        verification_result = ClaimVerificationResult(
+            claims_extracted=1,
+            claims_verified=1,
+            claims_partially_supported=1,
+            details=[
+                ClaimVerdict(
+                    claim="The rate is approximately 3.5%",
+                    claim_type="quantitative",
+                    cited_sources=[1],
+                    verdict="PARTIALLY_SUPPORTED",
+                    quote_context="The rate is approximately 3.5% [1].",
+                ),
+            ],
+        )
+
+        async def mock_execute(**kwargs):
+            return MockWorkflowResult(
+                success=True,
+                content='{"best_source": 2, "confidence": "high", "evidence_quote": "Current mortgage rate is 3.48%"}',
+            )
+
+        remapped = await remap_unsupported_citations(
+            state=state,
+            verification_result=verification_result,
+            execute_fn=mock_execute,
+            provider_id="test-provider",
+        )
+
+        assert remapped == 1
+        assert "[2]" in state.report
+        assert verification_result.details[0].cited_sources == [2]
+
+    @pytest.mark.asyncio
+    async def test_remapping_stats_tracked(self):
+        """citations_remapped counter is correctly set on the verification result."""
+        report = (
+            "Fact A [1]. Context.\n\n"
+            "Fact B [1]. Context.\n\n"
+        )
+        sources = [
+            _make_source(1, raw_content="Unrelated content"),
+            _make_source(2, raw_content="Supports Fact A content"),
+            _make_source(3, raw_content="Supports Fact B content"),
+        ]
+        state = _make_state_with_sources(report, sources)
+
+        verification_result = ClaimVerificationResult(
+            claims_extracted=2,
+            claims_verified=2,
+            claims_unsupported=2,
+            details=[
+                ClaimVerdict(
+                    claim="Fact A",
+                    claim_type="positive",
+                    cited_sources=[1],
+                    verdict="UNSUPPORTED",
+                    quote_context="Fact A [1].",
+                ),
+                ClaimVerdict(
+                    claim="Fact B",
+                    claim_type="positive",
+                    cited_sources=[1],
+                    verdict="UNSUPPORTED",
+                    quote_context="Fact B [1].",
+                ),
+            ],
+        )
+
+        call_count = 0
+
+        async def mock_execute(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            # Alternate: first claim remaps to 2, second to 3.
+            src = 2 if call_count == 1 else 3
+            return MockWorkflowResult(
+                success=True,
+                content=f'{{"best_source": {src}, "confidence": "high", "evidence_quote": "evidence"}}',
+            )
+
+        remapped = await remap_unsupported_citations(
+            state=state,
+            verification_result=verification_result,
+            execute_fn=mock_execute,
+            provider_id="test-provider",
+        )
+
+        assert remapped == 2
+        assert verification_result.citations_remapped == 2
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_low_confidence_removes_citation(self):
+        """Low-confidence match results in citation removal, not remapping."""
+        report = "Some claim [1]. More text.\n\nConclusion."
+        sources = [
+            _make_source(1, raw_content="Original source"),
+            _make_source(2, raw_content="Vaguely related source"),
+        ]
+        state = _make_state_with_sources(report, sources)
+
+        verification_result = ClaimVerificationResult(
+            claims_extracted=1,
+            claims_verified=1,
+            claims_unsupported=1,
+            details=[
+                ClaimVerdict(
+                    claim="Some claim",
+                    claim_type="positive",
+                    cited_sources=[1],
+                    verdict="UNSUPPORTED",
+                    quote_context="Some claim [1].",
+                ),
+            ],
+        )
+
+        async def mock_execute(**kwargs):
+            return MockWorkflowResult(
+                success=True,
+                content='{"best_source": 2, "confidence": "low", "evidence_quote": "maybe"}',
+            )
+
+        remapped = await remap_unsupported_citations(
+            state=state,
+            verification_result=verification_result,
+            execute_fn=mock_execute,
+            provider_id="test-provider",
+        )
+
+        assert remapped == 0
+        assert "[1]" not in state.report  # citation removed
+        assert "[2]" not in state.report  # not remapped to low-confidence match
+
+    @pytest.mark.asyncio
+    async def test_no_unsupported_claims_is_noop(self):
+        """No remapping when all claims are SUPPORTED."""
+        report = "Fact [1]. Context."
+        sources = [_make_source(1, content="Supporting content")]
+        state = _make_state_with_sources(report, sources)
+
+        verification_result = ClaimVerificationResult(
+            claims_extracted=1,
+            claims_verified=1,
+            claims_supported=1,
+            details=[
+                ClaimVerdict(
+                    claim="Fact",
+                    claim_type="positive",
+                    cited_sources=[1],
+                    verdict="SUPPORTED",
+                    quote_context="Fact [1].",
+                ),
+            ],
+        )
+
+        async def mock_execute(**kwargs):
+            raise AssertionError("Should not be called")
+
+        remapped = await remap_unsupported_citations(
+            state=state,
+            verification_result=verification_result,
+            execute_fn=mock_execute,
+            provider_id="test-provider",
+        )
+
+        assert remapped == 0
+        assert verification_result.citations_remapped == 0
+
+    @pytest.mark.asyncio
+    async def test_llm_failure_is_graceful(self):
+        """LLM call failure does not crash — claim is skipped."""
+        report = "Claim text [1]. Context.\n\nMore."
+        sources = [
+            _make_source(1, raw_content="Source 1"),
+            _make_source(2, raw_content="Source 2"),
+        ]
+        state = _make_state_with_sources(report, sources)
+
+        verification_result = ClaimVerificationResult(
+            claims_extracted=1,
+            claims_verified=1,
+            claims_unsupported=1,
+            details=[
+                ClaimVerdict(
+                    claim="Claim text",
+                    claim_type="positive",
+                    cited_sources=[1],
+                    verdict="UNSUPPORTED",
+                    quote_context="Claim text [1].",
+                ),
+            ],
+        )
+
+        async def mock_execute(**kwargs):
+            raise RuntimeError("LLM timeout")
+
+        remapped = await remap_unsupported_citations(
+            state=state,
+            verification_result=verification_result,
+            execute_fn=mock_execute,
+            provider_id="test-provider",
+        )
+
+        assert remapped == 0
+
+    @pytest.mark.asyncio
+    async def test_empty_report_is_noop(self):
+        """No remapping when report is empty."""
+        state = _make_state_with_sources("", [_make_source(1)])
+        state.report = ""
+
+        verification_result = ClaimVerificationResult(
+            claims_unsupported=1,
+            details=[
+                ClaimVerdict(
+                    claim="X",
+                    claim_type="positive",
+                    cited_sources=[1],
+                    verdict="UNSUPPORTED",
+                    quote_context="X [1].",
+                ),
+            ],
+        )
+
+        remapped = await remap_unsupported_citations(
+            state=state,
+            verification_result=verification_result,
+            execute_fn=AsyncMock(),
+            provider_id="test-provider",
+        )
+        assert remapped == 0
