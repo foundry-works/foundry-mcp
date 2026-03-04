@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0a9] - 2026-03-04
+
+### Added
+
+- **`fidelity_score` computed property on ClaimVerificationResult**: Weighted fidelity score (SUPPORTED=1.0, PARTIALLY_SUPPORTED=0.5, UNSUPPORTED/CONTRADICTED=0.0) now computed from verdict distribution. Surfaced in report status and deep-research-status metadata for at-a-glance verification quality.
+- **Citation-accuracy guardrails in synthesis prompt**: Synthesis now instructs the LLM to only cite a source for facts that actually appear in that source's content, omit citations when uncertain, and never attribute facts across sources based on topical similarity.
+
+### Changed
+
+- **Prefer raw_content over compressed summaries for claim verification**: Source resolution now falls back through `raw_content → content → snippet` instead of `content → raw_content → snippet`, because compressed summaries strip specific numbers and factual details that claim verification needs.
+
 ## [0.18.0a8] - 2026-03-04
 
 ### Added
