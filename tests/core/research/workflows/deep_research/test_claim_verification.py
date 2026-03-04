@@ -1329,11 +1329,11 @@ class TestReportOverwriteAfterCorrections:
 
 
 class TestExtractionMaxTokensAndTruncation:
-    """Tests for max_tokens=16384 on extraction call and 30K char truncation."""
+    """Tests for per-chunk max_tokens=4096 on extraction calls and 30K char truncation."""
 
     @pytest.mark.asyncio
     async def test_extraction_call_receives_max_tokens(self):
-        """Extraction LLM call should include max_tokens=16384."""
+        """Chunked extraction LLM calls should include max_tokens=4096."""
         report = "Short report with a claim [1]."
         sources = [_make_source(1, content="Source content")]
         state = _make_state_with_sources(report, sources)
@@ -1370,7 +1370,7 @@ class TestExtractionMaxTokensAndTruncation:
         )
 
         assert "max_tokens" in captured_kwargs
-        assert captured_kwargs["max_tokens"] == 16384
+        assert captured_kwargs["max_tokens"] == 4096
 
     @pytest.mark.asyncio
     async def test_large_report_truncated_before_extraction(self):

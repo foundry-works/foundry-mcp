@@ -46,12 +46,12 @@
 
 ## Phase 5: Update Orchestrator
 
-- [ ] Replace monolithic extraction call in `extract_and_verify_claims()` (lines 791-813)
-- [ ] Call `_extract_claims_chunked()` instead of direct execute_fn, passing `metadata=state.metadata`
-- [ ] Caller (`extract_and_verify_claims()`) owns `extraction_failed` metadata — set in except block and empty-claims check
-- [ ] Remove `_build_extraction_user_prompt()` function (dead code after this change)
-- [ ] Keep existing 30K truncation guard (still useful to cap total input)
-- [ ] No config changes needed — per-call timeout stays at 180s from config
+- [x] Replace monolithic extraction call in `extract_and_verify_claims()` (lines 791-813)
+- [x] Call `_extract_claims_chunked()` instead of direct execute_fn, passing `metadata=state.metadata`
+- [x] Caller (`extract_and_verify_claims()`) owns `extraction_failed` metadata — set in except block and empty-claims check
+- [x] Remove `_build_extraction_user_prompt()` function (dead code after this change)
+- [x] Keep existing 30K truncation guard (still useful to cap total input)
+- [x] No config changes needed — per-call timeout stays at 180s from config
 
 ## Phase 6: Post-Extraction Citation Filter
 

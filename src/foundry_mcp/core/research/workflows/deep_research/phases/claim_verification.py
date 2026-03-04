@@ -205,11 +205,6 @@ If no cited claims are found in this section, return an empty array: []
 """
 
 
-def _build_extraction_user_prompt(report: str) -> str:
-    """Build the user prompt for claim extraction."""
-    return f"## Research Report\n\n{report}\n\n## Task\n\nExtract all verifiable factual claims from the report above as a JSON array."
-
-
 # Regex to detect bibliography/references headings (anchored to avoid false positives).
 _BIBLIOGRAPHY_HEADING_RE = re.compile(
     r"(?i)^(bibliography|references|sources|works cited)$"
@@ -1074,24 +1069,15 @@ async def extract_and_verify_claims(
         )
     else:
         extraction_report = state.report
-    extraction_prompt = _build_extraction_user_prompt(extraction_report)
     try:
-        extraction_result: "WorkflowResult" = await execute_fn(
-            prompt=extraction_prompt,
-            system_prompt=_EXTRACTION_SYSTEM_PROMPT,
+        all_claims = await _extract_claims_chunked(
+            report=extraction_report,
+            execute_fn=execute_fn,
             provider_id=provider_id,
             timeout=timeout,
-            phase="claim_extraction",
-            max_tokens=16384,
-        )
-        if not extraction_result.success or not extraction_result.content:
-            logger.warning("Claim extraction LLM call failed")
-            state.metadata["claim_verification_skipped"] = "extraction_failed"
-            return result
-
-        all_claims = _parse_extracted_claims(
-            extraction_result.content,
             max_claims=config.deep_research_claim_verification_max_claims,
+            max_concurrent=config.deep_research_claim_verification_max_concurrent,
+            metadata=state.metadata,
         )
     except Exception as exc:
         logger.warning("Claim extraction failed: %s", exc)
