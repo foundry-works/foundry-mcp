@@ -26,23 +26,23 @@
 - [x] Set `max_retries=1` (reduced from default 2)
 - [x] Set `retry_delay=2.0` (reduced from default 5.0)
 - [x] Parse response with existing `_parse_extracted_claims()`, passing `max_claims_per_chunk` as `max_claims`
-- [ ] Compute `max_claims_per_chunk` as `max(10, max_claims // len(chunks))` in caller
+- [x] Compute `max_claims_per_chunk` as `max(10, max_claims // len(chunks))` in caller
 - [x] Tag extracted claims with chunk's section heading as `report_section`
 - [x] Graceful degradation: log warning and return empty list on failure
 
 ## Phase 4: Parallel Chunk Orchestrator
 
-- [ ] Add `_extract_claims_chunked()` async function
-- [ ] Use `asyncio.Semaphore(max_concurrent)` for bounded concurrency
-- [ ] Gather all chunk tasks with `asyncio.gather(*tasks, return_exceptions=True)`
-- [ ] Use `check_gather_cancellation()` for cancellation safety
-- [ ] Merge claim lists from all chunks
-- [ ] Deduplicate claims by **normalized** claim text (lowercase, strip whitespace, remove `\[\d+\]` citation brackets only)
-- [ ] Cap total claims at `max_claims`
-- [ ] Single chunk processed via `_extract_claims_from_chunk()` — same code path, no special case
-- [ ] Call `_filter_uncited_claims()` after merge+dedup, before returning
-- [ ] Log per-chunk extraction results (chunk index, success/fail, claim count)
-- [ ] Accept optional `metadata` dict; populate `extraction_strategy`, `extraction_chunks_attempted`, `extraction_chunks_succeeded`, `extraction_claims_per_chunk`
+- [x] Add `_extract_claims_chunked()` async function
+- [x] Use `asyncio.Semaphore(max_concurrent)` for bounded concurrency
+- [x] Gather all chunk tasks with `asyncio.gather(*tasks, return_exceptions=True)`
+- [x] Use `check_gather_cancellation()` for cancellation safety
+- [x] Merge claim lists from all chunks
+- [x] Deduplicate claims by **normalized** claim text (lowercase, strip whitespace, remove `\[\d+\]` citation brackets only)
+- [x] Cap total claims at `max_claims`
+- [x] Single chunk processed via `_extract_claims_from_chunk()` — same code path, no special case
+- [x] Call `_filter_uncited_claims()` after merge+dedup, before returning
+- [x] Log per-chunk extraction results (chunk index, success/fail, claim count)
+- [x] Accept optional `metadata` dict; populate `extraction_strategy`, `extraction_chunks_attempted`, `extraction_chunks_succeeded`, `extraction_claims_per_chunk`
 
 ## Phase 5: Update Orchestrator
 
@@ -55,10 +55,10 @@
 
 ## Phase 6: Post-Extraction Citation Filter
 
-- [ ] Add `_filter_uncited_claims()` function
-- [ ] Drop claims with empty or missing `cited_sources`
-- [ ] Log count of dropped uncited claims
-- [ ] Call from `_extract_claims_chunked()` after merge+dedup, before returning
+- [x] Add `_filter_uncited_claims()` function
+- [x] Drop claims with empty or missing `cited_sources`
+- [x] Log count of dropped uncited claims
+- [x] Call from `_extract_claims_chunked()` after merge+dedup, before returning
 
 ## Phase 7: Multi-Window Source Truncation
 

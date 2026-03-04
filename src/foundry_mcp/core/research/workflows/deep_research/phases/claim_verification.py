@@ -361,6 +361,134 @@ async def _extract_claims_from_chunk(
         return []
 
 
+def _filter_uncited_claims(claims: list[ClaimVerdict]) -> list[ClaimVerdict]:
+    """Drop claims that have no explicit citation references.
+
+    The citation-anchored extraction prompt should only produce claims with
+    cited_sources, but this filter acts as a safety net — if the LLM
+    hallucinated a claim with no [N] reference, it gets dropped here.
+
+    Args:
+        claims: Raw extracted claims.
+
+    Returns:
+        Claims with at least one entry in cited_sources.
+    """
+    filtered = [c for c in claims if c.cited_sources]
+    dropped = len(claims) - len(filtered)
+    if dropped:
+        logger.info("Dropped %d claims with no citation references", dropped)
+    return filtered
+
+
+# Regex for removing citation brackets during deduplication.
+_CITATION_BRACKET_RE = re.compile(r"\[\d+\]")
+
+
+async def _extract_claims_chunked(
+    report: str,
+    execute_fn: ExecuteFn,
+    provider_id: str,
+    timeout: float,
+    max_claims: int,
+    max_concurrent: int,
+    metadata: Optional[dict[str, Any]] = None,
+) -> list[ClaimVerdict]:
+    """Extract claims from report using parallel section-level chunking.
+
+    Splits the report into section chunks, extracts claims from each in
+    parallel with bounded concurrency, then merges and deduplicates results.
+
+    Args:
+        report: The (possibly truncated) report text.
+        execute_fn: LLM execution callable.
+        provider_id: LLM provider to use.
+        timeout: Per-call timeout in seconds.
+        max_claims: Max total claims to return.
+        max_concurrent: Max parallel extraction calls.
+        metadata: Optional state metadata dict to populate with extraction stats.
+
+    Returns:
+        Merged, deduplicated list of ClaimVerdict objects.
+    """
+    chunks = _split_report_into_sections(report)
+    max_claims_per_chunk = max(10, max_claims // len(chunks)) if chunks else max_claims
+
+    semaphore = asyncio.Semaphore(max_concurrent)
+
+    async def _run_chunk(chunk: dict[str, str]) -> list[ClaimVerdict]:
+        async with semaphore:
+            return await _extract_claims_from_chunk(
+                chunk=chunk,
+                execute_fn=execute_fn,
+                system_prompt=_EXTRACTION_SYSTEM_PROMPT,
+                provider_id=provider_id,
+                timeout=timeout,
+                max_claims_per_chunk=max_claims_per_chunk,
+            )
+
+    tasks = [_run_chunk(chunk) for chunk in chunks]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    check_gather_cancellation(results)
+
+    # Merge claims and log per-chunk results.
+    all_claims: list[ClaimVerdict] = []
+    claims_per_chunk: list[int] = []
+    chunks_succeeded = 0
+    for idx, res in enumerate(results):
+        if isinstance(res, Exception):
+            logger.warning(
+                "Chunk %d/%d extraction raised: %s", idx + 1, len(chunks), res
+            )
+            claims_per_chunk.append(0)
+        elif isinstance(res, list):
+            count = len(res)
+            all_claims.extend(res)
+            claims_per_chunk.append(count)
+            chunks_succeeded += 1
+            logger.info(
+                "Chunk %d/%d extracted %d claims (section: %r)",
+                idx + 1,
+                len(chunks),
+                count,
+                chunks[idx].get("section", "")[:60],
+            )
+        else:
+            claims_per_chunk.append(0)
+
+    # Deduplicate by normalized claim text.
+    seen: set[str] = set()
+    deduped: list[ClaimVerdict] = []
+    for claim in all_claims:
+        normalized = _CITATION_BRACKET_RE.sub("", claim.claim.lower()).strip()
+        if normalized not in seen:
+            seen.add(normalized)
+            deduped.append(claim)
+
+    # Filter uncited claims.
+    deduped = _filter_uncited_claims(deduped)
+
+    # Cap at max_claims.
+    if max_claims and len(deduped) > max_claims:
+        deduped = deduped[:max_claims]
+
+    # Populate metadata.
+    if metadata is not None:
+        metadata["extraction_strategy"] = "chunked"
+        metadata["extraction_chunks_attempted"] = len(chunks)
+        metadata["extraction_chunks_succeeded"] = chunks_succeeded
+        metadata["extraction_claims_per_chunk"] = claims_per_chunk
+
+    logger.info(
+        "Chunked extraction complete: %d chunks (%d succeeded), %d claims after dedup+filter",
+        len(chunks),
+        chunks_succeeded,
+        len(deduped),
+    )
+
+    return deduped
+
+
 def _parse_extracted_claims(response: str, max_claims: int = 0) -> list[ClaimVerdict]:
     """Parse LLM response into ClaimVerdict objects.
 
