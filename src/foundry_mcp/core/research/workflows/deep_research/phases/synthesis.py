@@ -45,7 +45,7 @@ from foundry_mcp.core.research.workflows.deep_research._token_budget import (
     truncate_at_boundary,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._citation_postprocess import (
-    postprocess_citations,
+    cleanup_citations,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
     FALLBACK_CONTEXT_WINDOW,
@@ -919,10 +919,15 @@ class SynthesisPhaseMixin:
         # Strip spontaneous "Section N:" / "Part N:" prefixes from headings
         report = _strip_section_numbering(report)
 
-        # Post-process citations: remove dangling refs, append Sources/References
-        report, citation_metadata = postprocess_citations(
+        # Cleanup citations: strip LLM sources section, remove dangling refs.
+        # Renumbering and bibliography are deferred to finalize_citations
+        # which runs after claim verification in workflow_execution.py.
+        report, citation_metadata = cleanup_citations(
             report, state, query_type=query_type,
         )
+
+        # Stash query_type for the downstream finalize_citations call
+        state.metadata["_query_type"] = query_type
 
         # Store report in state
         state.report = report
@@ -986,7 +991,7 @@ class SynthesisPhaseMixin:
             "tokens_used": result.tokens_used,
             "duration_ms": result.duration_ms,
             "report_length": len(state.report),
-            "citation_postprocess": citation_metadata,
+            "citation_cleanup": citation_metadata,
             "degraded_mode": degraded_mode,
         }
         if self.config.audit_verbosity == "full":
