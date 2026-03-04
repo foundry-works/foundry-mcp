@@ -1265,6 +1265,9 @@ Include analysis of Conflicting Information and Limitations where they exist, bu
 - Do NOT generate a Sources or References section — it will be appended automatically.
 - Distinguish between high-confidence findings (well-supported) and lower-confidence insights.
 - Citations are extremely important. Pay careful attention to getting these right. Users will often use citations to find more information on specific points.
+- Only cite a source for a specific fact if that fact actually appears in the source's content provided to you. Do not guess or infer which source a fact came from.
+- If you are uncertain which source supports a claim, omit the citation rather than citing the wrong source.
+- Never attribute a fact from one source to a different source based on topical similarity.
 
 ## Language
 

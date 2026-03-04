@@ -293,6 +293,16 @@ class TestCitationFormat:
         assert "do not" in prompt.lower()
         assert "Sources" in prompt
 
+    def test_citation_accuracy_guardrails(self) -> None:
+        """System prompt includes citation-accuracy guardrails."""
+        stub = StubSynthesis()
+        state = _make_state()
+        prompt = stub._build_synthesis_system_prompt(state)
+
+        assert "only cite a source for a specific fact if that fact actually appears" in prompt.lower()
+        assert "omit the citation rather than citing the wrong source" in prompt.lower()
+        assert "never attribute a fact from one source to a different source" in prompt.lower()
+
     def test_conflicting_information_section_preserved(self) -> None:
         """System prompt still mentions 'Conflicting Information' (existing test compat)."""
         stub = StubSynthesis()

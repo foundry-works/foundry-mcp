@@ -24,11 +24,11 @@
 - [x] Add test: serializes correctly in JSON output (both model_dump and model_dump_json)
 
 ## Phase 3: Add citation-accuracy guardrails to synthesis prompt
-- [ ] Add citation-accuracy lines to `## Citations` section in `_build_synthesis_system_prompt` (~after line 1267, before `## Language`)
-  - [ ] Instruction: only cite a source for a fact if that fact appears in the source content provided
-  - [ ] Instruction: do not guess citation numbers — omit the citation rather than cite the wrong source
-  - [ ] Instruction: never attribute a fact from one source to a different source based on topical similarity
-- [ ] Add prompt assertion test: system prompt contains the new citation-accuracy text
+- [x] Add citation-accuracy lines to `## Citations` section in `_build_synthesis_system_prompt` (~after line 1267, before `## Language`)
+  - [x] Instruction: only cite a source for a fact if that fact appears in the source content provided
+  - [x] Instruction: do not guess citation numbers — omit the citation rather than cite the wrong source
+  - [x] Instruction: never attribute a fact from one source to a different source based on topical similarity
+- [x] Add prompt assertion test: system prompt contains the new citation-accuracy text
 
 ## Phase 4: Log claim verification source resolution for diagnostics
 - [ ] Add `source_resolution: Optional[str] = None` field to `ClaimVerdict` in `models/deep_research.py`
