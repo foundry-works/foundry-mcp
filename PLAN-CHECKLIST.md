@@ -12,11 +12,11 @@
 
 ## Phase 2: Citation-Anchored Extraction Prompt
 
-- [ ] Replace `_EXTRACTION_SYSTEM_PROMPT` with citation-anchored version
-- [ ] Anchor extraction to inline `[N]` citations ("For each inline citation [N]...")
-- [ ] Add "ONLY extract claims that have an explicit [N] citation" hard rule
-- [ ] Add "If no cited claims found, return empty array: []" guidance
-- [ ] Add "If a single sentence cites multiple sources, extract ONE claim" dedup rule
+- [x] Replace `_EXTRACTION_SYSTEM_PROMPT` with citation-anchored version
+- [x] Anchor extraction to inline `[N]` citations ("For each inline citation [N]...")
+- [x] Add "ONLY extract claims that have an explicit [N] citation" hard rule
+- [x] Add "If no cited claims found, return empty array: []" guidance
+- [x] Add "If a single sentence cites multiple sources, extract ONE claim" dedup rule
 
 ## Phase 3: Per-Chunk Extraction Function
 

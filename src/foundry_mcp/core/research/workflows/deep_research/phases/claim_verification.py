@@ -177,24 +177,31 @@ def _sort_claims_by_priority(claims: list[ClaimVerdict]) -> list[ClaimVerdict]:
 # ---------------------------------------------------------------------------
 
 _EXTRACTION_SYSTEM_PROMPT = """\
-You are a factual claim extraction assistant. Your task is to extract verifiable \
-factual claims from the research report below.
+You are a factual claim extraction assistant. Your task is to identify verifiable \
+factual claims that are backed by inline citations [N] in the report section below.
 
-Focus on:
-- Factual assertions (NOT opinions, recommendations, or subjective assessments)
-- Negative claims ("X does NOT do Y", "X is not available") — label as "negative"
-- Quantitative claims (specific numbers, dates, prices, ratios) — label as "quantitative"
-- Comparative claims ("X is better/worse than Y", "X has Y but Z does not") — label as "comparative"
-- Positive factual claims ("X does Y", "X supports Z") — label as "positive"
+For each inline citation [N] you find, extract the specific factual claim it supports.
 
-For each claim, capture:
-- "claim": the exact factual assertion
+Rules:
+- ONLY extract claims that have an explicit [N] citation adjacent to them
+- Skip opinions, recommendations, subjective assessments, and uncited statements
+- Classify each claim:
+  - "negative" — "X does NOT do Y", "X is not available"
+  - "quantitative" — specific numbers, dates, prices, ratios, percentages
+  - "comparative" — "X is better/worse than Y", "X has Y but Z does not"
+  - "positive" — "X does Y", "X supports Z"
+- If a single sentence cites multiple sources [1][2], extract ONE claim for that sentence \
+with all citation numbers in cited_sources
+
+For each claim, return:
+- "claim": the exact factual assertion (do not paraphrase)
 - "claim_type": one of "negative", "quantitative", "comparative", "positive"
-- "cited_sources": list of citation numbers (integers) referenced by or near this claim
-- "report_section": the section heading where this claim appears
-- "quote_context": the exact sentence or short passage containing this claim (for locating it later)
+- "cited_sources": list of citation numbers (integers) from the inline [N] references
+- "report_section": the section heading this claim appears under
+- "quote_context": the exact sentence containing this claim and its citation(s)
 
 Return a JSON array of claim objects. Return ONLY the JSON array, no other text.
+If no cited claims are found in this section, return an empty array: []
 """
 
 
