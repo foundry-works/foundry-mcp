@@ -28,6 +28,7 @@ _ACTION_SUMMARY = {
     "deep-research-status": "Get status of deep research session",
     "deep-research-report": "Get final report from deep research",
     "deep-research-list": "List deep research sessions",
+    "deep-research-cancel": "Cancel a running deep research session",
     "deep-research-delete": "Delete a deep research session",
     "deep-research-evaluate": "Evaluate research report quality (LLM-as-judge)",
     "deep-research-provenance": "Retrieve provenance audit trail for research session",

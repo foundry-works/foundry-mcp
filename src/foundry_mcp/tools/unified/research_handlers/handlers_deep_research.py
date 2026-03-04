@@ -1,4 +1,4 @@
-"""Deep research lifecycle handlers: start, status, report, list, delete."""
+"""Deep research lifecycle handlers: start, status, report, list, delete, cancel."""
 
 from __future__ import annotations
 
@@ -35,6 +35,10 @@ _DR_REPORT_SCHEMA = {
 }
 
 _DR_DELETE_SCHEMA = {
+    "research_id": Str(required=True),
+}
+
+_DR_CANCEL_SCHEMA = {
     "research_id": Str(required=True),
 }
 
@@ -406,6 +410,43 @@ def _handle_deep_research_list(
     return asdict(success_response(data=response_data))
 
 
+def _handle_deep_research_cancel(
+    *,
+    research_id: Optional[str] = None,
+    **kwargs: Any,
+) -> dict:
+    """Handle deep-research-cancel action."""
+    payload = {"research_id": research_id}
+    err = validate_payload(payload, _DR_CANCEL_SCHEMA, tool_name="research", action="deep-research-cancel")
+    if err:
+        return err
+
+    config = _get_config()
+    workflow = DeepResearchWorkflow(config.research, _get_memory())
+
+    assert research_id is not None  # validated by _DR_CANCEL_SCHEMA
+    result = workflow.execute(action="cancel", research_id=research_id)
+
+    if not result.success:
+        return asdict(
+            error_response(
+                result.error or f"Failed to cancel '{research_id}'",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Use deep-research-status to check if the session is still running",
+            )
+        )
+
+    return asdict(
+        success_response(
+            data={
+                "cancelled": True,
+                "research_id": research_id,
+            }
+        )
+    )
+
+
 def _handle_deep_research_delete(
     *,
     research_id: Optional[str] = None,
@@ -421,6 +462,13 @@ def _handle_deep_research_delete(
     workflow = DeepResearchWorkflow(config.research, _get_memory())
 
     assert research_id is not None  # validated by _DR_DELETE_SCHEMA
+
+    # Cancel any running background task before deleting to prevent orphaned tasks
+    bg_task = workflow.get_background_task(research_id)
+    if bg_task is not None:
+        bg_task.cancel()
+        logger.info("Cancelled running task for '%s' before deletion", research_id)
+
     deleted = workflow.delete_session(research_id)
 
     if not deleted:

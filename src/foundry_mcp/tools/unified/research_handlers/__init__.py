@@ -21,6 +21,7 @@ from foundry_mcp.tools.unified.research_handlers._helpers import (
 from foundry_mcp.tools.unified.research_handlers.handlers_deep_research import (
     _handle_deep_research,
     _handle_deep_research_assess,
+    _handle_deep_research_cancel,
     _handle_deep_research_delete,
     _handle_deep_research_evaluate,
     _handle_deep_research_export,
@@ -95,6 +96,11 @@ _ACTION_DEFINITIONS = [
         name="deep-research-list",
         handler=_handle_deep_research_list,
         summary=_ACTION_SUMMARY["deep-research-list"],
+    ),
+    ActionDefinition(
+        name="deep-research-cancel",
+        handler=_handle_deep_research_cancel,
+        summary=_ACTION_SUMMARY["deep-research-cancel"],
     ),
     ActionDefinition(
         name="deep-research-delete",
@@ -268,6 +274,7 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
         - deep-research-status: Get status of deep research session
         - deep-research-report: Get final report from deep research
         - deep-research-list: List deep research sessions
+        - deep-research-cancel: Cancel a running deep research session
         - deep-research-delete: Delete a deep research session
         - deep-research-evaluate: Evaluate research report quality (LLM-as-judge)
         - deep-research-network: Build citation network graph from research session sources
