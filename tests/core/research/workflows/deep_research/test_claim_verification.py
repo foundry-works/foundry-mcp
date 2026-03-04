@@ -992,6 +992,58 @@ class TestSerializationRoundTrip:
         assert restored.id == "deepres-new"
 
 
+class TestFidelityScore:
+    """Tests for ClaimVerificationResult.fidelity_score computed property."""
+
+    def test_all_supported(self):
+        result = ClaimVerificationResult(
+            claims_verified=10, claims_supported=10,
+        )
+        assert result.fidelity_score == 1.0
+
+    def test_all_unsupported(self):
+        result = ClaimVerificationResult(
+            claims_verified=10, claims_unsupported=10,
+        )
+        assert result.fidelity_score == 0.0
+
+    def test_all_contradicted(self):
+        result = ClaimVerificationResult(
+            claims_verified=10, claims_contradicted=10,
+        )
+        assert result.fidelity_score == 0.0
+
+    def test_mixed_verdicts(self):
+        result = ClaimVerificationResult(
+            claims_verified=35,
+            claims_supported=5,
+            claims_partially_supported=1,
+            claims_unsupported=29,
+        )
+        expected = (5 * 1.0 + 1 * 0.5) / 35
+        assert result.fidelity_score == pytest.approx(expected, abs=1e-6)
+
+    def test_zero_claims_returns_none(self):
+        result = ClaimVerificationResult(claims_verified=0)
+        assert result.fidelity_score is None
+
+    def test_serializes_in_model_dump(self):
+        result = ClaimVerificationResult(
+            claims_verified=4, claims_supported=2, claims_partially_supported=2,
+        )
+        dumped = result.model_dump()
+        assert "fidelity_score" in dumped
+        assert dumped["fidelity_score"] == pytest.approx(0.75)
+
+    def test_serializes_in_json(self):
+        import json
+        result = ClaimVerificationResult(
+            claims_verified=2, claims_supported=1, claims_unsupported=1,
+        )
+        data = json.loads(result.model_dump_json())
+        assert data["fidelity_score"] == pytest.approx(0.5)
+
+
 # ---------------------------------------------------------------------------
 # Integration test: extract_and_verify_claims
 # ---------------------------------------------------------------------------

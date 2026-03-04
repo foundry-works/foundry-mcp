@@ -7,7 +7,7 @@ from enum import Enum
 from typing import Any, ClassVar, Literal, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, computed_field, field_validator, model_validator
 
 logger = logging.getLogger(__name__)
 
@@ -1354,6 +1354,18 @@ class ClaimVerificationResult(BaseModel):
         default_factory=list,
         description="Per-claim verification details",
     )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def fidelity_score(self) -> Optional[float]:
+        """Weighted fidelity score from verdict distribution.
+
+        Weights: SUPPORTED=1.0, PARTIALLY_SUPPORTED=0.5, UNSUPPORTED=0.0, CONTRADICTED=0.0.
+        Returns None if no claims were verified.
+        """
+        if self.claims_verified == 0:
+            return None
+        return (self.claims_supported + 0.5 * self.claims_partially_supported) / self.claims_verified
 
 
 class ResearchExtensions(BaseModel):

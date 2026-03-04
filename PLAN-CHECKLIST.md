@@ -10,18 +10,18 @@
 - [x] Run existing claim verification tests — confirm no regressions from the preference flip (139 passed)
 
 ## Phase 2: Compute and store fidelity_score
-- [ ] Add `fidelity_score` computed property to `ClaimVerificationResult` in `models/deep_research.py` (~after line 1356)
-  - [ ] Weight: SUPPORTED=1.0, PARTIALLY_SUPPORTED=0.5, UNSUPPORTED=0.0, CONTRADICTED=0.0
-  - [ ] Return `None` if `claims_verified == 0`
-  - [ ] Return `float` otherwise: `(claims_supported + 0.5 * claims_partially_supported) / claims_verified`
-- [ ] Verify `fidelity_score` appears in `model_dump()` output (Pydantic `@computed_field` auto-serializes)
-- [ ] Verify action_handlers.py deep-research-status includes fidelity_score in claim_verification data (should be automatic)
-- [ ] Add test: all SUPPORTED → 1.0
-- [ ] Add test: all UNSUPPORTED → 0.0
-- [ ] Add test: all CONTRADICTED → 0.0
-- [ ] Add test: mixed (5 SUP, 1 PARTIAL, 29 UNSUP) → ≈0.157
-- [ ] Add test: 0 claims_verified → None
-- [ ] Add test: serializes correctly in JSON output
+- [x] Add `fidelity_score` computed property to `ClaimVerificationResult` in `models/deep_research.py` (~after line 1356)
+  - [x] Weight: SUPPORTED=1.0, PARTIALLY_SUPPORTED=0.5, UNSUPPORTED=0.0, CONTRADICTED=0.0
+  - [x] Return `None` if `claims_verified == 0`
+  - [x] Return `float` otherwise: `(claims_supported + 0.5 * claims_partially_supported) / claims_verified`
+- [x] Verify `fidelity_score` appears in `model_dump()` output (Pydantic `@computed_field` auto-serializes)
+- [x] Verify action_handlers.py deep-research-status includes fidelity_score in claim_verification data (added to both status and report serialization points)
+- [x] Add test: all SUPPORTED → 1.0
+- [x] Add test: all UNSUPPORTED → 0.0
+- [x] Add test: all CONTRADICTED → 0.0
+- [x] Add test: mixed (5 SUP, 1 PARTIAL, 29 UNSUP) → ≈0.157
+- [x] Add test: 0 claims_verified → None
+- [x] Add test: serializes correctly in JSON output (both model_dump and model_dump_json)
 
 ## Phase 3: Add citation-accuracy guardrails to synthesis prompt
 - [ ] Add citation-accuracy lines to `## Citations` section in `_build_synthesis_system_prompt` (~after line 1267, before `## Language`)

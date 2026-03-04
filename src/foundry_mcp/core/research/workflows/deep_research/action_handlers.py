@@ -405,6 +405,7 @@ class ActionHandlersMixin:
                         "claims_contradicted": cv.claims_contradicted,
                         "claims_unsupported": cv.claims_unsupported,
                         "corrections_applied": cv.corrections_applied,
+                        "fidelity_score": cv.fidelity_score,
                     }
                 elif state.metadata.get("claim_verification_skipped"):
                     metadata["claim_verification"] = {
@@ -530,6 +531,7 @@ class ActionHandlersMixin:
                             "claims_contradicted": state.claim_verification.claims_contradicted,
                             "claims_unsupported": state.claim_verification.claims_unsupported,
                             "corrections_applied": state.claim_verification.corrections_applied,
+                            "fidelity_score": state.claim_verification.fidelity_score,
                         }
                     }
                     if state.claim_verification
