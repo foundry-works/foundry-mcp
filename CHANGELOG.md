@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0a15] - 2026-03-05
+
+### Added
+
+- **Separate topic research timeout config (90s default)**: Topic research LLM calls previously shared the reflection timeout (60s), but their first-turn prompts are substantially larger. New `deep_research_topic_research_timeout` config gives topic research dedicated headroom without affecting reflection calls.
+
+### Fixed
+
+- **Zero-source synthesis guard with ungrounded report disclaimer**: When all topic researchers fail (e.g. timeouts), synthesis previously generated an ungrounded report from LLM knowledge alone. A guard now detects zero sources, sets metadata, emits an audit warning, and prepends a visible disclaimer to the report.
+- **Timeout retries capped separately from transient error retries**: Timeout errors in `_execute_provider_async` now use a dedicated `max_timeout_retries` counter (default: 0) instead of sharing `max_retries` with transient API errors. Retrying the same prompt on a timed-out provider wastes ~190s per call with near-zero recovery chance.
+- **Year references filtered from citation regex**: `_CITATION_RE` now uses a negative lookahead to skip `[1900]`–`[2099]`, preventing year references from being parsed as citation markers during intermediate stages.
+- **Markdown tables fused onto heading lines split correctly**: Tables that the synthesis LLM fused onto heading lines are now detected and split into separate blocks.
+- **Headings truncated mid-word across lines repaired**: New `_repair_truncated_headings()` rejoins headings like `## Sign-\n\nUp Bonuses` that were split at hyphenation points during synthesis.
+
 ## [0.18.0a14] - 2026-03-05
 
 ### Changed
