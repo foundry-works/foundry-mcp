@@ -1085,6 +1085,14 @@ def _repair_heading_boundaries(original_window: str, corrected_text: str) -> str
     return repaired
 
 
+def repair_heading_boundaries_global(report: str) -> str:
+    """Run heading-boundary repair on the entire report."""
+    if not report:
+        return report
+    # Pass a dummy original with a heading to force repair logic to activate.
+    return _repair_heading_boundaries("# dummy heading\n\ntext", report)
+
+
 async def _correct_single_claim(
     claim: ClaimVerdict,
     state: DeepResearchState,
@@ -1257,6 +1265,10 @@ async def apply_corrections(
                     "Annotation skip: quote_context not found for UNSUPPORTED claim %r",
                     claim.claim[:60],
                 )
+
+    # Global heading-boundary repair after all corrections.
+    if corrections_applied > 0 and state.report:
+        state.report = repair_heading_boundaries_global(state.report)
 
 
 # ---------------------------------------------------------------------------

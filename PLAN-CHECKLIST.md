@@ -24,12 +24,12 @@ Deep research reports exhibit heading-body fusions where markdown headings get c
 - [x] Add test: `test_window_keeps_own_section_heading`
 
 ### Phase 3: Global Heading Repair
-- [ ] Add `repair_heading_boundaries_global()` public function in `claim_verification.py`
-- [ ] Call after `apply_corrections` in `claim_verification.py` (~line 1214)
-- [ ] Call after synthesis completes in `workflow_execution.py` (line 445, before claim verification)
-- [ ] Add test class `TestRepairHeadingBoundariesGlobal` with 3 tests
+- [x] Add `repair_heading_boundaries_global()` public function in `claim_verification.py`
+- [x] Call after `apply_corrections` in `claim_verification.py` (~line 1214)
+- [x] Call after synthesis completes in `workflow_execution.py` (line 445, before claim verification)
+- [x] Add test class `TestRepairHeadingBoundariesGlobal` with 3 tests
 
 ### Verification
-- [ ] All existing tests pass: `python -m pytest tests/core/research/workflows/deep_research/test_claim_verification.py -x -q`
-- [ ] All new tests pass
-- [ ] Manual validation: regex matches `## What You Have (and Don't)The Amex...` correctly
+- [x] All existing tests pass: `python -m pytest tests/core/research/workflows/deep_research/test_claim_verification.py -x -q`
+- [x] All new tests pass
+- [x] Manual validation: regex matches `## What You Have (and Don't)The Amex...` correctly

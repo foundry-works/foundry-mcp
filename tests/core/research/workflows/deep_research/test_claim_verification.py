@@ -57,6 +57,7 @@ from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification
     apply_corrections,
     extract_and_verify_claims,
     remap_unsupported_citations,
+    repair_heading_boundaries_global,
 )
 
 # ---------------------------------------------------------------------------
@@ -2908,6 +2909,47 @@ class TestRepairHeadingBoundaries:
         for line in result.split("\n"):
             if line.startswith("###"):
                 assert "Members" not in line, f"Body still on heading line: {line}"
+
+
+class TestRepairHeadingBoundariesGlobal:
+    """Tests for repair_heading_boundaries_global()."""
+
+    def test_repairs_fusions_in_full_report(self):
+        """Multi-section report with heading-body fusions gets cleaned."""
+        report = (
+            "# Main Title\n\n"
+            "Introduction paragraph.\n\n"
+            "## Section One\n\n"
+            "Content of section one.\n\n"
+            "## Section Two)The body starts here without a newline.\n\n"
+            "More content.\n\n"
+            "### Subsection?Another fusion here."
+        )
+        result = repair_heading_boundaries_global(report)
+        # Both fusions should be repaired.
+        for line in result.split("\n"):
+            if re.match(r"^#{1,6}\s+", line):
+                # Heading line should not contain body text.
+                assert not re.search(r"[.!?)\]]\s*[A-Z][a-z]", line), (
+                    f"Body text still on heading line: {line}"
+                )
+
+    def test_noop_on_clean_report(self):
+        """Clean report with proper heading boundaries is unchanged."""
+        report = (
+            "# Title\n\n"
+            "Intro paragraph.\n\n"
+            "## Section One\n\n"
+            "Content here.\n\n"
+            "## Section Two\n\n"
+            "More content."
+        )
+        result = repair_heading_boundaries_global(report)
+        assert result == report
+
+    def test_empty_report(self):
+        """Empty string returns empty string."""
+        assert repair_heading_boundaries_global("") == ""
 
 
 # ---------------------------------------------------------------------------

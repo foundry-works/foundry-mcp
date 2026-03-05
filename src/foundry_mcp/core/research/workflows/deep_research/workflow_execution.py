@@ -443,6 +443,13 @@ class WorkflowExecutionMixin:
                         self._record_workflow_error(exc, state, "orchestrator_synthesis")
                         raise
 
+                # Repair heading-body fusions from synthesis.
+                if state.report:
+                    from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification import (
+                        repair_heading_boundaries_global,
+                    )
+                    state.report = repair_heading_boundaries_global(state.report)
+
                 # --- CLAIM VERIFICATION ---
                 _cv_enabled = self.config.deep_research_claim_verification_enabled and (
                     state.research_profile is None
