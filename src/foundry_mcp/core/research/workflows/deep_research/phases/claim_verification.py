@@ -22,12 +22,11 @@ import hashlib
 import json
 import logging
 import re
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from foundry_mcp.config.research import ResearchConfig
     from foundry_mcp.core.research.models.sources import ResearchSource
-    from foundry_mcp.core.research.workflows.base import WorkflowResult
 
 from foundry_mcp.core.research.models.deep_research import (
     ClaimVerdict,
@@ -46,9 +45,10 @@ from foundry_mcp.core.research.workflows.deep_research._token_budget import (
 
 logger = logging.getLogger(__name__)
 
-# Type alias for the LLM execution callable passed as a dependency.
-# Matches ResearchWorkflowBase._execute_provider_async signature.
-ExecuteFn = Callable[..., Any]
+from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+    LLMCallResult,
+    execute_llm_call,
+)
 
 # Stopwords for keyword-proximity truncation (common function words).
 _STOPWORDS: frozenset[str] = frozenset(
@@ -374,7 +374,8 @@ def _split_report_into_sections(report: str) -> list[dict[str, str]]:
 
 async def _extract_claims_from_chunk(
     chunk: dict[str, str],
-    execute_fn: ExecuteFn,
+    workflow: Any,
+    state: DeepResearchState,
     system_prompt: str,
     provider_id: str,
     timeout: float,
@@ -384,7 +385,8 @@ async def _extract_claims_from_chunk(
 
     Args:
         chunk: Dict with ``"section"`` and ``"content"`` keys.
-        execute_fn: LLM execution callable.
+        workflow: DeepResearchWorkflow instance (for lifecycle instrumentation).
+        state: Current research state.
         system_prompt: Extraction system prompt.
         provider_id: LLM provider to use.
         timeout: Per-call timeout in seconds.
@@ -399,16 +401,27 @@ async def _extract_claims_from_chunk(
         f"Extract cited factual claims from the section above as a JSON array."
     )
     try:
-        extraction_result: "WorkflowResult" = await execute_fn(
-            prompt=chunk_prompt,
+        ret = await execute_llm_call(
+            workflow=workflow,
+            state=state,
+            phase_name="claim_extraction",
             system_prompt=system_prompt,
+            user_prompt=chunk_prompt,
             provider_id=provider_id,
+            model=None,
+            temperature=0.0,
             timeout=timeout,
-            phase="claim_extraction",
-            max_tokens=4096,
-            max_retries=1,
-            retry_delay=2.0,
+            role="claim_verification",
         )
+        if isinstance(ret, LLMCallResult):
+            extraction_result = ret.result
+        else:
+            # WorkflowResult returned on error — treat as failure.
+            logger.warning(
+                "Chunk extraction failed for section %r: lifecycle returned error",
+                chunk.get("section", "")[:60],
+            )
+            return []
         if not extraction_result.success or not extraction_result.content:
             logger.warning(
                 "Chunk extraction failed for section %r: LLM call unsuccessful",
@@ -462,7 +475,8 @@ _CITATION_BRACKET_RE = re.compile(r"\[\d+\]")
 
 async def _extract_claims_chunked(
     report: str,
-    execute_fn: ExecuteFn,
+    workflow: Any,
+    state: DeepResearchState,
     provider_id: str,
     timeout: float,
     max_claims: int,
@@ -476,7 +490,8 @@ async def _extract_claims_chunked(
 
     Args:
         report: The (possibly truncated) report text.
-        execute_fn: LLM execution callable.
+        workflow: DeepResearchWorkflow instance (for lifecycle instrumentation).
+        state: Current research state.
         provider_id: LLM provider to use.
         timeout: Per-call timeout in seconds.
         max_claims: Max total claims to return.
@@ -495,7 +510,8 @@ async def _extract_claims_chunked(
         async with semaphore:
             return await _extract_claims_from_chunk(
                 chunk=chunk,
-                execute_fn=execute_fn,
+                workflow=workflow,
+                state=state,
                 system_prompt=_EXTRACTION_SYSTEM_PROMPT,
                 provider_id=provider_id,
                 timeout=timeout,
@@ -886,7 +902,8 @@ def _parse_verification_response(response: str) -> dict[str, Any]:
 async def _verify_single_claim(
     claim: ClaimVerdict,
     citation_map: dict[int, "ResearchSource"],
-    execute_fn: ExecuteFn,
+    workflow: Any,
+    state: DeepResearchState,
     provider_id: str,
     timeout: float,
     semaphore: asyncio.Semaphore,
@@ -901,14 +918,22 @@ async def _verify_single_claim(
 
     async with semaphore:
         try:
-            result: "WorkflowResult" = await execute_fn(
-                prompt=user_prompt,
+            ret = await execute_llm_call(
+                workflow=workflow,
+                state=state,
+                phase_name="claim_verification",
                 system_prompt=_VERIFICATION_SYSTEM_PROMPT,
+                user_prompt=user_prompt,
                 provider_id=provider_id,
+                model=None,
+                temperature=0.0,
                 timeout=timeout,
-                max_tokens=2000,
-                phase="claim_verification",
+                role="claim_verification",
             )
+            if isinstance(ret, LLMCallResult):
+                result = ret.result
+            else:
+                result = ret
             if result.success and result.content:
                 parsed = _parse_verification_response(result.content)
                 claim.verdict = parsed["verdict"]
@@ -940,7 +965,8 @@ async def _verify_single_claim(
 async def _verify_claims_batch(
     claims: list[ClaimVerdict],
     citation_map: dict[int, "ResearchSource"],
-    execute_fn: ExecuteFn,
+    workflow: Any,
+    state: DeepResearchState,
     provider_id: str,
     timeout: float,
     max_concurrent: int,
@@ -948,7 +974,7 @@ async def _verify_claims_batch(
     """Verify a batch of claims in parallel (bounded concurrency)."""
     semaphore = asyncio.Semaphore(max_concurrent)
     tasks = [
-        _verify_single_claim(claim, citation_map, execute_fn, provider_id, timeout, semaphore)
+        _verify_single_claim(claim, citation_map, workflow, state, provider_id, timeout, semaphore)
         for claim in claims
     ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -1096,7 +1122,7 @@ def repair_heading_boundaries_global(report: str) -> str:
 async def _correct_single_claim(
     claim: ClaimVerdict,
     state: DeepResearchState,
-    execute_fn: ExecuteFn,
+    workflow: Any,
     provider_id: str,
     timeout: float,
 ) -> bool:
@@ -1144,13 +1170,22 @@ async def _correct_single_claim(
         )
 
     try:
-        result: "WorkflowResult" = await execute_fn(
-            prompt=user_prompt,
+        ret = await execute_llm_call(
+            workflow=workflow,
+            state=state,
+            phase_name="claim_verification_correction",
             system_prompt=_CORRECTION_SYSTEM_PROMPT,
+            user_prompt=user_prompt,
             provider_id=provider_id,
+            model=None,
+            temperature=0.0,
             timeout=timeout,
-            phase="claim_verification_correction",
+            role="claim_verification",
         )
+        if isinstance(ret, LLMCallResult):
+            result = ret.result
+        else:
+            result = ret
         if not result.success or not result.content:
             logger.warning("Correction LLM call failed for claim %r", claim.claim[:60])
             return False
@@ -1208,7 +1243,7 @@ async def apply_corrections(
     state: DeepResearchState,
     config: "ResearchConfig",
     verification_result: ClaimVerificationResult,
-    execute_fn: ExecuteFn,
+    workflow: Any,
     provider_id: Optional[str] = None,
 ) -> None:
     """Apply corrections for CONTRADICTED claims.
@@ -1241,7 +1276,7 @@ async def apply_corrections(
             )
             break
         success = await _correct_single_claim(
-            claim, state, execute_fn, resolved_provider, timeout
+            claim, state, workflow, resolved_provider, timeout
         )
         if success:
             corrections_applied += 1
@@ -1300,7 +1335,7 @@ Return ONLY the JSON object, no other text.
 async def remap_unsupported_citations(
     state: DeepResearchState,
     verification_result: ClaimVerificationResult,
-    execute_fn: ExecuteFn,
+    workflow: Any,
     provider_id: str,
     timeout: float = 60.0,
     max_concurrent: int = 5,
@@ -1318,7 +1353,7 @@ async def remap_unsupported_citations(
     Args:
         state: Research state with populated report and sources.
         verification_result: Verification result with per-claim details.
-        execute_fn: Async callable for LLM calls.
+        workflow: DeepResearchWorkflow instance (for lifecycle instrumentation).
         provider_id: LLM provider for remapping calls.
         timeout: Per-call timeout in seconds.
         max_concurrent: Maximum parallel remapping LLM calls.
@@ -1405,13 +1440,22 @@ async def remap_unsupported_citations(
         async with semaphore:
             llm_calls_made += 1
             try:
-                result: "WorkflowResult" = await execute_fn(
-                    prompt=user_prompt,
+                ret = await execute_llm_call(
+                    workflow=workflow,
+                    state=state,
+                    phase_name="claim_verification_remap",
                     system_prompt=_REMAP_SYSTEM_PROMPT,
+                    user_prompt=user_prompt,
                     provider_id=provider_id,
+                    model=None,
+                    temperature=0.0,
                     timeout=timeout,
-                    phase="claim_verification_remap",
+                    role="claim_verification",
                 )
+                if isinstance(ret, LLMCallResult):
+                    result = ret.result
+                else:
+                    result = ret
                 if not result.success or not result.content:
                     return False
 
@@ -1588,7 +1632,7 @@ async def extract_and_verify_claims(
     state: DeepResearchState,
     config: "ResearchConfig",
     provider_id: str,
-    execute_fn: ExecuteFn,
+    workflow: Any,
     timeout: float = 120.0,
 ) -> ClaimVerificationResult:
     """Run the full claim extraction and verification pipeline.
@@ -1597,7 +1641,7 @@ async def extract_and_verify_claims(
         state: Research state with populated report and sources.
         config: Research configuration.
         provider_id: LLM provider for verification calls.
-        execute_fn: Async callable matching _execute_provider_async signature.
+        workflow: DeepResearchWorkflow instance (for lifecycle instrumentation).
         timeout: Per-call timeout in seconds.
 
     Returns:
@@ -1626,7 +1670,8 @@ async def extract_and_verify_claims(
     try:
         all_claims = await _extract_claims_chunked(
             report=extraction_report,
-            execute_fn=execute_fn,
+            workflow=workflow,
+            state=state,
             provider_id=provider_id,
             timeout=timeout,
             max_claims=config.deep_research_claim_verification_max_claims,
@@ -1674,7 +1719,8 @@ async def extract_and_verify_claims(
     verified_claims = await _verify_claims_batch(
         to_verify,
         citation_map,
-        execute_fn,
+        workflow,
+        state,
         provider_id,
         timeout=timeout,
         max_concurrent=config.deep_research_claim_verification_max_concurrent,

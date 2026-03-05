@@ -1,87 +1,211 @@
-# Plan: Wire topic research LLM calls through `execute_llm_call` lifecycle wrapper
+# Plan: Wire remaining direct `_execute_provider_async` calls through `execute_llm_call`
 
 ## Context
 
-Deep research session `deepres-4fbeb6b8568d` failed silently — all 4 topic researcher sub-queries completed with 0 turns, 0 searches, 0 sources, but the audit trail contained **no information about why**. Investigation revealed two compounding problems:
+After wiring topic research LLM calls through the `execute_llm_call` lifecycle wrapper (0.18.0a13), two areas remain that bypass the lifecycle and call `_execute_provider_async` directly:
 
-1. **`_execute_researcher_llm_call` bypasses the `execute_llm_call` lifecycle wrapper.** Every other phase (clarification, brief, supervision) routes LLM calls through `execute_llm_call()` in `_lifecycle.py`, which provides audit events (`llm.call.started` / `llm.call.completed`), heartbeats, PhaseMetrics recording, and progressive ContextWindowError recovery. Topic research calls `_execute_provider_async` directly, losing all of this instrumentation.
+1. **Claim verification pipeline** (`claim_verification.py`) — 4 LLM call sites across extraction, verification, correction, and citation remapping. All receive `self._execute_provider_async` as an `execute_fn` callback from `workflow_execution.py`. This is the **high-priority** gap: an entire sub-pipeline with no audit events, no heartbeats, no PhaseMetrics, and no lifecycle-managed context-window recovery.
 
-2. **Two completely silent failure paths** in `_execute_researcher_llm_call` (lines 1052, 1055) return `None` with no `logger.warning` and no audit event.
+2. **Topic research parse retry** (`topic_research.py:1126`) — 1 LLM call in `_parse_with_retry_async` for re-prompting on malformed JSON. **Lower priority**: rare path, main researcher call is already instrumented.
 
-The fix is to migrate `_execute_researcher_llm_call` to delegate to `execute_llm_call`, which automatically provides audit trail, metrics, and error visibility — making failures like this diagnosable from the session JSON alone.
+### What's missing without lifecycle wiring
+
+| Capability | Claim verification | Parse retry |
+|---|---|---|
+| `llm.call.started` / `llm.call.completed` audit events | Missing | Missing |
+| Heartbeat updates | Missing | Missing |
+| PhaseMetrics recording | Missing | Missing |
+| Progressive context-window recovery (tiered truncation) | Missing (bare try/except) | Missing (bare try/except) |
+| Silent failure visibility | Partial (logger.warning exists but no audit) | Partial |
 
 ## Files to modify
 
-- `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py` — primary change
-- `tests/` — update any tests that mock `_execute_researcher_llm_call` or `_execute_provider_async` in the topic research context
+### Primary
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/claim_verification.py` — replace `execute_fn` callback pattern with `execute_llm_call` delegation
+- `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py` — update caller to pass `workflow` instead of `execute_fn`
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py` — wire parse retry through lifecycle
+
+### Tests
+- `tests/core/research/workflows/test_deep_research.py` — update claim verification mocks
+- `tests/core/research/workflows/test_topic_research.py` — update parse retry tests if affected
+- Any dedicated claim verification test files
 
 ## Implementation
 
-### Step 1: Rewrite `_execute_researcher_llm_call` to use `execute_llm_call`
+### Step 1: Change the `execute_fn` callback pattern to pass `workflow` + `state`
 
-Replace the body of `_execute_researcher_llm_call` (lines 894-1062) to:
+The current design passes `self._execute_provider_async` as an `execute_fn: ExecuteFn` callback to the claim verification free functions. This made sense when claim verification was a standalone module, but it prevents lifecycle integration because `execute_llm_call` needs both `workflow` and `state`.
 
-1. Build `system_prompt` and `user_prompt` (already done at lines 929-942 — keep this)
-2. Call `execute_llm_call()` instead of `self._execute_provider_async()`:
-   ```python
-   from ._lifecycle import execute_llm_call, LLMCallResult
+**Change the public API** of the three entry-point functions:
 
-   ret = await execute_llm_call(
-       workflow=self,
-       state=state,
-       phase_name="topic_research",
-       system_prompt=system_prompt,
-       user_prompt=user_prompt,
-       provider_id=provider_id,
-       model=researcher_model,
-       temperature=0.3,
-       timeout=self.config.deep_research_reflection_timeout,
-       role="topic_reflection",
-       skip_token_tracking=True,  # caller tracks tokens via local_tokens_used
-   )
-   ```
-3. Handle the return type:
-   - `isinstance(ret, WorkflowResult)` → error path (replaces the current `None` return)
-   - `isinstance(ret, LLMCallResult)` → success, return `ret.result` (the inner `WorkflowResult`)
+```python
+# Before
+async def extract_and_verify_claims(
+    state, config, provider_id, execute_fn, timeout
+)
+async def apply_corrections(
+    state, config, verification_result, execute_fn, provider_id
+)
+async def remap_unsupported_citations(
+    state, verification_result, execute_fn, provider_id, timeout, max_concurrent
+)
 
-4. **Keep the history-truncation recovery** as an outer wrapper: if `execute_llm_call` returns a `WorkflowResult` with context-window metadata, truncate `message_history` via `_truncate_researcher_history(..., budget_fraction=0.5)`, rebuild the prompt, and retry once. Use `_is_context_window_exceeded()` from `_lifecycle.py` to detect this.
+# After — replace execute_fn with workflow
+async def extract_and_verify_claims(
+    state, config, provider_id, workflow, timeout
+)
+async def apply_corrections(
+    state, config, verification_result, workflow, provider_id
+)
+async def remap_unsupported_citations(
+    state, verification_result, workflow, provider_id, timeout, max_concurrent
+)
+```
 
-5. **Delete the hand-rolled ContextWindowError/exception handling** (lines 966-1062) — `execute_llm_call` handles this internally with progressive truncation retries. The outer history-truncation loop handles the case `execute_llm_call` can't (rebuilding from truncated history).
+Thread `workflow` down to the 4 internal call sites (`_extract_claims_single_chunk`, `_verify_single_claim`, `_apply_single_correction`, `_remap_single_claim`).
 
-### Step 2: Update the caller in `_execute_topic_research_async`
+### Step 2: Replace each `await execute_fn(...)` with `await execute_llm_call(...)`
 
-Add `state` to the `_execute_researcher_llm_call` call (line 753). The caller already has `state` in scope.
+For each of the 4 call sites:
 
-The return type contract stays the same: success → `WorkflowResult` object, failure → `None`. No changes needed at the call site (lines 765-770) since `_execute_researcher_llm_call` will still return `WorkflowResult | None` — it unwraps `LLMCallResult.result` internally.
+**a) `_extract_claims_single_chunk` (line 402)**
+```python
+ret = await execute_llm_call(
+    workflow=workflow,
+    state=state,
+    phase_name="claim_extraction",
+    system_prompt=system_prompt,
+    user_prompt=chunk_prompt,
+    provider_id=provider_id,
+    model=None,
+    temperature=0.0,
+    timeout=timeout,
+    role="claim_verification",
+)
+```
+Handle `LLMCallResult` → use `ret.result`, `WorkflowResult` → log warning + return `[]`.
 
-### Step 3: Update tests
+**b) `_verify_single_claim` (line 904)**
+```python
+ret = await execute_llm_call(
+    workflow=workflow,
+    state=state,
+    phase_name="claim_verification",
+    system_prompt=_VERIFICATION_SYSTEM_PROMPT,
+    user_prompt=user_prompt,
+    provider_id=provider_id,
+    model=None,
+    temperature=0.0,
+    timeout=timeout,
+    role="claim_verification",
+)
+```
 
-Find and update tests that:
-- Mock `_execute_provider_async` in topic research test scenarios → should mock `execute_llm_call` or its provider instead
-- Assert on `_execute_researcher_llm_call` return types
+**c) `_apply_single_correction` (line 1147)**
+```python
+ret = await execute_llm_call(
+    workflow=workflow,
+    state=state,
+    phase_name="claim_verification_correction",
+    system_prompt=_CORRECTION_SYSTEM_PROMPT,
+    user_prompt=user_prompt,
+    provider_id=provider_id,
+    model=None,
+    temperature=0.0,
+    timeout=timeout,
+    role="claim_verification",
+)
+```
+
+**d) `_remap_single_claim` inner call (line 1408)**
+```python
+ret = await execute_llm_call(
+    workflow=workflow,
+    state=state,
+    phase_name="claim_verification_remap",
+    system_prompt=_REMAP_SYSTEM_PROMPT,
+    user_prompt=user_prompt,
+    provider_id=provider_id,
+    model=None,
+    temperature=0.0,
+    timeout=timeout,
+    role="claim_verification",
+)
+```
+
+### Step 3: Update `workflow_execution.py` callers
+
+Replace `execute_fn=self._execute_provider_async` with `workflow=self` at lines 477, 489, 497:
+
+```python
+verification_result = await extract_and_verify_claims(
+    state=state,
+    config=self.config,
+    provider_id=resolve_phase_provider(self.config, "claim_verification", "synthesis"),
+    workflow=self,  # was: execute_fn=self._execute_provider_async
+    timeout=self.config.deep_research_claim_verification_timeout,
+)
+
+await apply_corrections(
+    state=state,
+    config=self.config,
+    verification_result=verification_result,
+    workflow=self,  # was: execute_fn=self._execute_provider_async
+)
+
+await remap_unsupported_citations(
+    state=state,
+    verification_result=verification_result,
+    workflow=self,  # was: execute_fn=self._execute_provider_async
+    ...
+)
+```
+
+### Step 4: Remove the `ExecuteFn` type alias
+
+Delete `ExecuteFn = Callable[..., Any]` (line 51) since it's no longer used. Update the `TYPE_CHECKING` import block to add `WorkflowResult` if not already present, and add `execute_llm_call`/`LLMCallResult` imports.
+
+### Step 5: Wire topic research parse retry through lifecycle
+
+In `_parse_with_retry_async` (topic_research.py:1126), replace the `self._execute_provider_async(...)` call with `execute_llm_call(...)`. This requires threading `state` into `_parse_with_retry_async` — add `state: DeepResearchState` parameter.
+
+The caller at line 778 already has `state` in scope (from `_execute_topic_research_async`).
+
+### Step 6: Update tests
+
+1. **Claim verification tests**: Find tests that mock `execute_fn` or pass `_execute_provider_async` — update to pass a mock workflow with `_execute_provider_async` + lifecycle-required attributes.
+2. **Topic research tests**: Update any parse-retry test scenarios to account for `state` parameter and lifecycle mock fields.
+3. **Deep research integration tests**: Update `_mock_llm_provider` patterns in `test_deep_research.py` that exercise claim verification paths.
 
 ## What this fixes
 
 | Before | After |
 |--------|-------|
-| 0 audit events for topic research LLM calls | `llm.call.started` + `llm.call.completed` per call (with provider, duration, status) |
-| Silent failures on lines 1052/1055 | All failures captured in audit with error details |
-| No PhaseMetrics for topic research turns | PhaseMetrics recorded per turn |
-| No heartbeat updates during researcher loop | Heartbeat updated each turn |
-| Hand-rolled CWE handling with gaps | Battle-tested progressive truncation + outer history-truncation fallback |
+| 0 audit events for claim verification LLM calls | `llm.call.started` / `llm.call.completed` per call |
+| No heartbeat during claim verification (can appear stale/stuck) | Heartbeat updated per LLM call |
+| No PhaseMetrics for extraction/verification/correction/remap | PhaseMetrics recorded per call |
+| Bare try/except for context-window errors | Progressive tiered truncation recovery |
+| Parse retry in topic research uninstrumented | Full lifecycle coverage |
 
 ## What this does NOT change
 
-- The ReAct loop structure, tool dispatch, reflection enforcement — untouched
-- The `_finalize_topic_result` audit event — still fires, now complemented by per-turn events
-- Provider resolution logic — same `safe_resolve_model_for_role` + `resolve_phase_provider` chain
-- External behavior — same prompts, same tool calls, same results
+- Claim verification logic (extraction prompts, verdict parsing, correction application, remap logic) — untouched
+- The parallel verification structure (`_verify_claims_batch` with semaphore) — untouched
+- Sequential correction application order — untouched
+- External behavior — same prompts, same verdicts, same corrections
+
+## Risk assessment
+
+- **claim_verification.py is a standalone module** with free functions (not a mixin). Changing `execute_fn` to `workflow` changes the public API of 3 functions. Only one caller (`workflow_execution.py`). Low coupling risk.
+- **Parallel verification** uses `asyncio.Semaphore` — `execute_llm_call` is async-safe (no shared mutable state). No concurrency risk.
+- **`skip_token_tracking=False`** for claim verification (unlike topic research where the caller tracks tokens) — lifecycle wrapper handles token accounting automatically.
 
 ## Verification
 
-1. **Unit tests**: Run existing topic research tests — `pytest tests/ -k topic_research`
-2. **Integration**: Run a deep research session and verify:
-   - `llm.call.started` / `llm.call.completed` events appear in audit JSONL for topic_research phase
-   - On provider failure, the audit shows `status: "error"` with provider info
-   - `phase_metrics` includes `topic_research` entries
-3. **Regression**: Verify supervision/clarification/brief phases still work (they don't touch this code)
+1. **Unit tests**: `pytest tests/ -k claim_verification` passes
+2. **Topic research tests**: `pytest tests/ -k topic_research` passes
+3. **Full deep research suite**: `pytest tests/ -k deep_research` passes
+4. **Integration**: Run a deep research session with claim verification enabled and verify:
+   - `llm.call.started` / `llm.call.completed` events appear for `claim_extraction`, `claim_verification`, `claim_verification_correction`, `claim_verification_remap` phases
+   - PhaseMetrics include claim verification entries
+   - Heartbeat stays fresh during verification (no stale-task warnings)

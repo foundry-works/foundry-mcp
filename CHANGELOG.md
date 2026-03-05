@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0a14] - 2026-03-05
+
+### Changed
+
+- **Claim verification pipeline wired through `execute_llm_call` lifecycle wrapper**: All 4 LLM call sites in claim verification (extraction, verification, correction, citation remapping) now route through `execute_llm_call()` instead of receiving a raw `execute_fn` callback. This adds `llm.call.started` / `llm.call.completed` audit events, heartbeat updates, PhaseMetrics recording, and progressive context-window recovery (tiered truncation) to every claim verification LLM call — closing the last major instrumentation gap in the deep research pipeline.
+- **Topic research parse-retry wired through lifecycle**: The `_parse_with_retry_async` LLM call for re-prompting on malformed JSON now goes through `execute_llm_call()` when state is available, gaining audit events and heartbeat updates on retry paths.
+
+### Removed
+
+- **`ExecuteFn` type alias removed from claim verification**: The `Callable[..., Any]` type alias and `execute_fn` callback parameter have been replaced with a `workflow: Any` parameter on all public functions (`extract_and_verify_claims`, `apply_corrections`, `remap_unsupported_citations`). Only one caller (`workflow_execution.py`) was affected.
+
 ## [0.18.0a13] - 2026-03-05
 
 ### Fixed

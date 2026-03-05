@@ -474,7 +474,7 @@ class WorkflowExecutionMixin:
                             state=state,
                             config=self.config,
                             provider_id=resolve_phase_provider(self.config, "claim_verification", "synthesis"),
-                            execute_fn=self._execute_provider_async,
+                            workflow=self,
                             timeout=self.config.deep_research_claim_verification_timeout,
                         )
                         state.claim_verification = verification_result
@@ -486,7 +486,7 @@ class WorkflowExecutionMixin:
                                 state=state,
                                 config=self.config,
                                 verification_result=verification_result,
-                                execute_fn=self._execute_provider_async,
+                                workflow=self,
                             )
                             report_modified = True
 
@@ -494,7 +494,7 @@ class WorkflowExecutionMixin:
                             await remap_unsupported_citations(
                                 state=state,
                                 verification_result=verification_result,
-                                execute_fn=self._execute_provider_async,
+                                workflow=self,
                                 provider_id=resolve_phase_provider(
                                     self.config, "claim_verification", "synthesis"
                                 ),

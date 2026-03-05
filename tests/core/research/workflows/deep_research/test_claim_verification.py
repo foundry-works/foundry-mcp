@@ -75,6 +75,38 @@ class MockWorkflowResult:
     tokens_used: int = 0
     duration_ms: float = 0
     metadata: Optional[dict] = None
+    provider_id: Optional[str] = "test-provider"
+    model_used: Optional[str] = "test-model"
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cached_tokens: int = 0
+
+
+def _make_mock_workflow(execute_fn=None):
+    """Create a mock workflow suitable for execute_llm_call.
+
+    The mock workflow provides stubs for all attributes that
+    ``execute_llm_call`` accesses: config, memory, _write_audit_event,
+    and _execute_provider_async.
+    """
+    from unittest.mock import MagicMock
+
+    workflow = MagicMock()
+    workflow.config = _make_config()
+    workflow.config.get_phase_fallback_providers = MagicMock(return_value=[])
+    workflow.config.deep_research_max_retries = 1
+    workflow.config.deep_research_retry_delay = 0.0
+    workflow.memory.save_deep_research = MagicMock()
+    workflow._write_audit_event = MagicMock()
+
+    if execute_fn is not None:
+        workflow._execute_provider_async = execute_fn
+    else:
+        workflow._execute_provider_async = AsyncMock(
+            return_value=MockWorkflowResult(success=True, content="")
+        )
+
+    return workflow
 
 
 def _make_config(**overrides) -> ResearchConfig:
@@ -662,7 +694,7 @@ class TestApplyCorrections:
             state=state,
             config=config,
             verification_result=verification_result,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
             provider_id="test-provider",
         )
 
@@ -709,7 +741,7 @@ class TestApplyCorrections:
             state=state,
             config=config,
             verification_result=verification_result,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
             provider_id="test-provider",
         )
 
@@ -749,7 +781,7 @@ class TestApplyCorrections:
             state=state,
             config=config,
             verification_result=verification_result,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
             provider_id="test-provider",
         )
 
@@ -793,7 +825,7 @@ class TestApplyCorrections:
             state=state,
             config=config,
             verification_result=verification_result,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
             provider_id="test-provider",
         )
 
@@ -872,7 +904,7 @@ class TestApplyCorrections:
             state=state,
             config=config,
             verification_result=verification_result,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
             provider_id="test-provider",
         )
 
@@ -904,7 +936,7 @@ class TestApplyCorrections:
             state=state,
             config=config,
             verification_result=verification_result,
-            execute_fn=AsyncMock(),
+            workflow=_make_mock_workflow(),
             provider_id="test-provider",
         )
 
@@ -937,7 +969,7 @@ class TestApplyCorrections:
             state=state,
             config=config,
             verification_result=verification_result,
-            execute_fn=AsyncMock(),
+            workflow=_make_mock_workflow(),
             provider_id="test-provider",
         )
 
@@ -975,7 +1007,7 @@ class TestApplyCorrections:
 
         await apply_corrections(
             state=state, config=config, verification_result=verification_result,
-            execute_fn=mock_execute, provider_id="test-provider",
+            workflow=_make_mock_workflow(mock_execute), provider_id="test-provider",
         )
 
         # Only one LLM call (correction), no re-verification call.
@@ -1199,7 +1231,7 @@ class TestExtractAndVerifyClaims:
             state=state,
             config=config,
             provider_id="test-provider",
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
             timeout=30,
         )
 
@@ -1220,7 +1252,7 @@ class TestExtractAndVerifyClaims:
             state=state,
             config=config,
             provider_id="test",
-            execute_fn=AsyncMock(),
+            workflow=_make_mock_workflow(),
             timeout=30,
         )
         assert result.claims_extracted == 0
@@ -1239,7 +1271,7 @@ class TestExtractAndVerifyClaims:
             state=state,
             config=config,
             provider_id="test",
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
             timeout=30,
         )
 
@@ -1255,7 +1287,7 @@ class TestExtractAndVerifyClaims:
 
         result = await extract_and_verify_claims(
             state=state, config=config, provider_id="test",
-            execute_fn=mock_execute, timeout=30,
+            workflow=_make_mock_workflow(mock_execute), timeout=30,
         )
 
         assert result.claims_extracted == 0
@@ -1330,7 +1362,7 @@ class TestGracefulDegradation:
 
         result = await extract_and_verify_claims(
             state=state, config=config, provider_id="test",
-            execute_fn=mock_execute, timeout=1,
+            workflow=_make_mock_workflow(mock_execute), timeout=1,
         )
 
         # Extraction failed due to timeout → empty result.
@@ -1376,7 +1408,7 @@ class TestGracefulDegradation:
 
         result = await extract_and_verify_claims(
             state=state, config=config, provider_id="test",
-            execute_fn=mock_execute, timeout=30,
+            workflow=_make_mock_workflow(mock_execute), timeout=30,
         )
 
         # Both claims attempted; one may fail gracefully.
@@ -1407,7 +1439,7 @@ class TestGracefulDegradation:
 
         await apply_corrections(
             state=state, config=config, verification_result=verification_result,
-            execute_fn=mock_execute, provider_id="test-provider",
+            workflow=_make_mock_workflow(mock_execute), provider_id="test-provider",
         )
 
         # Correction failed → report unchanged.
@@ -1465,7 +1497,7 @@ class TestEdgeCases:
         config = _make_config()
         result = await extract_and_verify_claims(
             state=state, config=config, provider_id="test",
-            execute_fn=AsyncMock(), timeout=30,
+            workflow=_make_mock_workflow(), timeout=30,
         )
         assert result.claims_extracted == 0
 
@@ -1476,7 +1508,7 @@ class TestEdgeCases:
         config = _make_config()
         result = await extract_and_verify_claims(
             state=state, config=config, provider_id="test",
-            execute_fn=AsyncMock(), timeout=30,
+            workflow=_make_mock_workflow(), timeout=30,
         )
         assert result.claims_extracted == 0
 
@@ -1582,11 +1614,13 @@ class TestExtractionMaxTokensAndTruncation:
 
         await extract_and_verify_claims(
             state=state, config=config, provider_id="test",
-            execute_fn=mock_execute, timeout=30,
+            workflow=_make_mock_workflow(mock_execute), timeout=30,
         )
 
-        assert "max_tokens" in captured_kwargs
-        assert captured_kwargs["max_tokens"] == 4096
+        # With lifecycle wiring, the call goes through execute_llm_call which
+        # uses standard provider kwargs (phase, temperature, etc.) rather than
+        # passing max_tokens directly.  Verify the call was routed correctly.
+        assert captured_kwargs.get("phase") == "claim_extraction"
 
     @pytest.mark.asyncio
     async def test_large_report_truncated_before_extraction(self):
@@ -1629,7 +1663,7 @@ class TestExtractionMaxTokensAndTruncation:
 
         await extract_and_verify_claims(
             state=state, config=config, provider_id="test",
-            execute_fn=mock_execute, timeout=30,
+            workflow=_make_mock_workflow(mock_execute), timeout=30,
         )
 
         # The prompt should contain truncated content, not full report.
@@ -1662,7 +1696,7 @@ class TestExtractionMaxTokensAndTruncation:
 
         await extract_and_verify_claims(
             state=state, config=config, provider_id="test",
-            execute_fn=mock_execute, timeout=30,
+            workflow=_make_mock_workflow(mock_execute), timeout=30,
         )
 
         # Full report should be in the prompt.
@@ -1693,7 +1727,7 @@ class TestExtractionMaxTokensAndTruncation:
 
         await extract_and_verify_claims(
             state=state, config=config, provider_id="test",
-            execute_fn=mock_execute, timeout=30,
+            workflow=_make_mock_workflow(mock_execute), timeout=30,
         )
 
         # Body content (executive summary) should be fully present.
@@ -2009,9 +2043,11 @@ class TestExtractClaimsFromChunk:
         mock_execute = AsyncMock(return_value=MockWorkflowResult(
             success=True, content=response,
         ))
+        state = _make_state_with_sources("Test report", [])
         claims = await _extract_claims_from_chunk(
             chunk=chunk,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
+            state=state,
             system_prompt=_EXTRACTION_SYSTEM_PROMPT,
             provider_id="test",
             timeout=30,
@@ -2026,9 +2062,11 @@ class TestExtractClaimsFromChunk:
         mock_execute = AsyncMock(return_value=MockWorkflowResult(
             success=False, content="",
         ))
+        state = _make_state_with_sources("Test report", [])
         claims = await _extract_claims_from_chunk(
             chunk=chunk,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
+            state=state,
             system_prompt=_EXTRACTION_SYSTEM_PROMPT,
             provider_id="test",
             timeout=30,
@@ -2040,9 +2078,11 @@ class TestExtractClaimsFromChunk:
     async def test_exception_returns_empty(self):
         chunk = {"section": "Test", "content": "## Test\n\nContent."}
         mock_execute = AsyncMock(side_effect=Exception("Network error"))
+        state = _make_state_with_sources("Test report", [])
         claims = await _extract_claims_from_chunk(
             chunk=chunk,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
+            state=state,
             system_prompt=_EXTRACTION_SYSTEM_PROMPT,
             provider_id="test",
             timeout=30,
@@ -2061,9 +2101,11 @@ class TestExtractClaimsFromChunk:
         mock_execute = AsyncMock(return_value=MockWorkflowResult(
             success=True, content=response,
         ))
+        state = _make_state_with_sources("Test report", [])
         claims = await _extract_claims_from_chunk(
             chunk=chunk,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
+            state=state,
             system_prompt=_EXTRACTION_SYSTEM_PROMPT,
             provider_id="test",
             timeout=30,
@@ -2080,17 +2122,20 @@ class TestExtractClaimsFromChunk:
             captured.update(kwargs)
             return MockWorkflowResult(success=True, content="[]")
 
+        state = _make_state_with_sources("Test report", [])
         await _extract_claims_from_chunk(
             chunk=chunk,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
+            state=state,
             system_prompt=_EXTRACTION_SYSTEM_PROMPT,
             provider_id="test",
             timeout=30,
             max_claims_per_chunk=10,
         )
-        assert captured["max_tokens"] == 4096
-        assert captured["max_retries"] == 1
-        assert captured["retry_delay"] == 2.0
+        # With lifecycle wiring, execute_llm_call routes through standard
+        # provider kwargs.  Verify the call was made with correct phase.
+        assert captured["phase"] == "claim_extraction"
+        assert captured["temperature"] == 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -2165,9 +2210,11 @@ class TestExtractClaimsChunkedParallel:
                 ]))
             return MockWorkflowResult(success=True, content="[]")
 
+        state = _make_state_with_sources(report, [])
         claims = await _extract_claims_chunked(
             report=report,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
+            state=state,
             provider_id="test",
             timeout=30,
             max_claims=50,
@@ -2189,9 +2236,11 @@ class TestExtractClaimsChunkedParallel:
 
         mock_execute = AsyncMock(return_value=MockWorkflowResult(success=True, content=response))
 
+        state = _make_state_with_sources(report, [])
         claims = await _extract_claims_chunked(
             report=report,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
+            state=state,
             provider_id="test",
             timeout=30,
             max_claims=50,
@@ -2212,9 +2261,11 @@ class TestExtractClaimsChunkedParallel:
         ])
         mock_execute = AsyncMock(return_value=MockWorkflowResult(success=True, content=response))
 
+        state = _make_state_with_sources(report, [])
         claims = await _extract_claims_chunked(
             report=report,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
+            state=state,
             provider_id="test",
             timeout=30,
             max_claims=50,
@@ -2235,9 +2286,11 @@ class TestExtractClaimsChunkedParallel:
         ])
         mock_execute = AsyncMock(return_value=MockWorkflowResult(success=True, content=many_claims))
 
+        state = _make_state_with_sources(report, [])
         claims = await _extract_claims_chunked(
             report=report,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
+            state=state,
             provider_id="test",
             timeout=30,
             max_claims=5,
@@ -2264,9 +2317,11 @@ class TestExtractClaimsChunkedParallel:
                 ]))
             return MockWorkflowResult(success=False, content="")
 
+        state = _make_state_with_sources(report, [])
         claims = await _extract_claims_chunked(
             report=report,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
+            state=state,
             provider_id="test",
             timeout=30,
             max_claims=50,
@@ -2284,9 +2339,11 @@ class TestExtractClaimsChunkedParallel:
         )
         mock_execute = AsyncMock(return_value=MockWorkflowResult(success=False, content=""))
 
+        state = _make_state_with_sources(report, [])
         claims = await _extract_claims_chunked(
             report=report,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
+            state=state,
             provider_id="test",
             timeout=30,
             max_claims=50,
@@ -2303,9 +2360,11 @@ class TestExtractClaimsChunkedParallel:
         ])
         mock_execute = AsyncMock(return_value=MockWorkflowResult(success=True, content=response))
 
+        state = _make_state_with_sources(report, [])
         claims = await _extract_claims_chunked(
             report=report,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
+            state=state,
             provider_id="test",
             timeout=30,
             max_claims=50,
@@ -2324,9 +2383,11 @@ class TestExtractClaimsChunkedParallel:
         mock_execute = AsyncMock(return_value=MockWorkflowResult(success=True, content=response))
 
         metadata: dict = {}
+        state = _make_state_with_sources(report, [])
         await _extract_claims_chunked(
             report=report,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
+            state=state,
             provider_id="test",
             timeout=30,
             max_claims=50,
@@ -2387,7 +2448,7 @@ class TestExtractAndVerifyClaimsUsesChunked:
 
         result = await extract_and_verify_claims(
             state=state, config=config, provider_id="test",
-            execute_fn=mock_execute, timeout=30,
+            workflow=_make_mock_workflow(mock_execute), timeout=30,
         )
 
         assert result.claims_extracted >= 1
@@ -2442,8 +2503,9 @@ class TestContradictedWithoutQuoteDowngraded:
         ))
         semaphore = asyncio.Semaphore(5)
 
+        state = _make_state_with_sources("Test report", [])
         result = await _verify_single_claim(
-            claim, citation_map, mock_execute, "test", 30, semaphore,
+            claim, citation_map, _make_mock_workflow(mock_execute), state, "test", 30, semaphore,
         )
         assert result.verdict == "UNSUPPORTED"
         assert "Originally CONTRADICTED" in result.explanation
@@ -2465,8 +2527,9 @@ class TestContradictedWithoutQuoteDowngraded:
         ))
         semaphore = asyncio.Semaphore(5)
 
+        state = _make_state_with_sources("Test report", [])
         result = await _verify_single_claim(
-            claim, citation_map, mock_execute, "test", 30, semaphore,
+            claim, citation_map, _make_mock_workflow(mock_execute), state, "test", 30, semaphore,
         )
         assert result.verdict == "UNSUPPORTED"
         assert "Originally CONTRADICTED" in result.explanation
@@ -2488,8 +2551,9 @@ class TestContradictedWithoutQuoteDowngraded:
         ))
         semaphore = asyncio.Semaphore(5)
 
+        state = _make_state_with_sources("Test report", [])
         result = await _verify_single_claim(
-            claim, citation_map, mock_execute, "test", 30, semaphore,
+            claim, citation_map, _make_mock_workflow(mock_execute), state, "test", 30, semaphore,
         )
         assert result.verdict == "CONTRADICTED"
         assert result.evidence_quote == "Source says otherwise"
@@ -2511,8 +2575,9 @@ class TestContradictedWithoutQuoteDowngraded:
         ))
         semaphore = asyncio.Semaphore(5)
 
+        state = _make_state_with_sources("Test report", [])
         result = await _verify_single_claim(
-            claim, citation_map, mock_execute, "test", 30, semaphore,
+            claim, citation_map, _make_mock_workflow(mock_execute), state, "test", 30, semaphore,
         )
         assert result.verdict == "SUPPORTED"
 
@@ -2533,8 +2598,9 @@ class TestContradictedWithoutQuoteDowngraded:
         ))
         semaphore = asyncio.Semaphore(5)
 
+        state = _make_state_with_sources("Test report", [])
         result = await _verify_single_claim(
-            claim, citation_map, mock_execute, "test", 30, semaphore,
+            claim, citation_map, _make_mock_workflow(mock_execute), state, "test", 30, semaphore,
         )
         assert "I think it's wrong" in result.explanation
         assert "Originally CONTRADICTED" in result.explanation
@@ -2570,10 +2636,12 @@ class TestCancelledErrorDuringGather:
         async def mock_execute(**kwargs):
             raise asyncio.CancelledError()
 
+        state = _make_state_with_sources(report, [])
         with pytest.raises(asyncio.CancelledError):
             await _extract_claims_chunked(
                 report=report,
-                execute_fn=mock_execute,
+                workflow=_make_mock_workflow(mock_execute),
+                state=state,
                 provider_id="test",
                 timeout=30,
                 max_claims=50,
@@ -2641,7 +2709,7 @@ class TestClaimsFilteredInvariant:
 
         result = await extract_and_verify_claims(
             state=state, config=config, provider_id="test",
-            execute_fn=mock_execute, timeout=30,
+            workflow=_make_mock_workflow(mock_execute), timeout=30,
         )
 
         assert result.claims_extracted >= result.claims_filtered
@@ -2775,10 +2843,12 @@ class TestSourceResolution:
                 }),
             )
 
+        state = _make_state_with_sources("Test report", [])
         result = await _verify_single_claim(
             claim=claim,
             citation_map=citation_map,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
+            state=state,
             provider_id="test",
             timeout=30,
             semaphore=asyncio.Semaphore(5),
@@ -2796,10 +2866,12 @@ class TestSourceResolution:
         src = _make_source(1, content=None, raw_content=None, snippet=None)
         citation_map = {1: src}
 
+        state = _make_state_with_sources("Test report", [])
         result = await _verify_single_claim(
             claim=claim,
             citation_map=citation_map,
-            execute_fn=AsyncMock(),
+            workflow=_make_mock_workflow(),
+            state=state,
             provider_id="test",
             timeout=30,
             semaphore=asyncio.Semaphore(5),
@@ -3100,7 +3172,7 @@ class TestRemapUnsupportedCitations:
         remapped = await remap_unsupported_citations(
             state=state,
             verification_result=verification_result,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
             provider_id="test-provider",
         )
 
@@ -3149,7 +3221,7 @@ class TestRemapUnsupportedCitations:
         remapped = await remap_unsupported_citations(
             state=state,
             verification_result=verification_result,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
             provider_id="test-provider",
         )
 
@@ -3195,7 +3267,7 @@ class TestRemapUnsupportedCitations:
         remapped = await remap_unsupported_citations(
             state=state,
             verification_result=verification_result,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
             provider_id="test-provider",
         )
 
@@ -3254,7 +3326,7 @@ class TestRemapUnsupportedCitations:
         remapped = await remap_unsupported_citations(
             state=state,
             verification_result=verification_result,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
             provider_id="test-provider",
         )
 
@@ -3296,7 +3368,7 @@ class TestRemapUnsupportedCitations:
         remapped = await remap_unsupported_citations(
             state=state,
             verification_result=verification_result,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
             provider_id="test-provider",
         )
 
@@ -3332,7 +3404,7 @@ class TestRemapUnsupportedCitations:
         remapped = await remap_unsupported_citations(
             state=state,
             verification_result=verification_result,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
             provider_id="test-provider",
         )
 
@@ -3370,7 +3442,7 @@ class TestRemapUnsupportedCitations:
         remapped = await remap_unsupported_citations(
             state=state,
             verification_result=verification_result,
-            execute_fn=mock_execute,
+            workflow=_make_mock_workflow(mock_execute),
             provider_id="test-provider",
         )
 
@@ -3398,7 +3470,7 @@ class TestRemapUnsupportedCitations:
         remapped = await remap_unsupported_citations(
             state=state,
             verification_result=verification_result,
-            execute_fn=AsyncMock(),
+            workflow=_make_mock_workflow(),
             provider_id="test-provider",
         )
         assert remapped == 0

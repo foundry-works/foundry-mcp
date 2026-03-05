@@ -786,6 +786,7 @@ class TopicResearchMixin:
                 system_prompt=system_prompt,
                 budget_remaining=budget_remaining,
                 max_searches=max_searches,
+                state=state,
             )
             local_tokens_used += tokens_delta
 
@@ -1065,6 +1066,7 @@ class TopicResearchMixin:
         system_prompt: str,
         budget_remaining: int,
         max_searches: int,
+        state: DeepResearchState | None = None,
     ) -> tuple[Any, int]:
         """Parse tool calls from LLM response, retrying on parse failure.
 
@@ -1083,6 +1085,7 @@ class TopicResearchMixin:
             system_prompt: System prompt for retry calls.
             budget_remaining: Remaining tool call budget (for prompt).
             max_searches: Total tool call budget (for prompt).
+            state: Current research state (for lifecycle instrumentation).
 
         Returns:
             Tuple of (parsed response, tokens_used_delta). The response
@@ -1122,19 +1125,44 @@ class TopicResearchMixin:
                 budget_remaining=budget_remaining,
                 budget_total=max_searches,
             )
+            from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+                LLMCallResult,
+                execute_llm_call,
+            )
+
             try:
-                retry_result = await self._execute_provider_async(
-                    prompt=retry_user_prompt,
-                    provider_id=provider_id,
-                    model=researcher_model,
-                    system_prompt=system_prompt,
-                    timeout=self.config.deep_research_reflection_timeout,
-                    temperature=0.2,  # lower temp for format compliance
-                    phase="topic_research",
-                    fallback_providers=[],
-                    max_retries=1,
-                    retry_delay=2.0,
-                )
+                if state is not None:
+                    ret = await execute_llm_call(
+                        workflow=self,
+                        state=state,
+                        phase_name="topic_research_parse_retry",
+                        system_prompt=system_prompt,
+                        user_prompt=retry_user_prompt,
+                        provider_id=provider_id,
+                        model=researcher_model,
+                        temperature=0.2,  # lower temp for format compliance
+                        timeout=self.config.deep_research_reflection_timeout,
+                        role="research",
+                    )
+                    if isinstance(ret, LLMCallResult):
+                        retry_result = ret.result
+                    else:
+                        # WorkflowResult on error — stop retrying.
+                        break
+                else:
+                    # Fallback for callers that don't pass state (legacy/tests).
+                    retry_result = await self._execute_provider_async(
+                        prompt=retry_user_prompt,
+                        provider_id=provider_id,
+                        model=researcher_model,
+                        system_prompt=system_prompt,
+                        timeout=self.config.deep_research_reflection_timeout,
+                        temperature=0.2,
+                        phase="topic_research",
+                        fallback_providers=[],
+                        max_retries=1,
+                        retry_delay=2.0,
+                    )
                 if not retry_result.success:
                     break
                 tokens_delta += retry_result.tokens_used or 0
