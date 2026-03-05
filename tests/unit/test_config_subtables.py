@@ -353,7 +353,7 @@ _TIMEOUT_DEFAULTS = {
     "deep_research_planning_timeout": 360.0,
     "deep_research_synthesis_timeout": 600.0,
     "deep_research_reflection_timeout": 60.0,
-    "deep_research_topic_research_timeout": 90.0,
+    "deep_research_topic_research_timeout": 180.0,
     "deep_research_evaluation_timeout": 360.0,
     "deep_research_supervision_wall_clock_timeout": 1800.0,
     "deep_research_summarization_timeout": 60.0,

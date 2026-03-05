@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0a16] - 2026-03-05
+
+### Changed
+
+- **Topic research timeout default raised from 90s to 180s**: First-turn topic research prompts are substantially larger (~3KB) and frequently timed out at 90s. The new 180s default provides adequate headroom.
+
+### Fixed
+
+- **First-turn timeout retry for topic research LLM calls**: When `turn==0` and the LLM call times out, retry once with 1.5x the configured timeout before giving up. Emits `topic_research_first_turn_timeout_retry` audit event for observability.
+- **Round-0 zero-source result treated as total failure, not convergence**: When all topic research agents return 0 sources on the first supervision round, the loop now continues to the next round instead of declaring convergence. Emits `supervision_total_search_failure` audit event.
+- **Audit events and fallback save for report markdown failures**: When `_save_report_markdown` fails, a `report_markdown_save_failed` audit event is emitted. When the ungrounded synthesis disclaimer is added but `report_output_path` is `None`, a fallback save to the research memory directory is attempted.
+- **4 pre-existing test failures resolved**: Fixed test mocking issues in workflow execution, perplexity provider, citation tracking (year-reference regex filter), timeout fallback, and heartbeat timing tests.
+
 ## [0.18.0a15] - 2026-03-05
 
 ### Added
