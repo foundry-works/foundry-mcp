@@ -21,12 +21,12 @@
 
 ## Phase 3: Topic Research Timeout Config
 
-- [ ] **3.1** Add `deep_research_topic_research_timeout: float = 90.0` to `ResearchConfig` dataclass in `research.py`
-- [ ] **3.2** Add parsing in `ResearchConfig.from_dict()` for the new field
-- [ ] **3.3** Add to `_FLOAT_FIELDS` list for TOML config merging
-- [ ] **3.4** In `_execute_researcher_llm_call` (`topic_research.py:966`), replace `self.config.deep_research_reflection_timeout` with `self.config.deep_research_topic_research_timeout`
-- [ ] **3.5** Update `samples/foundry-mcp.toml` with the new config key and documentation comment
-- [ ] **3.6** Add test: verify topic research uses the new timeout config value
+- [x] **3.1** Add `deep_research_topic_research_timeout: float = 90.0` to `ResearchConfig` dataclass in `research.py`
+- [x] **3.2** Add parsing in `ResearchConfig.from_toml_dict()` for the new field
+- [x] **3.3** Add to `_TIMEOUT_DEFAULTS` and timeout validation list for TOML config merging
+- [x] **3.4** In `_execute_researcher_llm_call` (`topic_research.py:966`), replace `self.config.deep_research_reflection_timeout` with `self.config.deep_research_topic_research_timeout`
+- [x] **3.5** Update `samples/foundry-mcp-reference.toml` with the new config key and documentation comment
+- [x] **3.6** Add test: verify topic research uses the new timeout config value
 
 ## Verification
 

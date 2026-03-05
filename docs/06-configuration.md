@@ -380,6 +380,7 @@ researchers run in parallel, bounded by `deep_research_max_concurrent`.
 | `deep_research_topic_reflection_provider` | string | `null` | LLM provider for per-topic reflection (uses `default_provider` if not set) |
 | `deep_research_enable_extract` | bool | `true` | Allow researchers to extract full content from promising URLs |
 | `deep_research_extract_max_per_iteration` | int | `2` | Maximum URLs to extract per ReAct iteration |
+| `deep_research_topic_research_timeout` | float | `90.0` | Timeout per topic research LLM call in seconds |
 
 > **Note:** `deep_research_topic_max_searches` is accepted as a backward-compatible alias for `deep_research_topic_max_tool_calls`.
 

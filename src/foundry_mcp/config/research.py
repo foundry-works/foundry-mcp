@@ -183,6 +183,7 @@ class ResearchConfig:
     deep_research_evaluation_model: Optional[str] = None  # Model override for evaluation
     deep_research_evaluation_timeout: float = 360.0  # Timeout for evaluation LLM call (seconds)
     deep_research_reflection_timeout: float = 60.0  # Timeout per reflection call in seconds
+    deep_research_topic_research_timeout: float = 90.0  # Timeout per topic research LLM call in seconds
 
     # Multi-model cost optimization — role-based model hierarchy (Phase 6)
     # "research" role: main reasoning for analysis, planning, clarification (strongest available)
@@ -485,6 +486,7 @@ class ResearchConfig:
             "deep_research_planning_timeout": 360.0,
             "deep_research_synthesis_timeout": 600.0,
             "deep_research_reflection_timeout": 60.0,
+            "deep_research_topic_research_timeout": 90.0,
             "deep_research_evaluation_timeout": 360.0,
             "deep_research_supervision_wall_clock_timeout": 1800.0,
             "deep_research_summarization_timeout": 60.0,
@@ -689,6 +691,7 @@ class ResearchConfig:
             deep_research_evaluation_model=data.get("deep_research_evaluation_model"),
             deep_research_evaluation_timeout=float(data.get("deep_research_evaluation_timeout", 360.0)),
             deep_research_reflection_timeout=float(data.get("deep_research_reflection_timeout", 60.0)),
+            deep_research_topic_research_timeout=float(data.get("deep_research_topic_research_timeout", 90.0)),
             # Multi-model cost optimization — role-based hierarchy (Phase 6)
             deep_research_research_provider=data.get("deep_research_research_provider"),
             deep_research_research_model=data.get("deep_research_research_model"),
@@ -1094,6 +1097,7 @@ class ResearchConfig:
             "deep_research_synthesis_timeout",
             "deep_research_supervision_wall_clock_timeout",
             "deep_research_reflection_timeout",
+            "deep_research_topic_research_timeout",
             "deep_research_evaluation_timeout",
             "deep_research_digest_timeout",
             "deep_research_summarization_timeout",
@@ -2319,6 +2323,7 @@ class ResearchConfig:
             archive_content=self.deep_research_archive_content,
             archive_retention_days=self.deep_research_archive_retention_days,
             reflection_timeout=self.deep_research_reflection_timeout,
+            topic_research_timeout=self.deep_research_topic_research_timeout,
             evaluation_provider=self.deep_research_evaluation_provider,
             evaluation_model=self.deep_research_evaluation_model,
             evaluation_timeout=self.deep_research_evaluation_timeout,

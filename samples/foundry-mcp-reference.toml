@@ -380,6 +380,7 @@
 # deep_research_reflection_provider = null
 # deep_research_reflection_model = null
 # deep_research_reflection_timeout = 60.0
+# deep_research_topic_research_timeout = 90.0
 
 
 # -----------------------------------------------------------------------------

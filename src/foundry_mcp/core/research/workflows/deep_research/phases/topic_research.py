@@ -963,7 +963,7 @@ class TopicResearchMixin:
             provider_id=provider_id,
             model=researcher_model,
             temperature=0.3,
-            timeout=self.config.deep_research_reflection_timeout,
+            timeout=self.config.deep_research_topic_research_timeout,
             role="topic_reflection",
             skip_token_tracking=True,
         )
@@ -1001,7 +1001,7 @@ class TopicResearchMixin:
                 provider_id=provider_id,
                 model=researcher_model,
                 temperature=0.3,
-                timeout=self.config.deep_research_reflection_timeout,
+                timeout=self.config.deep_research_topic_research_timeout,
                 role="topic_reflection",
                 skip_token_tracking=True,
             )
@@ -1141,7 +1141,7 @@ class TopicResearchMixin:
                         provider_id=provider_id,
                         model=researcher_model,
                         temperature=0.2,  # lower temp for format compliance
-                        timeout=self.config.deep_research_reflection_timeout,
+                        timeout=self.config.deep_research_topic_research_timeout,
                         role="research",
                     )
                     if isinstance(ret, LLMCallResult):
@@ -1156,7 +1156,7 @@ class TopicResearchMixin:
                         provider_id=provider_id,
                         model=researcher_model,
                         system_prompt=system_prompt,
-                        timeout=self.config.deep_research_reflection_timeout,
+                        timeout=self.config.deep_research_topic_research_timeout,
                         temperature=0.2,
                         phase="topic_research",
                         fallback_providers=[],

@@ -242,6 +242,7 @@ class DeepResearchSettings:
 
     # Reflection timeout
     reflection_timeout: float = 60.0
+    topic_research_timeout: float = 90.0
 
     # Evaluation configuration
     evaluation_provider: Optional[str] = None

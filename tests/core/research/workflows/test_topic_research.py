@@ -132,6 +132,7 @@ class StubTopicResearch(TopicResearchMixin):
         self.config.deep_research_reflection_provider = None
         self.config.default_provider = "test-provider"
         self.config.deep_research_reflection_timeout = 60.0
+        self.config.deep_research_topic_research_timeout = 90.0
         self.config.deep_research_enable_extract = False
         self.config.deep_research_extract_max_per_iteration = 2
         self.config.deep_research_inline_compression = False
@@ -3921,3 +3922,32 @@ class TestValidatePaperId:
         result = _validate_paper_id(long_id)
         assert result is not None
         assert "Invalid paper_id" in result
+
+
+class TestTopicResearchTimeoutConfig:
+    """Verify topic research uses deep_research_topic_research_timeout (not reflection_timeout)."""
+
+    def test_config_default_value(self) -> None:
+        """ResearchConfig has deep_research_topic_research_timeout defaulting to 90.0."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        config = ResearchConfig()
+        assert config.deep_research_topic_research_timeout == 90.0
+
+    def test_config_from_dict(self) -> None:
+        """from_dict parses deep_research_topic_research_timeout."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        config = ResearchConfig.from_toml_dict({"deep_research_topic_research_timeout": 120.0})
+        assert config.deep_research_topic_research_timeout == 120.0
+
+    def test_config_independent_from_reflection_timeout(self) -> None:
+        """Topic research timeout is independent of reflection timeout."""
+        from foundry_mcp.config.research import ResearchConfig
+
+        config = ResearchConfig(
+            deep_research_reflection_timeout=30.0,
+            deep_research_topic_research_timeout=150.0,
+        )
+        assert config.deep_research_reflection_timeout == 30.0
+        assert config.deep_research_topic_research_timeout == 150.0

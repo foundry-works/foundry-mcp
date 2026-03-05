@@ -412,6 +412,10 @@ class TestSupervisionIntegration:
                 self.memory = MagicMock()
                 self.hooks = MagicMock()
                 self.orchestrator = MagicMock()
+                # Ensure decide_iteration returns an object with outputs={"should_iterate": False}
+                _decision = MagicMock()
+                _decision.outputs = {"should_iterate": False}
+                self.orchestrator.decide_iteration.return_value = _decision
                 self._tasks: dict = {}
                 self._tasks_lock = __import__("threading").Lock()
                 self._search_providers: dict = {}
