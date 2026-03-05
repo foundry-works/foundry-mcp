@@ -16,12 +16,12 @@ Deep research reports exhibit heading-body fusions where markdown headings get c
 - [x] Add test: `test_sameline_fusion_with_terminal_punctuation`
 
 ### Phase 2: Context Window Clamping
-- [ ] Add `_HEADING_BOUNDARY_RE` module-level constant
-- [ ] Add backward clamp in `_extract_context_window` — stop at last heading before claim
-- [ ] Add forward clamp in `_extract_context_window` — stop at first heading after claim
-- [ ] Add test: `test_window_does_not_cross_heading_forward`
-- [ ] Add test: `test_window_does_not_cross_heading_backward`
-- [ ] Add test: `test_window_keeps_own_section_heading`
+- [x] Add `_HEADING_BOUNDARY_RE` module-level constant
+- [x] Add backward clamp in `_extract_context_window` — stop at last heading before claim
+- [x] Add forward clamp in `_extract_context_window` — stop at first heading after claim
+- [x] Add test: `test_window_does_not_cross_heading_forward`
+- [x] Add test: `test_window_does_not_cross_heading_backward`
+- [x] Add test: `test_window_keeps_own_section_heading`
 
 ### Phase 3: Global Heading Repair
 - [ ] Add `repair_heading_boundaries_global()` public function in `claim_verification.py`

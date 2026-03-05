@@ -567,6 +567,54 @@ class TestExtractContextWindow:
         # Ensure the window contains complete paragraph.
         assert "Para 2 with the CLAIM text." in window
 
+    def test_window_does_not_cross_heading_forward(self):
+        """Window should stop at the next section heading, not include it."""
+        report = (
+            "## Section A\n\n"
+            "Body of section A with CLAIM HERE in it.\n\n"
+            "## Section B\n\n"
+            "Body of section B should not appear in window."
+        )
+        result = _extract_context_window(report, "CLAIM HERE")
+        assert result is not None
+        window, _, _ = result
+        assert "CLAIM HERE" in window
+        assert "## Section B" not in window
+        assert "Body of section B" not in window
+
+    def test_window_does_not_cross_heading_backward(self):
+        """Window should not include headings from prior sections."""
+        report = (
+            "## Prior Section\n\n"
+            "Prior section body text.\n\n"
+            "## Current Section\n\n"
+            "Body with CLAIM HERE in the current section."
+        )
+        result = _extract_context_window(report, "CLAIM HERE")
+        assert result is not None
+        window, _, _ = result
+        assert "CLAIM HERE" in window
+        assert "## Prior Section" not in window
+        assert "Prior section body" not in window
+
+    def test_window_keeps_own_section_heading(self):
+        """Window should include the claim's own section heading."""
+        report = (
+            "## Prior Section\n\n"
+            "Prior body.\n\n"
+            "## My Section\n\n"
+            "Body with CLAIM HERE in this section.\n\n"
+            "## Next Section\n\n"
+            "Next body."
+        )
+        result = _extract_context_window(report, "CLAIM HERE")
+        assert result is not None
+        window, _, _ = result
+        assert "CLAIM HERE" in window
+        assert "## My Section" in window
+        assert "## Prior Section" not in window
+        assert "## Next Section" not in window
+
 
 # ---------------------------------------------------------------------------
 # Unit tests: Correction Application

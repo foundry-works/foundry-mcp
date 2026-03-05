@@ -1002,6 +1002,24 @@ def _extract_context_window(report: str, quote_context: str) -> Optional[tuple[s
     para_end = report.find("\n\n", raw_end)
     window_end = para_end + 2 if para_end != -1 else len(report)
 
+    # Clamp at heading boundaries so corrections never span sections.
+    # Backward: keep claim's own section heading, drop earlier sections.
+    backward_region = report[window_start:match_start]
+    heading_hits = list(_HEADING_BOUNDARY_RE.finditer(backward_region))
+    if heading_hits:
+        last_hit = heading_hits[-1]
+        clamped_start = window_start + last_hit.start()
+        if clamped_start < match_start:
+            window_start = clamped_start
+
+    # Forward: stop at next section heading.
+    forward_region = report[match_end:window_end]
+    fwd_hit = _HEADING_BOUNDARY_RE.search(forward_region)
+    if fwd_hit:
+        clamped_end = match_end + fwd_hit.start()
+        if clamped_end > match_end:
+            window_end = clamped_end
+
     return report[window_start:window_end], window_start, window_end
 
 
@@ -1018,6 +1036,7 @@ _SAMELINE_FUSION_RE = re.compile(
     re.MULTILINE,
 )
 _HEADING_LINE_RE = re.compile(r"^#{1,6}\s+.+$", re.MULTILINE)
+_HEADING_BOUNDARY_RE = re.compile(r"\n(?=#{1,6}\s)")
 
 
 def _repair_heading_boundaries(original_window: str, corrected_text: str) -> str:
