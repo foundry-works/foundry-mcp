@@ -1063,6 +1063,9 @@ _SAMELINE_FUSION_RE = re.compile(
     r"^(#{1,6}\s+.+?[.!?)\]\"'\u2019\u201d*\u2014\u2013:;\-])([A-Z][a-z])",
     re.MULTILINE,
 )
+_HEADING_TABLE_FUSION_RE = re.compile(
+    r"^(#{1,6}\s+[^|\n]+?)\s*(\|(?:[^|\n]*\|){2,}.*)$", re.MULTILINE
+)
 _HEADING_LINE_RE = re.compile(r"^#{1,6}\s+.+$", re.MULTILINE)
 _HEADING_BOUNDARY_RE = re.compile(r"\n(?=#{1,6}\s)")
 
@@ -1133,6 +1136,7 @@ def _repair_heading_boundaries(original_window: str, corrected_text: str) -> str
     # same line (no newline between heading and body).
     repaired = _HEADING_RE.sub(r"\1\n\n\2", corrected_text)
     repaired = _SAMELINE_FUSION_RE.sub(r"\1\n\n\2", repaired)  # fallback pass
+    repaired = _HEADING_TABLE_FUSION_RE.sub(r"\1\n\n\2", repaired)  # table-on-heading
 
     # Also handle a heading line followed by a single \n (not \n\n) then body.
     # Split into lines and check each heading.

@@ -25,14 +25,14 @@
 ## Item 1b: Table-on-Heading Repair
 
 ### Code (`claim_verification.py`)
-- [ ] Add `_HEADING_TABLE_FUSION_RE = re.compile(r"^(#{1,6}\s+[^|\n]+?)\s*(\|(?:[^|\n]*\|){2,}.*)$", re.MULTILINE)`
-- [ ] Add `_HEADING_TABLE_FUSION_RE.sub(r"\1\n\n\2", ...)` pass in `_repair_heading_boundaries()`
+- [x] Add `_HEADING_TABLE_FUSION_RE = re.compile(r"^(#{1,6}\s+[^|\n]+?)\s*(\|(?:[^|\n]*\|){2,}.*)$", re.MULTILINE)`
+- [x] Add `_HEADING_TABLE_FUSION_RE.sub(r"\1\n\n\2", ...)` pass in `_repair_heading_boundaries()`
 
 ### Tests (`test_claim_verification.py`)
-- [ ] `## Title| A | B | C |` → split
-- [ ] `## A | B Comparison` (single pipe) → unchanged
-- [ ] `## Title|---|---|---|` (separator fused) → split
-- [ ] Already separated → unchanged
+- [x] `## Title| A | B | C |` → split
+- [x] `## A | B Comparison` (single pipe) → unchanged
+- [x] `## Title|---|---|---|` (separator fused) → split
+- [x] Already separated → unchanged
 
 ## Item 1c: Citation Year-Reference Filtering
 

@@ -3087,6 +3087,35 @@ class TestRepairTruncatedHeadings:
         assert result == text
 
 
+class TestRepairHeadingTableFusion:
+    """Tests for table-on-heading fusion repair (Item 1b)."""
+
+    def test_table_fused_onto_heading_is_split(self):
+        """Table row concatenated onto heading → separated with blank line."""
+        text = "## Annual Fee vs. Value Proposition| Card | Annual Fee | Value |"
+        result = _repair_heading_boundaries("# dummy\n\ntext", text)
+        assert result == "## Annual Fee vs. Value Proposition\n\n| Card | Annual Fee | Value |"
+
+    def test_single_pipe_heading_unchanged(self):
+        """Heading with a single pipe (not a table) → unchanged."""
+        text = "## A | B Comparison\n\nSome body text."
+        result = _repair_heading_boundaries("# dummy\n\ntext", text)
+        # Single pipe doesn't have 3+ cells, so should not be split
+        assert "## A | B Comparison" in result
+
+    def test_separator_row_fused_onto_heading(self):
+        """Table separator row fused onto heading → split."""
+        text = "## Results|---|---|---|"
+        result = _repair_heading_boundaries("# dummy\n\ntext", text)
+        assert result == "## Results\n\n|---|---|---|"
+
+    def test_already_separated_table_unchanged(self):
+        """Heading already separated from table by blank line → no change."""
+        text = "## Title\n\n| A | B | C |\n|---|---|---|"
+        result = _repair_heading_boundaries("# dummy\n\ntext", text)
+        assert "## Title\n\n| A | B | C |" in result
+
+
 # ---------------------------------------------------------------------------
 # Citation remapping helpers
 # ---------------------------------------------------------------------------
