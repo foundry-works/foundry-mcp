@@ -401,6 +401,25 @@ class WorkflowExecutionMixin:
 
                 # SYNTHESIS
                 if state.phase == DeepResearchPhase.SYNTHESIS:
+                    # --- ZERO-SOURCE GUARD ---
+                    if len(state.sources) == 0:
+                        logger.warning(
+                            "Zero sources collected for research %s — synthesis will be ungrounded",
+                            state.id,
+                        )
+                        self._write_audit_event(
+                            state,
+                            "zero_source_synthesis_warning",
+                            data={
+                                "source_count": 0,
+                                "phase": state.phase.value,
+                                "iteration": state.iteration,
+                            },
+                            level="warning",
+                        )
+                        state.metadata["ungrounded_synthesis"] = True
+                    # --- END ZERO-SOURCE GUARD ---
+
                     # Resume guard: skip synthesis if report exists and verification was in progress
                     _skip_to_verification = False
                     if state.report and state.metadata.get("claim_verification_started") and not state.claim_verification:
@@ -454,6 +473,29 @@ class WorkflowExecutionMixin:
                             repair_heading_boundaries_global,
                         )
                         state.report = repair_heading_boundaries_global(state.report)
+
+                    # --- UNGROUNDED SYNTHESIS DISCLAIMER ---
+                    if state.metadata.get("ungrounded_synthesis") and state.report:
+                        _disclaimer = (
+                            "> **Note:** This report was generated without web sources "
+                            "due to search failures. All claims are based on the model's "
+                            "training data and may be outdated or inaccurate.\n\n"
+                        )
+                        state.report = _disclaimer + state.report
+
+                        if state.report_output_path:
+                            validated = _validate_report_output_path(state.report_output_path)
+                            validated.write_text(state.report, encoding="utf-8")
+
+                        self._write_audit_event(
+                            state,
+                            "ungrounded_synthesis_disclaimer_added",
+                            data={
+                                "report_length": len(state.report),
+                                "report_saved": bool(state.report_output_path),
+                            },
+                        )
+                    # --- END UNGROUNDED SYNTHESIS DISCLAIMER ---
 
                     # --- CLAIM VERIFICATION ---
                     _cv_enabled = self.config.deep_research_claim_verification_enabled and (

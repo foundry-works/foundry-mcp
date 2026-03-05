@@ -12,12 +12,12 @@
 
 ## Phase 2: Zero-Source Synthesis Guard
 
-- [ ] **2.1** In `workflow_execution.py`, before the synthesis `_run_phase` call, check `len(state.sources) == 0`
-- [ ] **2.2** When zero sources: log warning, emit `zero_source_synthesis_warning` audit event, set `state.metadata["ungrounded_synthesis"] = True`
-- [ ] **2.3** After synthesis completes with `ungrounded_synthesis=True`, prepend disclaimer to `state.report`
-- [ ] **2.4** Re-save the report markdown file (if `report_output_path` is set) after prepending disclaimer
-- [ ] **2.5** Add test: zero-source state triggers warning metadata and disclaimer in report
-- [ ] **2.6** Add test: non-zero-source state does NOT trigger warning or disclaimer
+- [x] **2.1** In `workflow_execution.py`, before the synthesis `_run_phase` call, check `len(state.sources) == 0`
+- [x] **2.2** When zero sources: log warning, emit `zero_source_synthesis_warning` audit event, set `state.metadata["ungrounded_synthesis"] = True`
+- [x] **2.3** After synthesis completes with `ungrounded_synthesis=True`, prepend disclaimer to `state.report`
+- [x] **2.4** Re-save the report markdown file (if `report_output_path` is set) after prepending disclaimer
+- [x] **2.5** Add test: zero-source state triggers warning metadata and disclaimer in report
+- [x] **2.6** Add test: non-zero-source state does NOT trigger warning or disclaimer
 
 ## Phase 3: Topic Research Timeout Config
 

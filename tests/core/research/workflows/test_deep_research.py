@@ -2682,6 +2682,192 @@ class TestRunPhaseHelper:
 
 
 # =============================================================================
+# Zero-Source Synthesis Guard Tests (Phase 2)
+# =============================================================================
+
+
+class TestZeroSourceSynthesisGuard:
+    """Tests for zero-source detection and ungrounded synthesis disclaimer."""
+
+    @pytest.fixture
+    def workflow(self, mock_config, mock_memory):
+        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
+
+        return DeepResearchWorkflow(mock_config, mock_memory)
+
+    @pytest.fixture
+    def state_zero_sources(self):
+        """State at SYNTHESIS phase with zero sources."""
+        state = DeepResearchState(
+            id="deepres-zero-src",
+            original_query="Test query",
+            research_brief="Test brief",
+            phase=DeepResearchPhase.SYNTHESIS,
+            iteration=1,
+        )
+        # Ensure no sources
+        state.sources = []
+        return state
+
+    @pytest.fixture
+    def state_with_sources(self):
+        """State at SYNTHESIS phase with sources present."""
+        state = DeepResearchState(
+            id="deepres-with-src",
+            original_query="Test query",
+            research_brief="Test brief",
+            phase=DeepResearchPhase.SYNTHESIS,
+            iteration=1,
+        )
+        state.sources = [
+            ResearchSource(
+                title="Source 1",
+                url="https://example.com/1",
+                source_type=SourceType.WEB,
+            ),
+        ]
+        return state
+
+    @pytest.mark.asyncio
+    async def test_zero_sources_sets_ungrounded_metadata_and_disclaimer(
+        self, workflow, state_zero_sources, mock_memory
+    ):
+        """Zero sources should set ungrounded_synthesis metadata and prepend disclaimer."""
+        state = state_zero_sources
+
+        # Mock synthesis to produce a report
+        async def _mock_synthesis(*, state, provider_id, timeout):
+            state.report = "# Test Report\n\nSome synthesized content."
+            return WorkflowResult(success=True, content=state.report)
+
+        workflow._execute_synthesis_async = _mock_synthesis
+        workflow.hooks = MagicMock()
+        workflow._safe_orchestrator_transition = MagicMock()
+        workflow._check_cancellation = MagicMock()
+        workflow.orchestrator = MagicMock()
+        workflow.orchestrator.evaluate_phase_completion = MagicMock()
+        workflow.orchestrator.get_reflection_prompt = MagicMock(return_value="")
+        workflow.orchestrator.record_to_state = MagicMock()
+        iteration_decision = MagicMock()
+        iteration_decision.outputs = {"should_iterate": False}
+        workflow.orchestrator.decide_iteration = MagicMock(return_value=iteration_decision)
+
+        # Disable claim verification
+        workflow.config.deep_research_claim_verification_enabled = False
+
+        result = await workflow._execute_workflow_async(
+            state=state,
+            provider_id="test-provider",
+            timeout_per_operation=60.0,
+            max_concurrent=3,
+        )
+
+        assert result.success is True
+        assert state.metadata.get("ungrounded_synthesis") is True
+        assert state.report is not None
+        assert state.report.startswith("> **Note:**")
+        assert "without web sources" in state.report
+        assert "training data" in state.report
+        # Original report content should follow the disclaimer
+        assert "# Test Report" in state.report
+
+        # Verify audit events
+        audit_path = mock_memory.base_path / "deep_research" / f"{state.id}.audit.jsonl"
+        assert audit_path.exists()
+        lines = audit_path.read_text(encoding="utf-8").splitlines()
+        events = [json.loads(line) for line in lines]
+        event_types = [e["event_type"] for e in events]
+        assert "zero_source_synthesis_warning" in event_types
+        assert "ungrounded_synthesis_disclaimer_added" in event_types
+
+    @pytest.mark.asyncio
+    async def test_nonzero_sources_no_disclaimer(
+        self, workflow, state_with_sources, mock_memory
+    ):
+        """Non-zero sources should NOT trigger ungrounded warning or disclaimer."""
+        state = state_with_sources
+
+        async def _mock_synthesis(*, state, provider_id, timeout):
+            state.report = "# Test Report\n\nWell-sourced content."
+            return WorkflowResult(success=True, content=state.report)
+
+        workflow._execute_synthesis_async = _mock_synthesis
+        workflow.hooks = MagicMock()
+        workflow._safe_orchestrator_transition = MagicMock()
+        workflow._check_cancellation = MagicMock()
+        workflow.orchestrator = MagicMock()
+        workflow.orchestrator.evaluate_phase_completion = MagicMock()
+        workflow.orchestrator.get_reflection_prompt = MagicMock(return_value="")
+        workflow.orchestrator.record_to_state = MagicMock()
+        iteration_decision = MagicMock()
+        iteration_decision.outputs = {"should_iterate": False}
+        workflow.orchestrator.decide_iteration = MagicMock(return_value=iteration_decision)
+
+        workflow.config.deep_research_claim_verification_enabled = False
+
+        result = await workflow._execute_workflow_async(
+            state=state,
+            provider_id="test-provider",
+            timeout_per_operation=60.0,
+            max_concurrent=3,
+        )
+
+        assert result.success is True
+        assert state.metadata.get("ungrounded_synthesis") is not True
+        assert state.report is not None
+        assert not state.report.startswith("> **Note:**")
+        assert "without web sources" not in state.report
+
+        # Verify no zero-source audit events
+        audit_path = mock_memory.base_path / "deep_research" / f"{state.id}.audit.jsonl"
+        assert audit_path.exists()
+        lines = audit_path.read_text(encoding="utf-8").splitlines()
+        events = [json.loads(line) for line in lines]
+        event_types = [e["event_type"] for e in events]
+        assert "zero_source_synthesis_warning" not in event_types
+        assert "ungrounded_synthesis_disclaimer_added" not in event_types
+
+    @pytest.mark.asyncio
+    async def test_zero_sources_saves_report_file(
+        self, workflow, state_zero_sources, mock_memory, tmp_path
+    ):
+        """Zero-source disclaimer should be saved to report_output_path if set."""
+        state = state_zero_sources
+        report_file = tmp_path / "report.md"
+        state.report_output_path = str(report_file)
+
+        async def _mock_synthesis(*, state, provider_id, timeout):
+            state.report = "# Report\n\nContent here."
+            return WorkflowResult(success=True, content=state.report)
+
+        workflow._execute_synthesis_async = _mock_synthesis
+        workflow.hooks = MagicMock()
+        workflow._safe_orchestrator_transition = MagicMock()
+        workflow._check_cancellation = MagicMock()
+        workflow.orchestrator = MagicMock()
+        workflow.orchestrator.evaluate_phase_completion = MagicMock()
+        workflow.orchestrator.get_reflection_prompt = MagicMock(return_value="")
+        workflow.orchestrator.record_to_state = MagicMock()
+        iteration_decision = MagicMock()
+        iteration_decision.outputs = {"should_iterate": False}
+        workflow.orchestrator.decide_iteration = MagicMock(return_value=iteration_decision)
+
+        workflow.config.deep_research_claim_verification_enabled = False
+
+        await workflow._execute_workflow_async(
+            state=state,
+            provider_id="test-provider",
+            timeout_per_operation=60.0,
+            max_concurrent=3,
+        )
+
+        assert report_file.exists()
+        saved_content = report_file.read_text(encoding="utf-8")
+        assert saved_content.startswith("> **Note:**")
+        assert "# Report" in saved_content
+
+
+# =============================================================================
 # Backward-Compatibility Deserialization Tests (V.5)
 # =============================================================================
 
