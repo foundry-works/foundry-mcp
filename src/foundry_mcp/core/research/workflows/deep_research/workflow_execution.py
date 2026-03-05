@@ -362,236 +362,300 @@ class WorkflowExecutionMixin:
                 )
                 state.advance_phase()  # Skip to next active phase
 
-            # SUPERVISION (handles decomposition + research + gap-fill internally)
-            if state.phase == DeepResearchPhase.SUPERVISION:
-                if not self.config.deep_research_enable_supervision:
-                    logger.info(
-                        "Supervision disabled via config for research %s, skipping to SYNTHESIS",
-                        state.id,
-                    )
-                    self._write_audit_event(
-                        state,
-                        "supervision_skipped",
-                        data={"reason": "disabled_via_config"},
-                    )
-                    state.phase = DeepResearchPhase.SYNTHESIS
-                else:
-                    state.metadata["iteration_in_progress"] = True
-                    state.metadata["iteration_snapshot"] = _snapshot_iteration_counts(state)
-
-                    err = await self._run_phase(
-                        state,
-                        DeepResearchPhase.SUPERVISION,
-                        self._execute_supervision_async(
-                            state=state,
-                            provider_id=resolve_phase_provider(self.config, "supervision", "reflection"),
-                            timeout=self.config.get_phase_timeout("supervision"),
-                        ),
-                        skip_transition=True,
-                    )
-                    if err:
-                        return err
-                    state.phase = DeepResearchPhase.SYNTHESIS
-
-            # SYNTHESIS
-            if state.phase == DeepResearchPhase.SYNTHESIS:
-                # Resume guard: skip synthesis if report exists and verification was in progress
-                _skip_to_verification = False
-                if state.report and state.metadata.get("claim_verification_started") and not state.claim_verification:
-                    logger.info("Resuming claim verification (synthesis already complete) for research %s", state.id)
-                    _skip_to_verification = True
-                elif state.report and state.claim_verification:
-                    logger.info("Claim verification already complete for research %s, skipping", state.id)
-                    # Both synthesis and verification done — skip to completion.
-                else:
-                    err = await self._run_phase(
-                        state,
-                        DeepResearchPhase.SYNTHESIS,
-                        self._execute_synthesis_async(
-                            state=state,
-                            provider_id=state.synthesis_provider,
-                            timeout=self.config.get_phase_timeout("synthesis"),
-                        ),
-                        skip_transition=True,
-                    )
-                    if err:
-                        return err
-
-                    # Phase-specific: custom orchestrator + iteration decision
-                    try:
-                        self.orchestrator.evaluate_phase_completion(state, DeepResearchPhase.SYNTHESIS)
-                        self.orchestrator.decide_iteration(state)
-                        prompt = self.orchestrator.get_reflection_prompt(state, DeepResearchPhase.SYNTHESIS)
-                        self.hooks.think_pause(state, prompt)
-                        self.orchestrator.record_to_state(state)
-                    except Exception as exc:
-                        logger.exception(
-                            "Orchestrator transition failed for synthesis, research %s: %s",
+            # SUPERVISION → SYNTHESIS → CLAIM VERIFICATION iteration loop.
+            # Fidelity-gated re-iteration: if claim verification yields a
+            # fidelity score below threshold and iterations remain, loop back
+            # to SUPERVISION with gap-focused directives.
+            _iteration_complete = False
+            while not _iteration_complete:
+                # SUPERVISION (handles decomposition + research + gap-fill internally)
+                if state.phase == DeepResearchPhase.SUPERVISION:
+                    if not self.config.deep_research_enable_supervision:
+                        logger.info(
+                            "Supervision disabled via config for research %s, skipping to SYNTHESIS",
                             state.id,
-                            exc,
                         )
                         self._write_audit_event(
                             state,
-                            "orchestrator_error",
-                            data={
-                                "phase": "synthesis",
-                                "error": str(exc),
-                                "traceback": traceback.format_exc(),
-                            },
-                            level="error",
+                            "supervision_skipped",
+                            data={"reason": "disabled_via_config"},
                         )
-                        self._record_workflow_error(exc, state, "orchestrator_synthesis")
-                        raise
+                        state.phase = DeepResearchPhase.SYNTHESIS
+                    else:
+                        state.metadata["iteration_in_progress"] = True
+                        state.metadata["iteration_snapshot"] = _snapshot_iteration_counts(state)
 
-                # Repair heading-body fusions from synthesis.
-                if state.report:
-                    from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification import (
-                        repair_heading_boundaries_global,
-                    )
-                    state.report = repair_heading_boundaries_global(state.report)
-
-                # --- CLAIM VERIFICATION ---
-                _cv_enabled = self.config.deep_research_claim_verification_enabled and (
-                    state.research_profile is None
-                    or getattr(state.research_profile, "enable_claim_verification", True)
-                )
-                if _cv_enabled and not state.claim_verification:
-                    from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification import (
-                        apply_corrections,
-                        extract_and_verify_claims,
-                        remap_unsupported_citations,
-                    )
-
-                    state.metadata["claim_verification_started"] = True
-                    state.metadata["claim_verification_in_progress"] = True
-                    self.memory.save_deep_research(state)
-
-                    # Snapshot report before corrections for rollback on exception.
-                    report_snapshot = state.report
-
-                    try:
-                        verification_result = await extract_and_verify_claims(
-                            state=state,
-                            config=self.config,
-                            provider_id=resolve_phase_provider(self.config, "claim_verification", "synthesis"),
-                            workflow=self,
-                            timeout=self.config.deep_research_claim_verification_timeout,
+                        err = await self._run_phase(
+                            state,
+                            DeepResearchPhase.SUPERVISION,
+                            self._execute_supervision_async(
+                                state=state,
+                                provider_id=resolve_phase_provider(self.config, "supervision", "reflection"),
+                                timeout=self.config.get_phase_timeout("supervision"),
+                            ),
+                            skip_transition=True,
                         )
-                        state.claim_verification = verification_result
+                        if err:
+                            return err
+                        state.phase = DeepResearchPhase.SYNTHESIS
 
-                        report_modified = False
-
-                        if verification_result.claims_contradicted > 0:
-                            await apply_corrections(
+                # SYNTHESIS
+                if state.phase == DeepResearchPhase.SYNTHESIS:
+                    # Resume guard: skip synthesis if report exists and verification was in progress
+                    _skip_to_verification = False
+                    if state.report and state.metadata.get("claim_verification_started") and not state.claim_verification:
+                        logger.info("Resuming claim verification (synthesis already complete) for research %s", state.id)
+                        _skip_to_verification = True
+                    elif state.report and state.claim_verification:
+                        logger.info("Claim verification already complete for research %s, skipping", state.id)
+                        # Both synthesis and verification done — skip to completion.
+                    else:
+                        err = await self._run_phase(
+                            state,
+                            DeepResearchPhase.SYNTHESIS,
+                            self._execute_synthesis_async(
                                 state=state,
-                                config=self.config,
-                                verification_result=verification_result,
-                                workflow=self,
+                                provider_id=state.synthesis_provider,
+                                timeout=self.config.get_phase_timeout("synthesis"),
+                            ),
+                            skip_transition=True,
+                        )
+                        if err:
+                            return err
+
+                        # Phase-specific: evaluate synthesis quality
+                        try:
+                            self.orchestrator.evaluate_phase_completion(state, DeepResearchPhase.SYNTHESIS)
+                            prompt = self.orchestrator.get_reflection_prompt(state, DeepResearchPhase.SYNTHESIS)
+                            self.hooks.think_pause(state, prompt)
+                            self.orchestrator.record_to_state(state)
+                        except Exception as exc:
+                            logger.exception(
+                                "Orchestrator transition failed for synthesis, research %s: %s",
+                                state.id,
+                                exc,
                             )
-                            report_modified = True
-
-                        if verification_result.claims_unsupported > 0:
-                            await remap_unsupported_citations(
-                                state=state,
-                                verification_result=verification_result,
-                                workflow=self,
-                                provider_id=resolve_phase_provider(
-                                    self.config, "claim_verification", "synthesis"
-                                ),
-                                timeout=self.config.deep_research_claim_verification_timeout,
-                                max_concurrent=self.config.deep_research_claim_verification_max_concurrent,
+                            self._write_audit_event(
+                                state,
+                                "orchestrator_error",
+                                data={
+                                    "phase": "synthesis",
+                                    "error": str(exc),
+                                    "traceback": traceback.format_exc(),
+                                },
+                                level="error",
                             )
-                            if verification_result.citations_remapped > 0:
-                                report_modified = True
+                            self._record_workflow_error(exc, state, "orchestrator_synthesis")
+                            raise
 
-                        if report_modified and state.report_output_path:
-                            # Re-save report after corrections/remapping using the same
-                            # path synthesis wrote to (avoids _save_report_markdown
-                            # collision logic).
-                            validated = _validate_report_output_path(state.report_output_path)
-                            validated.write_text(state.report or "", encoding="utf-8")
+                    # Repair heading-body fusions from synthesis.
+                    if state.report:
+                        from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification import (
+                            repair_heading_boundaries_global,
+                        )
+                        state.report = repair_heading_boundaries_global(state.report)
 
-                        # Persist corrected report + verification result.
+                    # --- CLAIM VERIFICATION ---
+                    _cv_enabled = self.config.deep_research_claim_verification_enabled and (
+                        state.research_profile is None
+                        or getattr(state.research_profile, "enable_claim_verification", True)
+                    )
+                    if _cv_enabled and not state.claim_verification:
+                        from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification import (
+                            apply_corrections,
+                            extract_and_verify_claims,
+                            remap_unsupported_citations,
+                        )
+
+                        state.metadata["claim_verification_started"] = True
+                        state.metadata["claim_verification_in_progress"] = True
                         self.memory.save_deep_research(state)
 
+                        # Snapshot report before corrections for rollback on exception.
+                        report_snapshot = state.report
+
+                        try:
+                            verification_result = await extract_and_verify_claims(
+                                state=state,
+                                config=self.config,
+                                provider_id=resolve_phase_provider(self.config, "claim_verification", "synthesis"),
+                                workflow=self,
+                                timeout=self.config.deep_research_claim_verification_timeout,
+                            )
+                            state.claim_verification = verification_result
+
+                            report_modified = False
+
+                            if verification_result.claims_contradicted > 0:
+                                await apply_corrections(
+                                    state=state,
+                                    config=self.config,
+                                    verification_result=verification_result,
+                                    workflow=self,
+                                )
+                                report_modified = True
+
+                            if verification_result.claims_unsupported > 0:
+                                await remap_unsupported_citations(
+                                    state=state,
+                                    verification_result=verification_result,
+                                    workflow=self,
+                                    provider_id=resolve_phase_provider(
+                                        self.config, "claim_verification", "synthesis"
+                                    ),
+                                    timeout=self.config.deep_research_claim_verification_timeout,
+                                    max_concurrent=self.config.deep_research_claim_verification_max_concurrent,
+                                )
+                                if verification_result.citations_remapped > 0:
+                                    report_modified = True
+
+                            if report_modified and state.report_output_path:
+                                validated = _validate_report_output_path(state.report_output_path)
+                                validated.write_text(state.report or "", encoding="utf-8")
+
+                            # Persist corrected report + verification result.
+                            self.memory.save_deep_research(state)
+
+                            self._write_audit_event(
+                                state,
+                                "claim_verification_complete",
+                                data={
+                                    "claims_extracted": verification_result.claims_extracted,
+                                    "claims_filtered": verification_result.claims_filtered,
+                                    "claims_verified": verification_result.claims_verified,
+                                    "claims_contradicted": verification_result.claims_contradicted,
+                                    "corrections_applied": verification_result.corrections_applied,
+                                    "citations_remapped": verification_result.citations_remapped,
+                                },
+                            )
+                        except Exception as exc:
+                            # Rollback to pre-correction report.
+                            state.report = report_snapshot
+                            logger.warning(
+                                "Claim verification failed for research %s, delivering unverified report: %s",
+                                state.id,
+                                exc,
+                            )
+                            state.metadata["claim_verification_skipped"] = str(exc)
+                            self._write_audit_event(
+                                state,
+                                "claim_verification_failed",
+                                data={"error": str(exc)},
+                                level="warning",
+                            )
+                        finally:
+                            state.pop_metadata("claim_verification_in_progress")
+                    # --- END CLAIM VERIFICATION ---
+
+                    # --- FIDELITY-GATED ITERATION DECISION ---
+                    _fidelity_score = (
+                        state.claim_verification.fidelity_score
+                        if state.claim_verification
+                        else None
+                    )
+                    if _fidelity_score is not None:
+                        state.fidelity_scores.append(_fidelity_score)
+
+                    iteration_decision = self.orchestrator.decide_iteration(
+                        state,
+                        fidelity_score=_fidelity_score,
+                        fidelity_iteration_enabled=self.config.deep_research_fidelity_iteration_enabled,
+                        fidelity_threshold=self.config.deep_research_fidelity_threshold,
+                    )
+                    self.orchestrator.record_to_state(state)
+
+                    _should_iterate = (
+                        iteration_decision.outputs or {}
+                    ).get("should_iterate", False)
+
+                    if _should_iterate:
+                        # Build gap queries for the next supervision round
+                        gap_queries: list[str] = []
+                        if state.claim_verification:
+                            from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification import (
+                                build_gap_queries as _build_gap_queries,
+                            )
+                            gap_queries = _build_gap_queries(state.claim_verification)
+
+                        state.iteration_gap_queries = gap_queries
+                        state.iteration += 1
+                        state.phase = DeepResearchPhase.SUPERVISION
+                        state.claim_verification = None
+                        state.supervision_round = 0
+                        state.supervision_messages = []
+                        state.pop_metadata("claim_verification_started")
+                        state.pop_metadata("claim_verification_in_progress")
+
+                        logger.info(
+                            "Fidelity re-iteration triggered for research %s: "
+                            "fidelity=%.2f < threshold=%.2f, starting iteration %d/%d "
+                            "with %d gap queries",
+                            state.id,
+                            _fidelity_score or 0.0,
+                            self.config.deep_research_fidelity_threshold,
+                            state.iteration,
+                            state.max_iterations,
+                            len(gap_queries),
+                        )
                         self._write_audit_event(
                             state,
-                            "claim_verification_complete",
+                            "fidelity_reiteration",
                             data={
-                                "claims_extracted": verification_result.claims_extracted,
-                                "claims_filtered": verification_result.claims_filtered,
-                                "claims_verified": verification_result.claims_verified,
-                                "claims_contradicted": verification_result.claims_contradicted,
-                                "corrections_applied": verification_result.corrections_applied,
-                                "citations_remapped": verification_result.citations_remapped,
+                                "fidelity_score": _fidelity_score,
+                                "threshold": self.config.deep_research_fidelity_threshold,
+                                "iteration": state.iteration,
+                                "max_iterations": state.max_iterations,
+                                "gap_queries": gap_queries,
                             },
                         )
+                        self.memory.save_deep_research(state)
+                        continue  # Loop back to SUPERVISION
+                    # --- END FIDELITY-GATED ITERATION DECISION ---
+
+                    # --- CITATION FINALIZE ---
+                    from foundry_mcp.core.research.workflows.deep_research.phases._citation_postprocess import (
+                        finalize_citations,
+                    )
+
+                    try:
+                        report, finalize_meta = finalize_citations(
+                            state.report or "",
+                            state,
+                            query_type=state.metadata.get("_query_type"),
+                        )
+                        state.report = report
+
+                        # Re-save markdown file with finalized citations
+                        if state.report_output_path:
+                            validated = _validate_report_output_path(state.report_output_path)
+                            validated.write_text(state.report, encoding="utf-8")
+
+                        self._write_audit_event(
+                            state,
+                            "citation_finalize_complete",
+                            data=finalize_meta,
+                        )
                     except Exception as exc:
-                        # Rollback to pre-correction report.
-                        state.report = report_snapshot
+                        # Citation finalize is non-fatal — deliver the report as-is
                         logger.warning(
-                            "Claim verification failed for research %s, delivering unverified report: %s",
+                            "Citation finalize failed for research %s, delivering report with unrenumbered citations: %s",
                             state.id,
                             exc,
                         )
-                        state.metadata["claim_verification_skipped"] = str(exc)
                         self._write_audit_event(
                             state,
-                            "claim_verification_failed",
+                            "citation_finalize_failed",
                             data={"error": str(exc)},
                             level="warning",
                         )
-                    finally:
-                        state.pop_metadata("claim_verification_in_progress")
-                # --- END CLAIM VERIFICATION ---
+                    # --- END CITATION FINALIZE ---
 
-                # --- CITATION FINALIZE ---
-                # Renumber citations to reading order and append deterministic
-                # bibliography.  This runs after claim verification (which may
-                # remove/remap citations) so the final report has a clean
-                # sequential [1], [2], [3], ... sequence.
-                from foundry_mcp.core.research.workflows.deep_research.phases._citation_postprocess import (
-                    finalize_citations,
-                )
-
-                try:
-                    report, finalize_meta = finalize_citations(
-                        state.report or "",
-                        state,
-                        query_type=state.metadata.get("_query_type"),
-                    )
-                    state.report = report
-
-                    # Re-save markdown file with finalized citations
-                    if state.report_output_path:
-                        validated = _validate_report_output_path(state.report_output_path)
-                        validated.write_text(state.report, encoding="utf-8")
-
-                    self._write_audit_event(
-                        state,
-                        "citation_finalize_complete",
-                        data=finalize_meta,
-                    )
-                except Exception as exc:
-                    # Citation finalize is non-fatal — deliver the report as-is
-                    logger.warning(
-                        "Citation finalize failed for research %s, delivering report with unrenumbered citations: %s",
-                        state.id,
-                        exc,
-                    )
-                    self._write_audit_event(
-                        state,
-                        "citation_finalize_failed",
-                        data={"error": str(exc)},
-                        level="warning",
-                    )
-                # --- END CITATION FINALIZE ---
-
-                # No refinement — workflow complete
-                state.metadata["iteration_in_progress"] = False
-                state.metadata["last_completed_iteration"] = state.iteration
-                state.metadata.pop("iteration_snapshot", None)
-                state.mark_completed(report=state.report)
+                    # Workflow complete
+                    state.metadata["iteration_in_progress"] = False
+                    state.metadata["last_completed_iteration"] = state.iteration
+                    state.metadata.pop("iteration_snapshot", None)
+                    state.mark_completed(report=state.report)
+                    _iteration_complete = True
 
             # Calculate duration
             duration_ms = (time.perf_counter() - start_time) * 1000

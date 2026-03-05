@@ -73,6 +73,44 @@ def render_supervision_conversation_history(
     return parts
 
 
+def _build_fidelity_gap_context(state: DeepResearchState) -> list[str]:
+    """Build prompt lines for fidelity re-iteration gap context.
+
+    Prepended to supervision prompts when ``state.iteration > 1`` to
+    inform the supervisor about the previous iteration's fidelity score
+    and the gap queries that triggered re-iteration.
+
+    Args:
+        state: Current research state (iteration > 1)
+
+    Returns:
+        List of prompt lines
+    """
+    parts: list[str] = [
+        "## Fidelity Re-Iteration Context",
+        f"This is iteration **{state.iteration}** (triggered by low fidelity in the previous synthesis).",
+    ]
+
+    if state.fidelity_scores:
+        prev_score = state.fidelity_scores[-1]
+        parts.append(f"- Previous fidelity score: **{prev_score:.2f}**")
+
+    if state.iteration_gap_queries:
+        parts.append("- **Focus on these gaps from the previous iteration:**")
+        for i, query in enumerate(state.iteration_gap_queries, 1):
+            parts.append(f"  {i}. {sanitize_external_content(query)}")
+
+    parts.extend(
+        [
+            "",
+            "**Priority:** Address the gaps listed above. Generate directives that "
+            "specifically target these weak areas with better sources and evidence.",
+            "",
+        ]
+    )
+    return parts
+
+
 def classify_query_complexity(state: DeepResearchState) -> str:
     """Classify the original query's complexity for directive scaling.
 
@@ -180,6 +218,10 @@ def build_combined_think_delegate_user_prompt(
             "",
         ]
     )
+
+    # Fidelity re-iteration context
+    if state.iteration > 1:
+        parts.extend(_build_fidelity_gap_context(state))
 
     # Prior supervisor conversation
     if state.supervision_messages:
@@ -346,6 +388,10 @@ def build_delegation_user_prompt(
             "",
         ]
     )
+
+    # Fidelity re-iteration context
+    if state.iteration > 1:
+        parts.extend(_build_fidelity_gap_context(state))
 
     # Active search providers
     if active_providers:

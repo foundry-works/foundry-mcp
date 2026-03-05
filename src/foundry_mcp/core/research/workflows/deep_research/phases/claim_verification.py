@@ -1797,3 +1797,57 @@ async def extract_and_verify_claims(
             result.claims_partially_supported += 1
 
     return result
+
+
+# =========================================================================
+# Gap query generation for fidelity-gated re-iteration
+# =========================================================================
+
+
+def build_gap_queries(verification_result: ClaimVerificationResult) -> list[str]:
+    """Build targeted research queries from unsupported/contradicted claims.
+
+    Groups claims by verdict and report section, then generates focused
+    research questions for each gap area. Used by fidelity-gated
+    re-iteration to guide the next supervision round.
+
+    Args:
+        verification_result: Completed claim verification result
+
+    Returns:
+        List of gap queries (typically 3-5)
+    """
+    if not verification_result.details:
+        return []
+
+    # Group problematic claims by section
+    unsupported_by_section: dict[str, list[str]] = {}
+    contradicted_by_section: dict[str, list[str]] = {}
+
+    for claim in verification_result.details:
+        section = getattr(claim, "report_section", None) or "general"
+        if claim.verdict == "UNSUPPORTED":
+            unsupported_by_section.setdefault(section, []).append(claim.claim)
+        elif claim.verdict == "CONTRADICTED":
+            contradicted_by_section.setdefault(section, []).append(claim.claim)
+
+    queries: list[str] = []
+
+    # Contradicted claims get priority — they represent actively wrong information
+    for section, claims in contradicted_by_section.items():
+        claim_summary = "; ".join(c[:100] for c in claims[:3])
+        queries.append(
+            f"Find authoritative sources to verify or correct claims about "
+            f"{section}: {claim_summary}"
+        )
+
+    # Unsupported claims — need better evidence
+    for section, claims in unsupported_by_section.items():
+        claim_summary = "; ".join(c[:100] for c in claims[:3])
+        queries.append(
+            f"Find supporting evidence for claims about "
+            f"{section}: {claim_summary}"
+        )
+
+    # Cap at 5 queries to avoid excessive re-iteration cost
+    return queries[:5]

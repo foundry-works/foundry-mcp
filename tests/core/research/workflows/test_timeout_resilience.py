@@ -5,8 +5,13 @@ and fallback logic.
 """
 
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from foundry_mcp.config.research import ResearchConfig
+from foundry_mcp.core.errors.provider import ProviderTimeoutError
+from foundry_mcp.core.providers import ProviderResult, ProviderStatus
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
 
@@ -113,6 +118,7 @@ class TestExecuteProviderAsyncExists:
             "fallback_providers",
             "max_retries",
             "retry_delay",
+            "max_timeout_retries",
         ]
         assert params == expected_params
 
@@ -138,3 +144,174 @@ class TestWorkflowResultTimeoutMetadata:
         assert result.metadata["phase"] == "planning"
         assert result.metadata["retries"] == 2
         assert result.metadata["providers_tried"] == ["gemini", "claude"]
+
+
+def _make_workflow() -> DeepResearchWorkflow:
+    """Create a workflow with minimal config for testing."""
+    return DeepResearchWorkflow(ResearchConfig())
+
+
+def _make_success_result() -> ProviderResult:
+    """Create a successful ProviderResult."""
+    return ProviderResult(
+        content="ok",
+        provider_id="test",
+        model_used="test-model",
+        status=ProviderStatus.SUCCESS,
+    )
+
+
+class TestTimeoutRetryCap:
+    """Tests for max_timeout_retries parameter in _execute_provider_async."""
+
+    @pytest.mark.asyncio
+    async def test_timeout_no_retry_by_default(self) -> None:
+        """Timeout errors should NOT be retried when max_timeout_retries=0 (default)."""
+        workflow = _make_workflow()
+        call_count = 0
+
+        def fake_generate(request):
+            nonlocal call_count
+            call_count += 1
+            raise ProviderTimeoutError("timed out", provider="test")
+
+        mock_provider = MagicMock()
+        mock_provider.generate = fake_generate
+
+        with patch.object(workflow, "_resolve_provider", return_value=mock_provider):
+            result = await workflow._execute_provider_async(
+                prompt="test prompt",
+                provider_id="test",
+                timeout=1.0,
+                phase="test",
+                max_retries=3,
+                retry_delay=0.0,
+                max_timeout_retries=0,
+            )
+
+        assert result.success is False
+        assert result.metadata.get("timeout") is True
+        # Should be called exactly once — no retries for timeout
+        assert call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_non_timeout_errors_still_retry(self) -> None:
+        """Non-timeout errors should still retry up to max_retries."""
+        workflow = _make_workflow()
+        call_count = 0
+
+        def fake_generate(request):
+            nonlocal call_count
+            call_count += 1
+            raise RuntimeError("transient API error")
+
+        mock_provider = MagicMock()
+        mock_provider.generate = fake_generate
+
+        with patch.object(workflow, "_resolve_provider", return_value=mock_provider):
+            result = await workflow._execute_provider_async(
+                prompt="test prompt",
+                provider_id="test",
+                timeout=1.0,
+                phase="test",
+                max_retries=2,
+                retry_delay=0.0,
+                max_timeout_retries=0,
+            )
+
+        assert result.success is False
+        # Should be called 3 times (initial + 2 retries)
+        assert call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_timeout_retry_cap_of_one(self) -> None:
+        """max_timeout_retries=1 allows exactly one timeout retry."""
+        workflow = _make_workflow()
+        call_count = 0
+
+        def fake_generate(request):
+            nonlocal call_count
+            call_count += 1
+            raise ProviderTimeoutError("timed out", provider="test")
+
+        mock_provider = MagicMock()
+        mock_provider.generate = fake_generate
+
+        with patch.object(workflow, "_resolve_provider", return_value=mock_provider):
+            result = await workflow._execute_provider_async(
+                prompt="test prompt",
+                provider_id="test",
+                timeout=1.0,
+                phase="test",
+                max_retries=5,
+                retry_delay=0.0,
+                max_timeout_retries=1,
+            )
+
+        assert result.success is False
+        assert result.metadata.get("timeout") is True
+        # Should be called exactly 2 times (initial + 1 timeout retry)
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_asyncio_timeout_also_capped(self) -> None:
+        """asyncio.TimeoutError should also be capped by max_timeout_retries."""
+        workflow = _make_workflow()
+        call_count = 0
+
+        async def fake_wait_for(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            raise asyncio.TimeoutError()
+
+        mock_provider = MagicMock()
+        mock_provider.generate = MagicMock()  # won't be called directly
+
+        with (
+            patch.object(workflow, "_resolve_provider", return_value=mock_provider),
+            patch("asyncio.wait_for", side_effect=fake_wait_for),
+        ):
+            result = await workflow._execute_provider_async(
+                prompt="test prompt",
+                provider_id="test",
+                timeout=1.0,
+                phase="test",
+                max_retries=3,
+                retry_delay=0.0,
+                max_timeout_retries=0,
+            )
+
+        assert result.success is False
+        assert result.metadata.get("timeout") is True
+        # Should be called exactly once — no retries for asyncio.TimeoutError
+        assert call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_timeout_then_success_on_retry(self) -> None:
+        """When max_timeout_retries=1, a timeout followed by success should work."""
+        workflow = _make_workflow()
+        call_count = 0
+
+        def fake_generate(request):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ProviderTimeoutError("timed out", provider="test")
+            return _make_success_result()
+
+        mock_provider = MagicMock()
+        mock_provider.generate = fake_generate
+
+        with patch.object(workflow, "_resolve_provider", return_value=mock_provider):
+            result = await workflow._execute_provider_async(
+                prompt="test prompt",
+                provider_id="test",
+                timeout=1.0,
+                phase="test",
+                max_retries=3,
+                retry_delay=0.0,
+                max_timeout_retries=1,
+            )
+
+        assert result.success is True
+        assert call_count == 2

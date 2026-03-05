@@ -5313,3 +5313,165 @@ class TestAdaptiveProviderSelectionPrompts:
         prompt = stub._build_delegation_user_prompt(state, coverage)
 
         assert "Available Search Providers" not in prompt
+
+
+# ===========================================================================
+# Fidelity-gated re-iteration: decide_iteration() threshold tests
+# ===========================================================================
+
+
+class TestDecideIterationFidelityGating:
+    """Tests for fidelity-gated re-iteration logic in decide_iteration()."""
+
+    def _make_state(self, iteration: int = 1, max_iterations: int = 3) -> DeepResearchState:
+        return DeepResearchState(
+            original_query="test query",
+            phase=DeepResearchPhase.SYNTHESIS,
+            iteration=iteration,
+            max_iterations=max_iterations,
+        )
+
+    def test_fidelity_below_threshold_triggers_iteration(self):
+        """Fidelity below threshold -> should_iterate=True."""
+        from foundry_mcp.core.research.workflows.deep_research.orchestration import SupervisorOrchestrator
+
+        orch = SupervisorOrchestrator()
+        state = self._make_state(iteration=1, max_iterations=3)
+        decision = orch.decide_iteration(
+            state, fidelity_score=0.4, fidelity_threshold=0.7
+        )
+        assert decision.outputs["should_iterate"] is True
+        assert decision.outputs["next_phase"] == "SUPERVISION"
+
+    def test_fidelity_above_threshold_completes(self):
+        """Fidelity above threshold -> should_iterate=False."""
+        from foundry_mcp.core.research.workflows.deep_research.orchestration import SupervisorOrchestrator
+
+        orch = SupervisorOrchestrator()
+        state = self._make_state(iteration=1, max_iterations=3)
+        decision = orch.decide_iteration(
+            state, fidelity_score=0.85, fidelity_threshold=0.7
+        )
+        assert decision.outputs["should_iterate"] is False
+        assert decision.outputs["next_phase"] == "COMPLETED"
+
+    def test_fidelity_equal_to_threshold_completes(self):
+        """Fidelity exactly at threshold -> should_iterate=False."""
+        from foundry_mcp.core.research.workflows.deep_research.orchestration import SupervisorOrchestrator
+
+        orch = SupervisorOrchestrator()
+        state = self._make_state(iteration=1, max_iterations=3)
+        decision = orch.decide_iteration(
+            state, fidelity_score=0.7, fidelity_threshold=0.7
+        )
+        assert decision.outputs["should_iterate"] is False
+
+    def test_fidelity_below_but_max_iterations_reached(self):
+        """Fidelity below threshold but at max iterations -> complete."""
+        from foundry_mcp.core.research.workflows.deep_research.orchestration import SupervisorOrchestrator
+
+        orch = SupervisorOrchestrator()
+        state = self._make_state(iteration=3, max_iterations=3)
+        decision = orch.decide_iteration(
+            state, fidelity_score=0.4, fidelity_threshold=0.7
+        )
+        assert decision.outputs["should_iterate"] is False
+        assert decision.outputs["next_phase"] == "COMPLETED"
+
+    def test_fidelity_iteration_disabled_always_completes(self):
+        """fidelity_iteration_enabled=False -> always complete."""
+        from foundry_mcp.core.research.workflows.deep_research.orchestration import SupervisorOrchestrator
+
+        orch = SupervisorOrchestrator()
+        state = self._make_state(iteration=1, max_iterations=3)
+        decision = orch.decide_iteration(
+            state, fidelity_score=0.1, fidelity_iteration_enabled=False
+        )
+        assert decision.outputs["should_iterate"] is False
+
+    def test_fidelity_none_completes(self):
+        """fidelity_score=None (no CV) -> always complete."""
+        from foundry_mcp.core.research.workflows.deep_research.orchestration import SupervisorOrchestrator
+
+        orch = SupervisorOrchestrator()
+        state = self._make_state(iteration=1, max_iterations=3)
+        decision = orch.decide_iteration(
+            state, fidelity_score=None, fidelity_threshold=0.7
+        )
+        assert decision.outputs["should_iterate"] is False
+
+    def test_decision_inputs_include_fidelity_info(self):
+        """Decision inputs include fidelity_score and threshold."""
+        from foundry_mcp.core.research.workflows.deep_research.orchestration import SupervisorOrchestrator
+
+        orch = SupervisorOrchestrator()
+        state = self._make_state()
+        decision = orch.decide_iteration(
+            state, fidelity_score=0.5, fidelity_threshold=0.7
+        )
+        assert decision.inputs["fidelity_score"] == 0.5
+        assert decision.inputs["fidelity_threshold"] == 0.7
+        assert decision.inputs["fidelity_iteration_enabled"] is True
+
+
+# ===========================================================================
+# Supervision prompt gap context tests
+# ===========================================================================
+
+
+class TestSupervisionPromptGapContext:
+    """Tests for fidelity gap context in supervision prompts."""
+
+    def test_gap_context_not_shown_for_iteration_1(self):
+        """No gap context on first iteration."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_combined_think_delegate_user_prompt,
+        )
+
+        state = DeepResearchState(
+            original_query="test query",
+            phase=DeepResearchPhase.SUPERVISION,
+            iteration=1,
+        )
+        prompt = build_combined_think_delegate_user_prompt(state, [])
+        assert "Fidelity Re-Iteration Context" not in prompt
+
+    def test_gap_context_shown_for_iteration_2(self):
+        """Gap context included on iteration > 1."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_combined_think_delegate_user_prompt,
+        )
+
+        state = DeepResearchState(
+            original_query="test query",
+            phase=DeepResearchPhase.SUPERVISION,
+            iteration=2,
+            fidelity_scores=[0.43],
+            iteration_gap_queries=[
+                "Find evidence for claims about pricing",
+                "Verify annual fee comparisons",
+            ],
+        )
+        prompt = build_combined_think_delegate_user_prompt(state, [])
+        assert "Fidelity Re-Iteration Context" in prompt
+        assert "iteration **2**" in prompt
+        assert "0.43" in prompt
+        assert "Find evidence for claims about pricing" in prompt
+        assert "Verify annual fee comparisons" in prompt
+
+    def test_gap_context_in_delegation_prompt(self):
+        """Gap context included in delegation user prompt too."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompts import (
+            build_delegation_user_prompt,
+        )
+
+        state = DeepResearchState(
+            original_query="test query",
+            phase=DeepResearchPhase.SUPERVISION,
+            iteration=2,
+            fidelity_scores=[0.5],
+            iteration_gap_queries=["Find better sources for claim X"],
+        )
+        prompt = build_delegation_user_prompt(state, [])
+        assert "Fidelity Re-Iteration Context" in prompt
+        assert "0.50" in prompt

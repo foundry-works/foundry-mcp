@@ -797,6 +797,7 @@ async def execute_llm_call(
                 fallback_providers=workflow.config.get_phase_fallback_providers(phase_name),
                 max_retries=workflow.config.deep_research_max_retries,
                 retry_delay=workflow.config.deep_research_retry_delay,
+                max_timeout_retries=0,
             )
             # Success — clear any prior context error and break
             last_context_error = None

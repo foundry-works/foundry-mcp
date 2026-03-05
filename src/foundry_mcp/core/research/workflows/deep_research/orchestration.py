@@ -311,45 +311,89 @@ class SupervisorOrchestrator:
 
         return {"rationale": f"Phase {phase.value} completed", "quality_ok": True}
 
-    def decide_iteration(self, state: DeepResearchState) -> AgentDecision:
+    def decide_iteration(
+        self,
+        state: DeepResearchState,
+        fidelity_score: Optional[float] = None,
+        fidelity_iteration_enabled: bool = True,
+        fidelity_threshold: float = 0.7,
+    ) -> AgentDecision:
         """Supervisor decides whether to iterate or complete.
 
-        With the collapsed pipeline (no refinement phase), the supervisor
-        always completes after synthesis. Supervision gap-filling handles
-        iterative improvement before synthesis.
-
-        .. deprecated::
-            ``max_iterations > 1`` has no effect — multi-iteration
-            refinement is not implemented.  Supervision gap-filling
-            handles iterative improvement.  The parameter will be
-            removed in a future release.
+        When fidelity-gated re-iteration is enabled, a low fidelity score
+        from claim verification triggers additional research iterations
+        (SUPERVISION → SYNTHESIS → claim verification) until the fidelity
+        threshold is met or ``max_iterations`` is exhausted.
 
         Args:
             state: Current research state
+            fidelity_score: Fidelity score from claim verification (None if
+                claim verification was not run)
+            fidelity_iteration_enabled: Whether fidelity-gated re-iteration
+                is enabled (from config)
+            fidelity_threshold: Minimum fidelity score to consider complete
 
         Returns:
-            AgentDecision with complete decision
+            AgentDecision with iteration/completion decision
         """
-        if state.max_iterations > 1:
+        should_iterate = False
+        rationale: str
+        next_phase: str
+
+        if not fidelity_iteration_enabled:
+            rationale = (
+                f"Completing: fidelity iteration disabled "
+                f"(iteration {state.iteration}/{state.max_iterations})"
+            )
+            next_phase = "COMPLETED"
+        elif fidelity_score is None:
+            rationale = (
+                f"Completing: no fidelity score available "
+                f"(iteration {state.iteration}/{state.max_iterations})"
+            )
+            next_phase = "COMPLETED"
+        elif fidelity_score >= fidelity_threshold:
+            rationale = (
+                f"Completing: fidelity {fidelity_score:.2f} >= threshold {fidelity_threshold:.2f} "
+                f"(iteration {state.iteration}/{state.max_iterations})"
+            )
+            next_phase = "COMPLETED"
+        elif state.iteration >= state.max_iterations:
             logger.warning(
-                "max_iterations=%d is configured but multi-iteration refinement "
-                "is not implemented. Supervision gap-filling handles iterative "
-                "improvement. max_iterations > 1 has no effect and will be "
-                "removed in a future release.",
+                "Fidelity %.2f is below threshold %.2f but max iterations "
+                "reached (%d/%d) — completing anyway",
+                fidelity_score,
+                fidelity_threshold,
+                state.iteration,
                 state.max_iterations,
             )
+            rationale = (
+                f"Completing: fidelity {fidelity_score:.2f} < threshold {fidelity_threshold:.2f} "
+                f"but max iterations reached ({state.iteration}/{state.max_iterations})"
+            )
+            next_phase = "COMPLETED"
+        else:
+            should_iterate = True
+            rationale = (
+                f"Iterating: fidelity {fidelity_score:.2f} < threshold {fidelity_threshold:.2f} "
+                f"(iteration {state.iteration}/{state.max_iterations})"
+            )
+            next_phase = "SUPERVISION"
 
         decision = AgentDecision(
             agent=AgentRole.SUPERVISOR,
             action="decide_iteration",
-            rationale=f"Completing: iteration {state.iteration}/{state.max_iterations}",
+            rationale=rationale,
             inputs={
                 "iteration": state.iteration,
                 "max_iterations": state.max_iterations,
+                "fidelity_score": fidelity_score,
+                "fidelity_threshold": fidelity_threshold,
+                "fidelity_iteration_enabled": fidelity_iteration_enabled,
             },
             outputs={
-                "should_iterate": False,
-                "next_phase": "COMPLETED",
+                "should_iterate": should_iterate,
+                "next_phase": next_phase,
             },
         )
 

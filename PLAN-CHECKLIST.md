@@ -1,114 +1,37 @@
-# Implementation Checklist: Post-Synthesis Quality Improvements
+# Deep Research Timeout & Zero-Source Fix — Checklist
 
-## Item 1a: Heading Truncation Repair
+## Phase 1: Cap Timeout Retries
 
-### Code (`claim_verification.py`)
-- [x] Add `_HEADING_TRUNCATED_RE = re.compile(r"^(#{1,6}\s+\S.*\w)-\s*$", re.MULTILINE)` near line 1056
-- [x] Implement `_repair_truncated_headings(text: str) -> str`:
-  - [x] Find all matches of `_HEADING_TRUNCATED_RE` with line positions
-  - [x] For each match, scan forward past blank lines for first non-empty continuation line
-  - [x] Skip merge if continuation starts with `#` (another heading)
-  - [x] Merge: append continuation text onto heading (keeping the hyphen)
-  - [x] Remove consumed continuation line from original position
-- [x] Call `_repair_truncated_headings()` as final pass in `repair_heading_boundaries_global()` (after `_repair_heading_boundaries()`, not before — `_HEADING_RE` false-positives on hyphenated words like `Sign-Up`)
-- [x] Note: NOT called inside `_repair_heading_boundaries()` — truncation is a synthesis artifact, not a correction artifact
+- [x] **1.1** Add `max_timeout_retries: int = 0` parameter to `_execute_provider_async` in `base.py`
+- [x] **1.2** In the `ProviderTimeoutError` handler (`base.py:479-497`), check `timeout_retries_used < max_timeout_retries` instead of `attempt < max_retries`; track `timeout_retries_used` separately
+- [x] **1.3** In the `asyncio.TimeoutError` handler (`base.py:499-517`), apply the same timeout retry cap
+- [x] **1.4** Pass `max_timeout_retries=0` from `execute_llm_call` in `_lifecycle.py` (all deep research LLM calls get the new behavior)
+- [x] **1.5** Add test: verify timeout errors break immediately (no retries) when `max_timeout_retries=0`
+- [x] **1.6** Add test: verify non-timeout errors still retry up to `max_retries`
+- [x] **1.7** Add test: verify `max_timeout_retries=1` allows exactly one timeout retry
 
-### Tests (`test_claim_verification.py`)
-- [x] `## Sign-\n\nUp Bonuses and Value` → `## Sign-Up Bonuses and Value`
-- [x] `## Sign-\nUp Bonuses` (no blank line) → merge
-- [x] `## Self-Hosted Solutions` (not truncated) → unchanged
-- [x] Multiple truncated headings → all repaired
-- [x] Continuation is another heading → no merge
-- [x] Truncated heading at end of document → left as-is
-- [x] `repair_heading_boundaries_global()` integration test with truncated heading
+## Phase 2: Zero-Source Synthesis Guard
 
-## Item 1b: Table-on-Heading Repair
+- [ ] **2.1** In `workflow_execution.py`, before the synthesis `_run_phase` call, check `len(state.sources) == 0`
+- [ ] **2.2** When zero sources: log warning, emit `zero_source_synthesis_warning` audit event, set `state.metadata["ungrounded_synthesis"] = True`
+- [ ] **2.3** After synthesis completes with `ungrounded_synthesis=True`, prepend disclaimer to `state.report`
+- [ ] **2.4** Re-save the report markdown file (if `report_output_path` is set) after prepending disclaimer
+- [ ] **2.5** Add test: zero-source state triggers warning metadata and disclaimer in report
+- [ ] **2.6** Add test: non-zero-source state does NOT trigger warning or disclaimer
 
-### Code (`claim_verification.py`)
-- [x] Add `_HEADING_TABLE_FUSION_RE = re.compile(r"^(#{1,6}\s+[^|\n]+?)\s*(\|(?:[^|\n]*\|){2,}.*)$", re.MULTILINE)`
-- [x] Add `_HEADING_TABLE_FUSION_RE.sub(r"\1\n\n\2", ...)` pass in `_repair_heading_boundaries()`
+## Phase 3: Topic Research Timeout Config
 
-### Tests (`test_claim_verification.py`)
-- [x] `## Title| A | B | C |` → split
-- [x] `## A | B Comparison` (single pipe) → unchanged
-- [x] `## Title|---|---|---|` (separator fused) → split
-- [x] Already separated → unchanged
-
-## Item 1c: Citation Year-Reference Filtering
-
-### Code (`_citation_postprocess.py`)
-- [x] Update `_CITATION_RE` to `re.compile(r"\[(?!(?:19|20)\d{2}\])(\d+)\](?!\()")`
-- [x] Check `claim_verification.py` for separate citation regex — apply same filter
-- [x] Verify `extract_cited_numbers()` works with updated regex
-
-### Tests (`test_citation_postprocess.py`)
-- [x] `[1]`, `[99]` → matched
-- [x] `[100]`, `[500]` → matched
-- [x] `[2026]`, `[2025]`, `[1999]` → NOT matched
-- [x] `[1899]`, `[2100]` → matched
-- [x] `"in [2026] the market"` → not extracted
-- [x] `renumber_citations()` with `[2026]` in body → year preserved
-
-## Item 2: Fidelity-Gated Re-Iteration
-
-### Config (`config/research.py`)
-- [ ] Add `deep_research_fidelity_iteration_enabled: bool = True`
-- [ ] Add `deep_research_fidelity_threshold: float = 0.7`
-- [ ] Add parsing in `from_dict()`
-- [ ] Add validation in `validate_claim_verification_config()`
-
-### State model (`models/deep_research.py`)
-- [ ] Add `fidelity_scores: list[float] = Field(default_factory=list)` to `DeepResearchState`
-- [ ] Add `iteration_gap_queries: list[str] = Field(default_factory=list)` to `DeepResearchState`
-
-### Orchestrator (`orchestration.py`)
-- [ ] Update `decide_iteration()` signature to accept `fidelity_score: float | None = None`
-- [ ] Implement threshold logic:
-  - [ ] `fidelity_iteration_enabled=False` → complete
-  - [ ] `fidelity_score is None` → complete
-  - [ ] `fidelity_score >= threshold` → complete
-  - [ ] `fidelity_score < threshold AND iteration < max_iterations` → iterate
-  - [ ] `fidelity_score < threshold AND iteration >= max_iterations` → complete (log warning)
-- [ ] Remove deprecation warning about `max_iterations > 1`
-
-### Gap query generation (`claim_verification.py`)
-- [ ] Add `build_gap_queries(verification_result: ClaimVerificationResult) -> list[str]`:
-  - [ ] Group UNSUPPORTED claims by `report_section`
-  - [ ] Group CONTRADICTED claims by `report_section`
-  - [ ] Generate targeted research questions per section
-  - [ ] Return 3-5 gap queries
-
-### Workflow execution (`workflow_execution.py`)
-- [ ] After claim verification, pass `fidelity_score` to `decide_iteration()`
-- [ ] Append `fidelity_score` to `state.fidelity_scores`
-- [ ] If `should_iterate=True`:
-  - [ ] Call `build_gap_queries()` and store in `state.iteration_gap_queries`
-  - [ ] Increment `state.iteration`
-  - [ ] Reset `state.phase = DeepResearchPhase.SUPERVISION`
-  - [ ] Clear `state.claim_verification = None`
-  - [ ] Save state to disk
-  - [ ] Continue loop (SUPERVISION runs again naturally)
-- [ ] If `should_iterate=False`: proceed to citation finalize
-- [ ] Wrap SUPERVISION→SYNTHESIS→CV in iteration loop (or restructure as `while`)
-
-### Supervision prompt (`phases/supervision_prompts.py`)
-- [ ] When `state.iteration > 1`, prepend gap context:
-  - [ ] Previous fidelity score
-  - [ ] Gap queries from `state.iteration_gap_queries`
-  - [ ] Instruction to prioritize gap-filling directives
-
-### Tests
-- [ ] `test_orchestration.py`: threshold logic (5 cases above)
-- [ ] `test_claim_verification.py`: `build_gap_queries()` with mixed verdicts
-- [ ] `test_claim_verification.py`: empty verification → empty queries
-- [ ] `test_deep_research.py` (integration): low fidelity triggers second iteration
-- [ ] `test_deep_research.py`: `fidelity_scores` accumulates
-- [ ] `test_deep_research.py`: sources accumulate across iterations
+- [ ] **3.1** Add `deep_research_topic_research_timeout: float = 90.0` to `ResearchConfig` dataclass in `research.py`
+- [ ] **3.2** Add parsing in `ResearchConfig.from_dict()` for the new field
+- [ ] **3.3** Add to `_FLOAT_FIELDS` list for TOML config merging
+- [ ] **3.4** In `_execute_researcher_llm_call` (`topic_research.py:966`), replace `self.config.deep_research_reflection_timeout` with `self.config.deep_research_topic_research_timeout`
+- [ ] **3.5** Update `samples/foundry-mcp.toml` with the new config key and documentation comment
+- [ ] **3.6** Add test: verify topic research uses the new timeout config value
 
 ## Verification
 
-- [ ] `pytest tests/ -k claim_verification` passes
-- [ ] `pytest tests/ -k citation_postprocess` passes
-- [ ] `pytest tests/ -k orchestration` passes
-- [ ] `pytest tests/ -k deep_research` passes (full suite)
-- [ ] Manual: `repair_heading_boundaries_global()` on `deepres-db449219ed17` report fixes both heading issues
+- [ ] **V.1** Run existing test suites: `pytest tests/core/research/workflows/test_timeout_resilience.py -x`
+- [ ] **V.2** Run existing test suites: `pytest tests/core/research/workflows/test_deep_research.py -x`
+- [ ] **V.3** Run full deep research test directory: `pytest tests/core/research/workflows/deep_research/ -x`
+- [ ] **V.4** Manual smoke test: run a deep research session with Tavily API key unset (forces timeout/failure) and verify zero-source disclaimer appears
+- [ ] **V.5** Verify no regressions in existing timeout/resilience behavior for non-deep-research workflows

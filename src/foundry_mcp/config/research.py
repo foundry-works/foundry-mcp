@@ -339,6 +339,10 @@ class ResearchConfig:
     deep_research_claim_verification_annotate_unsupported: bool = False  # Inline (unverified) annotations
     deep_research_claim_verification_max_input_tokens: int = 200_000  # Total token budget escape hatch
 
+    # Fidelity-gated re-iteration (post-synthesis claim verification triggers additional research)
+    deep_research_fidelity_iteration_enabled: bool = True  # Enable fidelity-gated re-iteration
+    deep_research_fidelity_threshold: float = 0.7  # Fidelity score below which re-iteration is triggered
+
     deep_research_archive_content: bool = False  # Archive canonical text for digested sources
     deep_research_archive_retention_days: int = 30  # Days to retain archived digest content (0 = keep indefinitely)
     # Digest LLM provider configuration (uses default provider if not set)
@@ -837,6 +841,13 @@ class ResearchConfig:
             ),
             deep_research_claim_verification_max_input_tokens=int(
                 data.get("deep_research_claim_verification_max_input_tokens", 200_000)
+            ),
+            # Fidelity-gated re-iteration
+            deep_research_fidelity_iteration_enabled=_parse_bool(
+                data.get("deep_research_fidelity_iteration_enabled", True)
+            ),
+            deep_research_fidelity_threshold=float(
+                data.get("deep_research_fidelity_threshold", 0.7)
             ),
             # Academic coverage weights
             deep_research_academic_coverage_weights=data.get("deep_research_academic_coverage_weights"),
@@ -1524,6 +1535,13 @@ class ResearchConfig:
             raise ValueError(
                 f"Invalid deep_research_claim_verification_max_input_tokens: "
                 f"{self.deep_research_claim_verification_max_input_tokens!r}. Must be > 0."
+            )
+        # Fidelity-gated re-iteration validation
+        ft = self.deep_research_fidelity_threshold
+        if not (0.0 <= ft <= 1.0):
+            raise ValueError(
+                f"Invalid deep_research_fidelity_threshold: {ft!r}. "
+                "Must be in [0.0, 1.0]."
             )
 
     def get_provider_rate_limit(self, provider: str) -> int:

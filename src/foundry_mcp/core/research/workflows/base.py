@@ -329,6 +329,7 @@ class ResearchWorkflowBase(ABC):
         fallback_providers: Optional[List[str]] = None,
         max_retries: int = 2,
         retry_delay: float = 5.0,
+        max_timeout_retries: int = 0,
     ) -> WorkflowResult:
         """Execute a provider request asynchronously with timeout protection.
 
@@ -349,6 +350,10 @@ class ResearchWorkflowBase(ABC):
             fallback_providers: List of fallback provider IDs to try on failure
             max_retries: Maximum retry attempts per provider (default: 2)
             retry_delay: Delay between retries in seconds (default: 5.0)
+            max_timeout_retries: Maximum retry attempts for timeout errors
+                specifically (default: 0). Timeout errors are unlikely to
+                succeed on retry with the same prompt, so this defaults to 0.
+                Non-timeout transient errors still use max_retries.
 
         Returns:
             WorkflowResult with response, error, or timeout metadata
@@ -387,6 +392,7 @@ class ResearchWorkflowBase(ABC):
         last_error: Optional[str] = None
         saw_timeout = False
         saw_non_timeout = False
+        timeout_retries_used = 0
 
         for current_provider_id in providers_to_try:
             current_spec: Optional[ProviderSpec] = None
@@ -488,8 +494,10 @@ class ResearchWorkflowBase(ABC):
                         attempt + 1,
                         max_retries + 1,
                     )
-                    # Retry on timeout
-                    if attempt < max_retries:
+                    # Timeout retries are capped separately — retrying the
+                    # same prompt on a timed-out provider rarely helps.
+                    if timeout_retries_used < max_timeout_retries:
+                        timeout_retries_used += 1
                         total_retries += 1
                         await asyncio.sleep(retry_delay)
                         continue
@@ -508,8 +516,10 @@ class ResearchWorkflowBase(ABC):
                         attempt + 1,
                         max_retries + 1,
                     )
-                    # Retry on timeout
-                    if attempt < max_retries:
+                    # Timeout retries are capped separately — retrying the
+                    # same prompt on a timed-out provider rarely helps.
+                    if timeout_retries_used < max_timeout_retries:
+                        timeout_retries_used += 1
                         total_retries += 1
                         await asyncio.sleep(retry_delay)
                         continue

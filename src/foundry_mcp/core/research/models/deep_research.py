@@ -1635,6 +1635,16 @@ class DeepResearchState(BaseModel):
         description="Result of post-synthesis claim verification (when enabled)",
     )
 
+    # Fidelity-gated re-iteration tracking
+    fidelity_scores: list[float] = Field(
+        default_factory=list,
+        description="Fidelity scores from each iteration's claim verification (tracks convergence)",
+    )
+    iteration_gap_queries: list[str] = Field(
+        default_factory=list,
+        description="Gap queries from last fidelity-gated re-iteration (passed to supervision)",
+    )
+
     # Citation counter — maintained by add_source()/append_source().
     # Avoids O(n) scan of all sources on every add.
     next_citation_number: int = Field(

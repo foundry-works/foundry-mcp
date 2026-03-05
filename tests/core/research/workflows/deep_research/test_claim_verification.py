@@ -3566,3 +3566,206 @@ class TestRemapUnsupportedCitations:
             provider_id="test-provider",
         )
         assert remapped == 0
+
+
+# ===========================================================================
+# build_gap_queries tests
+# ===========================================================================
+
+
+class TestBuildGapQueries:
+    """Tests for gap query generation from claim verification results."""
+
+    def test_empty_verification_returns_empty(self):
+        """Empty verification result -> empty gap queries."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification import (
+            build_gap_queries,
+        )
+
+        result = ClaimVerificationResult(
+            claims_extracted=0,
+            claims_filtered=0,
+            claims_verified=0,
+            claims_supported=0,
+            claims_contradicted=0,
+            claims_unsupported=0,
+            claims_partially_supported=0,
+            corrections_applied=0,
+            citations_remapped=0,
+            details=[],
+        )
+        assert build_gap_queries(result) == []
+
+    def test_unsupported_claims_generate_queries(self):
+        """UNSUPPORTED claims generate gap queries."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification import (
+            build_gap_queries,
+        )
+
+        result = ClaimVerificationResult(
+            claims_extracted=2,
+            claims_filtered=0,
+            claims_verified=2,
+            claims_supported=0,
+            claims_contradicted=0,
+            claims_unsupported=2,
+            claims_partially_supported=0,
+            corrections_applied=0,
+            citations_remapped=0,
+            details=[
+                ClaimVerdict(
+                    claim="The annual fee is $550",
+                    claim_type="quantitative",
+                    cited_sources=[1],
+                    verdict="UNSUPPORTED",
+                ),
+                ClaimVerdict(
+                    claim="Rewards rate is 5x on travel",
+                    claim_type="quantitative",
+                    cited_sources=[2],
+                    verdict="UNSUPPORTED",
+                ),
+            ],
+        )
+        queries = build_gap_queries(result)
+        assert len(queries) >= 1
+        assert any("supporting evidence" in q.lower() for q in queries)
+
+    def test_contradicted_claims_generate_queries(self):
+        """CONTRADICTED claims generate priority gap queries."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification import (
+            build_gap_queries,
+        )
+
+        result = ClaimVerificationResult(
+            claims_extracted=1,
+            claims_filtered=0,
+            claims_verified=1,
+            claims_supported=0,
+            claims_contradicted=1,
+            claims_unsupported=0,
+            claims_partially_supported=0,
+            corrections_applied=0,
+            citations_remapped=0,
+            details=[
+                ClaimVerdict(
+                    claim="The card has no foreign transaction fee",
+                    claim_type="negative",
+                    cited_sources=[1],
+                    verdict="CONTRADICTED",
+                ),
+            ],
+        )
+        queries = build_gap_queries(result)
+        assert len(queries) >= 1
+        assert any("verify or correct" in q.lower() for q in queries)
+
+    def test_mixed_verdicts_prioritize_contradicted(self):
+        """CONTRADICTED queries come before UNSUPPORTED in output."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification import (
+            build_gap_queries,
+        )
+
+        result = ClaimVerificationResult(
+            claims_extracted=3,
+            claims_filtered=0,
+            claims_verified=3,
+            claims_supported=1,
+            claims_contradicted=1,
+            claims_unsupported=1,
+            claims_partially_supported=0,
+            corrections_applied=0,
+            citations_remapped=0,
+            details=[
+                ClaimVerdict(
+                    claim="Fee is $100",
+                    claim_type="quantitative",
+                    cited_sources=[1],
+                    verdict="SUPPORTED",
+                ),
+                ClaimVerdict(
+                    claim="No annual fee",
+                    claim_type="negative",
+                    cited_sources=[2],
+                    verdict="CONTRADICTED",
+                ),
+                ClaimVerdict(
+                    claim="Best in class",
+                    claim_type="positive",
+                    cited_sources=[3],
+                    verdict="UNSUPPORTED",
+                ),
+            ],
+        )
+        queries = build_gap_queries(result)
+        assert len(queries) == 2
+        # Contradicted comes first
+        assert "verify or correct" in queries[0].lower()
+        assert "supporting evidence" in queries[1].lower()
+
+    def test_supported_only_returns_empty(self):
+        """All SUPPORTED claims -> no gap queries."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification import (
+            build_gap_queries,
+        )
+
+        result = ClaimVerificationResult(
+            claims_extracted=2,
+            claims_filtered=0,
+            claims_verified=2,
+            claims_supported=2,
+            claims_contradicted=0,
+            claims_unsupported=0,
+            claims_partially_supported=0,
+            corrections_applied=0,
+            citations_remapped=0,
+            details=[
+                ClaimVerdict(
+                    claim="Claim A",
+                    claim_type="positive",
+                    cited_sources=[1],
+                    verdict="SUPPORTED",
+                ),
+                ClaimVerdict(
+                    claim="Claim B",
+                    claim_type="positive",
+                    cited_sources=[2],
+                    verdict="SUPPORTED",
+                ),
+            ],
+        )
+        assert build_gap_queries(result) == []
+
+    def test_queries_capped_at_5(self):
+        """Gap queries are capped at 5."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification import (
+            build_gap_queries,
+        )
+
+        # Create many unsupported claims with different sections
+        details = []
+        for i in range(10):
+            claim = ClaimVerdict(
+                claim=f"Claim {i}",
+                claim_type="positive",
+                cited_sources=[i + 1],
+                verdict="UNSUPPORTED",
+            )
+            # Set report_section via object attribute
+            object.__setattr__(claim, "report_section", f"Section {i}")
+            details.append(claim)
+
+        result = ClaimVerificationResult(
+            claims_extracted=10,
+            claims_filtered=0,
+            claims_verified=10,
+            claims_supported=0,
+            claims_contradicted=0,
+            claims_unsupported=10,
+            claims_partially_supported=0,
+            corrections_applied=0,
+            citations_remapped=0,
+            details=details,
+        )
+        queries = build_gap_queries(result)
+        assert len(queries) <= 5
