@@ -963,6 +963,15 @@ class SynthesisPhaseMixin:
         output_path = _save_report_markdown(state, output_dir=None)
         if output_path:
             state.report_output_path = output_path
+        else:
+            self._write_audit_event(
+                state,
+                "report_markdown_save_failed",
+                data={
+                    "report_length": len(state.report) if state.report else 0,
+                    "had_report": bool(state.report),
+                },
+            )
 
         # Log synthesis_completed provenance event
         # Append provenance BEFORE state save so it's not lost on a crash

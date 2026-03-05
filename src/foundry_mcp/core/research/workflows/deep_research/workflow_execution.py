@@ -486,6 +486,22 @@ class WorkflowExecutionMixin:
                         if state.report_output_path:
                             validated = _validate_report_output_path(state.report_output_path)
                             validated.write_text(state.report, encoding="utf-8")
+                        elif state.report:
+                            # Fallback: primary save failed, try research memory dir
+                            try:
+                                fallback_dir = self.memory.base_path / "deep_research"
+                                fallback_dir.mkdir(parents=True, exist_ok=True)
+                                fallback_path = fallback_dir / f"{state.id}.md"
+                                fallback_path.write_text(state.report, encoding="utf-8")
+                                state.report_output_path = str(fallback_path)
+                                logger.info(
+                                    "Fallback-saved report to %s", fallback_path
+                                )
+                            except Exception:
+                                logger.warning(
+                                    "Fallback report save also failed",
+                                    exc_info=True,
+                                )
 
                         self._write_audit_event(
                             state,

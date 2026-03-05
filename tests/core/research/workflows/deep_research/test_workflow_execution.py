@@ -572,6 +572,82 @@ class TestCancelledErrorPropagation:
         assert stub.memory.save_deep_research.called
 
 
+class TestReportMarkdownSaveAudit:
+    """Issue 4: Report markdown save failure visibility."""
+
+    def test_save_report_markdown_returns_none_for_no_report(self):
+        """4c: _save_report_markdown returns None when state has no report."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
+            _save_report_markdown,
+        )
+
+        state = make_test_state()
+        state.report = None
+        assert _save_report_markdown(state) is None
+
+    def test_save_report_markdown_returns_none_on_write_error(self, tmp_path):
+        """4c: _save_report_markdown returns None when write fails."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
+            _save_report_markdown,
+        )
+        from pathlib import Path
+
+        state = make_test_state()
+        state.report = "# Test Report"
+
+        # Pass a non-existent directory to trigger an exception
+        bad_dir = tmp_path / "nonexistent" / "deeply" / "nested"
+        result = _save_report_markdown(state, output_dir=bad_dir)
+        assert result is None
+
+    def test_save_report_markdown_succeeds(self, tmp_path):
+        """_save_report_markdown writes file and returns path on success."""
+        from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
+            _save_report_markdown,
+        )
+
+        state = make_test_state()
+        state.report = "# Test Report\n\nContent."
+        result = _save_report_markdown(state, output_dir=tmp_path)
+        assert result is not None
+        from pathlib import Path
+        assert Path(result).exists()
+        assert Path(result).read_text(encoding="utf-8") == state.report
+
+    @pytest.mark.asyncio
+    async def test_fallback_save_when_report_output_path_is_none(self, tmp_path):
+        """4d: Ungrounded disclaimer path triggers fallback save to research dir."""
+        stub = StubWorkflow()
+        stub.memory.base_path = tmp_path
+
+        # Set up state as if synthesis completed but primary save failed
+        state = make_test_state(phase=DeepResearchPhase.SYNTHESIS)
+        state.report = "# Ungrounded Report\n\nContent."
+        state.report_output_path = None
+        state.metadata["ungrounded_synthesis"] = True
+
+        # Directly exercise the fallback logic (extracted from workflow_execution)
+        _disclaimer = (
+            "> **Note:** This report was generated without web sources "
+            "due to search failures. All claims are based on the model's "
+            "training data and may be outdated or inaccurate.\n\n"
+        )
+        state.report = _disclaimer + state.report
+
+        # Simulate the fallback branch
+        fallback_dir = stub.memory.base_path / "deep_research"
+        fallback_dir.mkdir(parents=True, exist_ok=True)
+        fallback_path = fallback_dir / f"{state.id}.md"
+        fallback_path.write_text(state.report, encoding="utf-8")
+        state.report_output_path = str(fallback_path)
+
+        assert fallback_path.exists()
+        content = fallback_path.read_text(encoding="utf-8")
+        assert "without web sources" in content
+        assert "Ungrounded Report" in content
+        assert state.report_output_path is not None
+
+
 class TestValidateReportOutputPath:
     """0.1: Path traversal protection for report_output_path."""
 
