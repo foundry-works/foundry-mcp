@@ -1,211 +1,205 @@
-# Plan: Wire remaining direct `_execute_provider_async` calls through `execute_llm_call`
+# PLAN: Deep Research Post-Synthesis Quality Improvements
 
 ## Context
 
-After wiring topic research LLM calls through the `execute_llm_call` lifecycle wrapper (0.18.0a13), two areas remain that bypass the lifecycle and call `_execute_provider_async` directly:
+Analysis of deep research session `deepres-db449219ed17` (credit card comparison, fidelity=0.43) revealed four quality issues in the post-synthesis pipeline.
 
-1. **Claim verification pipeline** (`claim_verification.py`) — 4 LLM call sites across extraction, verification, correction, and citation remapping. All receive `self._execute_provider_async` as an `execute_fn` callback from `workflow_execution.py`. This is the **high-priority** gap: an entire sub-pipeline with no audit events, no heartbeats, no PhaseMetrics, and no lifecycle-managed context-window recovery.
+### Observed Issues
 
-2. **Topic research parse retry** (`topic_research.py:1126`) — 1 LLM call in `_parse_with_retry_async` for re-prompting on malformed JSON. **Lower priority**: rare path, main researcher call is already instrumented.
+1. **Broken heading `## Sign-`** — Synthesis LLM split "Sign-Up Bonuses" across a heading boundary, producing `## Sign-\n\nUp Bonuses and...`. Current repair code only handles same-line fusions (heading+body concatenated on one line), not mid-word heading truncations across lines.
 
-### What's missing without lifecycle wiring
+2. **Table merged onto heading** — `## Annual Fee vs. Value Proposition| Card | Annual Fee |...`. A markdown table row got concatenated directly onto the heading line. The repair regexes require `[A-Z][a-z]` after the heading (body text start), so pipe-delimited table content is invisible.
 
-| Capability | Claim verification | Parse retry |
-|---|---|---|
-| `llm.call.started` / `llm.call.completed` audit events | Missing | Missing |
-| Heartbeat updates | Missing | Missing |
-| PhaseMetrics recording | Missing | Missing |
-| Progressive context-window recovery (tiered truncation) | Missing (bare try/except) | Missing (bare try/except) |
-| Silent failure visibility | Partial (logger.warning exists but no audit) | Partial |
+3. **`[2026]` parsed as citation** — Year references like `[2026]` matched by `_CITATION_RE`. While `_compute_max_citation()` filters these during finalization, they appear as noise in intermediate stages (claim extraction, report-level citation counts).
 
-## Files to modify
+4. **Low fidelity (0.43) with no re-iteration** — `max_iterations=3` was set but `decide_iteration()` always returns `should_iterate=False`. The fidelity score is computed but never triggers additional research. The state already tracks `iteration` and `max_iterations` — the wiring just needs to be connected.
 
-### Primary
-- `src/foundry_mcp/core/research/workflows/deep_research/phases/claim_verification.py` — replace `execute_fn` callback pattern with `execute_llm_call` delegation
-- `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py` — update caller to pass `workflow` instead of `execute_fn`
-- `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py` — wire parse retry through lifecycle
+### Non-issue (confirmed working)
 
-### Tests
-- `tests/core/research/workflows/test_deep_research.py` — update claim verification mocks
-- `tests/core/research/workflows/test_topic_research.py` — update parse retry tests if affected
-- Any dedicated claim verification test files
+- **Correction generation for CONTRADICTED claims** — All 3 corrections were applied successfully. The serialized field is `corrected_text` (not `correction`). No fix needed.
 
-## Implementation
+---
 
-### Step 1: Change the `execute_fn` callback pattern to pass `workflow` + `state`
+## Implementation Plan
 
-The current design passes `self._execute_provider_async` as an `execute_fn: ExecuteFn` callback to the claim verification free functions. This made sense when claim verification was a standalone module, but it prevents lifecycle integration because `execute_llm_call` needs both `workflow` and `state`.
+### 1. Heading Truncation Repair
 
-**Change the public API** of the three entry-point functions:
+**Problem:** `## Sign-\n\nUp Bonuses and Business Class Valuation` — heading ends mid-word with a hyphen, continuation on later line after blank lines.
 
-```python
-# Before
-async def extract_and_verify_claims(
-    state, config, provider_id, execute_fn, timeout
-)
-async def apply_corrections(
-    state, config, verification_result, execute_fn, provider_id
-)
-async def remap_unsupported_citations(
-    state, verification_result, execute_fn, provider_id, timeout, max_concurrent
-)
+**Files:**
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/claim_verification.py`
 
-# After — replace execute_fn with workflow
-async def extract_and_verify_claims(
-    state, config, provider_id, workflow, timeout
-)
-async def apply_corrections(
-    state, config, verification_result, workflow, provider_id
-)
-async def remap_unsupported_citations(
-    state, verification_result, workflow, provider_id, timeout, max_concurrent
-)
+**Changes:**
+- New regex `_HEADING_TRUNCATED_RE = re.compile(r"^(#{1,6}\s+\S.*\w)-\s*$", re.MULTILINE)` — matches heading lines ending with `word-` at EOL
+- New function `_repair_truncated_headings(text: str) -> str`:
+  - Find headings matching the truncation pattern
+  - Skip blank lines to find the continuation text (first non-empty line)
+  - Merge continuation onto heading: `## Sign-\n\nUp Bonuses` → `## Sign-Up Bonuses`
+  - Continuation line is removed from its original position
+- Call as first pass in `_repair_heading_boundaries()` (before existing fusion repairs)
+- Also called from `repair_heading_boundaries_global()`
+
+**Edge cases:**
+- Heading with legitimate trailing hyphen that is a complete title (e.g., `## X-Ray Analysis`) — regex requires `\w` before `-`, so `X-` would match, but `X-Ray` on one line wouldn't (no line break). Only triggers when `-` is at EOL.
+- Multiple truncated headings — function loops over all matches
+- Continuation that is itself a heading — skip merge if next non-blank line starts with `#`
+
+**Tests** (`test_claim_verification.py`):
+- `## Sign-\n\nUp Bonuses and Value` → `## Sign-Up Bonuses and Value`
+- `## Sign-\nUp Bonuses` (no blank line gap) → merge
+- `## Self-Hosted Solutions` (complete heading, no truncation) → unchanged
+- Multiple truncated headings in one document → all repaired
+- Continuation is another heading → no merge
+- Truncated heading at end of document → left as-is
+
+### 2. Table-on-Heading Repair
+
+**Problem:** `## Annual Fee vs. Value Proposition| Card | Annual Fee | ...` — pipe-delimited table fused onto heading.
+
+**Files:**
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/claim_verification.py`
+
+**Changes:**
+- New regex `_HEADING_TABLE_FUSION_RE = re.compile(r"^(#{1,6}\s+[^|\n]+?)\s*(\|(?:[^|\n]*\|){2,}.*)$", re.MULTILINE)`:
+  - Matches heading text (no pipes) followed by a pipe-delimited segment with 3+ cells
+  - Requires `{2,}` pipe groups to avoid false positives on headings like `## A | B Comparison`
+- Replacement: `\1\n\n\2` — split heading from table row, insert blank line
+- Add as new pass in `_repair_heading_boundaries()` after existing fusion passes
+
+**Tests** (`test_claim_verification.py`):
+- `## Title| A | B | C |` → `## Title\n\n| A | B | C |`
+- `## A | B Comparison` (single pipe, not table) → unchanged
+- `## Title|---|---|---|` (separator row fused) → split
+- `## Title\n\n| A | B |` (already separated) → unchanged
+
+### 3. Citation Year-Reference Filtering
+
+**Problem:** `_CITATION_RE` matches `[2026]` as a citation reference.
+
+**Files:**
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/_citation_postprocess.py`
+
+**Changes:**
+- Update `_CITATION_RE` from:
+  ```python
+  _CITATION_RE = re.compile(r"\[(\d+)\](?!\()")
+  ```
+  to:
+  ```python
+  _CITATION_RE = re.compile(r"\[(?!(?:19|20)\d{2}\])(\d+)\](?!\()")
+  ```
+  Negative lookahead `(?!(?:19|20)\d{2}\])` skips `[1900]`–`[2099]`.
+
+- Check `claim_verification.py` for any separate citation regex — apply same year filter if found.
+
+**Tests** (`test_citation_postprocess.py`):
+- `[1]`, `[2]`, `[99]` → matched
+- `[100]`, `[500]` → matched (valid high citation numbers, not years)
+- `[2026]`, `[2025]`, `[1999]` → NOT matched
+- `[1899]`, `[2100]` → matched (outside year range)
+- `"published in [2026] by researchers"` → `[2026]` not extracted by `extract_cited_numbers()`
+- End-to-end `renumber_citations()` with `[2026]` in body text → year preserved, not renumbered
+
+### 4. Fidelity-Gated Re-Iteration
+
+**Problem:** Fidelity score is 0.43 ("low") but `decide_iteration()` always returns `should_iterate=False`. The state already has `iteration=1` and `max_iterations=3` — the mechanism exists but isn't wired up.
+
+**Architecture:** The current flow is linear:
+```
+SUPERVISION → SYNTHESIS → claim_verification → citation_finalize → mark_completed
 ```
 
-Thread `workflow` down to the 4 internal call sites (`_extract_claims_single_chunk`, `_verify_single_claim`, `_apply_single_correction`, `_remap_single_claim`).
-
-### Step 2: Replace each `await execute_fn(...)` with `await execute_llm_call(...)`
-
-For each of the 4 call sites:
-
-**a) `_extract_claims_single_chunk` (line 402)**
-```python
-ret = await execute_llm_call(
-    workflow=workflow,
-    state=state,
-    phase_name="claim_extraction",
-    system_prompt=system_prompt,
-    user_prompt=chunk_prompt,
-    provider_id=provider_id,
-    model=None,
-    temperature=0.0,
-    timeout=timeout,
-    role="claim_verification",
-)
+After claim verification, if fidelity is below threshold and iterations remain, loop back:
 ```
-Handle `LLMCallResult` → use `ret.result`, `WorkflowResult` → log warning + return `[]`.
-
-**b) `_verify_single_claim` (line 904)**
-```python
-ret = await execute_llm_call(
-    workflow=workflow,
-    state=state,
-    phase_name="claim_verification",
-    system_prompt=_VERIFICATION_SYSTEM_PROMPT,
-    user_prompt=user_prompt,
-    provider_id=provider_id,
-    model=None,
-    temperature=0.0,
-    timeout=timeout,
-    role="claim_verification",
-)
+SUPERVISION → SYNTHESIS → claim_verification →
+  if fidelity < threshold && iteration < max_iterations:
+    → build gap queries from UNSUPPORTED/CONTRADICTED claims
+    → increment iteration
+    → SUPERVISION (with gap context) → SYNTHESIS → claim_verification → ...
+  else:
+    → citation_finalize → mark_completed
 ```
 
-**c) `_apply_single_correction` (line 1147)**
-```python
-ret = await execute_llm_call(
-    workflow=workflow,
-    state=state,
-    phase_name="claim_verification_correction",
-    system_prompt=_CORRECTION_SYSTEM_PROMPT,
-    user_prompt=user_prompt,
-    provider_id=provider_id,
-    model=None,
-    temperature=0.0,
-    timeout=timeout,
-    role="claim_verification",
-)
-```
+**Files:**
 
-**d) `_remap_single_claim` inner call (line 1408)**
-```python
-ret = await execute_llm_call(
-    workflow=workflow,
-    state=state,
-    phase_name="claim_verification_remap",
-    system_prompt=_REMAP_SYSTEM_PROMPT,
-    user_prompt=user_prompt,
-    provider_id=provider_id,
-    model=None,
-    temperature=0.0,
-    timeout=timeout,
-    role="claim_verification",
-)
-```
+**a) Config** (`src/foundry_mcp/config/research.py`):
+- Add `deep_research_fidelity_iteration_enabled: bool = True`
+- Add `deep_research_fidelity_threshold: float = 0.7`
+- Add parsing in `from_dict()` and validation in `validate_claim_verification_config()`
 
-### Step 3: Update `workflow_execution.py` callers
+**b) Orchestrator** (`src/foundry_mcp/core/research/workflows/deep_research/orchestration.py`):
+- Update `decide_iteration()` to accept optional `fidelity_score: float | None`:
+  - If `fidelity_iteration_enabled` is False → always complete (current behavior)
+  - If `fidelity_score is None` (no claim verification) → complete
+  - If `fidelity_score >= threshold` → complete
+  - If `fidelity_score < threshold AND state.iteration < state.max_iterations` → iterate
+  - If `fidelity_score < threshold AND state.iteration >= state.max_iterations` → complete (log warning)
+- Remove the deprecation warning about `max_iterations > 1`
 
-Replace `execute_fn=self._execute_provider_async` with `workflow=self` at lines 477, 489, 497:
+**c) Workflow execution** (`src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py`):
+- After claim verification (line ~546), check the iteration decision:
+  - If `should_iterate=True`:
+    - Build gap-focused directives from UNSUPPORTED/CONTRADICTED claims (extract topics/questions that need better sources)
+    - Append to `state.directives` so supervision knows what to focus on
+    - Increment `state.iteration`
+    - Reset `state.phase = DeepResearchPhase.SUPERVISION`
+    - Clear `state.claim_verification` (will be re-run after next synthesis)
+    - **Don't** clear sources/findings — they accumulate across iterations
+    - Loop continues naturally (the outer `if state.phase == SUPERVISION` block runs again)
+  - If `should_iterate=False`: proceed to citation finalize as today
+- Move citation finalize + mark_completed outside the iteration loop or guard with the decision
+- Wrap the SUPERVISION → SYNTHESIS → CV block in a `while state.iteration <= state.max_iterations` loop
 
-```python
-verification_result = await extract_and_verify_claims(
-    state=state,
-    config=self.config,
-    provider_id=resolve_phase_provider(self.config, "claim_verification", "synthesis"),
-    workflow=self,  # was: execute_fn=self._execute_provider_async
-    timeout=self.config.deep_research_claim_verification_timeout,
-)
+**d) State model** (`src/foundry_mcp/core/research/models/deep_research.py`):
+- Add `fidelity_scores: list[float] = Field(default_factory=list)` to `DeepResearchState` to track convergence across iterations
+- Add `iteration_gap_queries: list[str] = Field(default_factory=list)` for gap context passed to supervision
 
-await apply_corrections(
-    state=state,
-    config=self.config,
-    verification_result=verification_result,
-    workflow=self,  # was: execute_fn=self._execute_provider_async
-)
+**e) Gap query generation** (new helper in `claim_verification.py` or `workflow_execution.py`):
+- `build_gap_queries(verification_result: ClaimVerificationResult) -> list[str]`:
+  - Group UNSUPPORTED claims by `report_section`
+  - For each section with unsupported claims, generate a targeted research question
+  - Group CONTRADICTED claims similarly
+  - Return list of gap queries (typically 3-5)
 
-await remap_unsupported_citations(
-    state=state,
-    verification_result=verification_result,
-    workflow=self,  # was: execute_fn=self._execute_provider_async
-    ...
-)
-```
+**f) Supervision prompt update** (`phases/supervision_prompts.py`):
+- When `state.iteration > 1`, prepend gap context to supervision prompt:
+  - "This is iteration {N}. Previous synthesis had fidelity {score}. Focus on these gaps: ..."
+  - Include the gap queries
+  - Instruct supervisor to prioritize directives that address the gaps
 
-### Step 4: Remove the `ExecuteFn` type alias
+**Tests:**
+- `test_orchestration.py`:
+  - Fidelity below threshold → `should_iterate=True`
+  - Fidelity above threshold → `should_iterate=False`
+  - Fidelity below threshold but max iterations reached → `should_iterate=False`
+  - `fidelity_iteration_enabled=False` → always complete
+  - Fidelity is None → complete
+- `test_claim_verification.py` (or new file):
+  - `build_gap_queries()` extracts meaningful queries from unsupported claims
+  - Empty verification result → empty gap queries
+- `test_deep_research.py` (integration):
+  - Mock a low-fidelity first iteration → verify second iteration runs
+  - Verify `fidelity_scores` accumulates across iterations
+  - Verify sources accumulate (not cleared between iterations)
 
-Delete `ExecuteFn = Callable[..., Any]` (line 51) since it's no longer used. Update the `TYPE_CHECKING` import block to add `WorkflowResult` if not already present, and add `execute_llm_call`/`LLMCallResult` imports.
+---
 
-### Step 5: Wire topic research parse retry through lifecycle
+## Sequencing
 
-In `_parse_with_retry_async` (topic_research.py:1126), replace the `self._execute_provider_async(...)` call with `execute_llm_call(...)`. This requires threading `state` into `_parse_with_retry_async` — add `state: DeepResearchState` parameter.
+| Order | Item | Risk | Scope |
+|-------|------|------|-------|
+| 1a | Heading truncation repair | Low | ~40 lines code + ~60 lines tests |
+| 1b | Table-on-heading repair | Low | ~15 lines code + ~40 lines tests |
+| 1c | Citation year filter | Low | ~5 lines code + ~30 lines tests |
+| 2 | Fidelity-gated iteration | Medium | ~150 lines code + ~100 lines tests |
 
-The caller at line 778 already has `state` in scope (from `_execute_topic_research_async`).
+Items 1a/1b/1c are independent — implement in parallel. Item 2 depends on understanding the full pipeline (now documented above) but is independent of the heading/citation fixes.
 
-### Step 6: Update tests
+## Risk Assessment
 
-1. **Claim verification tests**: Find tests that mock `execute_fn` or pass `_execute_provider_async` — update to pass a mock workflow with `_execute_provider_async` + lifecycle-required attributes.
-2. **Topic research tests**: Update any parse-retry test scenarios to account for `state` parameter and lifecycle mock fields.
-3. **Deep research integration tests**: Update `_mock_llm_provider` patterns in `test_deep_research.py` that exercise claim verification paths.
-
-## What this fixes
-
-| Before | After |
-|--------|-------|
-| 0 audit events for claim verification LLM calls | `llm.call.started` / `llm.call.completed` per call |
-| No heartbeat during claim verification (can appear stale/stuck) | Heartbeat updated per LLM call |
-| No PhaseMetrics for extraction/verification/correction/remap | PhaseMetrics recorded per call |
-| Bare try/except for context-window errors | Progressive tiered truncation recovery |
-| Parse retry in topic research uninstrumented | Full lifecycle coverage |
-
-## What this does NOT change
-
-- Claim verification logic (extraction prompts, verdict parsing, correction application, remap logic) — untouched
-- The parallel verification structure (`_verify_claims_batch` with semaphore) — untouched
-- Sequential correction application order — untouched
-- External behavior — same prompts, same verdicts, same corrections
-
-## Risk assessment
-
-- **claim_verification.py is a standalone module** with free functions (not a mixin). Changing `execute_fn` to `workflow` changes the public API of 3 functions. Only one caller (`workflow_execution.py`). Low coupling risk.
-- **Parallel verification** uses `asyncio.Semaphore` — `execute_llm_call` is async-safe (no shared mutable state). No concurrency risk.
-- **`skip_token_tracking=False`** for claim verification (unlike topic research where the caller tracks tokens) — lifecycle wrapper handles token accounting automatically.
-
-## Verification
-
-1. **Unit tests**: `pytest tests/ -k claim_verification` passes
-2. **Topic research tests**: `pytest tests/ -k topic_research` passes
-3. **Full deep research suite**: `pytest tests/ -k deep_research` passes
-4. **Integration**: Run a deep research session with claim verification enabled and verify:
-   - `llm.call.started` / `llm.call.completed` events appear for `claim_extraction`, `claim_verification`, `claim_verification_correction`, `claim_verification_remap` phases
-   - PhaseMetrics include claim verification entries
-   - Heartbeat stays fresh during verification (no stale-task warnings)
+| Item | Risk | Mitigation |
+|------|------|------------|
+| Heading truncation repair | Low — additive pass | Careful regex to avoid false merges; skip if continuation is a heading |
+| Table-on-heading repair | Low — additive pass | Require 3+ pipe cells to distinguish table from casual pipe |
+| Citation year filter | Low — tightens existing regex | Negative lookahead is precise; only affects 1900–2099 |
+| Fidelity-gated iteration | Medium — reactivates iteration loop, cost implications (more LLM calls per session) | Feature flag `fidelity_iteration_enabled` (default True); `max_iterations` cap (default 3); sources accumulate so re-iteration adds incrementally, not from scratch |

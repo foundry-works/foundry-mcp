@@ -50,6 +50,7 @@ from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification
     _parse_verification_response,
     _remove_citations_from_report,
     _repair_heading_boundaries,
+    _repair_truncated_headings,
     _resolve_source_text,
     _sort_claims_by_priority,
     _split_report_into_sections,
@@ -3022,6 +3023,68 @@ class TestRepairHeadingBoundariesGlobal:
     def test_empty_report(self):
         """Empty string returns empty string."""
         assert repair_heading_boundaries_global("") == ""
+
+    def test_truncated_heading_repaired_globally(self):
+        """Truncated heading in full report is rejoined."""
+        report = (
+            "# Main Title\n\n"
+            "Intro.\n\n"
+            "## Sign-\n\n"
+            "Up Bonuses and Value\n\n"
+            "Content here."
+        )
+        result = repair_heading_boundaries_global(report)
+        assert "## Sign-Up Bonuses and Value" in result
+        # The continuation line should not appear separately.
+        assert "\nUp Bonuses and Value\n" not in result
+
+
+class TestRepairTruncatedHeadings:
+    """Tests for _repair_truncated_headings()."""
+
+    def test_heading_truncated_with_blank_line_gap(self):
+        """## Sign-\\n\\nUp Bonuses → ## Sign-Up Bonuses."""
+        text = "## Sign-\n\nUp Bonuses and Value"
+        result = _repair_truncated_headings(text)
+        assert result == "## Sign-Up Bonuses and Value"
+
+    def test_heading_truncated_no_blank_line(self):
+        """## Sign-\\nUp Bonuses → merged."""
+        text = "## Sign-\nUp Bonuses"
+        result = _repair_truncated_headings(text)
+        assert result == "## Sign-Up Bonuses"
+
+    def test_complete_heading_unchanged(self):
+        """## Self-Hosted Solutions (not truncated) → unchanged."""
+        text = "## Self-Hosted Solutions\n\nContent here."
+        result = _repair_truncated_headings(text)
+        assert result == text
+
+    def test_multiple_truncated_headings(self):
+        """Multiple truncated headings are all repaired."""
+        text = (
+            "## Sign-\n\nUp Bonuses\n\n"
+            "Content.\n\n"
+            "### Break-\n\nDown Analysis\n\n"
+            "More content."
+        )
+        result = _repair_truncated_headings(text)
+        assert "## Sign-Up Bonuses" in result
+        assert "### Break-Down Analysis" in result
+
+    def test_continuation_is_heading_no_merge(self):
+        """If continuation line is another heading, don't merge."""
+        text = "## Self-\n\n## Other Section\n\nContent."
+        result = _repair_truncated_headings(text)
+        # The truncated heading is left as-is since continuation is a heading.
+        assert "## Self-\n" in result
+        assert "## Other Section" in result
+
+    def test_truncated_heading_at_end_of_document(self):
+        """Truncated heading at EOF with no continuation → left as-is."""
+        text = "Content.\n\n## Trunc-"
+        result = _repair_truncated_headings(text)
+        assert result == text
 
 
 # ---------------------------------------------------------------------------

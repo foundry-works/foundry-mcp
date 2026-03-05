@@ -1,47 +1,114 @@
-# Implementation Checklist
+# Implementation Checklist: Post-Synthesis Quality Improvements
 
-## Step 1: Change `execute_fn` callback to `workflow` parameter
-- [ ] In `extract_and_verify_claims`: replace `execute_fn: ExecuteFn` with `workflow: Any` parameter
-- [ ] In `apply_corrections`: replace `execute_fn: ExecuteFn` with `workflow: Any` parameter
-- [ ] In `remap_unsupported_citations`: replace `execute_fn: ExecuteFn` with `workflow: Any` parameter
-- [ ] Thread `workflow` + `state` down to internal helpers: `_extract_claims_chunked`, `_extract_claims_single_chunk`, `_verify_claims_batch`, `_verify_single_claim`, `_apply_single_correction`, `_remap_single_claim`
+## Item 1a: Heading Truncation Repair
 
-## Step 2: Replace `await execute_fn(...)` calls with `execute_llm_call(...)`
-- [ ] Add imports: `execute_llm_call`, `LLMCallResult` from `._lifecycle`
-- [ ] `_extract_claims_single_chunk` (line 402): replace `execute_fn(...)` with `execute_llm_call(workflow=workflow, state=state, phase_name="claim_extraction", ...)`
-- [ ] Handle return: `LLMCallResult` → use `ret.result`, `WorkflowResult` → return `[]`
-- [ ] `_verify_single_claim` (line 904): replace `execute_fn(...)` with `execute_llm_call(workflow=workflow, state=state, phase_name="claim_verification", ...)`
-- [ ] Handle return: `LLMCallResult` → use `ret.result`, error → set verdict to UNSUPPORTED
-- [ ] `_apply_single_correction` (line 1147): replace `execute_fn(...)` with `execute_llm_call(workflow=workflow, state=state, phase_name="claim_verification_correction", ...)`
-- [ ] Handle return: `LLMCallResult` → use `ret.result`, error → return False
-- [ ] `_remap_single_claim` inner call (line 1408): replace `execute_fn(...)` with `execute_llm_call(workflow=workflow, state=state, phase_name="claim_verification_remap", ...)`
-- [ ] Handle return: `LLMCallResult` → use `ret.result`, error → return False
+### Code (`claim_verification.py`)
+- [x] Add `_HEADING_TRUNCATED_RE = re.compile(r"^(#{1,6}\s+\S.*\w)-\s*$", re.MULTILINE)` near line 1056
+- [x] Implement `_repair_truncated_headings(text: str) -> str`:
+  - [x] Find all matches of `_HEADING_TRUNCATED_RE` with line positions
+  - [x] For each match, scan forward past blank lines for first non-empty continuation line
+  - [x] Skip merge if continuation starts with `#` (another heading)
+  - [x] Merge: append continuation text onto heading (keeping the hyphen)
+  - [x] Remove consumed continuation line from original position
+- [x] Call `_repair_truncated_headings()` as final pass in `repair_heading_boundaries_global()` (after `_repair_heading_boundaries()`, not before — `_HEADING_RE` false-positives on hyphenated words like `Sign-Up`)
+- [x] Note: NOT called inside `_repair_heading_boundaries()` — truncation is a synthesis artifact, not a correction artifact
 
-## Step 3: Update `workflow_execution.py` callers
-- [ ] Line 477: `execute_fn=self._execute_provider_async` → `workflow=self`
-- [ ] Line 489: `execute_fn=self._execute_provider_async` → `workflow=self`
-- [ ] Line 497: `execute_fn=self._execute_provider_async` → `workflow=self`
+### Tests (`test_claim_verification.py`)
+- [x] `## Sign-\n\nUp Bonuses and Value` → `## Sign-Up Bonuses and Value`
+- [x] `## Sign-\nUp Bonuses` (no blank line) → merge
+- [x] `## Self-Hosted Solutions` (not truncated) → unchanged
+- [x] Multiple truncated headings → all repaired
+- [x] Continuation is another heading → no merge
+- [x] Truncated heading at end of document → left as-is
+- [x] `repair_heading_boundaries_global()` integration test with truncated heading
 
-## Step 4: Clean up `ExecuteFn` type alias
-- [ ] Delete `ExecuteFn = Callable[..., Any]` (line 51) if no longer used
-- [ ] Remove the `Callable` import if no longer needed
-- [ ] Update `TYPE_CHECKING` imports as needed
+## Item 1b: Table-on-Heading Repair
 
-## Step 5: Wire topic research parse retry
-- [ ] Add `state: DeepResearchState` parameter to `_parse_with_retry_async`
-- [ ] Replace `self._execute_provider_async(...)` call at line 1126 with `execute_llm_call(workflow=self, state=state, phase_name="topic_research_parse_retry", ...)`
-- [ ] Handle `LLMCallResult` / `WorkflowResult` return type
-- [ ] Update caller at line 778 to pass `state=state`
-- [ ] Delete bare `except (asyncio.TimeoutError, OSError, ValueError, RuntimeError)` — lifecycle handles this
+### Code (`claim_verification.py`)
+- [ ] Add `_HEADING_TABLE_FUSION_RE = re.compile(r"^(#{1,6}\s+[^|\n]+?)\s*(\|(?:[^|\n]*\|){2,}.*)$", re.MULTILINE)`
+- [ ] Add `_HEADING_TABLE_FUSION_RE.sub(r"\1\n\n\2", ...)` pass in `_repair_heading_boundaries()`
 
-## Step 6: Update tests
-- [ ] Find tests mocking `execute_fn` in claim verification test files
-- [ ] Update mocks to provide a mock workflow with `_execute_provider_async` + lifecycle-required fields (`provider_id`, `model_used`, `duration_ms`, `input_tokens`, `output_tokens`, `cached_tokens`, `metadata`)
-- [ ] Update `test_deep_research.py` claim verification integration paths if affected
-- [ ] Update `_parse_with_retry_async` test scenarios for new `state` parameter
+### Tests (`test_claim_verification.py`)
+- [ ] `## Title| A | B | C |` → split
+- [ ] `## A | B Comparison` (single pipe) → unchanged
+- [ ] `## Title|---|---|---|` (separator fused) → split
+- [ ] Already separated → unchanged
+
+## Item 1c: Citation Year-Reference Filtering
+
+### Code (`_citation_postprocess.py`)
+- [ ] Update `_CITATION_RE` to `re.compile(r"\[(?!(?:19|20)\d{2}\])(\d+)\](?!\()")`
+- [ ] Check `claim_verification.py` for separate citation regex — apply same filter
+- [ ] Verify `extract_cited_numbers()` works with updated regex
+
+### Tests (`test_citation_postprocess.py`)
+- [ ] `[1]`, `[99]` → matched
+- [ ] `[100]`, `[500]` → matched
+- [ ] `[2026]`, `[2025]`, `[1999]` → NOT matched
+- [ ] `[1899]`, `[2100]` → matched
+- [ ] `"in [2026] the market"` → not extracted
+- [ ] `renumber_citations()` with `[2026]` in body → year preserved
+
+## Item 2: Fidelity-Gated Re-Iteration
+
+### Config (`config/research.py`)
+- [ ] Add `deep_research_fidelity_iteration_enabled: bool = True`
+- [ ] Add `deep_research_fidelity_threshold: float = 0.7`
+- [ ] Add parsing in `from_dict()`
+- [ ] Add validation in `validate_claim_verification_config()`
+
+### State model (`models/deep_research.py`)
+- [ ] Add `fidelity_scores: list[float] = Field(default_factory=list)` to `DeepResearchState`
+- [ ] Add `iteration_gap_queries: list[str] = Field(default_factory=list)` to `DeepResearchState`
+
+### Orchestrator (`orchestration.py`)
+- [ ] Update `decide_iteration()` signature to accept `fidelity_score: float | None = None`
+- [ ] Implement threshold logic:
+  - [ ] `fidelity_iteration_enabled=False` → complete
+  - [ ] `fidelity_score is None` → complete
+  - [ ] `fidelity_score >= threshold` → complete
+  - [ ] `fidelity_score < threshold AND iteration < max_iterations` → iterate
+  - [ ] `fidelity_score < threshold AND iteration >= max_iterations` → complete (log warning)
+- [ ] Remove deprecation warning about `max_iterations > 1`
+
+### Gap query generation (`claim_verification.py`)
+- [ ] Add `build_gap_queries(verification_result: ClaimVerificationResult) -> list[str]`:
+  - [ ] Group UNSUPPORTED claims by `report_section`
+  - [ ] Group CONTRADICTED claims by `report_section`
+  - [ ] Generate targeted research questions per section
+  - [ ] Return 3-5 gap queries
+
+### Workflow execution (`workflow_execution.py`)
+- [ ] After claim verification, pass `fidelity_score` to `decide_iteration()`
+- [ ] Append `fidelity_score` to `state.fidelity_scores`
+- [ ] If `should_iterate=True`:
+  - [ ] Call `build_gap_queries()` and store in `state.iteration_gap_queries`
+  - [ ] Increment `state.iteration`
+  - [ ] Reset `state.phase = DeepResearchPhase.SUPERVISION`
+  - [ ] Clear `state.claim_verification = None`
+  - [ ] Save state to disk
+  - [ ] Continue loop (SUPERVISION runs again naturally)
+- [ ] If `should_iterate=False`: proceed to citation finalize
+- [ ] Wrap SUPERVISION→SYNTHESIS→CV in iteration loop (or restructure as `while`)
+
+### Supervision prompt (`phases/supervision_prompts.py`)
+- [ ] When `state.iteration > 1`, prepend gap context:
+  - [ ] Previous fidelity score
+  - [ ] Gap queries from `state.iteration_gap_queries`
+  - [ ] Instruction to prioritize gap-filling directives
+
+### Tests
+- [ ] `test_orchestration.py`: threshold logic (5 cases above)
+- [ ] `test_claim_verification.py`: `build_gap_queries()` with mixed verdicts
+- [ ] `test_claim_verification.py`: empty verification → empty queries
+- [ ] `test_deep_research.py` (integration): low fidelity triggers second iteration
+- [ ] `test_deep_research.py`: `fidelity_scores` accumulates
+- [ ] `test_deep_research.py`: sources accumulate across iterations
 
 ## Verification
+
 - [ ] `pytest tests/ -k claim_verification` passes
-- [ ] `pytest tests/ -k topic_research` passes
+- [ ] `pytest tests/ -k citation_postprocess` passes
+- [ ] `pytest tests/ -k orchestration` passes
 - [ ] `pytest tests/ -k deep_research` passes (full suite)
-- [ ] No regressions in other phases: `pytest tests/ -k "planning or synthesis or analysis or supervision"` passes
+- [ ] Manual: `repair_heading_boundaries_global()` on `deepres-db449219ed17` report fixes both heading issues

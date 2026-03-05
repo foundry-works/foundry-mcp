@@ -1053,6 +1053,8 @@ def _extract_context_window(report: str, quote_context: str) -> Optional[tuple[s
 # Heading-boundary repair
 # ---------------------------------------------------------------------------
 
+_HEADING_TRUNCATED_RE = re.compile(r"^(#{1,6}\s+\S.*\w)-\s*$", re.MULTILINE)
+
 _HEADING_RE = re.compile(
     r"^(#{1,6}\s+[^\n]*?[a-z0-9)\]\"'\u2019\u201d!?.;:*\u2014\u2013\-])([A-Z][a-z])",
     re.MULTILINE,
@@ -1063,6 +1065,53 @@ _SAMELINE_FUSION_RE = re.compile(
 )
 _HEADING_LINE_RE = re.compile(r"^#{1,6}\s+.+$", re.MULTILINE)
 _HEADING_BOUNDARY_RE = re.compile(r"\n(?=#{1,6}\s)")
+
+
+def _repair_truncated_headings(text: str) -> str:
+    """Rejoin headings that were split mid-word across lines.
+
+    Detects patterns like ``## Sign-\\n\\nUp Bonuses`` where the synthesis LLM
+    broke a heading at a hyphenation point, and merges the continuation back
+    onto the heading line.
+    """
+    lines = text.split("\n")
+    result: list[str] = []
+    i = 0
+    while i < len(lines):
+        m = _HEADING_TRUNCATED_RE.match(lines[i])
+        if not m:
+            result.append(lines[i])
+            i += 1
+            continue
+
+        # Found a heading ending with `word-` — scan forward for continuation.
+        heading_line = lines[i]
+        j = i + 1
+        # Skip blank lines.
+        while j < len(lines) and lines[j].strip() == "":
+            j += 1
+
+        if j >= len(lines):
+            # Truncated heading at end of document — leave as-is.
+            result.append(heading_line)
+            i += 1
+            continue
+
+        continuation = lines[j]
+        if re.match(r"^#{1,6}\s+", continuation):
+            # Continuation is another heading — don't merge.
+            result.append(heading_line)
+            i += 1
+            continue
+
+        # Merge: heading keeps the hyphen, continuation is appended.
+        merged = heading_line.rstrip() + continuation
+        result.append(merged)
+        # Skip the blank lines and the continuation line we consumed.
+        i = j + 1
+        continue
+
+    return "\n".join(result)
 
 
 def _repair_heading_boundaries(original_window: str, corrected_text: str) -> str:
@@ -1116,7 +1165,11 @@ def repair_heading_boundaries_global(report: str) -> str:
     if not report:
         return report
     # Pass a dummy original with a heading to force repair logic to activate.
-    return _repair_heading_boundaries("# dummy heading\n\ntext", report)
+    report = _repair_heading_boundaries("# dummy heading\n\ntext", report)
+    # Final pass: rejoin headings truncated mid-word across lines.
+    # Runs after boundary repair because _HEADING_RE can false-positive on
+    # hyphenated words (e.g. "Sign-Up") — truncation repair cleans those up.
+    return _repair_truncated_headings(report)
 
 
 async def _correct_single_claim(
