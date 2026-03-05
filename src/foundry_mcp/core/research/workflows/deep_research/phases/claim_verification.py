@@ -1009,7 +1009,14 @@ def _extract_context_window(report: str, quote_context: str) -> Optional[tuple[s
 # Heading-boundary repair
 # ---------------------------------------------------------------------------
 
-_HEADING_RE = re.compile(r"^(#{1,6}\s+[^\n]*?[a-z0-9])([A-Z][a-z])", re.MULTILINE)
+_HEADING_RE = re.compile(
+    r"^(#{1,6}\s+[^\n]*?[a-z0-9)\]\"'\u2019\u201d!?.;:*\u2014\u2013\-])([A-Z][a-z])",
+    re.MULTILINE,
+)
+_SAMELINE_FUSION_RE = re.compile(
+    r"^(#{1,6}\s+.+?[.!?)\]\"'\u2019\u201d*\u2014\u2013:;\-])([A-Z][a-z])",
+    re.MULTILINE,
+)
 _HEADING_LINE_RE = re.compile(r"^#{1,6}\s+.+$", re.MULTILINE)
 
 
@@ -1031,6 +1038,7 @@ def _repair_heading_boundaries(original_window: str, corrected_text: str) -> str
     # Pattern: heading text immediately followed by an uppercase letter on the
     # same line (no newline between heading and body).
     repaired = _HEADING_RE.sub(r"\1\n\n\2", corrected_text)
+    repaired = _SAMELINE_FUSION_RE.sub(r"\1\n\n\2", repaired)  # fallback pass
 
     # Also handle a heading line followed by a single \n (not \n\n) then body.
     # Split into lines and check each heading.

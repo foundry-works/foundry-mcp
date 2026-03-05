@@ -2820,6 +2820,47 @@ class TestRepairHeadingBoundaries:
         result = _repair_heading_boundaries(original, corrected)
         assert result == corrected
 
+    def test_heading_ending_with_parenthesis(self):
+        """Heading ending with ')' fused with body is repaired (real-world case)."""
+        original = "## What You Have (and Don't)\n\nThe Amex Platinum provides..."
+        corrected = "## What You Have (and Don't)The Amex Platinum provides..."
+        result = _repair_heading_boundaries(original, corrected)
+        assert "Don't)\n\n" in result or "Don\u2019t)\n\n" in result
+        # Body must not be on the heading line.
+        for line in result.split("\n"):
+            if line.startswith("##"):
+                assert "Amex" not in line
+
+    def test_heading_ending_with_question_mark(self):
+        """Heading ending with '?' fused with body is repaired."""
+        original = "## Is It Worth It?\n\nThe answer depends..."
+        corrected = "## Is It Worth It?The answer depends..."
+        result = _repair_heading_boundaries(original, corrected)
+        assert "It?\n\n" in result
+        for line in result.split("\n"):
+            if line.startswith("##"):
+                assert "answer" not in line
+
+    def test_heading_ending_with_em_dash(self):
+        """Heading ending with em-dash fused with body is repaired."""
+        original = "## Overview \u2014\n\nThe program offers..."
+        corrected = "## Overview \u2014The program offers..."
+        result = _repair_heading_boundaries(original, corrected)
+        assert "\u2014\n\n" in result
+        for line in result.split("\n"):
+            if line.startswith("##"):
+                assert "program" not in line
+
+    def test_sameline_fusion_with_terminal_punctuation(self):
+        """Fallback regex catches fusions that primary regex misses."""
+        original = "### Key Benefits.\n\nMembers enjoy..."
+        corrected = "### Key Benefits.Members enjoy exclusive perks."
+        result = _repair_heading_boundaries(original, corrected)
+        # Body text must not remain on the heading line.
+        for line in result.split("\n"):
+            if line.startswith("###"):
+                assert "Members" not in line, f"Body still on heading line: {line}"
+
 
 # ---------------------------------------------------------------------------
 # Citation remapping helpers
