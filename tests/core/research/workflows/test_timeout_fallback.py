@@ -193,6 +193,7 @@ class TestExecuteProviderAsyncExists:
             "fallback_providers",
             "max_retries",
             "retry_delay",
+            "max_timeout_retries",
         ]
         assert params == expected_params
 

@@ -229,6 +229,9 @@ class TestHeartbeatTiming:
             r.success = True
             r.tokens_used = 10
             r.error = None
+            r.provider_id = "test-provider"
+            r.model_used = "test-model"
+            r.duration_ms = 100.0
             if _llm_cc % 2 == 1:
                 r.content = _json.dumps(
                     {"tool_calls": [{"tool": "web_search", "arguments": {"query": "test", "max_results": 5}}]}

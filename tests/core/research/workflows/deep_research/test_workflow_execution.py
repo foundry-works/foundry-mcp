@@ -61,9 +61,19 @@ class StubWorkflow(WorkflowExecutionMixin):
     def __init__(self) -> None:
         self.config = MagicMock()
         self.config.get_phase_timeout.return_value = 60.0
+        # Prevent claim verification and fidelity re-iteration from running
+        # (MagicMock attributes are truthy by default, causing infinite loops)
+        self.config.deep_research_claim_verification_enabled = False
+        self.config.deep_research_fidelity_iteration_enabled = False
+        self.config.deep_research_enable_supervision = True
         self.memory = MagicMock()
         self.hooks = MagicMock()
         self.orchestrator = MagicMock()
+        # decide_iteration must return an object with outputs={"should_iterate": False}
+        # to prevent infinite fidelity re-iteration loops
+        _no_iterate = MagicMock()
+        _no_iterate.outputs = {"should_iterate": False}
+        self.orchestrator.decide_iteration.return_value = _no_iterate
         self._tasks: dict[str, Any] = {}
         self._tasks_lock = threading.Lock()
         self._search_providers: dict[str, Any] = {}

@@ -241,10 +241,10 @@ class TestExtractCitedNumbers:
         assert extract_cited_numbers(report, max_citation=6) == {5, 6}
 
     def test_max_citation_none_preserves_all(self):
-        """Without max_citation, behavior is unchanged (backward-compatible)."""
-        report = "[1] and [2025]"
-        assert extract_cited_numbers(report) == {1, 2025}
-        assert extract_cited_numbers(report, max_citation=None) == {1, 2025}
+        """Without max_citation, all non-year citations are preserved."""
+        report = "[1] and [500]"
+        assert extract_cited_numbers(report) == {1, 500}
+        assert extract_cited_numbers(report, max_citation=None) == {1, 500}
 
 
 # =============================================================================

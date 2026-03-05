@@ -253,13 +253,14 @@ class TestPerplexitySearchProviderErrorHandling:
     @pytest.mark.asyncio
     async def test_rate_limit_error_429(self, provider):
         """Test 429 response raises RateLimitError."""
-        mock_response = MagicMock()
-        mock_response.status_code = 429
-        mock_response.headers = {"Retry-After": "30"}
-
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
-
+        # Patch _execute_with_retry to raise directly, bypassing the
+        # resilience executor's retry loop which would wait retry_after
+        # seconds (30s) and timeout the test.
+        with patch.object(
+            provider,
+            "_execute_with_retry",
+            side_effect=RateLimitError(provider="perplexity", retry_after=30.0),
+        ):
             with pytest.raises(RateLimitError) as exc_info:
                 await provider.search("test query")
 
