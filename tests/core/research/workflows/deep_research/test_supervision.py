@@ -4793,6 +4793,52 @@ class TestShouldContinueGatheringAccuracy:
         assert history[0]["should_continue_gathering"] is True
         assert should_stop is False
 
+    @pytest.mark.asyncio
+    async def test_total_search_failure_round0_continues(self):
+        """Round 0 with 0 sources is total failure — loop should continue."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=0, sources_per_query=0, supervision_round=0)
+        assert len(state.sources) == 0
+
+        should_stop = await stub._post_round_bookkeeping(
+            state=state,
+            directives=[],
+            directive_results=[],
+            think_output=None,
+            round_new_sources=0,
+            inline_stats={},
+            min_sources=2,
+            timeout=60.0,
+        )
+
+        assert should_stop is False, "Total failure on round 0 should NOT stop the loop"
+        assert state.supervision_round == 1, "Round should have advanced"
+        # Verify audit event was emitted
+        assert any(
+            event_name == "supervision_total_search_failure"
+            for event_name, _ in stub._audit_events
+        ), "Should emit supervision_total_search_failure audit event"
+
+    @pytest.mark.asyncio
+    async def test_convergence_later_round_with_prior_sources_stops(self):
+        """Round > 0 with prior sources and 0 new sources = convergence — stop."""
+        stub = StubSupervision(delegation_model=True)
+        state = _make_state(num_completed=2, sources_per_query=3, supervision_round=1)
+        assert len(state.sources) > 0
+
+        should_stop = await stub._post_round_bookkeeping(
+            state=state,
+            directives=[],
+            directive_results=[],
+            think_output=None,
+            round_new_sources=0,
+            inline_stats={},
+            min_sources=2,
+            timeout=60.0,
+        )
+
+        assert should_stop is True, "Convergence on later round should stop the loop"
+
 
 class TestCoverageSnapshotSuffix:
     """2B: Verify pre/post suffixed snapshots and accurate delta computation."""

@@ -845,11 +845,34 @@ class SupervisionPhaseMixin:
                 directives_executed=len(directive_results),
             )
 
+        completed_round = state.supervision_round
         self._advance_supervision_round(state)
         self.memory.save_deep_research(state)
 
-        # If no new sources were found this round, stop delegating
+        # If no new sources were found this round, decide whether to stop.
+        # On round 0 with no prior sources this is total failure — allow the
+        # loop to continue so the next round can retry with gap-driven
+        # directives.  On later rounds (or when prior sources exist) it
+        # means genuine convergence.
         if round_new_sources == 0:
+            total_failure = completed_round == 0 and len(state.sources) == 0
+            if total_failure:
+                logger.warning(
+                    "Supervision delegation: total search failure on round 0 "
+                    "(0 sources), allowing retry in round %d",
+                    state.supervision_round,
+                )
+                self._write_audit_event(
+                    state,
+                    "supervision_total_search_failure",
+                    data={
+                        "completed_round": completed_round,
+                        "total_sources": 0,
+                        "total_findings": len(state.findings),
+                    },
+                    level="warning",
+                )
+                return False
             logger.info(
                 "Supervision delegation: no new sources in round %d, stopping",
                 state.supervision_round,
