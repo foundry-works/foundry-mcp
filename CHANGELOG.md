@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0a12] - 2026-03-04
+
+### Fixed
+
+- **Global heading-boundary repair after corrections and synthesis**: A final repair pass now runs after both the correction and synthesis stages to fix any headings that were broken by content modifications, ensuring clean markdown output.
+- **Context windows clamped at heading boundaries**: Context windows used for corrections are now clamped to heading boundaries, preventing cross-section content from leaking into correction prompts and causing misplaced edits.
+- **Broadened heading-boundary repair regex**: The heading-boundary repair regex now catches punctuation-terminated headings (e.g., headings ending with colons or question marks), fixing cases where these headings were not being repaired.
+
 ## [0.18.0a11] - 2026-03-04
 
 ### Changed
