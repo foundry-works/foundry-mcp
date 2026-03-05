@@ -1016,7 +1016,46 @@ class TopicResearchMixin:
             )
             return None
 
-        # Non-context-window failure
+        # Non-context-window failure — retry once on first-turn timeout
+        if turn == 0 and ret.metadata and ret.metadata.get("timeout"):
+            extended_timeout = self.config.deep_research_topic_research_timeout * 1.5
+            logger.warning(
+                "Topic %r researcher timed out on first turn, retrying once "
+                "with extended timeout %.0fs",
+                sub_query.id,
+                extended_timeout,
+            )
+            self._write_audit_event(
+                state,
+                "topic_research_first_turn_timeout_retry",
+                data={
+                    "sub_query_id": sub_query.id,
+                    "original_timeout": self.config.deep_research_topic_research_timeout,
+                    "extended_timeout": extended_timeout,
+                },
+            )
+            retry_ret = await execute_llm_call(
+                workflow=self,
+                state=state,
+                phase_name="topic_research",
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                provider_id=provider_id,
+                model=researcher_model,
+                temperature=0.3,
+                timeout=extended_timeout,
+                role="topic_reflection",
+                skip_token_tracking=True,
+            )
+            if isinstance(retry_ret, LLMCallResult):
+                return retry_ret.result
+
+            logger.warning(
+                "Topic %r researcher first-turn timeout retry also failed",
+                sub_query.id,
+            )
+            return None
+
         logger.warning(
             "Topic %r researcher LLM call failed on turn %d: %s",
             sub_query.id,

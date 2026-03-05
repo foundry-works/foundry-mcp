@@ -132,7 +132,7 @@ class StubTopicResearch(TopicResearchMixin):
         self.config.deep_research_reflection_provider = None
         self.config.default_provider = "test-provider"
         self.config.deep_research_reflection_timeout = 60.0
-        self.config.deep_research_topic_research_timeout = 90.0
+        self.config.deep_research_topic_research_timeout = 180.0
         self.config.deep_research_enable_extract = False
         self.config.deep_research_extract_max_per_iteration = 2
         self.config.deep_research_inline_compression = False
@@ -3928,11 +3928,11 @@ class TestTopicResearchTimeoutConfig:
     """Verify topic research uses deep_research_topic_research_timeout (not reflection_timeout)."""
 
     def test_config_default_value(self) -> None:
-        """ResearchConfig has deep_research_topic_research_timeout defaulting to 90.0."""
+        """ResearchConfig has deep_research_topic_research_timeout defaulting to 180.0."""
         from foundry_mcp.config.research import ResearchConfig
 
         config = ResearchConfig()
-        assert config.deep_research_topic_research_timeout == 90.0
+        assert config.deep_research_topic_research_timeout == 180.0
 
     def test_config_from_dict(self) -> None:
         """from_dict parses deep_research_topic_research_timeout."""
@@ -3951,3 +3951,108 @@ class TestTopicResearchTimeoutConfig:
         )
         assert config.deep_research_reflection_timeout == 30.0
         assert config.deep_research_topic_research_timeout == 150.0
+
+
+class TestFirstTurnTimeoutRetry:
+    """Verify first-turn timeout retry in _execute_researcher_llm_call."""
+
+    @pytest.mark.asyncio
+    async def test_first_turn_timeout_retries_once_with_extended_timeout(self) -> None:
+        """When turn==0 and LLM returns a timeout WorkflowResult, retry once with 1.5x timeout."""
+        from foundry_mcp.core.research.workflows.base import WorkflowResult
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            LLMCallResult,
+        )
+
+        mixin = StubTopicResearch()
+        state = _make_state()
+        sq = state.sub_queries[0]
+
+        timeout_result = WorkflowResult(
+            success=False,
+            content="",
+            error="Timed out",
+            metadata={"timeout": True},
+        )
+        success_result = LLMCallResult(
+            result=WorkflowResult(success=True, content="ok"),
+            llm_call_duration_ms=100.0,
+        )
+
+        call_count = 0
+
+        async def mock_execute_llm_call(**kwargs: Any) -> WorkflowResult | LLMCallResult:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return timeout_result
+            # Second call should have extended timeout
+            assert kwargs["timeout"] == pytest.approx(180.0 * 1.5)
+            return success_result
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases._lifecycle.execute_llm_call",
+            side_effect=mock_execute_llm_call,
+        ):
+            result = await mixin._execute_researcher_llm_call(
+                sub_query=sq,
+                message_history=[],
+                researcher_model="test-model",
+                provider_id="test-provider",
+                budget_remaining=5,
+                max_searches=5,
+                extract_enabled=False,
+                turn=0,
+                state=state,
+            )
+
+        assert result is not None
+        assert call_count == 2
+        # Audit event should be recorded
+        audit_names = [name for name, _ in mixin._audit_events]
+        assert "topic_research_first_turn_timeout_retry" in audit_names
+
+    @pytest.mark.asyncio
+    async def test_non_first_turn_timeout_does_not_retry(self) -> None:
+        """When turn > 0 and LLM returns a timeout WorkflowResult, do NOT retry."""
+        from foundry_mcp.core.research.workflows.base import WorkflowResult
+
+        mixin = StubTopicResearch()
+        state = _make_state()
+        sq = state.sub_queries[0]
+
+        timeout_result = WorkflowResult(
+            success=False,
+            content="",
+            error="Timed out",
+            metadata={"timeout": True},
+        )
+
+        call_count = 0
+
+        async def mock_execute_llm_call(**kwargs: Any) -> WorkflowResult:
+            nonlocal call_count
+            call_count += 1
+            return timeout_result
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases._lifecycle.execute_llm_call",
+            side_effect=mock_execute_llm_call,
+        ):
+            result = await mixin._execute_researcher_llm_call(
+                sub_query=sq,
+                message_history=[],
+                researcher_model="test-model",
+                provider_id="test-provider",
+                budget_remaining=5,
+                max_searches=5,
+                extract_enabled=False,
+                turn=2,
+                state=state,
+            )
+
+        assert result is None
+        assert call_count == 1
+        # No retry audit event
+        audit_names = [name for name, _ in mixin._audit_events]
+        assert "topic_research_first_turn_timeout_retry" not in audit_names
