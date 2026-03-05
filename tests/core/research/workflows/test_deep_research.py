@@ -30,6 +30,33 @@ from foundry_mcp.core.research.models.sources import (
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 
 # =============================================================================
+# Helpers
+# =============================================================================
+
+
+def _add_lifecycle_fields(mock_result: MagicMock) -> MagicMock:
+    """Add lifecycle-required fields to a mock provider result.
+
+    ``execute_llm_call`` reads ``provider_id``, ``model_used``, etc. from the
+    result for ``PhaseMetrics`` recording.  ``MagicMock`` auto-creates these as
+    child mocks (not valid strings/ints), causing Pydantic validation errors.
+    """
+    for attr, default in [
+        ("provider_id", "test-provider"),
+        ("model_used", "test-model"),
+        ("duration_ms", 100.0),
+        ("input_tokens", 40),
+        ("output_tokens", 10),
+        ("cached_tokens", 0),
+    ]:
+        if not isinstance(getattr(mock_result, attr, None), (str, int, float)):
+            setattr(mock_result, attr, default)
+    if not isinstance(getattr(mock_result, "metadata", None), dict):
+        mock_result.metadata = None
+    return mock_result
+
+
+# =============================================================================
 # Test Fixtures
 # =============================================================================
 
@@ -574,7 +601,7 @@ class TestDeepResearchWorkflow:
                 r.content = json.dumps(
                     {"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]}
                 )
-            return r
+            return _add_lifecycle_fields(r)
 
         with (
             patch.object(workflow, "_get_search_provider", side_effect=provider_lookup),
@@ -662,7 +689,7 @@ class TestDeepResearchWorkflow:
                 r.content = json.dumps(
                     {"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]}
                 )
-            return r
+            return _add_lifecycle_fields(r)
 
         with (
             patch.object(workflow, "_get_search_provider", side_effect=provider_lookup),
@@ -1988,7 +2015,7 @@ class TestDeepResearchProviderFailover:
                 r.content = json.dumps(
                     {"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]}
                 )
-            return r
+            return _add_lifecycle_fields(r)
 
         with (
             patch.object(
@@ -2073,7 +2100,7 @@ class TestDeepResearchProviderFailover:
                 r.content = json.dumps(
                     {"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]}
                 )
-            return r
+            return _add_lifecycle_fields(r)
 
         with (
             patch.object(
@@ -2204,7 +2231,7 @@ class TestDeepResearchProviderFailover:
                 r.content = json.dumps(
                     {"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]}
                 )
-            return r
+            return _add_lifecycle_fields(r)
 
         with (
             patch.object(
@@ -2299,7 +2326,7 @@ class TestDeepResearchProviderFailover:
                 r.content = json.dumps(
                     {"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]}
                 )
-            return r
+            return _add_lifecycle_fields(r)
 
         with (
             patch.object(
@@ -2437,7 +2464,7 @@ class TestDeepResearchProviderFailoverEdgeCases:
                 r.content = json.dumps(
                     {"tool_calls": [{"tool": "research_complete", "arguments": {"summary": "Done"}}]}
                 )
-            return r
+            return _add_lifecycle_fields(r)
 
         with (
             patch.object(

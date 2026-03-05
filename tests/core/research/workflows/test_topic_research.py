@@ -169,13 +169,30 @@ class StubTopicResearch(TopicResearchMixin):
     async def _execute_provider_async(self, **kwargs: Any) -> MagicMock:
         """Mock provider async execution for researcher LLM calls."""
         if self._provider_async_fn:
-            return await self._provider_async_fn(**kwargs)
-        # Default: signal research complete immediately
-        result = MagicMock()
-        result.success = True
-        result.content = _react_response(_complete_call("Default completion"))
-        result.tokens_used = 50
-        result.error = None
+            result = await self._provider_async_fn(**kwargs)
+        else:
+            # Default: signal research complete immediately
+            result = MagicMock()
+            result.success = True
+            result.content = _react_response(_complete_call("Default completion"))
+            result.tokens_used = 50
+            result.error = None
+        # Ensure lifecycle-required fields are present with valid types
+        # so that PhaseMetrics validation in execute_llm_call succeeds.
+        for attr, default in [
+            ("provider_id", "test-provider"),
+            ("model_used", "test-model"),
+            ("duration_ms", 100.0),
+            ("input_tokens", 40),
+            ("output_tokens", 10),
+            ("cached_tokens", 0),
+        ]:
+            if not isinstance(getattr(result, attr, None), (str, int, float)):
+                setattr(result, attr, default)
+        # Ensure metadata is a proper dict (not MagicMock) so lifecycle
+        # checks like result.metadata.get("timeout") behave correctly.
+        if not isinstance(getattr(result, "metadata", None), dict):
+            result.metadata = None
         return result
 
     async def _compress_single_topic_async(self, **kwargs: Any) -> tuple[int, int, bool]:

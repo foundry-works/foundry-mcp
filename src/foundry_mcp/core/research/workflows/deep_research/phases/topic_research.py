@@ -22,7 +22,6 @@ if TYPE_CHECKING:
     from foundry_mcp.config.research import ResearchConfig
     from foundry_mcp.core.research.memory import ResearchMemory
 
-from foundry_mcp.core.errors.provider import ContextWindowError
 from foundry_mcp.core.research.models.deep_research import (
     CitationSearchTool,
     DeepResearchState,
@@ -761,6 +760,7 @@ class TopicResearchMixin:
                 citation_tools_enabled=citation_tools_enabled,
                 pdf_extraction_enabled=pdf_extraction_enabled,
                 turn=turn,
+                state=state,
             )
             if llm_result is None:
                 break
@@ -901,14 +901,19 @@ class TopicResearchMixin:
         max_searches: int,
         extract_enabled: bool,
         turn: int,
+        state: DeepResearchState,
         citation_tools_enabled: bool = False,
         pdf_extraction_enabled: bool = False,
     ) -> Any | None:
         """Execute a single researcher LLM call for one ReAct turn.
 
-        Builds the system and user prompts, calls the provider, and
-        returns the LLM result. Returns ``None`` on failure or exception
-        to signal the main loop should break.
+        Delegates to ``execute_llm_call`` from ``_lifecycle.py`` for full
+        lifecycle instrumentation (audit events, heartbeats, PhaseMetrics,
+        progressive context-window recovery).
+
+        If ``execute_llm_call`` exhausts its internal retries due to a
+        context-window error, an outer retry truncates the conversation
+        history at 50% budget and retries once with a rebuilt prompt.
 
         Args:
             sub_query: The sub-query being researched.
@@ -919,6 +924,7 @@ class TopicResearchMixin:
             max_searches: Total tool call budget.
             extract_enabled: Whether extract_content is available.
             turn: Current turn index (for logging).
+            state: Current deep research state (for lifecycle wrapper).
             citation_tools_enabled: Whether citation_search and related_papers
                 tools are available.
             pdf_extraction_enabled: Whether extract_pdf tool is available.
@@ -926,6 +932,12 @@ class TopicResearchMixin:
         Returns:
             LLM result object on success, None on failure.
         """
+        from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+            LLMCallResult,
+            _is_context_window_exceeded,
+            execute_llm_call,
+        )
+
         system_prompt = _build_researcher_system_prompt(
             budget_total=max_searches,
             budget_remaining=budget_remaining,
@@ -941,37 +953,34 @@ class TopicResearchMixin:
             budget_total=max_searches,
         )
 
-        try:
-            llm_result = await self._execute_provider_async(
-                prompt=user_prompt,
-                provider_id=provider_id,
-                model=researcher_model,
-                system_prompt=system_prompt,
-                timeout=self.config.deep_research_reflection_timeout,
-                temperature=0.3,
-                phase="topic_research",
-                fallback_providers=[],
-                max_retries=1,
-                retry_delay=2.0,
-            )
-            if not llm_result.success:
-                logger.warning(
-                    "Topic %r researcher LLM call failed on turn %d: %s",
-                    sub_query.id,
-                    turn + 1,
-                    llm_result.error,
-                )
-                return None
-            return llm_result
-        except ContextWindowError as exc:
+        ret = await execute_llm_call(
+            workflow=self,
+            state=state,
+            phase_name="topic_research",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            provider_id=provider_id,
+            model=researcher_model,
+            temperature=0.3,
+            timeout=self.config.deep_research_reflection_timeout,
+            role="topic_reflection",
+            skip_token_tracking=True,
+        )
+
+        if isinstance(ret, LLMCallResult):
+            return ret.result
+
+        # ret is a WorkflowResult (error path)
+
+        # Context-window exhausted after internal retries — try once more
+        # with aggressively truncated conversation history.
+        if _is_context_window_exceeded(ret):
             logger.warning(
-                "Topic %r researcher hit context window on turn %d, truncating history and retrying once: %s",
+                "Topic %r researcher hit context window on turn %d after "
+                "internal retries, truncating history at 50%% and retrying once",
                 sub_query.id,
                 turn + 1,
-                exc,
             )
-            # Aggressively truncate and retry once — halve the budget so the
-            # retry is strictly shorter than the initial attempt.
             truncated = _truncate_researcher_history(
                 message_history, researcher_model, budget_fraction=0.5,
             )
@@ -981,85 +990,39 @@ class TopicResearchMixin:
                 budget_remaining=budget_remaining,
                 budget_total=max_searches,
             )
-            try:
-                llm_result = await self._execute_provider_async(
-                    prompt=retry_prompt,
-                    provider_id=provider_id,
-                    model=researcher_model,
-                    system_prompt=system_prompt,
-                    timeout=self.config.deep_research_reflection_timeout,
-                    temperature=0.3,
-                    phase="topic_research",
-                    fallback_providers=[],
-                    max_retries=1,
-                    retry_delay=2.0,
-                )
-                if not llm_result.success:
-                    logger.warning(
-                        "Topic %r researcher retry after truncation failed on turn %d: %s",
-                        sub_query.id,
-                        turn + 1,
-                        llm_result.error,
-                    )
-                    return None
-                return llm_result
-            except Exception as retry_exc:
-                logger.warning(
-                    "Topic %r researcher retry after truncation exception on turn %d: %s",
-                    sub_query.id,
-                    turn + 1,
-                    retry_exc,
-                )
-                return None
-        except (asyncio.TimeoutError, OSError, ValueError, RuntimeError) as exc:
-            # Check if a generic exception is actually a context-window error
-            # from a provider that doesn't raise ContextWindowError directly.
-            from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
-                _is_context_window_error,
+
+            retry_ret = await execute_llm_call(
+                workflow=self,
+                state=state,
+                phase_name="topic_research",
+                system_prompt=system_prompt,
+                user_prompt=retry_prompt,
+                provider_id=provider_id,
+                model=researcher_model,
+                temperature=0.3,
+                timeout=self.config.deep_research_reflection_timeout,
+                role="topic_reflection",
+                skip_token_tracking=True,
             )
 
-            if _is_context_window_error(exc):
-                logger.warning(
-                    "Topic %r researcher hit provider-specific context window error on turn %d, "
-                    "truncating history and retrying once: %s",
-                    sub_query.id,
-                    turn + 1,
-                    exc,
-                )
-                truncated = _truncate_researcher_history(
-                    message_history, researcher_model, budget_fraction=0.5,
-                )
-                retry_prompt = _build_react_user_prompt(
-                    topic=sub_query.query,
-                    message_history=truncated,
-                    budget_remaining=budget_remaining,
-                    budget_total=max_searches,
-                )
-                try:
-                    llm_result = await self._execute_provider_async(
-                        prompt=retry_prompt,
-                        provider_id=provider_id,
-                        model=researcher_model,
-                        system_prompt=system_prompt,
-                        timeout=self.config.deep_research_reflection_timeout,
-                        temperature=0.3,
-                        phase="topic_research",
-                        fallback_providers=[],
-                        max_retries=1,
-                        retry_delay=2.0,
-                    )
-                    if not llm_result.success:
-                        return None
-                    return llm_result
-                except Exception:
-                    return None
+            if isinstance(retry_ret, LLMCallResult):
+                return retry_ret.result
+
             logger.warning(
-                "Topic %r researcher LLM call exception on turn %d: %s",
+                "Topic %r researcher retry after history truncation failed on turn %d",
                 sub_query.id,
                 turn + 1,
-                exc,
             )
             return None
+
+        # Non-context-window failure
+        logger.warning(
+            "Topic %r researcher LLM call failed on turn %d: %s",
+            sub_query.id,
+            turn + 1,
+            getattr(ret, "error", ret.content),
+        )
+        return None
 
     @staticmethod
     def _inject_reflection_prompt(

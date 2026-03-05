@@ -1,165 +1,87 @@
-# Plan: Fix Heading-Body Fusion in Deep Research Reports
+# Plan: Wire topic research LLM calls through `execute_llm_call` lifecycle wrapper
 
 ## Context
 
-Deep research reports exhibit heading-body fusions where markdown headings like `## Section Title` get concatenated with the following paragraph body (e.g., `## Your Current Portfolio: What You Already Have (and Don't)The Amex Platinum provides...`). A real session (deepres-106671273d6e on 0.18.0a11) showed 4 fusions:
+Deep research session `deepres-4fbeb6b8568d` failed silently — all 4 topic researcher sub-queries completed with 0 turns, 0 searches, 0 sources, but the audit trail contained **no information about why**. Investigation revealed two compounding problems:
 
-- 2 from **correction LLM** stripping whitespace when rewriting context windows that bled across section boundaries
-- 2 from **synthesis LLM** itself producing fused headings (no correction involved)
+1. **`_execute_researcher_llm_call` bypasses the `execute_llm_call` lifecycle wrapper.** Every other phase (clarification, brief, supervision) routes LLM calls through `execute_llm_call()` in `_lifecycle.py`, which provides audit events (`llm.call.started` / `llm.call.completed`), heartbeats, PhaseMetrics recording, and progressive ContextWindowError recovery. Topic research calls `_execute_provider_async` directly, losing all of this instrumentation.
 
-The existing `_repair_heading_boundaries()` function was designed to catch these but fails due to a narrow regex and limited scope.
+2. **Two completely silent failure paths** in `_execute_researcher_llm_call` (lines 1052, 1055) return `None` with no `logger.warning` and no audit event.
 
-## Root Causes
+The fix is to migrate `_execute_researcher_llm_call` to delegate to `execute_llm_call`, which automatically provides audit trail, metrics, and error visibility — making failures like this diagnosable from the session JSON alone.
 
-### 1. `_HEADING_RE` regex too narrow (line 1012)
-```python
-_HEADING_RE = re.compile(r"^(#{1,6}\s+[^\n]*?[a-z0-9])([A-Z][a-z])", re.MULTILINE)
-```
-The terminal `[a-z0-9]` only matches headings ending with lowercase letters or digits. Headings ending with `)`, `"`, `?`, `!`, `—` etc. are missed entirely. The real-world heading `(and Don't)` ends with `)`.
+## Files to modify
 
-### 2. Line-based repair misses same-line fusions (lines 1037-1052)
-When heading+body are fused on the same line and the regex fails (Problem 1), the line-based pass sees them as ONE line. There's no "next line" to check because the body is on the heading line itself.
-
-### 3. Context windows cross section boundaries (lines 979-1005)
-`_extract_context_window` expands to `\n\n` paragraph boundaries but doesn't stop at heading boundaries (`## `, `### `). A correction window for a claim in one section can include headings from adjacent sections. The correction LLM rewrites the entire window and may strip whitespace around those adjacent headings.
-
-### 4. No heading repair after synthesis or after all corrections
-Synthesis LLM can produce fusions directly. Heading repair only runs per-window during individual corrections, never on the full report.
-
-## Files to Modify
-
-1. **`src/foundry_mcp/core/research/workflows/deep_research/phases/claim_verification.py`** — regex fix, same-line detection, context window clamping, global repair function
-2. **`src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py`** — post-synthesis global repair call (line 445)
-3. **`tests/core/research/workflows/deep_research/test_claim_verification.py`** — new test cases
+- `src/foundry_mcp/core/research/workflows/deep_research/phases/topic_research.py` — primary change
+- `tests/` — update any tests that mock `_execute_researcher_llm_call` or `_execute_provider_async` in the topic research context
 
 ## Implementation
 
-### Phase 1: Broaden `_HEADING_RE` and Add Same-Line Fallback
+### Step 1: Rewrite `_execute_researcher_llm_call` to use `execute_llm_call`
 
-**1a. Fix `_HEADING_RE` (line 1012)**
+Replace the body of `_execute_researcher_llm_call` (lines 894-1062) to:
 
-Expand terminal character class to include common heading-end punctuation:
+1. Build `system_prompt` and `user_prompt` (already done at lines 929-942 — keep this)
+2. Call `execute_llm_call()` instead of `self._execute_provider_async()`:
+   ```python
+   from ._lifecycle import execute_llm_call, LLMCallResult
 
-```python
-_HEADING_RE = re.compile(
-    r"^(#{1,6}\s+[^\n]*?[a-z0-9)\]\"'\u2019\u201d!?.;:*\u2014\u2013\-])([A-Z][a-z])",
-    re.MULTILINE,
-)
-```
+   ret = await execute_llm_call(
+       workflow=self,
+       state=state,
+       phase_name="topic_research",
+       system_prompt=system_prompt,
+       user_prompt=user_prompt,
+       provider_id=provider_id,
+       model=researcher_model,
+       temperature=0.3,
+       timeout=self.config.deep_research_reflection_timeout,
+       role="topic_reflection",
+       skip_token_tracking=True,  # caller tracks tokens via local_tokens_used
+   )
+   ```
+3. Handle the return type:
+   - `isinstance(ret, WorkflowResult)` → error path (replaces the current `None` return)
+   - `isinstance(ret, LLMCallResult)` → success, return `ret.result` (the inner `WorkflowResult`)
 
-Added characters: `)`, `]`, `"`, `'`, right-single-quote, right-double-quote, `!`, `?`, `.`, `;`, `:`, `*`, em-dash, en-dash, hyphen.
+4. **Keep the history-truncation recovery** as an outer wrapper: if `execute_llm_call` returns a `WorkflowResult` with context-window metadata, truncate `message_history` via `_truncate_researcher_history(..., budget_fraction=0.5)`, rebuild the prompt, and retry once. Use `_is_context_window_exceeded()` from `_lifecycle.py` to detect this.
 
-**1b. Add `_SAMELINE_FUSION_RE` (new module-level constant after line 1013)**
+5. **Delete the hand-rolled ContextWindowError/exception handling** (lines 966-1062) — `execute_llm_call` handles this internally with progressive truncation retries. The outer history-truncation loop handles the case `execute_llm_call` can't (rebuilding from truncated history).
 
-Second-pass safety net with greedy heading match and broader terminal set:
+### Step 2: Update the caller in `_execute_topic_research_async`
 
-```python
-_SAMELINE_FUSION_RE = re.compile(
-    r"^(#{1,6}\s+.+?[.!?)\]\"'\u2019\u201d*\u2014\u2013:;\-])([A-Z][a-z])",
-    re.MULTILINE,
-)
-```
+Add `state` to the `_execute_researcher_llm_call` call (line 753). The caller already has `state` in scope.
 
-**1c. Apply in `_repair_heading_boundaries` (after line 1033)**
+The return type contract stays the same: success → `WorkflowResult` object, failure → `None`. No changes needed at the call site (lines 765-770) since `_execute_researcher_llm_call` will still return `WorkflowResult | None` — it unwraps `LLMCallResult.result` internally.
 
-```python
-repaired = _HEADING_RE.sub(r"\1\n\n\2", corrected_text)
-repaired = _SAMELINE_FUSION_RE.sub(r"\1\n\n\2", repaired)  # NEW: fallback pass
-```
+### Step 3: Update tests
 
-### Phase 2: Clamp Context Windows at Heading Boundaries
+Find and update tests that:
+- Mock `_execute_provider_async` in topic research test scenarios → should mock `execute_llm_call` or its provider instead
+- Assert on `_execute_researcher_llm_call` return types
 
-**2a. Add module-level constant:**
-```python
-_HEADING_BOUNDARY_RE = re.compile(r"\n(?=#{1,6}\s)")
-```
+## What this fixes
 
-**2b. Modify `_extract_context_window` (after line 1003)**
+| Before | After |
+|--------|-------|
+| 0 audit events for topic research LLM calls | `llm.call.started` + `llm.call.completed` per call (with provider, duration, status) |
+| Silent failures on lines 1052/1055 | All failures captured in audit with error details |
+| No PhaseMetrics for topic research turns | PhaseMetrics recorded per turn |
+| No heartbeat updates during researcher loop | Heartbeat updated each turn |
+| Hand-rolled CWE handling with gaps | Battle-tested progressive truncation + outer history-truncation fallback |
 
-After paragraph-boundary expansion, clamp inward at heading boundaries:
+## What this does NOT change
 
-- **Backward clamp:** Find the *last* heading between `window_start` and `match_start`. Keep it (the claim's own section heading) but drop anything before it.
-- **Forward clamp:** Find the *first* heading between `match_end` and `window_end`. Stop there — don't include adjacent sections.
-
-```python
-# Backward: keep claim's own heading, drop earlier sections
-backward_region = report[window_start:match_start]
-heading_hits = list(_HEADING_BOUNDARY_RE.finditer(backward_region))
-if heading_hits:
-    last_hit = heading_hits[-1]
-    clamped_start = window_start + last_hit.start()
-    if clamped_start < match_start:
-        window_start = clamped_start
-
-# Forward: stop at next section heading
-forward_region = report[match_end:window_end]
-fwd_hit = _HEADING_BOUNDARY_RE.search(forward_region)
-if fwd_hit:
-    clamped_end = match_end + fwd_hit.start()
-    if clamped_end > match_end:
-        window_end = clamped_end
-```
-
-### Phase 3: Global Heading Repair
-
-**3a. New public function in `claim_verification.py`:**
-
-```python
-def repair_heading_boundaries_global(report: str) -> str:
-    """Run heading-boundary repair on the entire report."""
-    if not report:
-        return report
-    # Pass a dummy original with a heading to force repair logic to activate.
-    return _repair_heading_boundaries("# dummy heading\n\ntext", report)
-```
-
-**3b. Call after `apply_corrections` completes (~line 1214):**
-
-```python
-if corrections_applied > 0 and state.report:
-    state.report = repair_heading_boundaries_global(state.report)
-```
-
-**3c. Call after synthesis, before claim verification (line 445 in `workflow_execution.py`):**
-
-```python
-# Repair heading-body fusions from synthesis.
-if state.report:
-    from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification import (
-        repair_heading_boundaries_global,
-    )
-    state.report = repair_heading_boundaries_global(state.report)
-```
-
-### Phase 4: Tests
-
-**Add to `TestRepairHeadingBoundaries`:**
-- `test_heading_ending_with_parenthesis` — the exact case from the real session: `(and Don't)The Amex...`
-- `test_heading_ending_with_question_mark` — `Is It Worth It?The answer...`
-- `test_heading_ending_with_em_dash` — `Overview —The program...`
-- `test_sameline_fusion_with_terminal_punctuation` — verify no body text remains on heading line
-
-**Add to `TestExtractContextWindow`:**
-- `test_window_does_not_cross_heading_forward` — window stops at next `## Section`
-- `test_window_does_not_cross_heading_backward` — window doesn't include prior section headings
-- `test_window_keeps_own_section_heading` — claim's own `## Section` heading IS included
-
-**New class `TestRepairHeadingBoundariesGlobal`:**
-- `test_repairs_fusions_in_full_report` — multi-section report with fusions gets cleaned
-- `test_noop_on_clean_report` — clean report is unchanged
-- `test_empty_report` — empty string returns empty string
-
-## Risk Assessment
-
-| Change | Risk | Mitigation |
-|--------|------|------------|
-| Regex broadening | Low | Added chars are all legitimate heading-terminal chars. `[A-Z][a-z]` body-start requirement prevents false positives. |
-| Same-line fallback | Low | Only fires on `#`-prefixed lines with sentence-terminal punctuation before `[A-Z][a-z]`. |
-| Context window clamping | Medium | Reduces context for correction LLM. Mitigated by keeping claim's own section heading. |
-| Global repair | Low | Pure text transform that only adds `\n\n` after headings. Triple-newline collapse prevents accumulation. |
+- The ReAct loop structure, tool dispatch, reflection enforcement — untouched
+- The `_finalize_topic_result` audit event — still fires, now complemented by per-turn events
+- Provider resolution logic — same `safe_resolve_model_for_role` + `resolve_phase_provider` chain
+- External behavior — same prompts, same tool calls, same results
 
 ## Verification
 
-1. Run existing tests: `python -m pytest tests/core/research/workflows/deep_research/test_claim_verification.py -x -q`
-2. All new tests pass
-3. Manual regex validation: confirm `_HEADING_RE` matches `## What You Have (and Don't)The Amex...`
+1. **Unit tests**: Run existing topic research tests — `pytest tests/ -k topic_research`
+2. **Integration**: Run a deep research session and verify:
+   - `llm.call.started` / `llm.call.completed` events appear in audit JSONL for topic_research phase
+   - On provider failure, the audit shows `status: "error"` with provider info
+   - `phase_metrics` includes `topic_research` entries
+3. **Regression**: Verify supervision/clarification/brief phases still work (they don't touch this code)

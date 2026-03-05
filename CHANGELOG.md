@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0a13] - 2026-03-05
+
+### Fixed
+
+- **Topic research LLM calls routed through `execute_llm_call` lifecycle wrapper**: `_execute_researcher_llm_call` now delegates to `execute_llm_call()` instead of calling `_execute_provider_async()` directly. This adds `llm.call.started` / `llm.call.completed` audit events, heartbeat updates, and PhaseMetrics recording for every topic research turn — making silent failures (like all-zero-turn sessions) fully diagnosable from the session JSON alone.
+- **Two silent failure paths in topic research now emit audit events and warnings**: Previously, two error paths in `_execute_researcher_llm_call` returned `None` with no logging or audit trail. All failure paths now produce `logger.warning` calls and are captured in audit events via the lifecycle wrapper.
+- **Context-window recovery unified with battle-tested lifecycle wrapper**: Replaced ~100 lines of hand-rolled `ContextWindowError` / exception handling with the lifecycle wrapper's progressive truncation (3 retries with tiered strategies), plus an outer history-truncation fallback that rebuilds from 50%-budget conversation history.
+
 ## [0.18.0a12] - 2026-03-04
 
 ### Fixed
