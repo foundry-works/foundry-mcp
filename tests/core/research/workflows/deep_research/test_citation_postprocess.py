@@ -1,4 +1,4 @@
-"""Tests for citation post-processing, focused on strip_llm_sources_section.
+"""Tests for citation post-processing.
 
 Covers:
 - Heading-based stripping (## Sources, ## References) — regression
@@ -7,13 +7,17 @@ Covers:
 - Horizontal rule preceding inline sources (--- + Sources:)
 - Combined heading + inline sources
 - No sources at all (no-op)
+- Citation year-reference filtering (_CITATION_RE skips [1900]-[2099])
 """
 
 from __future__ import annotations
 
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.workflows.deep_research.phases._citation_postprocess import (
+    _CITATION_RE,
     cleanup_citations,
+    extract_cited_numbers,
+    renumber_citations,
     strip_llm_sources_section,
 )
 
@@ -268,3 +272,56 @@ class TestCleanupCitationsStripOnly:
         assert "[1]" in cleaned
         assert "[50]" not in cleaned
         assert meta["dangling_citations_removed"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Citation year-reference filtering (_CITATION_RE)
+# ---------------------------------------------------------------------------
+
+
+class TestCitationYearFiltering:
+    """Verify _CITATION_RE skips year references [1900]–[2099]."""
+
+    def test_matches_low_citation_numbers(self):
+        """[1], [2], [99] should be matched as citations."""
+        for text, expected in [("[1]", "1"), ("[2]", "2"), ("[99]", "99")]:
+            matches = _CITATION_RE.findall(text)
+            assert matches == [expected], f"{text} should match"
+
+    def test_matches_high_citation_numbers(self):
+        """[100], [500] should be matched (valid high citation numbers)."""
+        for text, expected in [("[100]", "100"), ("[500]", "500")]:
+            matches = _CITATION_RE.findall(text)
+            assert matches == [expected], f"{text} should match"
+
+    def test_skips_year_references(self):
+        """[2026], [2025], [1999] should NOT be matched."""
+        for text in ["[2026]", "[2025]", "[1999]", "[1900]", "[2099]"]:
+            matches = _CITATION_RE.findall(text)
+            assert matches == [], f"{text} should NOT match"
+
+    def test_matches_outside_year_range(self):
+        """[1899], [2100] are outside the year range — should match."""
+        for text, expected in [("[1899]", "1899"), ("[2100]", "2100")]:
+            matches = _CITATION_RE.findall(text)
+            assert matches == [expected], f"{text} should match"
+
+    def test_year_not_extracted_by_extract_cited_numbers(self):
+        """Year references in body text should not be extracted."""
+        report = "Published in [2026] by researchers, citing [1] and [2]."
+        numbers = extract_cited_numbers(report)
+        assert 2026 not in numbers
+        assert numbers == {1, 2}
+
+    def test_renumber_preserves_year_references(self):
+        """renumber_citations should leave [2026] untouched."""
+        state = DeepResearchState(original_query="test")
+        state.add_source(title="Source A", url="https://a.com")
+        state.add_source(title="Source B", url="https://b.com")
+
+        report = "Finding [2] then [1] in [2026]."
+        result, remap = renumber_citations(report, state)
+        assert "[2026]" in result
+        assert "[1]" in result  # renumbered from [2]
+        assert "[2]" in result  # renumbered from [1]
+        assert 2026 not in remap

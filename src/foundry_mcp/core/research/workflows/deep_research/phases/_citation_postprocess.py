@@ -22,8 +22,9 @@ logger = logging.getLogger(__name__)
 
 # Matches [N] where N is one or more digits, but NOT inside markdown link
 # syntax like [text](url). The negative lookahead (?!\() ensures we skip
-# patterns followed by a parenthesised URL.
-_CITATION_RE = re.compile(r"\[(\d+)\](?!\()")
+# patterns followed by a parenthesised URL.  The (?!(?:19|20)\d{2}\])
+# lookahead skips year references like [2025] or [1999].
+_CITATION_RE = re.compile(r"\[(?!(?:19|20)\d{2}\])(\d+)\](?!\()")
 
 
 def extract_cited_numbers(report: str, *, max_citation: int | None = None) -> set[int]:

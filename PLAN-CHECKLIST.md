@@ -37,17 +37,17 @@
 ## Item 1c: Citation Year-Reference Filtering
 
 ### Code (`_citation_postprocess.py`)
-- [ ] Update `_CITATION_RE` to `re.compile(r"\[(?!(?:19|20)\d{2}\])(\d+)\](?!\()")`
-- [ ] Check `claim_verification.py` for separate citation regex — apply same filter
-- [ ] Verify `extract_cited_numbers()` works with updated regex
+- [x] Update `_CITATION_RE` to `re.compile(r"\[(?!(?:19|20)\d{2}\])(\d+)\](?!\()")`
+- [x] Check `claim_verification.py` for separate citation regex — apply same filter
+- [x] Verify `extract_cited_numbers()` works with updated regex
 
 ### Tests (`test_citation_postprocess.py`)
-- [ ] `[1]`, `[99]` → matched
-- [ ] `[100]`, `[500]` → matched
-- [ ] `[2026]`, `[2025]`, `[1999]` → NOT matched
-- [ ] `[1899]`, `[2100]` → matched
-- [ ] `"in [2026] the market"` → not extracted
-- [ ] `renumber_citations()` with `[2026]` in body → year preserved
+- [x] `[1]`, `[99]` → matched
+- [x] `[100]`, `[500]` → matched
+- [x] `[2026]`, `[2025]`, `[1999]` → NOT matched
+- [x] `[1899]`, `[2100]` → matched
+- [x] `"in [2026] the market"` → not extracted
+- [x] `renumber_citations()` with `[2026]` in body → year preserved
 
 ## Item 2: Fidelity-Gated Re-Iteration
 
