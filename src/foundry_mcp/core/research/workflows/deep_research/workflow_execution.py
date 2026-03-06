@@ -728,6 +728,103 @@ class WorkflowExecutionMixin:
                             state.pop_metadata("claim_verification_in_progress")
                     # --- END CLAIM VERIFICATION ---
 
+                    # --- SOURCE DEEPENING ---
+                    # Re-verify UNSUPPORTED claims with expanded content windows
+                    # before computing fidelity. This runs inline (no re-iteration)
+                    # and can upgrade verdicts from UNSUPPORTED to SUPPORTED.
+                    _deepening_classification = None
+                    if (
+                        state.claim_verification
+                        and state.claim_verification.claims_unsupported > 0
+                    ):
+                        try:
+                            from foundry_mcp.core.research.workflows.deep_research.phases._source_deepening import (
+                                classify_unsupported_claims,
+                                reverify_with_expanded_window,
+                            )
+                            from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+                                LLMCallResult,
+                                execute_llm_call,
+                            )
+
+                            _cv_citation_map = state.get_citation_map()
+                            _deepening_classification = classify_unsupported_claims(
+                                state.claim_verification, _cv_citation_map
+                            )
+
+                            # Expanded-window re-verification for claims with rich sources.
+                            if _deepening_classification.deepen_window:
+                                _deepen_provider_id = resolve_phase_provider(
+                                    self.config, "claim_verification", "synthesis"
+                                )
+
+                                async def _deepen_llm_call(
+                                    system_prompt: str, user_prompt: str
+                                ) -> str:
+                                    ret = await execute_llm_call(
+                                        workflow=self,
+                                        state=state,
+                                        phase_name="claim_reverification",
+                                        system_prompt=system_prompt,
+                                        user_prompt=user_prompt,
+                                        provider_id=_deepen_provider_id,
+                                        model=None,
+                                        temperature=0.0,
+                                        timeout=self.config.deep_research_claim_verification_timeout,
+                                        role="claim_verification",
+                                    )
+                                    if isinstance(ret, LLMCallResult):
+                                        return ret.result.content or ""
+                                    raise RuntimeError("Deepening LLM call failed")
+
+                                await reverify_with_expanded_window(
+                                    _deepening_classification.deepen_window,
+                                    _cv_citation_map,
+                                    _deepen_llm_call,
+                                )
+
+                                # Recompute aggregate counts after verdict upgrades.
+                                vr = state.claim_verification
+                                vr.claims_supported = sum(
+                                    1 for c in vr.details if c.verdict == "SUPPORTED"
+                                )
+                                vr.claims_partially_supported = sum(
+                                    1 for c in vr.details if c.verdict == "PARTIALLY_SUPPORTED"
+                                )
+                                vr.claims_unsupported = sum(
+                                    1 for c in vr.details if c.verdict == "UNSUPPORTED"
+                                )
+
+                            _deepen_window_upgraded = sum(
+                                1
+                                for c in _deepening_classification.deepen_window
+                                if c.verdict in ("SUPPORTED", "PARTIALLY_SUPPORTED")
+                            )
+                            self._write_audit_event(
+                                state,
+                                "source_deepening_complete",
+                                data={
+                                    "inferential": len(_deepening_classification.inferential),
+                                    "deepen_window_total": len(_deepening_classification.deepen_window),
+                                    "deepen_window_upgraded": _deepen_window_upgraded,
+                                    "deepen_extract": len(_deepening_classification.deepen_extract),
+                                    "widen": len(_deepening_classification.widen),
+                                },
+                            )
+                        except Exception as exc:
+                            logger.warning(
+                                "Source deepening failed for research %s: %s",
+                                state.id,
+                                exc,
+                            )
+                            self._write_audit_event(
+                                state,
+                                "source_deepening_failed",
+                                data={"error": str(exc)},
+                                level="warning",
+                            )
+                    # --- END SOURCE DEEPENING ---
+
                     # --- FIDELITY-GATED ITERATION DECISION ---
                     _fidelity_score = (
                         state.claim_verification.fidelity_score
@@ -757,7 +854,19 @@ class WorkflowExecutionMixin:
                             from foundry_mcp.core.research.workflows.deep_research.phases.claim_verification import (
                                 build_gap_queries as _build_gap_queries,
                             )
-                            gap_queries = _build_gap_queries(state.claim_verification)
+                            # Exclude inferential claims and claims already
+                            # resolved by expanded-window re-verification.
+                            _exclude: set[str] = set()
+                            if _deepening_classification is not None:
+                                for c in _deepening_classification.inferential:
+                                    _exclude.add(c.claim)
+                                for c in _deepening_classification.deepen_window:
+                                    if c.verdict in ("SUPPORTED", "PARTIALLY_SUPPORTED"):
+                                        _exclude.add(c.claim)
+                            gap_queries = _build_gap_queries(
+                                state.claim_verification,
+                                exclude_claims=_exclude or None,
+                            )
 
                         state.iteration_gap_queries = gap_queries
                         state.iteration += 1

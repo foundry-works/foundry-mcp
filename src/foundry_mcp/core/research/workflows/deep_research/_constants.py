@@ -27,3 +27,4 @@ VERIFICATION_MAX_CORRECTIONS_DEFAULT = 5  # Max correction LLM calls per report
 VERIFICATION_SOURCE_MAX_CHARS = 8000  # Per-source content truncation in verification prompts
 VERIFICATION_OUTPUT_RESERVED = 2000  # Reserve tokens for verification output
 VERIFICATION_MAX_INPUT_TOKENS_DEFAULT = 200_000  # Total token budget escape hatch
+VERIFICATION_SOURCE_DEEPEN_MAX_CHARS = 24_000  # 3x normal window for expanded re-verification

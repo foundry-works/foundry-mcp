@@ -1804,7 +1804,11 @@ async def extract_and_verify_claims(
 # =========================================================================
 
 
-def build_gap_queries(verification_result: ClaimVerificationResult) -> list[str]:
+def build_gap_queries(
+    verification_result: ClaimVerificationResult,
+    *,
+    exclude_claims: set[str] | None = None,
+) -> list[str]:
     """Build targeted research queries from unsupported/contradicted claims.
 
     Groups claims by verdict and report section, then generates focused
@@ -1812,7 +1816,9 @@ def build_gap_queries(verification_result: ClaimVerificationResult) -> list[str]
     re-iteration to guide the next supervision round.
 
     Args:
-        verification_result: Completed claim verification result
+        verification_result: Completed claim verification result.
+        exclude_claims: Set of claim texts to exclude (e.g. inferential
+            claims or claims already resolved by source deepening).
 
     Returns:
         List of gap queries (typically 3-5)
@@ -1820,11 +1826,15 @@ def build_gap_queries(verification_result: ClaimVerificationResult) -> list[str]
     if not verification_result.details:
         return []
 
+    _excluded = exclude_claims or set()
+
     # Group problematic claims by section
     unsupported_by_section: dict[str, list[str]] = {}
     contradicted_by_section: dict[str, list[str]] = {}
 
     for claim in verification_result.details:
+        if claim.claim in _excluded:
+            continue
         section = getattr(claim, "report_section", None) or "general"
         if claim.verdict == "UNSUPPORTED":
             unsupported_by_section.setdefault(section, []).append(claim.claim)
