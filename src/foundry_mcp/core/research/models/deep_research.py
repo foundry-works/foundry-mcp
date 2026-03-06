@@ -1644,6 +1644,11 @@ class DeepResearchState(BaseModel):
         default_factory=list,
         description="Gap queries from last fidelity-gated re-iteration (passed to supervision)",
     )
+    iteration_reports: dict[int, str] = Field(
+        default_factory=dict,
+        description="Per-iteration report snapshots (iteration number → report text). "
+        "Stored after synthesis completes so fidelity regression can roll back to a better version.",
+    )
 
     # Citation counter — maintained by add_source()/append_source().
     # Avoids O(n) scan of all sources on every add.

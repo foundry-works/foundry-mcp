@@ -655,6 +655,12 @@ class WorkflowExecutionMixin:
                         )
                         state.report = repair_heading_boundaries_global(state.report)
 
+                    # Snapshot report for fidelity regression rollback.
+                    # Captured after synthesis + heading repair but before
+                    # claim verification modifies it.
+                    if state.report:
+                        state.iteration_reports[state.iteration] = state.report
+
                     # --- UNGROUNDED SYNTHESIS DISCLAIMER ---
                     if state.metadata.get("ungrounded_synthesis") and state.report:
                         _disclaimer = (
@@ -1010,6 +1016,34 @@ class WorkflowExecutionMixin:
                         self.memory.save_deep_research(state)
                         continue  # Loop back to SUPERVISION
                     # --- END FIDELITY-GATED ITERATION DECISION ---
+
+                    # --- FIDELITY REGRESSION ROLLBACK ---
+                    _rollback_iter = (
+                        iteration_decision.outputs or {}
+                    ).get("rollback_to_iteration")
+                    if _rollback_iter is not None and _rollback_iter in state.iteration_reports:
+                        _rolled_back_report = state.iteration_reports[_rollback_iter]
+                        logger.info(
+                            "Rolling back report from iteration %d to iteration %d "
+                            "for research %s (fidelity regression)",
+                            state.iteration,
+                            _rollback_iter,
+                            state.id,
+                        )
+                        state.report = _rolled_back_report
+                        # Clear the finalized flag so _finalize_report re-runs
+                        # on the restored report.
+                        state.pop_metadata("_report_finalized")
+                        self._write_audit_event(
+                            state,
+                            "fidelity_regression_rollback",
+                            data={
+                                "rolled_back_from_iteration": state.iteration,
+                                "rolled_back_to_iteration": _rollback_iter,
+                                "fidelity_scores": list(state.fidelity_scores),
+                            },
+                        )
+                    # --- END FIDELITY REGRESSION ROLLBACK ---
 
                     # --- CITATION FINALIZE ---
                     await self._finalize_report(state)

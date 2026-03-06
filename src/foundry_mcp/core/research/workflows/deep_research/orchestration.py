@@ -341,6 +341,7 @@ class SupervisorOrchestrator:
             AgentDecision with iteration/completion decision
         """
         should_iterate = False
+        rollback_to_iteration: Optional[int] = None
         rationale: str
         next_phase: str
 
@@ -381,6 +382,7 @@ class SupervisorOrchestrator:
             if delta < fidelity_min_improvement:
                 if delta < 0:
                     reason = f"fidelity regressed by {abs(delta):.3f}"
+                    rollback_to_iteration = state.iteration - 1
                 else:
                     reason = f"fidelity improvement {delta:.3f} < min_improvement {fidelity_min_improvement:.3f}"
                 rationale = (
@@ -421,6 +423,7 @@ class SupervisorOrchestrator:
             outputs={
                 "should_iterate": should_iterate,
                 "next_phase": next_phase,
+                **({"rollback_to_iteration": rollback_to_iteration} if rollback_to_iteration is not None else {}),
             },
         )
 

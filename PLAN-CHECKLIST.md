@@ -45,14 +45,14 @@
 - [x] Test: `test_deepen_thin_sources_no_extract_provider_skipped`
 
 ## Phase 4: Fidelity regression rollback
-- [ ] Check if `state.iteration_reports` (per-iteration report snapshots) exists; add if needed
-- [ ] Store report snapshot after each synthesis completes (before verification modifies it)
-- [ ] Add `rollback_to_iteration` field to `decide_iteration` result when `delta < 0`
-- [ ] In workflow execution, when rollback indicated:
-  - [ ] Restore report from `iteration_reports[rollback_iteration]`
-  - [ ] Re-run claim verification on restored report (or restore previous verification results)
-  - [ ] Log `fidelity_regression_rollback` audit event
-- [ ] Proceed to `_finalize_report` with the restored (better) report
-- [ ] Test: `test_fidelity_regression_rolls_back_report`
-- [ ] Test: `test_fidelity_regression_rollback_audit_event`
-- [ ] Test: `test_regression_rollback_finalizes_restored_report`
+- [x] Check if `state.iteration_reports` (per-iteration report snapshots) exists; add if needed
+- [x] Store report snapshot after each synthesis completes (before verification modifies it)
+- [x] Add `rollback_to_iteration` field to `decide_iteration` result when `delta < 0`
+- [x] In workflow execution, when rollback indicated:
+  - [x] Restore report from `iteration_reports[rollback_iteration]`
+  - [x] Re-run claim verification on restored report (or restore previous verification results)
+  - [x] Log `fidelity_regression_rollback` audit event
+- [x] Proceed to `_finalize_report` with the restored (better) report
+- [x] Test: `test_fidelity_regression_rolls_back_report`
+- [x] Test: `test_fidelity_regression_rollback_audit_event`
+- [x] Test: `test_regression_rollback_finalizes_restored_report`

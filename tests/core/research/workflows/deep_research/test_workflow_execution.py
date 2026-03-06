@@ -1011,3 +1011,201 @@ class TestZeroSourceYieldShortCircuit:
         assert len(finalize_events) == 1
         assert finalize_events[0][1]["data"]["trigger"] == "zero_yield_short_circuit"
         assert state.metadata.get("_report_finalized") is True
+
+
+class TestFidelityRegressionRollback:
+    """Phase 4: Fidelity regression rolls back to the previous iteration's report."""
+
+    @pytest.mark.asyncio
+    async def test_fidelity_regression_rolls_back_report(self):
+        """When fidelity drops between iterations, the previous (better)
+        report is restored instead of keeping the regressed one."""
+        stub = StubWorkflow()
+        stub.config.deep_research_claim_verification_enabled = True
+        stub.config.deep_research_fidelity_iteration_enabled = True
+        stub.config.deep_research_fidelity_threshold = 0.70
+        stub.config.deep_research_fidelity_min_improvement = 0.10
+        stub.config.deep_research_claim_verification_timeout = 60.0
+        stub.config.deep_research_claim_verification_max_concurrent = 3
+
+        # Simulate iteration 2 where fidelity regressed.
+        # The orchestrator returns should_iterate=False + rollback_to_iteration=1.
+        from unittest.mock import MagicMock
+
+        _regression_decision = MagicMock()
+        _regression_decision.outputs = {
+            "should_iterate": False,
+            "rollback_to_iteration": 1,
+        }
+        stub.orchestrator.decide_iteration.return_value = _regression_decision
+
+        # Synthesis produces a worse report on iteration 2
+        async def synthesis_iter2(**kw: Any) -> WorkflowResult:
+            kw["state"].report = "# Iteration 2 Report\n\nRegressed content."
+            return _ok_result()
+
+        stub._execute_synthesis_async = synthesis_iter2
+
+        state = make_test_state(
+            phase=DeepResearchPhase.SUPERVISION, iteration=2, max_iterations=3
+        )
+        # Store the iteration 1 snapshot (as would have been stored previously)
+        state.iteration_reports[1] = "# Iteration 1 Report\n\nBetter content."
+        state.fidelity_scores = [0.65]  # iteration 1 score
+
+        # Add a source so synthesis runs (avoids zero-yield short-circuit)
+        from foundry_mcp.core.research.models.sources import ResearchSource
+
+        async def supervision_adds_source(**kw: Any) -> WorkflowResult:
+            kw["state"].sources.append(
+                ResearchSource(
+                    title="Source 1",
+                    url="https://example.com/1",
+                    citation_number=1,
+                )
+            )
+            return _ok_result()
+
+        stub._execute_supervision_async = supervision_adds_source
+
+        result = await stub._execute_workflow_async(
+            state=state,
+            provider_id=None,
+            timeout_per_operation=60.0,
+            max_concurrent=3,
+        )
+
+        assert result.success is True
+        # Report was rolled back to iteration 1's version
+        assert "Iteration 1 Report" in (state.report or "")
+        assert "Iteration 2 Report" not in (state.report or "")
+        assert state.completed_at is not None
+
+    @pytest.mark.asyncio
+    async def test_fidelity_regression_rollback_audit_event(self):
+        """A fidelity_regression_rollback audit event is logged with
+        iteration details when rollback occurs."""
+        stub = StubWorkflow()
+        stub.config.deep_research_claim_verification_enabled = True
+        stub.config.deep_research_fidelity_iteration_enabled = True
+        stub.config.deep_research_fidelity_threshold = 0.70
+        stub.config.deep_research_fidelity_min_improvement = 0.10
+        stub.config.deep_research_claim_verification_timeout = 60.0
+        stub.config.deep_research_claim_verification_max_concurrent = 3
+
+        from unittest.mock import MagicMock
+
+        _regression_decision = MagicMock()
+        _regression_decision.outputs = {
+            "should_iterate": False,
+            "rollback_to_iteration": 1,
+        }
+        stub.orchestrator.decide_iteration.return_value = _regression_decision
+
+        async def synthesis_iter2(**kw: Any) -> WorkflowResult:
+            kw["state"].report = "# Regressed Report"
+            return _ok_result()
+
+        stub._execute_synthesis_async = synthesis_iter2
+
+        state = make_test_state(
+            phase=DeepResearchPhase.SUPERVISION, iteration=2, max_iterations=3
+        )
+        state.iteration_reports[1] = "# Good Report"
+        state.fidelity_scores = [0.65]
+
+        from foundry_mcp.core.research.models.sources import ResearchSource
+
+        async def supervision_adds_source(**kw: Any) -> WorkflowResult:
+            kw["state"].sources.append(
+                ResearchSource(title="S1", url="https://example.com/1", citation_number=1)
+            )
+            return _ok_result()
+
+        stub._execute_supervision_async = supervision_adds_source
+
+        result = await stub._execute_workflow_async(
+            state=state,
+            provider_id=None,
+            timeout_per_operation=60.0,
+            max_concurrent=3,
+        )
+
+        assert result.success is True
+        rollback_events = [
+            e for e in stub._audit_events if e[0] == "fidelity_regression_rollback"
+        ]
+        assert len(rollback_events) == 1
+        event_data = rollback_events[0][1]["data"]
+        assert event_data["rolled_back_from_iteration"] == 2
+        assert event_data["rolled_back_to_iteration"] == 1
+        assert isinstance(event_data["fidelity_scores"], list)
+
+    @pytest.mark.asyncio
+    async def test_regression_rollback_finalizes_restored_report(self):
+        """After rollback, _finalize_report runs on the restored report
+        (citations + confidence section are appended)."""
+        stub = StubWorkflow()
+        stub.config.deep_research_claim_verification_enabled = True
+        stub.config.deep_research_fidelity_iteration_enabled = True
+        stub.config.deep_research_fidelity_threshold = 0.70
+        stub.config.deep_research_fidelity_min_improvement = 0.10
+        stub.config.deep_research_claim_verification_timeout = 60.0
+        stub.config.deep_research_claim_verification_max_concurrent = 3
+
+        from unittest.mock import MagicMock
+
+        _regression_decision = MagicMock()
+        _regression_decision.outputs = {
+            "should_iterate": False,
+            "rollback_to_iteration": 1,
+        }
+        stub.orchestrator.decide_iteration.return_value = _regression_decision
+
+        async def synthesis_iter2(**kw: Any) -> WorkflowResult:
+            kw["state"].report = "# Regressed Report"
+            return _ok_result()
+
+        stub._execute_synthesis_async = synthesis_iter2
+
+        from foundry_mcp.core.research.models.sources import ResearchSource
+
+        state = make_test_state(
+            phase=DeepResearchPhase.SUPERVISION, iteration=2, max_iterations=3
+        )
+        state.iteration_reports[1] = (
+            "# Good Report\n\nFinding supported by source [1].\n"
+        )
+        state.sources.append(
+            ResearchSource(
+                title="Source 1",
+                url="https://example.com/1",
+                citation_number=1,
+            )
+        )
+        state.fidelity_scores = [0.65]
+
+        async def supervision_adds_source(**kw: Any) -> WorkflowResult:
+            kw["state"].sources.append(
+                ResearchSource(title="S2", url="https://example.com/2", citation_number=2)
+            )
+            return _ok_result()
+
+        stub._execute_supervision_async = supervision_adds_source
+
+        result = await stub._execute_workflow_async(
+            state=state,
+            provider_id=None,
+            timeout_per_operation=60.0,
+            max_concurrent=3,
+        )
+
+        assert result.success is True
+        # Finalize ran on the restored report
+        finalize_events = [
+            e for e in stub._audit_events if e[0] == "citation_finalize_complete"
+        ]
+        assert len(finalize_events) == 1
+        assert state.metadata.get("_report_finalized") is True
+        # The report content is from iteration 1
+        assert "Good Report" in (state.report or "")
