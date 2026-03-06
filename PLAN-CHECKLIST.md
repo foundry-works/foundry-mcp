@@ -92,10 +92,61 @@
 - [ ] **4.21** Test: `test_generate_confidence_section_skipped_when_no_verification` — no verification data → section omitted
 - [ ] **4.22** Test: `test_confidence_section_integration` — end-to-end with realistic mock state
 
+## Phase 5: Source-deepening verification strategy
+
+### 5a: Classify UNSUPPORTED claims
+
+- [ ] **5.1** Create `src/foundry_mcp/core/research/workflows/deep_research/phases/_source_deepening.py`
+- [ ] **5.2** Implement `classify_unsupported_claims(verification_result, citation_map)` returning:
+  - [ ] `inferential`: comparative/recommendation claims (no action needed)
+  - [ ] `deepen_window`: factual claims where source has rich raw_content (>16K) but was truncated to 8K
+  - [ ] `deepen_extract`: factual claims where source is thin (snippet-only, <4K raw_content)
+  - [ ] `widen`: factual claims that genuinely need new sources
+- [ ] **5.3** Classification keys on `claim_type` (quantitative/negative → factual, comparative/positive → potentially inferential) plus `raw_content` length of cited source
+
+### 5b: Expanded-window re-verification
+
+- [ ] **5.4** Implement `reverify_with_expanded_window(claims, citation_map, llm_call_fn, *, max_chars=24000)`
+- [ ] **5.5** Add `VERIFICATION_SOURCE_DEEPEN_MAX_CHARS = 24000` to `_constants.py`
+- [ ] **5.6** Re-uses existing `_VERIFICATION_SYSTEM_PROMPT` and `_parse_verification_response` — only the content window changes
+- [ ] **5.7** Updates `ClaimVerdict.verdict` in place when upgraded (UNSUPPORTED → SUPPORTED/PARTIALLY_SUPPORTED)
+- [ ] **5.8** Audit event: `claim_reverification_expanded_window` with counts of upgraded verdicts
+
+### 5c: Re-extract thin sources
+
+- [ ] **5.9** Implement `deepen_thin_sources(claims, citation_map, state, extract_provider)`
+- [ ] **5.10** DOI resolution path: if source has `metadata.doi`, attempt Semantic Scholar paper details fetch
+- [ ] **5.11** URL re-extraction path: if source has URL, re-extract via TavilyExtractProvider
+- [ ] **5.12** Update `source.raw_content` with richer content (preserve original in `source.metadata["_pre_deepen_content"]`)
+- [ ] **5.13** After deepening, run standard verification on newly deepened claims
+- [ ] **5.14** Audit event: `source_deepening_complete` with counts of sources deepened
+
+### 5d: Integration into claim verification pipeline
+
+- [ ] **5.15** Wire expanded-window re-verification into `workflow_execution.py` between claim verification and fidelity scoring
+- [ ] **5.16** Wire source re-extraction before expanded-window step (so deepened content is available)
+- [ ] **5.17** Modify `build_gap_queries` to exclude inferential claims from gap queries
+- [ ] **5.18** Modify `build_gap_queries` to exclude claims already resolved by deepening
+- [ ] **5.19** Fidelity score now reflects post-deepening verdicts (no code change needed — score is computed from ClaimVerificationResult which was mutated in place)
+
+### 5e: Tests
+
+- [ ] **5.20** Test: `test_classify_inferential_claims` — comparative claims classified correctly
+- [ ] **5.21** Test: `test_classify_deepen_window` — quantitative + rich source → deepen_window
+- [ ] **5.22** Test: `test_classify_deepen_extract` — quantitative + thin source → deepen_extract
+- [ ] **5.23** Test: `test_classify_widen` — factual + no existing source → widen
+- [ ] **5.24** Test: `test_reverify_expanded_window_upgrades_verdict`
+- [ ] **5.25** Test: `test_reverify_expanded_window_unchanged`
+- [ ] **5.26** Test: `test_deepen_thin_sources_with_doi`
+- [ ] **5.27** Test: `test_deepen_thin_sources_with_url`
+- [ ] **5.28** Test: `test_build_gap_queries_excludes_inferential`
+- [ ] **5.29** Test: `test_fidelity_improves_after_deepening` — end-to-end
+
 ## Final Validation
 
-- [ ] **5.1** Run full deep research test suite: `pytest tests/core/research/workflows/deep_research/ -x`
-- [ ] **5.2** Run citation postprocess tests: `pytest tests/core/research/workflows/deep_research/test_citation_postprocess.py -x`
-- [ ] **5.3** Run config tests to verify new field: `pytest tests/ -k "research_config" -x`
-- [ ] **5.4** Verify no import cycles introduced
-- [ ] **5.5** Run new confidence section tests: `pytest tests/core/research/workflows/deep_research/test_confidence_section.py -x`
+- [ ] **6.1** Run full deep research test suite: `pytest tests/core/research/workflows/deep_research/ -x`
+- [ ] **6.2** Run citation postprocess tests: `pytest tests/core/research/workflows/deep_research/test_citation_postprocess.py -x`
+- [ ] **6.3** Run config tests to verify new field: `pytest tests/ -k "research_config" -x`
+- [ ] **6.4** Verify no import cycles introduced
+- [ ] **6.5** Run new confidence section tests: `pytest tests/core/research/workflows/deep_research/test_confidence_section.py -x`
+- [ ] **6.6** Run new source deepening tests: `pytest tests/core/research/workflows/deep_research/test_source_deepening.py -x`

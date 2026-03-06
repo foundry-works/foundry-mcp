@@ -274,22 +274,161 @@ New test file:
 - `test_generate_confidence_section_skipped_when_no_verification` — when no claim verification ran, section is either omitted or says so explicitly
 - `test_confidence_section_integration` — end-to-end: build context + generate section from a realistic mock state
 
+### Phase 5: Source-deepening verification strategy
+
+**Goal:** When claim verification produces UNSUPPORTED verdicts, distinguish between claims that need *new* sources (widening) and claims that need *better reading* of existing sources (deepening). For deepening candidates, re-extract content from the original source URL rather than searching the web for new sources.
+
+**Why this matters:** The current re-iteration loop always widens — `build_gap_queries` generates "Find supporting evidence for..." queries that trigger new web searches. But in many cases (especially academic literature reviews), the evidence already exists in a source we gathered — it's just not in the 8K-char keyword window that verification checked. Or the source is a blog post *about* a paper, and the actual paper (reachable via DOI or direct link) has the specific figure. Widening produces more blog posts saying the same thing; deepening finds the actual evidence.
+
+**Observed in session `deepres-1e60452ebc50`:** All 74 sources had `raw_content` (avg 32K chars), but verification truncated each to 8K via `_multi_window_truncate`. Claims about specific numbers ("60,000 Aeroplan points to Europe") may have been in the source text but outside the keyword windows. Meanwhile, re-iteration searched for *new* sources and found 25 more — but fidelity only improved from 0.33 to 0.42.
+
+#### Classification: which UNSUPPORTED claims are deepening candidates?
+
+Not all UNSUPPORTED claims should trigger deepening. The classification splits into three buckets:
+
+1. **Inferential claims** (comparative, recommendation, synthesis) — these are UNSUPPORTED because no single source states them. They're expected products of synthesis. **Action:** none (these are correctly unsupported).
+
+2. **Factual claims with a cited source that has rich `raw_content`** — the claim cites `[N]`, source `[N]` has 30K+ chars of raw_content, but verification only checked an 8K keyword window. The evidence may be elsewhere in the same document. **Action:** re-verify with a larger window or full content.
+
+3. **Factual claims where the source is thin** (snippet-only, blog summary, or compressed) — the original source doesn't contain enough detail. The source URL may lead to a richer page, or the source may reference a paper via DOI that should be fetched directly. **Action:** re-extract the URL or resolve the DOI.
+
+#### New file: `src/foundry_mcp/core/research/workflows/deep_research/phases/_source_deepening.py`
+
+**Step 1 — Classify UNSUPPORTED claims into deepening candidates.**
+
+```python
+def classify_unsupported_claims(
+    verification_result: ClaimVerificationResult,
+    citation_map: dict[int, ResearchSource],
+) -> DeepClassification:
+    """Classify UNSUPPORTED claims into deepening vs. widening vs. inferential.
+
+    Returns:
+        DeepClassification with three lists:
+        - inferential: claims that are synthesis/comparative (no action needed)
+        - deepen_window: claims where source has rich raw_content (re-verify with larger window)
+        - deepen_extract: claims where source is thin (re-extract URL or resolve DOI)
+        - widen: claims that genuinely need new sources
+    """
+```
+
+Classification logic:
+- `claim_type in ("comparative", "positive")` AND claim text contains recommendation language → **inferential**
+- `claim_type in ("quantitative", "negative")` AND cited source has `raw_content` with `len > 16000` → **deepen_window** (evidence likely exists but was outside the 8K keyword window)
+- `claim_type in ("quantitative", "negative")` AND cited source has `raw_content` with `len < 4000` or only `snippet` → **deepen_extract** (source is too thin, needs re-fetch)
+- Remaining → **widen** (needs new sources via web search)
+
+**Step 2 — Re-verify with expanded windows (for `deepen_window` claims).**
+
+```python
+async def reverify_with_expanded_window(
+    claims: list[ClaimVerdict],
+    citation_map: dict[int, ResearchSource],
+    llm_call_fn: Callable,
+    *,
+    max_chars: int = 24000,  # 3x the normal 8K window
+) -> list[ClaimVerdict]:
+    """Re-verify claims using a larger content window from the same source.
+
+    Uses _multi_window_truncate with a 3x budget, or passes full raw_content
+    if it fits. Does NOT fetch anything new — purely re-reads existing content.
+    """
+```
+
+This is cheap — it's an LLM call with more context from content we already have in memory. No network I/O.
+
+**Step 3 — Re-extract thin sources (for `deepen_extract` claims).**
+
+```python
+async def deepen_thin_sources(
+    claims: list[ClaimVerdict],
+    citation_map: dict[int, ResearchSource],
+    state: DeepResearchState,
+    extract_provider: TavilyExtractProvider,
+) -> int:
+    """Re-extract content for sources that were too thin for verification.
+
+    For each thin source:
+    1. If source has DOI in metadata → attempt Semantic Scholar full-text fetch
+    2. If source has URL → re-extract via Tavily Extract with follow_links=True
+    3. Update source.raw_content with the richer content
+
+    Returns number of sources successfully deepened.
+    """
+```
+
+This involves network I/O but targets specific URLs we already know, not broad web searches.
+
+**Step 4 — Integrate into `build_gap_queries` and re-iteration decision.**
+
+The current `build_gap_queries` in `claim_verification.py` only produces widening queries. Modify it to:
+
+1. Run `classify_unsupported_claims` first
+2. For `deepen_window` claims: queue them for expanded-window re-verification (runs immediately, no re-iteration needed)
+3. For `deepen_extract` claims: queue the source URLs for re-extraction (runs before the next supervision round)
+4. For `widen` claims: generate the existing "Find supporting evidence..." gap queries
+5. For `inferential` claims: exclude from gap queries entirely (they inflate the perceived gap without adding value)
+
+This changes the re-iteration flow:
+
+```
+Current:
+  synthesis → claim verification → ALL unsupported → gap queries → web search → ...
+
+Proposed:
+  synthesis → claim verification → classify unsupported →
+    inferential: skip (expected)
+    deepen_window: re-verify with 3x window (immediate, no re-iteration)
+    deepen_extract: re-fetch source URL (before next supervision round)
+    widen: gap queries → web search (existing flow)
+```
+
+The `deepen_window` step runs inline after claim verification, before the fidelity score is computed. This means the fidelity score already reflects the expanded-window results, and fewer claims remain UNSUPPORTED by the time the iteration decision is made. The 0.33 → 0.42 session might have reached 0.55+ just from expanded windows, reducing or eliminating unnecessary re-iteration cycles.
+
+#### File changes
+
+| File | Change |
+|------|--------|
+| `src/foundry_mcp/core/research/workflows/deep_research/phases/_source_deepening.py` | **New** — claim classification, expanded-window re-verification, source re-extraction |
+| `src/foundry_mcp/core/research/workflows/deep_research/phases/claim_verification.py` | Modify `build_gap_queries` to classify claims and exclude inferential; add deepening step before fidelity scoring |
+| `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py` | Wire deepening step between claim verification and fidelity decision |
+| `src/foundry_mcp/core/research/workflows/deep_research/_constants.py` | Add `VERIFICATION_SOURCE_DEEPEN_MAX_CHARS = 24000` |
+
+#### Tests
+
+New file: `tests/core/research/workflows/deep_research/test_source_deepening.py`
+- `test_classify_inferential_claims` — comparative claims classified as inferential
+- `test_classify_deepen_window` — quantitative claim with rich raw_content classified as deepen_window
+- `test_classify_deepen_extract` — quantitative claim with thin source classified as deepen_extract
+- `test_classify_widen` — factual claim with no existing source classified as widen
+- `test_reverify_expanded_window_upgrades_verdict` — claim goes from UNSUPPORTED to SUPPORTED with larger window
+- `test_reverify_expanded_window_unchanged` — claim stays UNSUPPORTED with larger window (evidence genuinely absent)
+- `test_deepen_thin_sources_with_doi` — source with DOI triggers Semantic Scholar fetch
+- `test_deepen_thin_sources_with_url` — source with URL triggers Tavily Extract re-fetch
+- `test_build_gap_queries_excludes_inferential` — inferential claims not included in gap queries
+- `test_fidelity_improves_after_deepening` — end-to-end: deepening step improves fidelity score before iteration decision
+
 ## Files Modified
 
 | File | Change |
 |------|--------|
-| `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py` | Add citation finalize in cancellation handler; extract `_finalize_report` helper |
+| `src/foundry_mcp/core/research/workflows/deep_research/workflow_execution.py` | Add citation finalize in cancellation handler; extract `_finalize_report` helper; wire deepening step |
 | `src/foundry_mcp/core/research/workflows/deep_research/orchestration.py` | Add convergence stall check in `decide_iteration` |
 | `src/foundry_mcp/core/research/workflows/deep_research/phases/_confidence_section.py` | **New** — context assembly + LLM-interpreted confidence section |
+| `src/foundry_mcp/core/research/workflows/deep_research/phases/_source_deepening.py` | **New** — claim classification, expanded-window re-verification, source re-extraction |
+| `src/foundry_mcp/core/research/workflows/deep_research/phases/claim_verification.py` | Modify `build_gap_queries` to classify and exclude inferential claims |
+| `src/foundry_mcp/core/research/workflows/deep_research/_constants.py` | Add `VERIFICATION_SOURCE_DEEPEN_MAX_CHARS` |
 | `src/foundry_mcp/config/research.py` | Add `deep_research_fidelity_min_improvement` config field |
 | `tests/core/research/workflows/deep_research/test_workflow_execution.py` | 4 new cancellation+citation tests |
 | `tests/core/research/workflows/deep_research/test_supervision.py` | 4 new convergence stall tests |
 | `tests/core/research/workflows/deep_research/test_confidence_section.py` | **New** — 7 tests for confidence section |
+| `tests/core/research/workflows/deep_research/test_source_deepening.py` | **New** — 10 tests for source deepening |
 
 ## Out of Scope
 
 - Changing fidelity threshold default (0.70) — that's a tuning decision, not a code fix
-- Modifying claim verification to produce higher fidelity scores
 - Retry logic for sub-queries that return zero sources (Tavily-specific)
 - Adding `finalize_citations` to the `mark_failed` / `mark_interrupted` paths (different failure modes)
 - Making the confidence section user-configurable (on/off toggle) — add later if needed
+- Full PDF paper extraction (beyond what Tavily Extract provides) — future enhancement
+- Semantic Scholar full-text API access (requires partnership tier) — deepen_extract falls back gracefully
