@@ -465,6 +465,112 @@ class TestDeepenThinSources:
 
 
 # ---------------------------------------------------------------------------
+# Tests: deepen_thin_sources + re-verification integration
+# ---------------------------------------------------------------------------
+
+
+class TestDeepenThinSourcesIntegration:
+    """Integration: thin source re-extraction followed by re-verification."""
+
+    @pytest.mark.asyncio
+    async def test_deepen_followed_by_reverify_upgrades(self):
+        """Source deepening enriches content, then re-verification upgrades verdict."""
+        claim = _make_claim(
+            "Transfer processing takes 24-48 hours",
+            claim_type="quantitative",
+            cited_sources=[1],
+        )
+        # Start with a thin source (<4K chars)
+        source = _make_source(
+            1,
+            raw_content="Short snippet about transfers",
+            url="https://example.com/transfers",
+        )
+        citation_map = {1: source}
+
+        # Mock extract provider returns richer content (>16K chars)
+        mock_provider = AsyncMock()
+        enriched_content = (
+            "Transfer processing typically takes 24-48 hours for domestic "
+            "transfers and 3-5 business days for international wires. " + "x" * 20000
+        )
+        extracted_source = ResearchSource(
+            title="Extracted",
+            url="https://example.com/transfers",
+            raw_content=enriched_content,
+        )
+        mock_provider.extract = AsyncMock(return_value=[extracted_source])
+
+        # Step 1: Deepen thin sources
+        deepened = await deepen_thin_sources([claim], citation_map, mock_provider)
+        assert deepened == 1
+        assert len(source.raw_content or "") > 16000
+
+        # Step 2: Re-verify with the enriched content (simulates workflow pipeline)
+        mock_llm = AsyncMock(
+            return_value='{"verdict": "SUPPORTED", "evidence_quote": "24-48 hours for domestic", "explanation": "Found in enriched content"}'
+        )
+        result = await reverify_with_expanded_window(
+            [claim], citation_map, mock_llm
+        )
+
+        assert result[0].verdict == "SUPPORTED"
+        assert "Upgraded from UNSUPPORTED" in (result[0].explanation or "")
+
+    @pytest.mark.asyncio
+    async def test_deepen_no_extract_provider_skips_gracefully(self):
+        """When no extract provider is available, deepen_extract is skipped entirely."""
+        claim = _make_claim(
+            "Annual fee waived first year",
+            claim_type="quantitative",
+            cited_sources=[1],
+        )
+        source = _make_source(1, raw_content="Short", url="https://example.com")
+        citation_map = {1: source}
+
+        count = await deepen_thin_sources([claim], citation_map, None)
+
+        assert count == 0
+        # Source remains unchanged
+        assert source.raw_content == "Short"
+        assert "_pre_deepen_content" not in source.metadata
+
+    @pytest.mark.asyncio
+    async def test_deepen_enriches_content_preserves_original(self):
+        """Deepened source has enriched raw_content and preserves original in metadata."""
+        claim = _make_claim(
+            "The card has a $200 travel credit",
+            claim_type="quantitative",
+            cited_sources=[1],
+        )
+        original_content = "Brief overview of travel card"
+        source = _make_source(
+            1,
+            raw_content=original_content,
+            url="https://example.com/card",
+        )
+        citation_map = {1: source}
+
+        mock_provider = AsyncMock()
+        enriched = (
+            "This premium card includes a $200 annual travel credit "
+            "applicable to airlines and hotels. " + "x" * 10000
+        )
+        extracted_source = ResearchSource(
+            title="Extracted",
+            url="https://example.com/card",
+            raw_content=enriched,
+        )
+        mock_provider.extract = AsyncMock(return_value=[extracted_source])
+
+        count = await deepen_thin_sources([claim], citation_map, mock_provider)
+
+        assert count == 1
+        assert source.raw_content == enriched
+        assert source.metadata["_pre_deepen_content"] == original_content
+
+
+# ---------------------------------------------------------------------------
 # Tests: build_gap_queries with exclusions
 # ---------------------------------------------------------------------------
 

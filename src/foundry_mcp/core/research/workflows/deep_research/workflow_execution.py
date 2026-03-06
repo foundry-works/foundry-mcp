@@ -157,6 +157,23 @@ class WorkflowExecutionMixin:
         async def _execute_synthesis_async(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_supervision_async(self, *args: Any, **kwargs: Any) -> Any: ...
 
+    def _get_extract_provider(self) -> Any:
+        """Get a TavilyExtractProvider for source deepening, or None."""
+        import os
+
+        try:
+            from foundry_mcp.core.research.providers.tavily_extract import (
+                TavilyExtractProvider,
+            )
+
+            api_key = self.config.tavily_api_key or os.environ.get("TAVILY_API_KEY")
+            if not api_key:
+                return None
+            return TavilyExtractProvider(api_key=api_key)
+        except Exception as exc:
+            logger.warning("Failed to initialize extract provider: %s", exc)
+            return None
+
     async def _finalize_report(
         self, state: DeepResearchState, *, trigger: str = "normal"
     ) -> None:
@@ -781,6 +798,7 @@ class WorkflowExecutionMixin:
                         try:
                             from foundry_mcp.core.research.workflows.deep_research.phases._source_deepening import (
                                 classify_unsupported_claims,
+                                deepen_thin_sources,
                                 reverify_with_expanded_window,
                             )
                             from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
@@ -793,35 +811,37 @@ class WorkflowExecutionMixin:
                                 state.claim_verification, _cv_citation_map
                             )
 
+                            # Shared LLM callback for re-verification (used by
+                            # both deepen_window and deepen_extract paths).
+                            _deepen_provider_id = resolve_phase_provider(
+                                self.config, "claim_verification", "synthesis"
+                            )
+
+                            # NOTE: This closure captures self, state, and
+                            # _deepen_provider_id by reference. Safe in the
+                            # current sequential flow; do not parallelise
+                            # without binding these as default arguments.
+                            async def _deepen_llm_call(
+                                system_prompt: str, user_prompt: str
+                            ) -> str:
+                                ret = await execute_llm_call(
+                                    workflow=self,
+                                    state=state,
+                                    phase_name="claim_reverification",
+                                    system_prompt=system_prompt,
+                                    user_prompt=user_prompt,
+                                    provider_id=_deepen_provider_id,
+                                    model=None,
+                                    temperature=0.0,
+                                    timeout=self.config.deep_research_claim_verification_timeout,
+                                    role="claim_verification",
+                                )
+                                if isinstance(ret, LLMCallResult):
+                                    return ret.result.content or ""
+                                raise RuntimeError("Deepening LLM call failed")
+
                             # Expanded-window re-verification for claims with rich sources.
                             if _deepening_classification.deepen_window:
-                                _deepen_provider_id = resolve_phase_provider(
-                                    self.config, "claim_verification", "synthesis"
-                                )
-
-                                # NOTE: This closure captures self, state, and
-                                # _deepen_provider_id by reference. Safe in the
-                                # current sequential flow; do not parallelise
-                                # without binding these as default arguments.
-                                async def _deepen_llm_call(
-                                    system_prompt: str, user_prompt: str
-                                ) -> str:
-                                    ret = await execute_llm_call(
-                                        workflow=self,
-                                        state=state,
-                                        phase_name="claim_reverification",
-                                        system_prompt=system_prompt,
-                                        user_prompt=user_prompt,
-                                        provider_id=_deepen_provider_id,
-                                        model=None,
-                                        temperature=0.0,
-                                        timeout=self.config.deep_research_claim_verification_timeout,
-                                        role="claim_verification",
-                                    )
-                                    if isinstance(ret, LLMCallResult):
-                                        return ret.result.content or ""
-                                    raise RuntimeError("Deepening LLM call failed")
-
                                 await reverify_with_expanded_window(
                                     _deepening_classification.deepen_window,
                                     _cv_citation_map,
@@ -840,6 +860,44 @@ class WorkflowExecutionMixin:
                                     1 for c in vr.details if c.verdict == "UNSUPPORTED"
                                 )
 
+                            # Re-extract thin sources and re-verify upgraded claims.
+                            _deepen_extract_deepened = 0
+                            _deepen_extract_upgraded = 0
+                            if _deepening_classification.deepen_extract:
+                                _extract_provider = self._get_extract_provider()
+                                if _extract_provider is not None:
+                                    _deepen_extract_deepened = await deepen_thin_sources(
+                                        _deepening_classification.deepen_extract,
+                                        _cv_citation_map,
+                                        _extract_provider,
+                                    )
+
+                                    if _deepen_extract_deepened > 0:
+                                        # Re-verify the deepened claims with enriched content
+                                        await reverify_with_expanded_window(
+                                            _deepening_classification.deepen_extract,
+                                            _cv_citation_map,
+                                            _deepen_llm_call,
+                                        )
+
+                                        # Recompute aggregate counts after deepen_extract upgrades.
+                                        vr = state.claim_verification
+                                        vr.claims_supported = sum(
+                                            1 for c in vr.details if c.verdict == "SUPPORTED"
+                                        )
+                                        vr.claims_partially_supported = sum(
+                                            1 for c in vr.details if c.verdict == "PARTIALLY_SUPPORTED"
+                                        )
+                                        vr.claims_unsupported = sum(
+                                            1 for c in vr.details if c.verdict == "UNSUPPORTED"
+                                        )
+
+                                    _deepen_extract_upgraded = sum(
+                                        1
+                                        for c in _deepening_classification.deepen_extract
+                                        if c.verdict in ("SUPPORTED", "PARTIALLY_SUPPORTED")
+                                    )
+
                             _deepen_window_upgraded = sum(
                                 1
                                 for c in _deepening_classification.deepen_window
@@ -852,7 +910,9 @@ class WorkflowExecutionMixin:
                                     "inferential": len(_deepening_classification.inferential),
                                     "deepen_window_total": len(_deepening_classification.deepen_window),
                                     "deepen_window_upgraded": _deepen_window_upgraded,
-                                    "deepen_extract": len(_deepening_classification.deepen_extract),
+                                    "deepen_extract_total": len(_deepening_classification.deepen_extract),
+                                    "deepen_extract_deepened": _deepen_extract_deepened,
+                                    "deepen_extract_upgraded": _deepen_extract_upgraded,
                                     "widen": len(_deepening_classification.widen),
                                 },
                             )

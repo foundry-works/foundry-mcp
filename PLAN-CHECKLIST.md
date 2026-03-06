@@ -33,16 +33,16 @@
 - [x] Test: `test_confidence_context_includes_provider_health`
 
 ## Phase 3: Wire `deepen_thin_sources`
-- [ ] Verify `deepen_thin_sources` signature in `_source_deepening.py` is correct post-7c03416
-- [ ] Resolve extract provider from provider registry in workflow execution context
-- [ ] Call `deepen_thin_sources` after `reverify_with_expanded_window` for deepen_extract claims
-- [ ] If sources deepened, re-verify those claims with expanded window
-- [ ] Recompute aggregate verification counts after deepen_extract
-- [ ] Add deepen_extract counts to existing source_deepening audit event
-- [ ] Gracefully skip when no extract provider is available
-- [ ] Test: `test_deepen_thin_sources_enriches_content`
-- [ ] Test: `test_deepen_thin_sources_followed_by_reverify_upgrades`
-- [ ] Test: `test_deepen_thin_sources_no_extract_provider_skipped`
+- [x] Verify `deepen_thin_sources` signature in `_source_deepening.py` is correct post-7c03416
+- [x] Resolve extract provider from provider registry in workflow execution context
+- [x] Call `deepen_thin_sources` after `reverify_with_expanded_window` for deepen_extract claims
+- [x] If sources deepened, re-verify those claims with expanded window
+- [x] Recompute aggregate verification counts after deepen_extract
+- [x] Add deepen_extract counts to existing source_deepening audit event
+- [x] Gracefully skip when no extract provider is available
+- [x] Test: `test_deepen_thin_sources_enriches_content`
+- [x] Test: `test_deepen_thin_sources_followed_by_reverify_upgrades`
+- [x] Test: `test_deepen_thin_sources_no_extract_provider_skipped`
 
 ## Phase 4: Fidelity regression rollback
 - [ ] Check if `state.iteration_reports` (per-iteration report snapshots) exists; add if needed
