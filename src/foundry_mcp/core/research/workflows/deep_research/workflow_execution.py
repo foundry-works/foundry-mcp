@@ -491,6 +491,10 @@ class WorkflowExecutionMixin:
             # to SUPERVISION with gap-focused directives.
             _iteration_complete = False
             while not _iteration_complete:
+                # Snapshot source count before supervision so we can detect
+                # zero-yield iterations (no new sources found).
+                _sources_before_supervision = len(state.sources)
+
                 # SUPERVISION (handles decomposition + research + gap-fill internally)
                 if state.phase == DeepResearchPhase.SUPERVISION:
                     if not self.config.deep_research_enable_supervision:
@@ -521,6 +525,39 @@ class WorkflowExecutionMixin:
                         if err:
                             return err
                         state.phase = DeepResearchPhase.SYNTHESIS
+
+                # --- ZERO-YIELD SHORT-CIRCUIT ---
+                # If this is iteration 2+ and supervision added no new sources,
+                # re-synthesizing won't improve the report. Keep the previous
+                # iteration's report, finalize, and complete immediately.
+                _sources_gained = len(state.sources) - _sources_before_supervision
+                if state.iteration > 1 and _sources_gained == 0:
+                    logger.info(
+                        "Zero new sources on iteration %d for research %s — "
+                        "short-circuiting (previous report preserved)",
+                        state.iteration,
+                        state.id,
+                    )
+                    self._write_audit_event(
+                        state,
+                        "iteration_short_circuit",
+                        data={
+                            "iteration": state.iteration,
+                            "reason": "zero_source_yield",
+                            "sources_total": len(state.sources),
+                        },
+                    )
+                    await self._finalize_report(
+                        state, trigger="zero_yield_short_circuit"
+                    )
+                    state.metadata["iteration_in_progress"] = False
+                    state.metadata["last_completed_iteration"] = state.iteration
+                    state.metadata.pop("iteration_snapshot", None)
+                    state.metadata["completion_reason"] = "zero_source_yield"
+                    state.mark_completed(report=state.report)
+                    _iteration_complete = True
+                    continue
+                # --- END ZERO-YIELD SHORT-CIRCUIT ---
 
                 # SYNTHESIS
                 if state.phase == DeepResearchPhase.SYNTHESIS:

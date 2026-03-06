@@ -1,15 +1,16 @@
 # Plan Checklist: Deep Research Iteration Resilience
 
 ## Phase 1: Zero-source-yield short-circuit
-- [ ] Capture `iteration_source_count_before = len(state.sources)` at top of each iteration loop in `workflow_execution.py`
-- [ ] Add source-gain check after supervision completes, before synthesis begins
-- [ ] Guard: only short-circuit on iteration > 1 (first iteration always proceeds)
-- [ ] Write `iteration_short_circuit` audit event with reason and source counts
-- [ ] Call `_finalize_report` on previous iteration's report before completing
-- [ ] Set `state.completion_reason = "zero_source_yield"`
-- [ ] Test: `test_zero_source_yield_short_circuits_iteration`
-- [ ] Test: `test_first_iteration_zero_sources_proceeds_to_synthesis`
-- [ ] Test: `test_zero_yield_still_finalizes_report`
+- [x] Capture `iteration_source_count_before = len(state.sources)` at top of each iteration loop in `workflow_execution.py`
+- [x] Add source-gain check after supervision completes, before synthesis begins
+- [x] Guard: only short-circuit on iteration > 1 (first iteration always proceeds)
+- [x] Write `iteration_short_circuit` audit event with reason and source counts
+- [x] Call `_finalize_report` on previous iteration's report before completing
+- [x] Set `state.metadata["completion_reason"] = "zero_source_yield"` (adapted: field stored in metadata, not a model attr)
+- [x] Test: `test_zero_source_yield_short_circuits_iteration`
+- [x] Test: `test_first_iteration_zero_sources_proceeds_to_synthesis`
+- [x] Test: `test_zero_yield_still_finalizes_report`
+- [x] Fix: Updated `test_cancellation_after_completed_iteration_finalizes_citations` to add source during supervision (prevents false short-circuit)
 
 ## Phase 2: Provider health tracking
 - [ ] Create `ProviderHealthTracker` class in `topic_research.py`

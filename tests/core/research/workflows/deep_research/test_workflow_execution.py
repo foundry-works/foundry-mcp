@@ -762,10 +762,28 @@ class TestCancellationCitationFinalize:
         completed but before the next one started (iteration_in_progress
         is not set).
         """
+        from foundry_mcp.core.research.models.sources import ResearchSource
+
         stub = StubWorkflow()
 
         async def raise_cancelled(**kw: Any) -> WorkflowResult:
             raise asyncio.CancelledError("cancelled")
+
+        # Supervision must add a source so the zero-yield short-circuit
+        # doesn't fire before synthesis is reached.
+        async def supervision_adds_source(**kw: Any) -> WorkflowResult:
+            state = kw.get("state")
+            if state:
+                state.sources.append(
+                    ResearchSource(
+                        title="New Source",
+                        url="https://example.com/new",
+                        citation_number=99,
+                    )
+                )
+            return _ok_result()
+
+        stub._execute_supervision_async = supervision_adds_source
 
         # Raise during synthesis, but clear iteration_in_progress first
         # to simulate the cancel arriving after iteration completion
@@ -866,3 +884,130 @@ class TestCancellationCitationFinalize:
         ]
         assert len(fail_events) == 1
         assert "finalize boom" in fail_events[0][1]["data"]["error"]
+
+
+class TestZeroSourceYieldShortCircuit:
+    """Phase 1: Zero-source-yield short-circuit on iteration 2+."""
+
+    @pytest.mark.asyncio
+    async def test_zero_source_yield_short_circuits_iteration(self):
+        """When iteration 2 adds zero new sources, synthesis is skipped and
+        the previous iteration's report is preserved."""
+        stub = StubWorkflow()
+        stub.config.deep_research_enable_supervision = True
+        synthesis_called = False
+
+        async def track_synthesis(**kw: Any) -> WorkflowResult:
+            nonlocal synthesis_called
+            synthesis_called = True
+            return _ok_result()
+
+        # Supervision succeeds but adds no sources
+        stub._execute_synthesis_async = track_synthesis
+
+        state = make_test_state(
+            phase=DeepResearchPhase.SUPERVISION, iteration=2, max_iterations=3
+        )
+        # Simulate iteration 1 already produced a report
+        state.report = "# Iteration 1 Report\n\nPrevious findings."
+        state.metadata["iteration_in_progress"] = True
+
+        result = await stub._execute_workflow_async(
+            state=state,
+            provider_id=None,
+            timeout_per_operation=60.0,
+            max_concurrent=3,
+        )
+
+        assert result.success is True
+        # Synthesis was NOT called — short-circuited
+        assert synthesis_called is False
+        # Previous report preserved
+        assert "Iteration 1 Report" in (state.report or "")
+        # Audit event logged
+        sc_events = [
+            e for e in stub._audit_events if e[0] == "iteration_short_circuit"
+        ]
+        assert len(sc_events) == 1
+        assert sc_events[0][1]["data"]["reason"] == "zero_source_yield"
+        assert sc_events[0][1]["data"]["iteration"] == 2
+        # Completion metadata
+        assert state.metadata.get("completion_reason") == "zero_source_yield"
+        assert state.completed_at is not None
+
+    @pytest.mark.asyncio
+    async def test_first_iteration_zero_sources_proceeds_to_synthesis(self):
+        """Iteration 1 with zero sources does NOT short-circuit — it proceeds
+        to synthesis (which may produce an ungrounded report)."""
+        stub = StubWorkflow()
+        stub.config.deep_research_enable_supervision = True
+        synthesis_called = False
+
+        async def track_synthesis(**kw: Any) -> WorkflowResult:
+            nonlocal synthesis_called
+            synthesis_called = True
+            return _ok_result()
+
+        stub._execute_synthesis_async = track_synthesis
+
+        state = make_test_state(
+            phase=DeepResearchPhase.SUPERVISION, iteration=1, max_iterations=3
+        )
+        # No sources exist — iteration 1
+        assert len(state.sources) == 0
+
+        result = await stub._execute_workflow_async(
+            state=state,
+            provider_id=None,
+            timeout_per_operation=60.0,
+            max_concurrent=3,
+        )
+
+        assert result.success is True
+        # Synthesis WAS called
+        assert synthesis_called is True
+        # No short-circuit audit event
+        sc_events = [
+            e for e in stub._audit_events if e[0] == "iteration_short_circuit"
+        ]
+        assert len(sc_events) == 0
+
+    @pytest.mark.asyncio
+    async def test_zero_yield_still_finalizes_report(self):
+        """When zero-yield short-circuit fires, _finalize_report is still called
+        (citations + confidence section appended)."""
+        stub = StubWorkflow()
+        stub.config.deep_research_enable_supervision = True
+
+        from foundry_mcp.core.research.models.sources import ResearchSource
+
+        state = make_test_state(
+            phase=DeepResearchPhase.SUPERVISION, iteration=2, max_iterations=3
+        )
+        state.report = (
+            "# Report\n\nFinding supported by source [1].\n"
+        )
+        state.sources.append(
+            ResearchSource(
+                title="Source 1",
+                url="https://example.com/1",
+                citation_number=1,
+            )
+        )
+        state.metadata["iteration_in_progress"] = True
+
+        result = await stub._execute_workflow_async(
+            state=state,
+            provider_id=None,
+            timeout_per_operation=60.0,
+            max_concurrent=3,
+        )
+
+        assert result.success is True
+        # _finalize_report was invoked — citation finalize audit event present
+        finalize_events = [
+            e for e in stub._audit_events if e[0] == "citation_finalize_complete"
+        ]
+        assert len(finalize_events) == 1
+        assert finalize_events[0][1]["data"]["trigger"] == "zero_yield_short_circuit"
+        assert state.metadata.get("_report_finalized") is True
