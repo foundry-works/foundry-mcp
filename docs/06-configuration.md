@@ -214,7 +214,7 @@ The following settings control timeout, cancellation, and resilience behavior fo
 | `deep_research_timeout` | float | `600.0` | Overall workflow timeout in seconds (10 minutes) |
 | `deep_research_planning_timeout` | float | `360.0` | Planning phase timeout |
 | `deep_research_analysis_timeout` | float | `360.0` | Analysis phase timeout |
-| `deep_research_synthesis_timeout` | float | `600.0` | Synthesis phase timeout (longer for complex reports) |
+| `deep_research_synthesis_timeout` | float | `900.0` | Synthesis phase timeout (longer for complex reports) |
 | `deep_research_refinement_timeout` | float | `360.0` | Refinement phase timeout |
 
 **Timeout Precedence:**
@@ -243,7 +243,7 @@ deep_research_timeout = 600.0  # 10 minutes
 # Per-phase timeouts (optional overrides)
 deep_research_planning_timeout = 360.0
 deep_research_analysis_timeout = 360.0
-deep_research_synthesis_timeout = 600.0
+deep_research_synthesis_timeout = 900.0
 deep_research_refinement_timeout = 360.0
 
 # Retry behavior

@@ -351,7 +351,7 @@ _TIMEOUT_DEFAULTS = {
     "default_timeout": 360.0,
     "deep_research_timeout": 3600.0,
     "deep_research_planning_timeout": 360.0,
-    "deep_research_synthesis_timeout": 600.0,
+    "deep_research_synthesis_timeout": 900.0,
     "deep_research_reflection_timeout": 120.0,
     "deep_research_topic_research_timeout": 180.0,
     "deep_research_evaluation_timeout": 360.0,
@@ -380,7 +380,7 @@ class TestTimeoutPresets:
     def test_relaxed_preset(self):
         config = ResearchConfig.from_toml_dict({"timeouts": {"preset": "relaxed"}})
         assert config.default_timeout == 360.0 * 1.5
-        assert config.deep_research_synthesis_timeout == 600.0 * 1.5
+        assert config.deep_research_synthesis_timeout == 900.0 * 1.5
 
     def test_default_preset_no_change(self):
         config = ResearchConfig.from_toml_dict({"timeouts": {"preset": "default"}})

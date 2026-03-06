@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0a18] - 2026-03-06
+
+### Changed
+
+- **Synthesis timeout default raised from 600s to 900s**: Sessions with large compressed findings (80K+ chars from 50+ sources) were timing out during synthesis, producing no report at all. The 900s default provides enough wall-clock time for the LLM to process large inputs and generate comprehensive reports.
+
 ## [0.18.0a17] - 2026-03-06
 
 ### Added

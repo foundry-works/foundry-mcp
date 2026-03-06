@@ -388,7 +388,7 @@
 # -----------------------------------------------------------------------------
 
 # deep_research_planning_timeout = 360.0           # Query decomposition (seconds)
-# deep_research_synthesis_timeout = 600.0           # Report generation (seconds)
+# deep_research_synthesis_timeout = 900.0           # Report generation (seconds)
 # deep_research_summarization_timeout = 60          # Fetch-time summarization (seconds)
 
 

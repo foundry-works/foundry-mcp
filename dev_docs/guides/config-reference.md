@@ -334,7 +334,7 @@ timeout_override = 600.0
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `deep_research_planning_timeout` | float | `360.0` | Query decomposition |
-| `deep_research_synthesis_timeout` | float | `600.0` | Report generation |
+| `deep_research_synthesis_timeout` | float | `900.0` | Report generation |
 
 ### Per-Phase Providers
 
@@ -370,7 +370,7 @@ Configure in `[research.timeouts]` with a `preset` key. Individual timeout overr
 | `default_timeout` | 360.0 |
 | `deep_research_timeout` | 2400.0 |
 | `deep_research_planning_timeout` | 360.0 |
-| `deep_research_synthesis_timeout` | 600.0 |
+| `deep_research_synthesis_timeout` | 900.0 |
 | `deep_research_reflection_timeout` | 120.0 |
 | `deep_research_topic_research_timeout` | 180.0 |
 | `deep_research_evaluation_timeout` | 360.0 |

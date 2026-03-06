@@ -208,7 +208,7 @@ class ResearchConfig:
     deep_research_max_concurrent: int = 3
     # Per-phase timeout overrides (seconds) - uses deep_research_timeout if not set
     deep_research_planning_timeout: float = 360.0
-    deep_research_synthesis_timeout: float = 600.0  # Synthesis may take longer
+    deep_research_synthesis_timeout: float = 900.0  # Synthesis may take longer with large inputs
     # Per-phase provider overrides - uses default_provider if not set
     deep_research_planning_provider: Optional[str] = None
     deep_research_synthesis_provider: Optional[str] = None
@@ -484,7 +484,7 @@ class ResearchConfig:
             "default_timeout": 360.0,
             "deep_research_timeout": 3600.0,
             "deep_research_planning_timeout": 360.0,
-            "deep_research_synthesis_timeout": 600.0,
+            "deep_research_synthesis_timeout": 900.0,
             "deep_research_reflection_timeout": 120.0,
             "deep_research_topic_research_timeout": 180.0,
             "deep_research_evaluation_timeout": 360.0,
@@ -709,7 +709,7 @@ class ResearchConfig:
             deep_research_max_concurrent=int(data.get("deep_research_max_concurrent", 3)),
             # Per-phase timeout overrides (match class defaults)
             deep_research_planning_timeout=float(data.get("deep_research_planning_timeout", 360.0)),
-            deep_research_synthesis_timeout=float(data.get("deep_research_synthesis_timeout", 600.0)),
+            deep_research_synthesis_timeout=float(data.get("deep_research_synthesis_timeout", 900.0)),
             # Per-phase provider overrides
             deep_research_planning_provider=data.get("deep_research_planning_provider"),
             deep_research_synthesis_provider=data.get("deep_research_synthesis_provider"),
