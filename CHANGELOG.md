@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0a19] - 2026-03-06
+
+### Added
+
+- **Source-deepening verification strategy for deep research**: Classifies UNSUPPORTED claims into inferential/deepen_window/deepen_extract/widen buckets. Re-verifies deepen_window claims with 3x expanded content windows (24K vs 8K) before computing fidelity, upgrading verdicts in-place. Excludes inferential and resolved claims from gap queries to reduce unnecessary re-iteration.
+- **LLM-interpreted Research Confidence section for deep research reports**: Appends a "Research Confidence" section after Sources that contextualizes claim verification data for the reader. An LLM interprets raw verification stats relative to the query type, distinguishing expected inferential claims from genuine evidence gaps. Falls back to deterministic bullet-point summary on LLM failure.
+- **Fidelity convergence early-stop for deep research iterations**: Stops re-iterating when fidelity improvement between consecutive iterations is below a configurable threshold (default 0.10), preventing wasted cycles when convergence stalls.
+
+### Changed
+
+- **`_finalize_report` helper extracted to DRY citation finalize blocks**: Replaces three identical `finalize_citations` blocks (happy path, cancellation rollback, cancellation after completion) with a single `_finalize_report` method on `WorkflowExecutionMixin`. Uses `_report_finalized` metadata flag for idempotency.
+
+### Fixed
+
+- **Comparative claims always classified as inferential**: Was requiring recommendation keyword match, causing unnecessary web searches for comparative claims.
+- **State persisted after source deepening**: Prevents verdict loss on crash by persisting state after the source-deepening phase completes.
+- **Raw fidelity scores replaced with summarized progress labels in confidence section LLM prompt**: Avoids exposing forbidden raw decimals to the LLM.
+- **Fidelity regression vs stall distinguished in convergence rationale**: Early-stop rationale now differentiates between regression and stall conditions.
+- **`fidelity_min_improvement=0.0` allowed to disable convergence early-stop**: Previously only positive values were accepted.
+
 ## [0.18.0a18] - 2026-03-06
 
 ### Changed
