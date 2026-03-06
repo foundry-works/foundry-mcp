@@ -9,17 +9,13 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
-from tests.core.research.workflows.deep_research.conftest import make_test_state
 
 from foundry_mcp.core.research.models.deep_research import (
     ClaimVerdict,
     ClaimVerificationResult,
-    DeepResearchState,
 )
 from foundry_mcp.core.research.models.sources import ResearchSource
 from foundry_mcp.core.research.workflows.deep_research.phases._source_deepening import (
@@ -235,8 +231,8 @@ class TestClassifyUnsupportedClaims:
         assert len(result.deepen_extract) == 1
         assert len(result.widen) == 1
 
-    def test_comparative_without_recommendation_language_not_inferential(self):
-        """Comparative claim without recommendation words is not inferential."""
+    def test_comparative_without_recommendation_language_still_inferential(self):
+        """All comparative claims are inferential — they are cross-item judgments."""
         claims = [
             _make_claim(
                 "Card A has a higher annual fee than Card B",
@@ -251,9 +247,8 @@ class TestClassifyUnsupportedClaims:
 
         result = classify_unsupported_claims(vr, citation_map)
 
-        # Without recommendation language, falls through to deepen_window
-        assert len(result.inferential) == 0
-        assert len(result.deepen_window) == 1
+        assert len(result.inferential) == 1
+        assert len(result.deepen_window) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -386,7 +381,6 @@ class TestDeepenThinSources:
             url="https://example.com/article",
         )
         citation_map = {1: source}
-        state = make_test_state()
 
         # Mock extract provider
         mock_provider = AsyncMock()
@@ -398,7 +392,7 @@ class TestDeepenThinSources:
         mock_provider.extract = AsyncMock(return_value=[extracted_source])
 
         count = await deepen_thin_sources(
-            [claim], citation_map, state, mock_provider
+            [claim], citation_map, mock_provider
         )
 
         assert count == 1
@@ -409,10 +403,9 @@ class TestDeepenThinSources:
     async def test_deepen_no_provider_returns_zero(self):
         """No extract provider returns 0."""
         claim = _make_claim("Some fact", cited_sources=[1])
-        state = make_test_state()
 
         count = await deepen_thin_sources(
-            [claim], {}, state, None
+            [claim], {}, None
         )
 
         assert count == 0
@@ -427,13 +420,12 @@ class TestDeepenThinSources:
         )
         source = _make_source(1, raw_content="Short", url="https://example.com")
         citation_map = {1: source}
-        state = make_test_state()
 
         mock_provider = AsyncMock()
         mock_provider.extract = AsyncMock(side_effect=RuntimeError("Network error"))
 
         count = await deepen_thin_sources(
-            [claim], citation_map, state, mock_provider
+            [claim], citation_map, mock_provider
         )
 
         assert count == 0
@@ -454,7 +446,6 @@ class TestDeepenThinSources:
             url="https://example.com",
         )
         citation_map = {1: source}
-        state = make_test_state()
 
         mock_provider = AsyncMock()
         # Extracted content is shorter
@@ -466,7 +457,7 @@ class TestDeepenThinSources:
         mock_provider.extract = AsyncMock(return_value=[extracted_source])
 
         count = await deepen_thin_sources(
-            [claim], citation_map, state, mock_provider
+            [claim], citation_map, mock_provider
         )
 
         assert count == 0

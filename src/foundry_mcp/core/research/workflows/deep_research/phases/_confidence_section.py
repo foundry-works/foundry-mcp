@@ -63,6 +63,24 @@ contradict source data and was corrected")
 # ---------------------------------------------------------------------------
 
 
+def _summarize_fidelity_trajectory(scores: list[float]) -> str:
+    """Summarize fidelity scores as a human-readable trend label.
+
+    Avoids exposing raw decimal scores to the LLM prompt, which the
+    system prompt forbids.
+    """
+    if not scores:
+        return "no verification data"
+    if len(scores) == 1:
+        return "single iteration"
+    delta = scores[-1] - scores[-2]
+    if delta > 0.05:
+        return f"improving over {len(scores)} iterations"
+    elif delta < -0.05:
+        return f"declining over {len(scores)} iterations"
+    return f"stable over {len(scores)} iterations"
+
+
 def build_confidence_context(state: "DeepResearchState") -> dict[str, Any] | None:
     """Assemble structured verification data for the confidence LLM call.
 
@@ -127,7 +145,7 @@ def build_confidence_context(state: "DeepResearchState") -> dict[str, Any] | Non
         "failed_sub_queries": failed_queries,
         "corrections_applied": len(corrections),
         "correction_summaries": corrections[:5],  # Cap at 5
-        "fidelity_trajectory": state.fidelity_scores,
+        "research_iteration_progress": _summarize_fidelity_trajectory(state.fidelity_scores),
         "iteration_count": state.iteration,
         "max_iterations": state.max_iterations,
         "source_count": len(state.sources),
@@ -209,7 +227,7 @@ async def generate_confidence_section(
     if query_type:
         context["query_type"] = query_type
 
-    user_prompt = json.dumps(context, indent=2, default=str)
+    user_prompt = json.dumps(context, indent=2)
 
     try:
         result = await llm_call_fn(_CONFIDENCE_SYSTEM_PROMPT, user_prompt)

@@ -379,9 +379,12 @@ class SupervisorOrchestrator:
         elif len(state.fidelity_scores) >= 2:
             delta = state.fidelity_scores[-1] - state.fidelity_scores[-2]
             if delta < fidelity_min_improvement:
+                if delta < 0:
+                    reason = f"fidelity regressed by {abs(delta):.3f}"
+                else:
+                    reason = f"fidelity improvement {delta:.3f} < min_improvement {fidelity_min_improvement:.3f}"
                 rationale = (
-                    f"Completing: fidelity improvement {delta:.3f} < min_improvement "
-                    f"{fidelity_min_improvement:.3f} "
+                    f"Completing: {reason} "
                     f"(scores: {state.fidelity_scores}, "
                     f"iteration {state.iteration}/{state.max_iterations})"
                 )

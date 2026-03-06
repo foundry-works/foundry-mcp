@@ -131,7 +131,7 @@ class TestBuildConfidenceContext:
         assert ctx["verdict_distribution"]["contradicted"] == 1
         assert ctx["verdict_distribution"]["total_verified"] == 11
         assert ctx["iteration_count"] == 2
-        assert ctx["fidelity_trajectory"] == [0.33, 0.42]
+        assert ctx["research_iteration_progress"] == "improving over 2 iterations"
         assert ctx["corrections_applied"] == 1
         assert len(ctx["correction_summaries"]) == 1
 

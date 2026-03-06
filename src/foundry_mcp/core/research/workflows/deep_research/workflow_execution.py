@@ -758,6 +758,10 @@ class WorkflowExecutionMixin:
                                     self.config, "claim_verification", "synthesis"
                                 )
 
+                                # NOTE: This closure captures self, state, and
+                                # _deepen_provider_id by reference. Safe in the
+                                # current sequential flow; do not parallelise
+                                # without binding these as default arguments.
                                 async def _deepen_llm_call(
                                     system_prompt: str, user_prompt: str
                                 ) -> str:
@@ -811,6 +815,9 @@ class WorkflowExecutionMixin:
                                     "widen": len(_deepening_classification.widen),
                                 },
                             )
+                            # Persist upgraded verdicts so a crash before fidelity
+                            # computation doesn't lose deepening results.
+                            self.memory.save_deep_research(state)
                         except Exception as exc:
                             logger.warning(
                                 "Source deepening failed for research %s: %s",

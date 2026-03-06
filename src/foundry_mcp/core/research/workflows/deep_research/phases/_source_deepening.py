@@ -4,7 +4,7 @@ When claim verification produces UNSUPPORTED verdicts, distinguishes between
 claims that need *new* sources (widening) and claims that need *better reading*
 of existing sources (deepening).
 
-Three deepening strategies:
+Four deepening strategies:
   1. **Inferential** — comparative/recommendation claims that are unsupported
      by design (synthesis conclusions). No action needed.
   2. **Deepen-window** — factual claims where the source has rich raw_content
@@ -26,7 +26,6 @@ if TYPE_CHECKING:
     from foundry_mcp.core.research.models.deep_research import (
         ClaimVerdict,
         ClaimVerificationResult,
-        DeepResearchState,
     )
     from foundry_mcp.core.research.models.sources import ResearchSource
     from foundry_mcp.core.research.providers.tavily_extract import (
@@ -40,6 +39,9 @@ from foundry_mcp.core.research.workflows.deep_research._constants import (
 logger = logging.getLogger(__name__)
 
 # Claim types considered "inferential" (synthesis conclusions, not factual).
+# "comparative" — cross-item comparisons are inherently synthesized judgments.
+# "positive" — evaluative/sentiment claims ("X is great for Y") that reflect
+#   the author's assessment rather than a citable fact.
 _INFERENTIAL_CLAIM_TYPES = frozenset({"comparative", "positive"})
 
 # Recommendation language patterns that reinforce inferential classification.
@@ -96,8 +98,12 @@ def classify_unsupported_claims(
             continue
 
         # Check for inferential claims (synthesis/comparative).
-        if claim.claim_type in _INFERENTIAL_CLAIM_TYPES and _RECOMMENDATION_PATTERNS.search(
-            claim.claim
+        # Comparative claims are always inferential (cross-item judgments).
+        # Positive/evaluative claims are inferential only when they contain
+        # recommendation language — otherwise they may be factual assertions.
+        if claim.claim_type == "comparative" or (
+            claim.claim_type in _INFERENTIAL_CLAIM_TYPES
+            and _RECOMMENDATION_PATTERNS.search(claim.claim)
         ):
             result.inferential.append(claim)
             continue
@@ -266,7 +272,6 @@ def _build_expanded_verification_prompt(
 async def deepen_thin_sources(
     claims: list["ClaimVerdict"],
     citation_map: dict[int, "ResearchSource"],
-    _state: "DeepResearchState",
     extract_provider: Optional["TavilyExtractProvider"],
 ) -> int:
     """Re-extract content for sources that were too thin for verification.
@@ -278,7 +283,6 @@ async def deepen_thin_sources(
     Args:
         claims: Claims classified as ``deepen_extract``.
         citation_map: Mapping from citation number to ResearchSource.
-        state: Deep research state (for source mutation).
         extract_provider: TavilyExtractProvider instance, or None to skip.
 
     Returns:

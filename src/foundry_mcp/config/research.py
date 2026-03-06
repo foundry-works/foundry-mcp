@@ -1552,10 +1552,10 @@ class ResearchConfig:
                 "Must be in [0.0, 1.0]."
             )
         fmi = self.deep_research_fidelity_min_improvement
-        if not (0.0 < fmi < 1.0):
+        if not (0.0 <= fmi < 1.0):
             raise ValueError(
                 f"Invalid deep_research_fidelity_min_improvement: {fmi!r}. "
-                "Must be in (0.0, 1.0)."
+                "Must be in [0.0, 1.0)."
             )
 
     def get_provider_rate_limit(self, provider: str) -> int:
