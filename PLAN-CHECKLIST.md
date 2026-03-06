@@ -2,20 +2,20 @@
 
 ## Phase 1: Finalize citations on cancellation/timeout
 
-- [ ] **1.1** Add `_citations_finalized` metadata flag to happy-path `finalize_citations` block (workflow_execution.py ~line 684)
-- [ ] **1.2** Add `finalize_citations` call in cancellation handler after rollback to `last_completed_iteration` (workflow_execution.py ~line 829)
-  - [ ] Guard with `_citations_finalized` check
-  - [ ] Re-save markdown file if `report_output_path` exists
-  - [ ] Audit event with `trigger: "cancellation_rollback"`
-  - [ ] Non-fatal try/except matching happy-path pattern
-- [ ] **1.3** Add `finalize_citations` call in cancellation handler for completed-iteration-at-cancel branch (workflow_execution.py ~line 843-849)
-  - [ ] Same guard, save, audit, and error handling pattern
-  - [ ] Audit event with `trigger: "cancellation_completed"`
-- [ ] **1.4** Test: `test_cancellation_rollback_finalizes_citations`
-- [ ] **1.5** Test: `test_cancellation_after_completed_iteration_finalizes_citations`
-- [ ] **1.6** Test: `test_cancellation_first_iteration_incomplete_skips_finalize`
-- [ ] **1.7** Test: `test_citation_finalize_failure_during_cancellation_is_nonfatal`
-- [ ] **1.8** Run existing cancellation tests to verify no regressions
+- [x] **1.1** Add `_citations_finalized` metadata flag to happy-path `finalize_citations` block (workflow_execution.py ~line 684)
+- [x] **1.2** Add `finalize_citations` call in cancellation handler after rollback to `last_completed_iteration` (workflow_execution.py ~line 829)
+  - [x] Guard with `_citations_finalized` check
+  - [x] Re-save markdown file if `report_output_path` exists
+  - [x] Audit event with `trigger: "cancellation_rollback"`
+  - [x] Non-fatal try/except matching happy-path pattern
+- [x] **1.3** Add `finalize_citations` call in cancellation handler for completed-iteration-at-cancel branch (workflow_execution.py ~line 843-849)
+  - [x] Same guard, save, audit, and error handling pattern
+  - [x] Audit event with `trigger: "cancellation_completed"`
+- [x] **1.4** Test: `test_cancellation_rollback_finalizes_citations`
+- [x] **1.5** Test: `test_cancellation_after_completed_iteration_finalizes_citations`
+- [x] **1.6** Test: `test_cancellation_first_iteration_incomplete_skips_finalize`
+- [x] **1.7** Test: `test_citation_finalize_failure_during_cancellation_is_nonfatal`
+- [x] **1.8** Run existing cancellation tests to verify no regressions
 
 ## Phase 2: Fidelity convergence early-stop
 

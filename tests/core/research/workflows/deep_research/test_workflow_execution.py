@@ -689,3 +689,180 @@ class TestValidateReportOutputPath:
 
         with pytest.raises(ValueError, match="Parent directory does not exist"):
             _validate_report_output_path("/nonexistent_dir_abc123/report.md")
+
+
+class TestCancellationCitationFinalize:
+    """Phase 1: Citation finalization on cancellation/timeout."""
+
+    @staticmethod
+    def _make_state_with_citations(
+        phase: DeepResearchPhase = DeepResearchPhase.SUPERVISION,
+        iteration: int = 2,
+        has_completed_iteration: bool = True,
+    ) -> DeepResearchState:
+        """Create a state with a report containing inline citations and sources."""
+        from foundry_mcp.core.research.models.sources import ResearchSource
+
+        state = make_test_state(phase=phase, iteration=iteration)
+        state.report = (
+            "# Test Report\n\n"
+            "This is a finding [1]. Another finding [2].\n\n"
+            "More analysis [3] supports the conclusion.\n"
+        )
+        # Add sources with citation numbers
+        for i in range(1, 4):
+            state.sources.append(
+                ResearchSource(
+                    title=f"Source {i}",
+                    url=f"https://example.com/source{i}",
+                    citation_number=i,
+                )
+            )
+        state.metadata["iteration_in_progress"] = True
+        if has_completed_iteration:
+            state.metadata["last_completed_iteration"] = iteration - 1
+        return state
+
+    @pytest.mark.asyncio
+    async def test_cancellation_rollback_finalizes_citations(self):
+        """After cancellation with rollback, the saved report has a ## Sources section."""
+        stub = StubWorkflow()
+
+        async def raise_cancelled(**kw: Any) -> WorkflowResult:
+            raise asyncio.CancelledError("cancelled")
+
+        stub._execute_supervision_async = raise_cancelled
+
+        state = self._make_state_with_citations(iteration=2, has_completed_iteration=True)
+
+        with pytest.raises(asyncio.CancelledError):
+            await stub._execute_workflow_async(
+                state=state,
+                provider_id=None,
+                timeout_per_operation=60.0,
+                max_concurrent=3,
+            )
+
+        # Report should now have a Sources section
+        assert "## Sources" in state.report or "## References" in state.report
+        assert state.metadata.get("_citations_finalized") is True
+        # Verify the audit event was recorded with cancellation trigger
+        finalize_events = [
+            e for e in stub._audit_events if e[0] == "citation_finalize_complete"
+        ]
+        assert len(finalize_events) == 1
+        assert finalize_events[0][1]["data"]["trigger"] == "cancellation_rollback"
+
+    @pytest.mark.asyncio
+    async def test_cancellation_after_completed_iteration_finalizes_citations(self):
+        """Cancellation when iteration_in_progress is not set enters the else
+        branch of the cancellation handler and still finalizes citations.
+
+        This simulates a real task.cancel() arriving after the iteration
+        completed but before the next one started (iteration_in_progress
+        is not set).
+        """
+        stub = StubWorkflow()
+
+        async def raise_cancelled(**kw: Any) -> WorkflowResult:
+            raise asyncio.CancelledError("cancelled")
+
+        # Raise during synthesis, but clear iteration_in_progress first
+        # to simulate the cancel arriving after iteration completion
+        async def synthesis_cancel(**kw: Any) -> WorkflowResult:
+            state = kw.get("state")
+            if state:
+                state.metadata.pop("iteration_in_progress", None)
+            raise asyncio.CancelledError("cancelled after iteration complete")
+
+        stub._execute_synthesis_async = synthesis_cancel
+
+        state = self._make_state_with_citations(
+            phase=DeepResearchPhase.SUPERVISION, iteration=2
+        )
+        state.metadata["last_completed_iteration"] = 1
+
+        with pytest.raises(asyncio.CancelledError):
+            await stub._execute_workflow_async(
+                state=state,
+                provider_id=None,
+                timeout_per_operation=60.0,
+                max_concurrent=3,
+            )
+
+        assert state.report is not None
+        assert "## Sources" in state.report or "## References" in state.report
+        assert state.metadata.get("_citations_finalized") is True
+        finalize_events = [
+            e for e in stub._audit_events if e[0] == "citation_finalize_complete"
+        ]
+        assert len(finalize_events) == 1
+        assert finalize_events[0][1]["data"]["trigger"] == "cancellation_completed"
+
+    @pytest.mark.asyncio
+    async def test_cancellation_first_iteration_incomplete_skips_finalize(self):
+        """When first iteration is incomplete, no finalize attempt is made."""
+        stub = StubWorkflow()
+
+        async def raise_cancelled(**kw: Any) -> WorkflowResult:
+            raise asyncio.CancelledError("cancelled")
+
+        stub._execute_supervision_async = raise_cancelled
+
+        state = self._make_state_with_citations(
+            iteration=1, has_completed_iteration=False
+        )
+        # No last_completed_iteration — first iteration incomplete
+
+        with pytest.raises(asyncio.CancelledError):
+            await stub._execute_workflow_async(
+                state=state,
+                provider_id=None,
+                timeout_per_operation=60.0,
+                max_concurrent=3,
+            )
+
+        # No finalize should have been attempted
+        assert state.metadata.get("_citations_finalized") is not True
+        finalize_events = [
+            e
+            for e in stub._audit_events
+            if e[0] in ("citation_finalize_complete", "citation_finalize_failed")
+        ]
+        assert len(finalize_events) == 0
+
+    @pytest.mark.asyncio
+    async def test_citation_finalize_failure_during_cancellation_is_nonfatal(self):
+        """If finalize_citations raises during cancellation, handler still completes."""
+        stub = StubWorkflow()
+
+        async def raise_cancelled(**kw: Any) -> WorkflowResult:
+            raise asyncio.CancelledError("cancelled")
+
+        stub._execute_supervision_async = raise_cancelled
+
+        state = self._make_state_with_citations(iteration=2, has_completed_iteration=True)
+
+        # Patch finalize_citations to raise
+        from unittest.mock import patch
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.phases._citation_postprocess.finalize_citations",
+            side_effect=RuntimeError("finalize boom"),
+        ), pytest.raises(asyncio.CancelledError):
+            await stub._execute_workflow_async(
+                state=state,
+                provider_id=None,
+                timeout_per_operation=60.0,
+                max_concurrent=3,
+            )
+
+        # State should still be saved and cancellation completed
+        assert state.metadata.get("cancelled") is True
+        assert stub.memory.save_deep_research.called
+        # Finalize failure was audited
+        fail_events = [
+            e for e in stub._audit_events if e[0] == "citation_finalize_failed"
+        ]
+        assert len(fail_events) == 1
+        assert "finalize boom" in fail_events[0][1]["data"]["error"]
