@@ -5463,6 +5463,61 @@ class TestDecideIterationFidelityGating:
         assert decision.inputs["fidelity_threshold"] == 0.7
         assert decision.inputs["fidelity_iteration_enabled"] is True
 
+    def test_fidelity_convergence_stall_completes(self):
+        """Two scores with delta < min_improvement -> completes."""
+        from foundry_mcp.core.research.workflows.deep_research.orchestration import SupervisorOrchestrator
+
+        orch = SupervisorOrchestrator()
+        state = self._make_state(iteration=2, max_iterations=5)
+        state.fidelity_scores = [0.33, 0.42]  # delta=0.09 < 0.10
+        decision = orch.decide_iteration(
+            state, fidelity_score=0.42, fidelity_threshold=0.7, fidelity_min_improvement=0.10
+        )
+        assert decision.outputs["should_iterate"] is False
+        assert decision.outputs["next_phase"] == "COMPLETED"
+        assert "improvement" in decision.rationale
+        assert "0.090" in decision.rationale
+
+    def test_fidelity_convergence_sufficient_improvement_iterates(self):
+        """Two scores with delta >= min_improvement -> iterates."""
+        from foundry_mcp.core.research.workflows.deep_research.orchestration import SupervisorOrchestrator
+
+        orch = SupervisorOrchestrator()
+        state = self._make_state(iteration=2, max_iterations=5)
+        state.fidelity_scores = [0.30, 0.45]  # delta=0.15 >= 0.10
+        decision = orch.decide_iteration(
+            state, fidelity_score=0.45, fidelity_threshold=0.7, fidelity_min_improvement=0.10
+        )
+        assert decision.outputs["should_iterate"] is True
+        assert decision.outputs["next_phase"] == "SUPERVISION"
+
+    def test_fidelity_convergence_only_one_score_iterates(self):
+        """Single score below threshold still iterates (not enough history)."""
+        from foundry_mcp.core.research.workflows.deep_research.orchestration import SupervisorOrchestrator
+
+        orch = SupervisorOrchestrator()
+        state = self._make_state(iteration=1, max_iterations=5)
+        state.fidelity_scores = [0.33]
+        decision = orch.decide_iteration(
+            state, fidelity_score=0.33, fidelity_threshold=0.7, fidelity_min_improvement=0.10
+        )
+        assert decision.outputs["should_iterate"] is True
+        assert decision.outputs["next_phase"] == "SUPERVISION"
+
+    def test_fidelity_convergence_decision_records_scores(self):
+        """Decision inputs include score history and min_improvement."""
+        from foundry_mcp.core.research.workflows.deep_research.orchestration import SupervisorOrchestrator
+
+        orch = SupervisorOrchestrator()
+        state = self._make_state(iteration=2, max_iterations=5)
+        state.fidelity_scores = [0.33, 0.42]
+        decision = orch.decide_iteration(
+            state, fidelity_score=0.42, fidelity_threshold=0.7, fidelity_min_improvement=0.10
+        )
+        assert decision.inputs["fidelity_min_improvement"] == 0.10
+        assert decision.inputs["fidelity_scores"] == [0.33, 0.42]
+        assert "scores" in decision.rationale
+
 
 # ===========================================================================
 # Supervision prompt gap context tests

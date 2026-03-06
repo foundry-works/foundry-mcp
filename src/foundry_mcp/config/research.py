@@ -343,6 +343,7 @@ class ResearchConfig:
     # Fidelity-gated re-iteration (post-synthesis claim verification triggers additional research)
     deep_research_fidelity_iteration_enabled: bool = True  # Enable fidelity-gated re-iteration
     deep_research_fidelity_threshold: float = 0.7  # Fidelity score below which re-iteration is triggered
+    deep_research_fidelity_min_improvement: float = 0.10  # Min score improvement between iterations to continue
 
     deep_research_archive_content: bool = False  # Archive canonical text for digested sources
     deep_research_archive_retention_days: int = 30  # Days to retain archived digest content (0 = keep indefinitely)
@@ -851,6 +852,9 @@ class ResearchConfig:
             ),
             deep_research_fidelity_threshold=float(
                 data.get("deep_research_fidelity_threshold", 0.7)
+            ),
+            deep_research_fidelity_min_improvement=float(
+                data.get("deep_research_fidelity_min_improvement", 0.10)
             ),
             # Academic coverage weights
             deep_research_academic_coverage_weights=data.get("deep_research_academic_coverage_weights"),
@@ -1546,6 +1550,12 @@ class ResearchConfig:
             raise ValueError(
                 f"Invalid deep_research_fidelity_threshold: {ft!r}. "
                 "Must be in [0.0, 1.0]."
+            )
+        fmi = self.deep_research_fidelity_min_improvement
+        if not (0.0 < fmi < 1.0):
+            raise ValueError(
+                f"Invalid deep_research_fidelity_min_improvement: {fmi!r}. "
+                "Must be in (0.0, 1.0)."
             )
 
     def get_provider_rate_limit(self, provider: str) -> int:

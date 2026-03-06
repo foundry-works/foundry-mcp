@@ -619,6 +619,7 @@ class WorkflowExecutionMixin:
                         fidelity_score=_fidelity_score,
                         fidelity_iteration_enabled=self.config.deep_research_fidelity_iteration_enabled,
                         fidelity_threshold=self.config.deep_research_fidelity_threshold,
+                        fidelity_min_improvement=self.config.deep_research_fidelity_min_improvement,
                     )
                     self.orchestrator.record_to_state(state)
 

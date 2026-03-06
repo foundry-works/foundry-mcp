@@ -19,17 +19,17 @@
 
 ## Phase 2: Fidelity convergence early-stop
 
-- [ ] **2.1** Add `deep_research_fidelity_min_improvement: float = 0.10` to `ResearchConfig` (config/research.py)
-- [ ] **2.2** Add `from_dict` parsing for `deep_research_fidelity_min_improvement`
-- [ ] **2.3** Add validation in `_validate_research_settings` (0.0 < value < 1.0)
-- [ ] **2.4** Add `fidelity_min_improvement` parameter to `decide_iteration` signature (orchestration.py)
-- [ ] **2.5** Add convergence stall check: if `len(fidelity_scores) >= 2` and `delta < min_improvement`, complete
-- [ ] **2.6** Pass `fidelity_min_improvement` from config in workflow_execution.py call site
-- [ ] **2.7** Test: `test_fidelity_convergence_stall_completes`
-- [ ] **2.8** Test: `test_fidelity_convergence_sufficient_improvement_iterates`
-- [ ] **2.9** Test: `test_fidelity_convergence_only_one_score_iterates`
-- [ ] **2.10** Test: `test_fidelity_convergence_decision_records_scores`
-- [ ] **2.11** Run existing fidelity iteration tests to verify no regressions
+- [x] **2.1** Add `deep_research_fidelity_min_improvement: float = 0.10` to `ResearchConfig` (config/research.py)
+- [x] **2.2** Add `from_dict` parsing for `deep_research_fidelity_min_improvement`
+- [x] **2.3** Add validation in `_validate_research_settings` (0.0 < value < 1.0)
+- [x] **2.4** Add `fidelity_min_improvement` parameter to `decide_iteration` signature (orchestration.py)
+- [x] **2.5** Add convergence stall check: if `len(fidelity_scores) >= 2` and `delta < min_improvement`, complete
+- [x] **2.6** Pass `fidelity_min_improvement` from config in workflow_execution.py call site
+- [x] **2.7** Test: `test_fidelity_convergence_stall_completes`
+- [x] **2.8** Test: `test_fidelity_convergence_sufficient_improvement_iterates`
+- [x] **2.9** Test: `test_fidelity_convergence_only_one_score_iterates`
+- [x] **2.10** Test: `test_fidelity_convergence_decision_records_scores`
+- [x] **2.11** Run existing fidelity iteration tests to verify no regressions
 
 ## Phase 3: Extract `_finalize_report` helper
 

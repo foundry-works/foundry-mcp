@@ -317,6 +317,7 @@ class SupervisorOrchestrator:
         fidelity_score: Optional[float] = None,
         fidelity_iteration_enabled: bool = True,
         fidelity_threshold: float = 0.7,
+        fidelity_min_improvement: float = 0.10,
     ) -> AgentDecision:
         """Supervisor decides whether to iterate or complete.
 
@@ -332,6 +333,9 @@ class SupervisorOrchestrator:
             fidelity_iteration_enabled: Whether fidelity-gated re-iteration
                 is enabled (from config)
             fidelity_threshold: Minimum fidelity score to consider complete
+            fidelity_min_improvement: Minimum improvement between consecutive
+                fidelity scores to justify another iteration. If the delta
+                is below this, iteration stops (convergence stall).
 
         Returns:
             AgentDecision with iteration/completion decision
@@ -372,6 +376,24 @@ class SupervisorOrchestrator:
                 f"but max iterations reached ({state.iteration}/{state.max_iterations})"
             )
             next_phase = "COMPLETED"
+        elif len(state.fidelity_scores) >= 2:
+            delta = state.fidelity_scores[-1] - state.fidelity_scores[-2]
+            if delta < fidelity_min_improvement:
+                rationale = (
+                    f"Completing: fidelity improvement {delta:.3f} < min_improvement "
+                    f"{fidelity_min_improvement:.3f} "
+                    f"(scores: {state.fidelity_scores}, "
+                    f"iteration {state.iteration}/{state.max_iterations})"
+                )
+                next_phase = "COMPLETED"
+            else:
+                should_iterate = True
+                rationale = (
+                    f"Iterating: fidelity {fidelity_score:.2f} < threshold {fidelity_threshold:.2f}, "
+                    f"improvement {delta:.3f} >= min_improvement {fidelity_min_improvement:.3f} "
+                    f"(iteration {state.iteration}/{state.max_iterations})"
+                )
+                next_phase = "SUPERVISION"
         else:
             should_iterate = True
             rationale = (
@@ -390,6 +412,8 @@ class SupervisorOrchestrator:
                 "fidelity_score": fidelity_score,
                 "fidelity_threshold": fidelity_threshold,
                 "fidelity_iteration_enabled": fidelity_iteration_enabled,
+                "fidelity_min_improvement": fidelity_min_improvement,
+                "fidelity_scores": list(state.fidelity_scores),
             },
             outputs={
                 "should_iterate": should_iterate,
