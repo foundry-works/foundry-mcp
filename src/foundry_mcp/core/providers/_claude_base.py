@@ -290,6 +290,23 @@ class ClaudeCLIProviderBase(ProviderContext):
             ) from exc
 
     def _extract_usage(self, payload: Dict[str, Any]) -> TokenUsage:
+        # Claude CLI puts real token counts in modelUsage.{model}.{field}.
+        # The top-level "usage" in CLI output contains message/turn counts,
+        # not actual token counts.
+        model_usage = payload.get("modelUsage") or {}
+        if model_usage:
+            input_t = sum(v.get("input_tokens", 0) for v in model_usage.values())
+            output_t = sum(v.get("output_tokens", 0) for v in model_usage.values())
+            cached_t = sum(
+                v.get("cache_read_input_tokens", 0) for v in model_usage.values()
+            )
+            return TokenUsage(
+                input_tokens=input_t,
+                output_tokens=output_t,
+                cached_input_tokens=cached_t,
+                total_tokens=input_t + output_t,
+            )
+        # Fallback for non-CLI providers or older response formats
         usage = payload.get("usage") or {}
         return TokenUsage(
             input_tokens=int(usage.get("input_tokens") or 0),

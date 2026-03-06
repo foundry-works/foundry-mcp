@@ -351,7 +351,8 @@ class ActionHandlersMixin:
                 state = self.memory.load_deep_research(research_id)
             metadata: dict[str, Any] = {
                 "research_id": research_id,
-                "task_status": bg_task.status.value,
+                "status": bg_task.status.value,
+                "task_status": bg_task.status.value,  # back-compat
                 "elapsed_ms": bg_task.elapsed_ms,
                 "is_complete": bg_task.is_done,
             }
@@ -499,11 +500,26 @@ class ActionHandlersMixin:
             for sq in state.failed_sub_queries()
         ]
 
+        # Derive canonical status string from state flags
+        _cancelled = bool(state.metadata.get("cancelled"))
+        _timed_out = bool(state.metadata.get("timeout"))
+        if _cancelled:
+            _status = "cancelled"
+        elif _timed_out:
+            _status = "timeout"
+        elif is_failed:
+            _status = "failed"
+        elif state.completed_at is not None:
+            _status = "completed"
+        else:
+            _status = "in_progress"
+
         return WorkflowResult(
             success=True,
             content="\n".join(status_lines),
             metadata={
                 "research_id": state.id,
+                "status": _status,
                 "original_query": state.original_query,
                 "phase": state.phase.value,
                 "iteration": state.iteration,
@@ -520,8 +536,8 @@ class ActionHandlersMixin:
                 "failure_error": state.metadata.get("failure_error"),
                 "total_tokens_used": state.total_tokens_used,
                 "total_duration_ms": state.total_duration_ms,
-                "timed_out": bool(state.metadata.get("timeout")),
-                "cancelled": bool(state.metadata.get("cancelled")),
+                "timed_out": _timed_out,
+                "cancelled": _cancelled,
                 "status_check_count": state.status_check_count,
                 "last_heartbeat_at": state.last_heartbeat_at.isoformat() if state.last_heartbeat_at else None,
                 **(

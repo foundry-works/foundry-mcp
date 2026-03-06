@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0a21] - 2026-03-06
+
+### Fixed
+
+- **Deep research session status always reported as `unknown`**: `_get_status()` returned `is_complete: True` but never a `"status"` string in its metadata. The unified handler expected `metadata["status"]`, so every completed session showed `status: "unknown"`. Both the active-task path (was using `"task_status"` key) and the completed-session fallback path (had no status key at all) now include a canonical `"status"` field derived from session state (`completed`, `failed`, `cancelled`, `timeout`, `in_progress`).
+- **Claude CLI provider reported `input_tokens=3` (message count) instead of actual token counts**: `_extract_usage()` read from the top-level `usage` object in CLI JSON output, which contains conversation turn/message counts, not token counts. Real token counts live in `modelUsage.{model}.{field}`. Now prefers `modelUsage` when present, falling back to `usage` for non-CLI providers. Also correctly maps `cache_read_input_tokens` (CLI convention) to `cached_input_tokens`.
+
 ## [0.18.0a20] - 2026-03-06
 
 ### Added

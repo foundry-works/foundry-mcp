@@ -506,8 +506,14 @@ class TestClaudeProvider:
         mock_output = json.dumps(
             {
                 "result": "Hello from Claude!",
-                "modelUsage": {"claude-sonnet-4-5-20250929": {}},
-                "usage": {"input_tokens": 12, "output_tokens": 6},
+                "modelUsage": {
+                    "claude-sonnet-4-5-20250929": {
+                        "input_tokens": 120,
+                        "output_tokens": 60,
+                        "cache_read_input_tokens": 15,
+                    }
+                },
+                "usage": {"input_tokens": 3, "output_tokens": 3},
             }
         )
         runner = make_mock_runner(stdout=mock_output)
@@ -517,6 +523,27 @@ class TestClaudeProvider:
 
         assert result.content == "Hello from Claude!"
         assert result.status == ProviderStatus.SUCCESS
+        # Token counts come from modelUsage, not the top-level usage
+        # (top-level usage contains message/turn counts in CLI output)
+        assert result.tokens.input_tokens == 120
+        assert result.tokens.output_tokens == 60
+        assert result.tokens.cached_input_tokens == 15
+
+    def test_usage_fallback_without_model_usage(self, hooks):
+        """ClaudeProvider should fall back to top-level usage when modelUsage is absent."""
+        from foundry_mcp.core.providers.claude import CLAUDE_METADATA, ClaudeProvider
+
+        mock_output = json.dumps(
+            {
+                "result": "Hello!",
+                "usage": {"input_tokens": 12, "output_tokens": 6},
+            }
+        )
+        runner = make_mock_runner(stdout=mock_output)
+        provider = ClaudeProvider(metadata=CLAUDE_METADATA, hooks=hooks, runner=runner)
+
+        result = provider.generate(ProviderRequest(prompt="Hello"))
+
         assert result.tokens.input_tokens == 12
         assert result.tokens.output_tokens == 6
 
