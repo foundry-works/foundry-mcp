@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0a20] - 2026-03-06
+
+### Added
+
+- **Zero-source-yield short-circuit for deep research iterations**: When an iteration's supervision + topic research phase produces zero new sources (iteration > 1), skips synthesis and stops iterating immediately — the previous iteration's report is already the best achievable. Emits `iteration_short_circuit` audit event with reason and source counts.
+- **Provider health tracking for deep research sessions**: New `ProviderHealthTracker` in topic research tracks per-provider success/failure rates within a session. When a provider's failure rate exceeds 80% over recent calls, it's flagged as degraded. Provider health summary flows into the confidence section context and `iteration_short_circuit` audit events.
+- **`deepen_thin_sources` wired into deep research post-synthesis pipeline**: The existing but previously dead-code `deepen_thin_sources` function is now called after `deepen_window` reverification. Enriches thin sources via Tavily extract, then re-verifies deepened claims with expanded content windows. Gracefully skipped when no extract provider is available.
+- **Fidelity regression rollback for deep research iterations**: When fidelity regresses between iterations, rolls back to the previous iteration's report instead of keeping the worse one. Stores per-iteration report snapshots after synthesis. Emits `fidelity_regression_rollback` audit event with iteration details and fidelity delta.
+
 ## [0.18.0a19] - 2026-03-06
 
 ### Added
