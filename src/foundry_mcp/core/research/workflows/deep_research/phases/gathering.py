@@ -16,6 +16,9 @@ if TYPE_CHECKING:
     pass
 
 from foundry_mcp.core.observability import audit_log, get_metrics
+from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+    ProviderHealthTracker,
+)
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.models.sources import SourceQuality
 from foundry_mcp.core.research.providers import (
@@ -418,6 +421,7 @@ class GatheringPhaseMixin(CompressionMixin):
         # Semaphore for concurrency control
         semaphore = asyncio.Semaphore(max_concurrent)
         state_lock = asyncio.Lock()
+        provider_tracker = ProviderHealthTracker()
 
         # Update heartbeat and persist interim state for progress visibility
         state.last_heartbeat_at = datetime.now(timezone.utc)
@@ -465,6 +469,7 @@ class GatheringPhaseMixin(CompressionMixin):
                 seen_titles=seen_titles,
                 state_lock=state_lock,
                 semaphore=semaphore,
+                provider_tracker=provider_tracker,
             )
 
         try:
@@ -494,6 +499,8 @@ class GatheringPhaseMixin(CompressionMixin):
             raise
         finally:
             state.updated_at = datetime.now(timezone.utc)
+            # Store provider health summary for confidence section
+            state.metadata["_provider_health"] = provider_tracker.summary()
 
         # --- Per-topic compression step ---
         # When inline compression is enabled, each topic researcher already

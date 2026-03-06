@@ -538,14 +538,18 @@ class WorkflowExecutionMixin:
                         state.iteration,
                         state.id,
                     )
+                    _short_circuit_data: dict[str, Any] = {
+                        "iteration": state.iteration,
+                        "reason": "zero_source_yield",
+                        "sources_total": len(state.sources),
+                    }
+                    _provider_health = state.metadata.get("_provider_health")
+                    if _provider_health and _provider_health.get("all_degraded"):
+                        _short_circuit_data["provider_health"] = "all_degraded"
                     self._write_audit_event(
                         state,
                         "iteration_short_circuit",
-                        data={
-                            "iteration": state.iteration,
-                            "reason": "zero_source_yield",
-                            "sources_total": len(state.sources),
-                        },
+                        data=_short_circuit_data,
                     )
                     await self._finalize_report(
                         state, trigger="zero_yield_short_circuit"

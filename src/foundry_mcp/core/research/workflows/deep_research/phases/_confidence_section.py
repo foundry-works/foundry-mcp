@@ -55,6 +55,9 @@ retrieved from any source")
 - Mention corrections if any were made ("One claim about X was found to \
 contradict source data and was corrected")
 - Note iteration count if >1 ("This report was refined over N research cycles")
+- If provider_health data is present and shows degraded providers, mention that \
+search provider availability was limited during research, which may have \
+constrained source coverage
 - Be direct and concise — this is an appendix, not a new analysis"""
 
 
@@ -151,6 +154,10 @@ def build_confidence_context(state: "DeepResearchState") -> dict[str, Any] | Non
         "source_count": len(state.sources),
     }
 
+    # Include provider health data when available
+    if "_provider_health" in state.metadata:
+        context["provider_health"] = state.metadata["_provider_health"]
+
     return context
 
 
@@ -195,6 +202,13 @@ def _build_deterministic_fallback(context: dict[str, Any]) -> str:
     source_count = context.get("source_count", 0)
     if source_count:
         lines.append(f"- **{source_count} sources** were gathered and consulted.")
+
+    provider_health = context.get("provider_health")
+    if provider_health and provider_health.get("all_degraded"):
+        lines.append(
+            "- Search provider availability was limited during later research cycles, "
+            "which may have constrained source coverage."
+        )
 
     return "\n".join(lines)
 

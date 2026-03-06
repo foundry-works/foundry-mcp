@@ -646,6 +646,98 @@ def _truncate_researcher_history(
     return result
 
 
+# ------------------------------------------------------------------
+# Provider health tracking
+# ------------------------------------------------------------------
+
+
+class ProviderHealthTracker:
+    """Track per-provider success/failure rates within a research session.
+
+    Lightweight, session-scoped tracker that observes search provider
+    outcomes and exposes degraded-mode detection. The tracker does NOT
+    retry or rotate providers — it only records and reports.
+
+    Args:
+        degraded_threshold: Failure rate (0.0–1.0) at or above which a
+            provider is considered degraded. Default 0.8.
+        window_size: Number of most recent calls to consider for the
+            failure rate calculation. Default 10.
+    """
+
+    def __init__(
+        self, *, degraded_threshold: float = 0.8, window_size: int = 10
+    ) -> None:
+        self._degraded_threshold = degraded_threshold
+        self._window_size = window_size
+        # Per-provider ordered list of (success: bool, error_type: str | None)
+        self._history: dict[str, list[tuple[bool, str | None]]] = {}
+
+    def record_success(self, provider: str) -> None:
+        """Record a successful search call for *provider*."""
+        self._history.setdefault(provider, []).append((True, None))
+
+    def record_failure(self, provider: str, error_type: str) -> None:
+        """Record a failed search call for *provider*."""
+        self._history.setdefault(provider, []).append((False, error_type))
+
+    def _recent(self, provider: str) -> list[tuple[bool, str | None]]:
+        """Return the last *window_size* entries for a provider."""
+        history = self._history.get(provider, [])
+        return history[-self._window_size :]
+
+    def failure_rate(self, provider: str) -> float:
+        """Return the failure rate over the recent window for *provider*.
+
+        Returns 0.0 if no calls have been recorded.
+        """
+        recent = self._recent(provider)
+        if not recent:
+            return 0.0
+        failures = sum(1 for ok, _ in recent if not ok)
+        return failures / len(recent)
+
+    def is_degraded(self, provider: str) -> bool:
+        """True if *provider*'s recent failure rate >= degraded_threshold."""
+        recent = self._recent(provider)
+        if not recent:
+            return False
+        return self.failure_rate(provider) >= self._degraded_threshold
+
+    def all_degraded(self) -> bool:
+        """True if ALL tracked providers are degraded.
+
+        Returns False if no providers have been tracked yet.
+        """
+        if not self._history:
+            return False
+        return all(self.is_degraded(p) for p in self._history)
+
+    def summary(self) -> dict[str, Any]:
+        """Structured summary for audit events and the confidence section."""
+        providers: dict[str, Any] = {}
+        for provider in self._history:
+            recent = self._recent(provider)
+            total = len(recent)
+            failures = sum(1 for ok, _ in recent if not ok)
+            error_types: dict[str, int] = {}
+            for ok, err in recent:
+                if not ok and err:
+                    error_types[err] = error_types.get(err, 0) + 1
+            providers[provider] = {
+                "total_calls": len(self._history[provider]),
+                "recent_window": total,
+                "recent_failures": failures,
+                "failure_rate": round(failures / total, 3) if total else 0.0,
+                "degraded": self.is_degraded(provider),
+                "error_types": error_types,
+            }
+        return {
+            "providers": providers,
+            "all_degraded": self.all_degraded(),
+        }
+
+
 class TopicResearchMixin:
     """Per-topic ReAct research methods. Mixed into DeepResearchWorkflow.
 
@@ -705,6 +797,7 @@ class TopicResearchMixin:
         seen_titles: dict[str, str],
         state_lock: asyncio.Lock,
         semaphore: asyncio.Semaphore,
+        provider_tracker: ProviderHealthTracker | None = None,
     ) -> TopicResearchResult:
         """Execute a single-topic tool-calling ReAct research loop.
 
@@ -837,6 +930,7 @@ class TopicResearchMixin:
                 extract_max_per_iter=extract_max_per_iter,
                 citation_tools_enabled=citation_tools_enabled,
                 pdf_extraction_enabled=pdf_extraction_enabled,
+                provider_tracker=provider_tracker,
             )
             tool_calls_used += calls_delta
             budget_remaining -= budget_delta
@@ -1263,6 +1357,7 @@ class TopicResearchMixin:
         extract_max_per_iter: int,
         citation_tools_enabled: bool = False,
         pdf_extraction_enabled: bool = False,
+        provider_tracker: ProviderHealthTracker | None = None,
     ) -> tuple[bool, int, int]:
         """Dispatch all tool calls from a single researcher turn.
 
@@ -1321,6 +1416,7 @@ class TopicResearchMixin:
                     state_lock=state_lock,
                     semaphore=semaphore,
                     budget_remaining=budget_remaining - budget_delta,
+                    provider_tracker=provider_tracker,
                 )
                 tool_calls_delta += queries_charged
                 budget_delta += queries_charged
@@ -1877,6 +1973,7 @@ class TopicResearchMixin:
         state_lock: asyncio.Lock,
         semaphore: asyncio.Semaphore,
         budget_remaining: int = 1,
+        provider_tracker: ProviderHealthTracker | None = None,
     ) -> tuple[str, int]:
         """Handle a WebSearch tool call: dispatch to search providers.
 
@@ -1938,6 +2035,7 @@ class TopicResearchMixin:
                 seen_titles=seen_titles,
                 state_lock=state_lock,
                 semaphore=semaphore,
+                provider_tracker=provider_tracker,
             )
         else:
             # Batch path: parallel dispatch via asyncio.gather
@@ -1954,6 +2052,7 @@ class TopicResearchMixin:
                         seen_titles=seen_titles,
                         state_lock=state_lock,
                         semaphore=semaphore,
+                        provider_tracker=provider_tracker,
                     )
                     for q in queries
                 ),
@@ -2654,6 +2753,7 @@ class TopicResearchMixin:
         seen_titles: dict[str, str],
         state_lock: asyncio.Lock,
         semaphore: asyncio.Semaphore,
+        provider_tracker: ProviderHealthTracker | None = None,
     ) -> int:
         """Execute search for a single query across all available providers.
 
@@ -2669,6 +2769,7 @@ class TopicResearchMixin:
             seen_titles: Shared title dedup dict
             state_lock: Lock for thread-safe state mutations
             semaphore: Semaphore bounding concurrent search calls
+            provider_tracker: Optional health tracker for recording outcomes.
 
         Returns the number of new (deduplicated) sources added to state.
         """
@@ -2756,6 +2857,9 @@ class TopicResearchMixin:
                             state.search_provider_stats.get(provider_name, 0) + 1
                         )
 
+                    if provider_tracker is not None:
+                        provider_tracker.record_success(provider_name)
+
                 except SearchProviderError as e:
                     logger.warning(
                         "Topic search provider %s error for query %r: %s",
@@ -2763,12 +2867,16 @@ class TopicResearchMixin:
                         query[:50],
                         e,
                     )
+                    if provider_tracker is not None:
+                        provider_tracker.record_failure(provider_name, "search_provider_error")
                 except asyncio.TimeoutError:
                     logger.warning(
                         "Topic search provider %s timed out for query %r",
                         provider_name,
                         query[:50],
                     )
+                    if provider_tracker is not None:
+                        provider_tracker.record_failure(provider_name, "timeout")
                 except Exception as e:
                     logger.warning(
                         "Topic search provider %s unexpected error for query %r: %s",
@@ -2776,6 +2884,8 @@ class TopicResearchMixin:
                         query[:50],
                         e,
                     )
+                    if provider_tracker is not None:
+                        provider_tracker.record_failure(provider_name, "unexpected_error")
 
         return added
 

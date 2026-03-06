@@ -73,6 +73,9 @@ from foundry_mcp.core.research.workflows.deep_research.phases.supervision_prompt
     build_think_system_prompt,
     classify_query_complexity,
 )
+from foundry_mcp.core.research.workflows.deep_research.phases.topic_research import (
+    ProviderHealthTracker,
+)
 from foundry_mcp.core.research.workflows.deep_research.source_quality import _normalize_title
 
 logger = logging.getLogger(__name__)
@@ -1276,6 +1279,7 @@ class SupervisionPhaseMixin:
 
         semaphore = asyncio.Semaphore(max_concurrent)
         state_lock = asyncio.Lock()
+        provider_tracker = ProviderHealthTracker()
 
         # Create sub-queries from directives
         directive_sub_queries: list[SubQuery] = []
@@ -1317,6 +1321,7 @@ class SupervisionPhaseMixin:
                     seen_titles=seen_titles,
                     state_lock=state_lock,
                     semaphore=semaphore,
+                    provider_tracker=provider_tracker,
                 )
                 # Incremental persistence after each researcher completes
                 # so accumulated sources survive crashes or premature stale detection
@@ -1372,6 +1377,10 @@ class SupervisionPhaseMixin:
             total_sources,
         )
 
+        # Store provider health summary for confidence section and audit
+        health_summary = provider_tracker.summary()
+        state.metadata["_provider_health"] = health_summary
+
         self._write_audit_event(
             state,
             "directive_execution_complete",
@@ -1379,6 +1388,7 @@ class SupervisionPhaseMixin:
                 "directives_total": len(results),
                 "directives_successful": len(successful),
                 "total_new_sources": total_sources,
+                "provider_health": health_summary,
             },
         )
 

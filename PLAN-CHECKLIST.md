@@ -13,24 +13,24 @@
 - [x] Fix: Updated `test_cancellation_after_completed_iteration_finalizes_citations` to add source during supervision (prevents false short-circuit)
 
 ## Phase 2: Provider health tracking
-- [ ] Create `ProviderHealthTracker` class in `topic_research.py`
-  - [ ] `record_success(provider)` method
-  - [ ] `record_failure(provider, error_type)` method
-  - [ ] `is_degraded(provider)` — failure rate >= threshold over recent calls
-  - [ ] `all_degraded()` — all configured providers degraded
-  - [ ] `summary()` — structured dict for audit/confidence
-- [ ] Integrate `record_success` after successful search in `_topic_search_single`
-- [ ] Integrate `record_failure` in each `except` block in `_topic_search_single`
-- [ ] Wire tracker through `_execute_topic_research` (shared across sub-queries)
-- [ ] Store `state.metadata["_provider_health"]` after topic research completes
-- [ ] Include provider health in `iteration_short_circuit` audit event when all degraded
-- [ ] Add provider health to `build_confidence_context` in `_confidence_section.py`
-- [ ] Update confidence LLM prompt to mention provider issues when present
-- [ ] Test: `test_provider_health_tracker_records_success_and_failure`
-- [ ] Test: `test_provider_health_tracker_degraded_threshold`
-- [ ] Test: `test_provider_health_tracker_all_degraded`
-- [ ] Test: `test_provider_health_summary_format`
-- [ ] Test: `test_confidence_context_includes_provider_health`
+- [x] Create `ProviderHealthTracker` class in `topic_research.py`
+  - [x] `record_success(provider)` method
+  - [x] `record_failure(provider, error_type)` method
+  - [x] `is_degraded(provider)` — failure rate >= threshold over recent calls
+  - [x] `all_degraded()` — all configured providers degraded
+  - [x] `summary()` — structured dict for audit/confidence
+- [x] Integrate `record_success` after successful search in `_topic_search_single`
+- [x] Integrate `record_failure` in each `except` block in `_topic_search_single`
+- [x] Wire tracker through `_execute_topic_research` (shared across sub-queries)
+- [x] Store `state.metadata["_provider_health"]` after topic research completes
+- [x] Include provider health in `iteration_short_circuit` audit event when all degraded
+- [x] Add provider health to `build_confidence_context` in `_confidence_section.py`
+- [x] Update confidence LLM prompt to mention provider issues when present
+- [x] Test: `test_provider_health_tracker_records_success_and_failure`
+- [x] Test: `test_provider_health_tracker_degraded_threshold`
+- [x] Test: `test_provider_health_tracker_all_degraded`
+- [x] Test: `test_provider_health_summary_format`
+- [x] Test: `test_confidence_context_includes_provider_health`
 
 ## Phase 3: Wire `deepen_thin_sources`
 - [ ] Verify `deepen_thin_sources` signature in `_source_deepening.py` is correct post-7c03416

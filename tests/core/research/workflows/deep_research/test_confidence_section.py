@@ -411,3 +411,90 @@ class TestDeterministicFallback:
         result = _build_deterministic_fallback(context)
 
         assert "research cycles" not in result
+
+    def test_fallback_includes_provider_health_when_all_degraded(self):
+        """Fallback mentions provider issues when all providers are degraded."""
+        context = {
+            "verdict_distribution": {"total_verified": 5, "supported": 5,
+                                      "partially_supported": 0, "unsupported": 0,
+                                      "contradicted": 0},
+            "corrections_applied": 0,
+            "failed_sub_queries": [],
+            "iteration_count": 2,
+            "source_count": 3,
+            "provider_health": {
+                "all_degraded": True,
+                "providers": {
+                    "tavily": {"degraded": True, "failure_rate": 1.0},
+                },
+            },
+        }
+
+        result = _build_deterministic_fallback(context)
+
+        assert "provider availability was limited" in result
+
+    def test_fallback_omits_provider_health_when_healthy(self):
+        """Fallback does not mention provider issues when providers are healthy."""
+        context = {
+            "verdict_distribution": {"total_verified": 5, "supported": 5,
+                                      "partially_supported": 0, "unsupported": 0,
+                                      "contradicted": 0},
+            "corrections_applied": 0,
+            "failed_sub_queries": [],
+            "iteration_count": 2,
+            "source_count": 3,
+            "provider_health": {
+                "all_degraded": False,
+                "providers": {
+                    "tavily": {"degraded": False, "failure_rate": 0.1},
+                },
+            },
+        }
+
+        result = _build_deterministic_fallback(context)
+
+        assert "provider availability" not in result
+
+
+# ---------------------------------------------------------------------------
+# Tests: provider health in confidence context
+# ---------------------------------------------------------------------------
+
+
+class TestConfidenceContextProviderHealth:
+    """Verify provider health data flows into confidence context."""
+
+    def test_confidence_context_includes_provider_health(self):
+        """Provider health from state.metadata is included in context."""
+        state = _make_state_with_verification()
+        state.metadata["_provider_health"] = {
+            "providers": {
+                "tavily": {
+                    "total_calls": 10,
+                    "recent_failures": 8,
+                    "failure_rate": 0.8,
+                    "degraded": True,
+                    "error_types": {"timeout": 5, "search_provider_error": 3},
+                },
+            },
+            "all_degraded": True,
+        }
+
+        ctx = build_confidence_context(state)
+
+        assert ctx is not None
+        assert "provider_health" in ctx
+        assert ctx["provider_health"]["all_degraded"] is True
+        assert ctx["provider_health"]["providers"]["tavily"]["degraded"] is True
+
+    def test_confidence_context_omits_provider_health_when_absent(self):
+        """No provider_health key when metadata doesn't contain it."""
+        state = _make_state_with_verification()
+        # Ensure no _provider_health in metadata
+        state.metadata.pop("_provider_health", None)
+
+        ctx = build_confidence_context(state)
+
+        assert ctx is not None
+        assert "provider_health" not in ctx
