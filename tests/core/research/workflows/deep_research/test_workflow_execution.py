@@ -745,7 +745,7 @@ class TestCancellationCitationFinalize:
 
         # Report should now have a Sources section
         assert "## Sources" in state.report or "## References" in state.report
-        assert state.metadata.get("_citations_finalized") is True
+        assert state.metadata.get("_report_finalized") is True
         # Verify the audit event was recorded with cancellation trigger
         finalize_events = [
             e for e in stub._audit_events if e[0] == "citation_finalize_complete"
@@ -792,7 +792,7 @@ class TestCancellationCitationFinalize:
 
         assert state.report is not None
         assert "## Sources" in state.report or "## References" in state.report
-        assert state.metadata.get("_citations_finalized") is True
+        assert state.metadata.get("_report_finalized") is True
         finalize_events = [
             e for e in stub._audit_events if e[0] == "citation_finalize_complete"
         ]
@@ -823,7 +823,7 @@ class TestCancellationCitationFinalize:
             )
 
         # No finalize should have been attempted
-        assert state.metadata.get("_citations_finalized") is not True
+        assert state.metadata.get("_report_finalized") is not True
         finalize_events = [
             e
             for e in stub._audit_events

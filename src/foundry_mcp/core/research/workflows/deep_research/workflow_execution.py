@@ -156,6 +156,56 @@ class WorkflowExecutionMixin:
         async def _execute_synthesis_async(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_supervision_async(self, *args: Any, **kwargs: Any) -> Any: ...
 
+    def _finalize_report(
+        self, state: DeepResearchState, *, trigger: str = "normal"
+    ) -> None:
+        """Run finalize_citations and re-save the markdown file.
+
+        Non-fatal: logs and audits on failure but does not raise.
+        No-op if citations were already finalized (idempotency guard).
+        """
+        if state.metadata.get("_report_finalized") or not state.report:
+            return
+
+        try:
+            from foundry_mcp.core.research.workflows.deep_research.phases._citation_postprocess import (
+                finalize_citations,
+            )
+
+            report, finalize_meta = finalize_citations(
+                state.report,
+                state,
+                query_type=state.metadata.get("_query_type"),
+            )
+            state.report = report
+            state.metadata["_report_finalized"] = True
+
+            if state.report_output_path:
+                validated = _validate_report_output_path(state.report_output_path)
+                validated.write_text(state.report, encoding="utf-8")
+
+            audit_data = {**finalize_meta}
+            if trigger != "normal":
+                audit_data["trigger"] = trigger
+            self._write_audit_event(
+                state,
+                "citation_finalize_complete",
+                data=audit_data,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Citation finalize failed for research %s (%s): %s",
+                state.id,
+                trigger,
+                exc,
+            )
+            self._write_audit_event(
+                state,
+                "citation_finalize_failed",
+                data={"error": str(exc), "trigger": trigger},
+                level="warning",
+            )
+
     def _check_cancellation(self, state: DeepResearchState) -> None:
         """Check if cancellation has been requested for this research session.
 
@@ -672,43 +722,7 @@ class WorkflowExecutionMixin:
                     # --- END FIDELITY-GATED ITERATION DECISION ---
 
                     # --- CITATION FINALIZE ---
-                    from foundry_mcp.core.research.workflows.deep_research.phases._citation_postprocess import (
-                        finalize_citations,
-                    )
-
-                    if not state.metadata.get("_citations_finalized"):
-                        try:
-                            report, finalize_meta = finalize_citations(
-                                state.report or "",
-                                state,
-                                query_type=state.metadata.get("_query_type"),
-                            )
-                            state.report = report
-                            state.metadata["_citations_finalized"] = True
-
-                            # Re-save markdown file with finalized citations
-                            if state.report_output_path:
-                                validated = _validate_report_output_path(state.report_output_path)
-                                validated.write_text(state.report, encoding="utf-8")
-
-                            self._write_audit_event(
-                                state,
-                                "citation_finalize_complete",
-                                data=finalize_meta,
-                            )
-                        except Exception as exc:
-                            # Citation finalize is non-fatal — deliver the report as-is
-                            logger.warning(
-                                "Citation finalize failed for research %s, delivering report with unrenumbered citations: %s",
-                                state.id,
-                                exc,
-                            )
-                            self._write_audit_event(
-                                state,
-                                "citation_finalize_failed",
-                                data={"error": str(exc)},
-                                level="warning",
-                            )
+                    self._finalize_report(state)
                     # --- END CITATION FINALIZE ---
 
                     # Workflow complete
@@ -832,41 +846,7 @@ class WorkflowExecutionMixin:
                     state.phase = DeepResearchPhase.SYNTHESIS
 
                     # Finalize citations on the rolled-back report
-                    if not state.metadata.get("_citations_finalized") and state.report:
-                        try:
-                            from foundry_mcp.core.research.workflows.deep_research.phases._citation_postprocess import (
-                                finalize_citations,
-                            )
-
-                            report, finalize_meta = finalize_citations(
-                                state.report,
-                                state,
-                                query_type=state.metadata.get("_query_type"),
-                            )
-                            state.report = report
-                            state.metadata["_citations_finalized"] = True
-
-                            if state.report_output_path:
-                                validated = _validate_report_output_path(state.report_output_path)
-                                validated.write_text(state.report, encoding="utf-8")
-
-                            self._write_audit_event(
-                                state,
-                                "citation_finalize_complete",
-                                data={**finalize_meta, "trigger": "cancellation_rollback"},
-                            )
-                        except Exception as exc:
-                            logger.warning(
-                                "Citation finalize failed during cancellation for research %s: %s",
-                                state.id,
-                                exc,
-                            )
-                            self._write_audit_event(
-                                state,
-                                "citation_finalize_failed",
-                                data={"error": str(exc), "trigger": "cancellation_rollback"},
-                                level="warning",
-                            )
+                    self._finalize_report(state, trigger="cancellation_rollback")
                 else:
                     # First iteration is incomplete - we cannot safely resume, must discard entire session
                     logger.warning(
@@ -889,41 +869,7 @@ class WorkflowExecutionMixin:
                 )
 
                 # Finalize citations if not already done
-                if not state.metadata.get("_citations_finalized") and state.report:
-                    try:
-                        from foundry_mcp.core.research.workflows.deep_research.phases._citation_postprocess import (
-                            finalize_citations,
-                        )
-
-                        report, finalize_meta = finalize_citations(
-                            state.report,
-                            state,
-                            query_type=state.metadata.get("_query_type"),
-                        )
-                        state.report = report
-                        state.metadata["_citations_finalized"] = True
-
-                        if state.report_output_path:
-                            validated = _validate_report_output_path(state.report_output_path)
-                            validated.write_text(state.report, encoding="utf-8")
-
-                        self._write_audit_event(
-                            state,
-                            "citation_finalize_complete",
-                            data={**finalize_meta, "trigger": "cancellation_completed"},
-                        )
-                    except Exception as exc:
-                        logger.warning(
-                            "Citation finalize failed during cancellation for research %s: %s",
-                            state.id,
-                            exc,
-                        )
-                        self._write_audit_event(
-                            state,
-                            "citation_finalize_failed",
-                            data={"error": str(exc), "trigger": "cancellation_completed"},
-                            level="warning",
-                        )
+                self._finalize_report(state, trigger="cancellation_completed")
 
             # Save state with cancelling transition
             self.memory.save_deep_research(state)

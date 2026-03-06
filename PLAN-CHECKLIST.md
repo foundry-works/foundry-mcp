@@ -33,15 +33,15 @@
 
 ## Phase 3: Extract `_finalize_report` helper
 
-- [ ] **3.1** Rename concept from `_finalize_and_save_citations` to `_finalize_report` (will include confidence section in Phase 4)
-- [ ] **3.2** Extract `_finalize_report(self, state, *, trigger)` method on workflow executor
-  - [ ] Idempotency guard via `_report_finalized` metadata
-  - [ ] Non-fatal error handling with audit logging
-  - [ ] Markdown file re-save
-- [ ] **3.3** Replace happy-path finalize block (lines 673-709) with helper call
-- [ ] **3.4** Replace cancellation-rollback finalize block (Phase 1.2) with helper call
-- [ ] **3.5** Replace cancellation-completed finalize block (Phase 1.3) with helper call
-- [ ] **3.6** Verify all existing tests still pass after extraction
+- [x] **3.1** Rename concept from `_finalize_and_save_citations` to `_finalize_report` (will include confidence section in Phase 4)
+- [x] **3.2** Extract `_finalize_report(self, state, *, trigger)` method on workflow executor
+  - [x] Idempotency guard via `_report_finalized` metadata
+  - [x] Non-fatal error handling with audit logging
+  - [x] Markdown file re-save
+- [x] **3.3** Replace happy-path finalize block (lines 673-709) with helper call
+- [x] **3.4** Replace cancellation-rollback finalize block (Phase 1.2) with helper call
+- [x] **3.5** Replace cancellation-completed finalize block (Phase 1.3) with helper call
+- [x] **3.6** Verify all existing tests still pass after extraction
 
 ## Phase 4: LLM-interpreted research confidence section
 
