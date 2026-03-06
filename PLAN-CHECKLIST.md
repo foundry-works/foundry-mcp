@@ -47,50 +47,50 @@
 
 ### 4a: Context assembly (deterministic)
 
-- [ ] **4.1** Create `src/foundry_mcp/core/research/workflows/deep_research/phases/_confidence_section.py`
-- [ ] **4.2** Implement `build_confidence_context(state)` — assembles structured dict from:
-  - [ ] Verdict distribution (supported / partial / unsupported / contradicted counts)
-  - [ ] Per-section breakdown (which report sections have most unsupported claims)
-  - [ ] Claim-type breakdown (comparative/inferential vs. quantitative/factual unsupported claims)
-  - [ ] Failed sub-queries with query text
-  - [ ] Fidelity score trajectory across iterations
-  - [ ] Corrections applied count and summaries
-  - [ ] Source count and iteration count
-- [ ] **4.3** Handle edge case: `state.claim_verification is None` (verification didn't run or was wiped by iteration reset)
+- [x] **4.1** Create `src/foundry_mcp/core/research/workflows/deep_research/phases/_confidence_section.py`
+- [x] **4.2** Implement `build_confidence_context(state)` — assembles structured dict from:
+  - [x] Verdict distribution (supported / partial / unsupported / contradicted counts)
+  - [x] Per-section breakdown (which report sections have most unsupported claims)
+  - [x] Claim-type breakdown (comparative/inferential vs. quantitative/factual unsupported claims)
+  - [x] Failed sub-queries with query text
+  - [x] Fidelity score trajectory across iterations
+  - [x] Corrections applied count and summaries
+  - [x] Source count and iteration count
+- [x] **4.3** Handle edge case: `state.claim_verification is None` (verification didn't run or was wiped by iteration reset)
 
 ### 4b: LLM interpretation call
 
-- [ ] **4.4** Implement `generate_confidence_section(state, llm_call_fn, *, query_type)` async function
-- [ ] **4.5** Write system prompt — interpret verification data in context of the query type:
-  - [ ] Distinguish inferential claims (expected for this query) from evidence-gap claims
-  - [ ] Name specific failed sub-queries as gaps
-  - [ ] Mention corrections applied
-  - [ ] Note iteration history
-  - [ ] No raw scores, no "fidelity" terminology, no hedging
-  - [ ] 150-300 word target
-- [ ] **4.6** Write user prompt — JSON serialization of `build_confidence_context` output + `original_query` + `query_type`
-- [ ] **4.7** Model selection: use haiku-class model (compression-tier) via `resolve_phase_provider`
-- [ ] **4.8** Implement deterministic fallback: if LLM call fails/times out, produce bullet-point summary from raw data
-- [ ] **4.9** Return markdown string starting with `## Research Confidence\n\n`
+- [x] **4.4** Implement `generate_confidence_section(state, llm_call_fn, *, query_type)` async function
+- [x] **4.5** Write system prompt — interpret verification data in context of the query type:
+  - [x] Distinguish inferential claims (expected for this query) from evidence-gap claims
+  - [x] Name specific failed sub-queries as gaps
+  - [x] Mention corrections applied
+  - [x] Note iteration history
+  - [x] No raw scores, no "fidelity" terminology, no hedging
+  - [x] 150-300 word target
+- [x] **4.6** Write user prompt — JSON serialization of `build_confidence_context` output + `original_query` + `query_type`
+- [x] **4.7** Model selection: use haiku-class model (compression-tier) via `resolve_phase_provider`
+- [x] **4.8** Implement deterministic fallback: if LLM call fails/times out, produce bullet-point summary from raw data
+- [x] **4.9** Return markdown string starting with `## Research Confidence\n\n`
 
 ### 4c: Integration into `_finalize_report`
 
-- [ ] **4.10** Add confidence section generation as step 2 in `_finalize_report` (after citation finalize, before markdown save)
-- [ ] **4.11** Section appended after `## Sources` — final section of report
-- [ ] **4.12** Handle async context: confidence call is async, verify it works in both happy-path and cancellation-handler contexts
-- [ ] **4.13** Non-fatal: confidence section failure does not block report delivery
-- [ ] **4.14** Audit event: `confidence_section_complete` or `confidence_section_failed`
-- [ ] **4.15** Skip confidence section entirely if `state.claim_verification is None` (no data to interpret)
+- [x] **4.10** Add confidence section generation as step 2 in `_finalize_report` (after citation finalize, before markdown save)
+- [x] **4.11** Section appended after `## Sources` — final section of report
+- [x] **4.12** Handle async context: confidence call is async, verify it works in both happy-path and cancellation-handler contexts
+- [x] **4.13** Non-fatal: confidence section failure does not block report delivery
+- [x] **4.14** Audit event: `confidence_section_complete` or `confidence_section_failed`
+- [x] **4.15** Skip confidence section entirely if `state.claim_verification is None` (no data to interpret)
 
 ### 4d: Tests
 
-- [ ] **4.16** Test: `test_build_confidence_context_basic` — known verdict distribution produces expected context structure
-- [ ] **4.17** Test: `test_build_confidence_context_no_verification` — None claim_verification handled gracefully
-- [ ] **4.18** Test: `test_build_confidence_context_failed_subqueries` — failed sub-queries appear in context output
-- [ ] **4.19** Test: `test_generate_confidence_section_success` — mock LLM returns valid markdown
-- [ ] **4.20** Test: `test_generate_confidence_section_llm_failure_falls_back` — mock LLM raises, deterministic fallback used
-- [ ] **4.21** Test: `test_generate_confidence_section_skipped_when_no_verification` — no verification data → section omitted
-- [ ] **4.22** Test: `test_confidence_section_integration` — end-to-end with realistic mock state
+- [x] **4.16** Test: `test_build_confidence_context_basic` — known verdict distribution produces expected context structure
+- [x] **4.17** Test: `test_build_confidence_context_no_verification` — None claim_verification handled gracefully
+- [x] **4.18** Test: `test_build_confidence_context_failed_subqueries` — failed sub-queries appear in context output
+- [x] **4.19** Test: `test_generate_confidence_section_success` — mock LLM returns valid markdown
+- [x] **4.20** Test: `test_generate_confidence_section_llm_failure_falls_back` — mock LLM raises, deterministic fallback used
+- [x] **4.21** Test: `test_generate_confidence_section_skipped_when_no_verification` — no verification data → section omitted
+- [x] **4.22** Test: `test_confidence_section_integration` — end-to-end with realistic mock state
 
 ## Phase 5: Source-deepening verification strategy
 

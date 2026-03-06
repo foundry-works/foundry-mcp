@@ -28,6 +28,7 @@ from foundry_mcp.core.research.models.deep_research import (
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research._model_resolution import (
     resolve_phase_provider,
+    safe_resolve_model_for_role,
 )
 from foundry_mcp.core.research.workflows.deep_research.source_quality import (
     _extract_hostname,
@@ -156,17 +157,20 @@ class WorkflowExecutionMixin:
         async def _execute_synthesis_async(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_supervision_async(self, *args: Any, **kwargs: Any) -> Any: ...
 
-    def _finalize_report(
+    async def _finalize_report(
         self, state: DeepResearchState, *, trigger: str = "normal"
     ) -> None:
-        """Run finalize_citations and re-save the markdown file.
+        """Finalize citations and append confidence section.
 
-        Non-fatal: logs and audits on failure but does not raise.
-        No-op if citations were already finalized (idempotency guard).
+        1. Run finalize_citations (renumber + append ## Sources)
+        2. Run generate_confidence_section (append ## Research Confidence)
+
+        Non-fatal for both steps. Idempotency-guarded.
         """
         if state.metadata.get("_report_finalized") or not state.report:
             return
 
+        # Step 1: Citation finalization
         try:
             from foundry_mcp.core.research.workflows.deep_research.phases._citation_postprocess import (
                 finalize_citations,
@@ -178,11 +182,6 @@ class WorkflowExecutionMixin:
                 query_type=state.metadata.get("_query_type"),
             )
             state.report = report
-            state.metadata["_report_finalized"] = True
-
-            if state.report_output_path:
-                validated = _validate_report_output_path(state.report_output_path)
-                validated.write_text(state.report, encoding="utf-8")
 
             audit_data = {**finalize_meta}
             if trigger != "normal":
@@ -205,6 +204,80 @@ class WorkflowExecutionMixin:
                 data={"error": str(exc), "trigger": trigger},
                 level="warning",
             )
+
+        # Step 2: Confidence section (non-fatal, skipped when no verification data)
+        if state.claim_verification is not None:
+            try:
+                from foundry_mcp.core.research.workflows.deep_research.phases._confidence_section import (
+                    generate_confidence_section,
+                )
+                from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+                    LLMCallResult,
+                    execute_llm_call,
+                )
+
+                confidence_provider, confidence_model = safe_resolve_model_for_role(
+                    self.config, "confidence"
+                )
+                if confidence_provider is None:
+                    confidence_provider = resolve_phase_provider(
+                        self.config, "compression"
+                    )
+
+                async def _confidence_llm_call(
+                    system_prompt: str, user_prompt: str
+                ) -> str:
+                    call_result = await execute_llm_call(
+                        workflow=self,
+                        state=state,
+                        phase_name="confidence",
+                        system_prompt=system_prompt,
+                        user_prompt=user_prompt,
+                        provider_id=confidence_provider,
+                        model=confidence_model,
+                        temperature=0.3,
+                        timeout=30.0,
+                        role="confidence",
+                    )
+                    if isinstance(call_result, LLMCallResult):
+                        return call_result.result.content or ""
+                    raise RuntimeError(
+                        f"Confidence LLM call failed: {getattr(call_result, 'error', 'unknown')}"
+                    )
+
+                section = await generate_confidence_section(
+                    state,
+                    _confidence_llm_call,
+                    query_type=state.metadata.get("_query_type"),
+                )
+
+                if section and state.report:
+                    state.report = state.report.rstrip() + "\n\n" + section + "\n"
+
+                self._write_audit_event(
+                    state,
+                    "confidence_section_complete",
+                    data={"trigger": trigger, "length": len(section or "")},
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Confidence section failed for research %s (%s): %s",
+                    state.id,
+                    trigger,
+                    exc,
+                )
+                self._write_audit_event(
+                    state,
+                    "confidence_section_failed",
+                    data={"error": str(exc), "trigger": trigger},
+                    level="warning",
+                )
+
+        # Mark finalized and save
+        state.metadata["_report_finalized"] = True
+        if state.report_output_path and state.report:
+            validated = _validate_report_output_path(state.report_output_path)
+            validated.write_text(state.report, encoding="utf-8")
 
     def _check_cancellation(self, state: DeepResearchState) -> None:
         """Check if cancellation has been requested for this research session.
@@ -722,7 +795,7 @@ class WorkflowExecutionMixin:
                     # --- END FIDELITY-GATED ITERATION DECISION ---
 
                     # --- CITATION FINALIZE ---
-                    self._finalize_report(state)
+                    await self._finalize_report(state)
                     # --- END CITATION FINALIZE ---
 
                     # Workflow complete
@@ -846,7 +919,7 @@ class WorkflowExecutionMixin:
                     state.phase = DeepResearchPhase.SYNTHESIS
 
                     # Finalize citations on the rolled-back report
-                    self._finalize_report(state, trigger="cancellation_rollback")
+                    await self._finalize_report(state, trigger="cancellation_rollback")
                 else:
                     # First iteration is incomplete - we cannot safely resume, must discard entire session
                     logger.warning(
@@ -869,7 +942,7 @@ class WorkflowExecutionMixin:
                 )
 
                 # Finalize citations if not already done
-                self._finalize_report(state, trigger="cancellation_completed")
+                await self._finalize_report(state, trigger="cancellation_completed")
 
             # Save state with cancelling transition
             self.memory.save_deep_research(state)
