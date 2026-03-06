@@ -352,7 +352,7 @@ with (does not replace) the existing heuristic quality gates.
 |---------|------|---------|-------------|
 | `deep_research_enable_reflection` | bool | `true` | Enable LLM reflection at phase boundaries |
 | `deep_research_reflection_provider` | string | `null` | LLM provider for reflection (uses `default_provider` if not set) |
-| `deep_research_reflection_timeout` | float | `60.0` | Timeout per reflection call in seconds |
+| `deep_research_reflection_timeout` | float | `120.0` | Timeout per reflection/think call in seconds |
 
 The reflection LLM returns a structured assessment: quality rating, whether to
 proceed, suggested adjustments, and rationale. Reflection decisions are recorded
@@ -362,7 +362,7 @@ in the audit trail.
 [research]
 deep_research_enable_reflection = true
 deep_research_reflection_provider = "[cli]gemini:flash"
-deep_research_reflection_timeout = 60.0
+deep_research_reflection_timeout = 120.0
 ```
 
 ### Parallel Topic Researcher Agents

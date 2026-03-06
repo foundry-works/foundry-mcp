@@ -182,7 +182,7 @@ class ResearchConfig:
     )
     deep_research_evaluation_model: Optional[str] = None  # Model override for evaluation
     deep_research_evaluation_timeout: float = 360.0  # Timeout for evaluation LLM call (seconds)
-    deep_research_reflection_timeout: float = 60.0  # Timeout per reflection call in seconds
+    deep_research_reflection_timeout: float = 120.0  # Timeout per reflection/think call in seconds
     deep_research_topic_research_timeout: float = 180.0  # Timeout per topic research LLM call in seconds
 
     # Multi-model cost optimization — role-based model hierarchy (Phase 6)
@@ -485,7 +485,7 @@ class ResearchConfig:
             "deep_research_timeout": 3600.0,
             "deep_research_planning_timeout": 360.0,
             "deep_research_synthesis_timeout": 600.0,
-            "deep_research_reflection_timeout": 60.0,
+            "deep_research_reflection_timeout": 120.0,
             "deep_research_topic_research_timeout": 180.0,
             "deep_research_evaluation_timeout": 360.0,
             "deep_research_supervision_wall_clock_timeout": 1800.0,
@@ -690,7 +690,7 @@ class ResearchConfig:
             deep_research_evaluation_provider=data.get("deep_research_evaluation_provider"),
             deep_research_evaluation_model=data.get("deep_research_evaluation_model"),
             deep_research_evaluation_timeout=float(data.get("deep_research_evaluation_timeout", 360.0)),
-            deep_research_reflection_timeout=float(data.get("deep_research_reflection_timeout", 60.0)),
+            deep_research_reflection_timeout=float(data.get("deep_research_reflection_timeout", 120.0)),
             deep_research_topic_research_timeout=float(data.get("deep_research_topic_research_timeout", 180.0)),
             # Multi-model cost optimization — role-based hierarchy (Phase 6)
             deep_research_research_provider=data.get("deep_research_research_provider"),

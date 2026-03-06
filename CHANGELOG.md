@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0a17] - 2026-03-06
+
+### Added
+
+- **`workflow_interrupted` audit events on process exit, SIGTERM, and crash**: Lifecycle handlers (`atexit`, SIGTERM, crash) now write a `workflow_interrupted` audit event before marking sessions as interrupted. Includes phase, iteration, supervision round, source/finding/topic counts, and terminal status — closing the silent-death observability gap where sessions could end with no audit trail.
+
+### Changed
+
+- **Reflection/think timeout default raised from 60s to 120s**: The supervision think step and first-round critique share `deep_research_reflection_timeout`, which was too tight for complex queries (think timed out at 60s, critique completed at 59s in real sessions). The new 120s default provides adequate headroom without affecting topic research (which uses its own 180s timeout).
+
 ## [0.18.0a16] - 2026-03-05
 
 ### Changed

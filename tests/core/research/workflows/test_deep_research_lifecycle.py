@@ -518,6 +518,58 @@ class TestCleanupOnExit:
             with _active_sessions_lock:
                 _active_research_sessions.pop(state.id, None)
 
+    def test_cleanup_writes_audit_event(self, tmp_path):
+        """_cleanup_on_exit should write a workflow_interrupted audit event."""
+        import json
+
+        from foundry_mcp.core.research.workflows.deep_research.infrastructure import (
+            _active_research_sessions,
+            _active_sessions_lock,
+            _cleanup_on_exit,
+            set_active_research_memory,
+        )
+
+        state = DeepResearchState(
+            id="audit-cleanup-test",
+            original_query="test",
+            phase=DeepResearchPhase.SUPERVISION,
+        )
+
+        # Set up audit directory and memory mock
+        dr_dir = tmp_path / "deep_research"
+        dr_dir.mkdir()
+        audit_file = dr_dir / f"{state.id}.audit.jsonl"
+        audit_file.touch()
+
+        mock_memory = MagicMock()
+        mock_memory.base_path = tmp_path
+        original_memory = None
+
+        with _active_sessions_lock:
+            _active_research_sessions[state.id] = state
+
+        try:
+            import foundry_mcp.core.research.workflows.deep_research.infrastructure as infra
+            original_memory = infra._active_research_memory
+            set_active_research_memory(mock_memory)
+
+            with patch("foundry_mcp.core.research.workflows.deep_research.infrastructure._persist_active_sessions"):
+                _cleanup_on_exit()
+
+            # Verify audit event was written
+            lines = audit_file.read_text().strip().splitlines()
+            assert len(lines) == 1
+            event = json.loads(lines[0])
+            assert event["event_type"] == "workflow_interrupted"
+            assert event["data"]["reason"] == "process_exit"
+            assert event["data"]["terminal_status"] == "interrupted"
+            assert event["data"]["phase"] == "supervision"
+        finally:
+            with _active_sessions_lock:
+                _active_research_sessions.pop(state.id, None)
+            if original_memory is not None:
+                set_active_research_memory(original_memory)
+
 
 # =============================================================================
 # Install Handler Tests

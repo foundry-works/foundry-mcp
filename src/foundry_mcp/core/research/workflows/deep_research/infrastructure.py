@@ -7,14 +7,17 @@ persisted on abnormal exit.
 
 from __future__ import annotations
 
+import json
 import logging
 import signal
 import sys
 import threading
 import traceback
+from datetime import datetime, timezone
 from pathlib import Path
 from types import FrameType
 from typing import TYPE_CHECKING, Any, Optional
+from uuid import uuid4
 
 if TYPE_CHECKING:
     from foundry_mcp.core.research.memory import ResearchMemory
@@ -34,6 +37,41 @@ _MAX_ACTIVE_SESSIONS: int = 20
 
 _crash_handler_installed = False
 _crash_handler_lock = threading.Lock()
+
+
+def _write_lifecycle_audit_event(
+    state: "DeepResearchState",
+    event_type: str,
+    data: dict[str, Any],
+    level: str = "warning",
+) -> None:
+    """Write an audit event without requiring a workflow instance.
+
+    Used by atexit/signal handlers that only have access to the state
+    object, not the full DeepResearchWorkflow.
+    """
+    memory = _active_research_memory
+    if memory is None:
+        return
+    try:
+        audit_path = memory.base_path / "deep_research" / f"{state.id}.audit.jsonl"
+        if not audit_path.parent.exists():
+            return
+        payload = {
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "event_id": uuid4().hex,
+            "event_type": event_type,
+            "level": level,
+            "research_id": state.id,
+            "phase": state.phase.value,
+            "iteration": state.iteration,
+            "data": data,
+        }
+        with audit_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, ensure_ascii=True))
+            handle.write("\n")
+    except Exception:
+        pass  # Best effort — don't fail shutdown handlers
 
 
 def register_active_session(research_id: str, state: "DeepResearchState") -> None:
@@ -144,6 +182,22 @@ def _crash_handler(exc_type: type, exc_value: BaseException, exc_tb: Any) -> Non
     # Try to save crash markers for active research sessions
     for research_id, state in sessions_snapshot:
         try:
+            _write_lifecycle_audit_event(
+                state,
+                "workflow_interrupted",
+                data={
+                    "reason": "crash",
+                    "phase": state.phase.value,
+                    "iteration": state.iteration,
+                    "supervision_round": getattr(state, "supervision_round", None),
+                    "source_count": len(state.sources),
+                    "finding_count": len(state.findings),
+                    "topic_result_count": len(state.topic_research_results),
+                    "error": f"{exc_type.__name__}: {exc_value}",
+                    "terminal_status": "crashed",
+                },
+                level="error",
+            )
             state.update_metadata("crash", True)
             state.update_metadata("crash_error", str(exc_value))
             # Sanitize research_id to prevent path traversal in crash file names
@@ -197,6 +251,21 @@ def _sigterm_handler(signum: int, frame: Optional[FrameType]) -> None:
     for research_id, state in sessions_snapshot:
         try:
             if state.completed_at is None:
+                _write_lifecycle_audit_event(
+                    state,
+                    "workflow_interrupted",
+                    data={
+                        "reason": "SIGTERM",
+                        "phase": state.phase.value,
+                        "iteration": state.iteration,
+                        "supervision_round": getattr(state, "supervision_round", None),
+                        "source_count": len(state.sources),
+                        "finding_count": len(state.findings),
+                        "topic_result_count": len(state.topic_research_results),
+                        "cancelled_task_ids": cancelled_ids,
+                        "terminal_status": "interrupted",
+                    },
+                )
                 state.mark_interrupted(reason="SIGTERM")
                 logger.info(
                     "Session %s marked INTERRUPTED at phase=%s, iteration=%d",
@@ -233,6 +302,20 @@ def _cleanup_on_exit() -> None:
 
     for _research_id, state in sessions_snapshot:
         if state.completed_at is None:
+            _write_lifecycle_audit_event(
+                state,
+                "workflow_interrupted",
+                data={
+                    "reason": "process_exit",
+                    "phase": state.phase.value,
+                    "iteration": state.iteration,
+                    "supervision_round": getattr(state, "supervision_round", None),
+                    "source_count": len(state.sources),
+                    "finding_count": len(state.findings),
+                    "topic_result_count": len(state.topic_research_results),
+                    "terminal_status": "interrupted",
+                },
+            )
             state.mark_interrupted(reason="process_exit")
     _persist_active_sessions()
     # Clear the dict to release references even if the finally block didn't run
