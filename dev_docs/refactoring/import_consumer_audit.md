@@ -9,7 +9,7 @@ Target modules: `foundry_mcp.core.spec`, `foundry_mcp.core.task`, `foundry_mcp.t
 
 ## 1. `foundry_mcp.core.spec` Consumers
 
-### Source Code (24 files)
+### Source Code (22 files)
 
 | File | Symbols | Classification |
 |------|---------|---------------|
@@ -27,7 +27,6 @@ Target modules: `foundry_mcp.core.spec`, `foundry_mcp.core.task`, `foundry_mcp.t
 | `tools/unified/plan.py:35` | `find_specs_directory` | **Internal** — tool router |
 | `tools/unified/review.py:41` | `find_spec_file`, `find_specs_directory`, `load_spec` | **Internal** — tool router |
 | `tools/unified/verification.py:23` | `find_specs_directory`, `load_spec`, `save_spec` | **Internal** — tool router |
-| `tools/unified/research.py:743,778,884` | `load_spec`, `find_specs_directory`, `save_spec` | **Internal** — tool router (function-scope imports) |
 | `cli/commands/modify.py:26-31` | `add_assumption`, `add_phase`, `add_revision`, `update_frontmatter` | **Internal** — CLI (deprecated) |
 | `cli/commands/validate.py:21` | `load_spec`, `find_spec_file` | **Internal** — CLI (deprecated) |
 | `cli/commands/specs.py:25` | `list_specs`, `load_spec` | **Internal** — CLI (deprecated) |
@@ -71,7 +70,7 @@ Target modules: `foundry_mcp.core.spec`, `foundry_mcp.core.task`, `foundry_mcp.t
 > (`_helpers.py`, `queries.py`, `mutations.py`, `batch.py`). The `__init__.py` re-exports all
 > public symbols, so consumer imports remain unchanged.
 
-### Source Code (7 files)
+### Source Code (6 files)
 
 | File | Symbols | Classification |
 |------|---------|---------------|
@@ -81,7 +80,6 @@ Target modules: `foundry_mcp.core.spec`, `foundry_mcp.core.task`, `foundry_mcp.t
 | `tools/unified/authoring.py:48` | `TASK_TYPES` | **Internal** — tool router |
 | `cli/commands/tasks.py:28-36` | `check_dependencies`, `get_next_task`, `get_parent_context`, `get_phase_context`, `get_previous_sibling`, `get_task_journal_summary`, `prepare_task` | **Internal** — CLI (deprecated) |
 | `cli/commands/modify.py:25` | `add_task`, `remove_task` | **Internal** — CLI (deprecated) |
-| `core/research/workflows/deep_research.py:46` | `task_registry` (module) | **Internal** — research workflow |
 
 ### Test Files (3 files)
 
@@ -109,11 +107,11 @@ Target modules: `foundry_mcp.core.spec`, `foundry_mcp.core.task`, `foundry_mcp.t
 
 ### Internal Cross-Module Imports (within `tools/unified/`)
 
-All 14 tool routers import from `tools/unified/router`:
+All 12 tool routers import from `tools/unified/router`:
 - `ActionDefinition`, `ActionRouter`, `DispatchError`, `error_response`, `success_response`
 
-`tools/unified/server.py` manifest builder imports all 14 router singletons:
-- `_AUTHORING_ROUTER`, `_ENVIRONMENT_ROUTER`, `_ERROR_ROUTER`, `_HEALTH_ROUTER`, `_JOURNAL_ROUTER`, `_LIFECYCLE_ROUTER`, `_PLAN_ROUTER`, `_PROVIDER_ROUTER`, `_RESEARCH_ROUTER`, `_REVIEW_ROUTER`, `_SERVER_ROUTER`, `_SPEC_ROUTER`, `_TASK_ROUTER`, `_VERIFICATION_ROUTER`
+`tools/unified/server.py` manifest builder imports all 12 router singletons:
+- `_AUTHORING_ROUTER`, `_ENVIRONMENT_ROUTER`, `_ERROR_ROUTER`, `_HEALTH_ROUTER`, `_JOURNAL_ROUTER`, `_LIFECYCLE_ROUTER`, `_PLAN_ROUTER`, `_REVIEW_ROUTER`, `_SERVER_ROUTER`, `_SPEC_ROUTER`, `_TASK_ROUTER`, `_VERIFICATION_ROUTER`
 
 `tools/unified/__init__.py:53` — Dynamic import via `importlib.import_module("foundry_mcp.tools.unified.task")` for conditional tool registration.
 
@@ -142,7 +140,6 @@ No `pickle`, `pickle.dump`, `pickle.dumps`, `pickle.load`, `pickle.loads`, or `i
 
 ### Reflection on Other Modules (not target, for reference)
 
-- `core/providers/registry.py:313,352` — `importlib.import_module` for provider factory loading
 - `tools/unified/environment.py:880` — `__import__` for package validation
 - `core/health.py:693` — `__import__("threading")` for lock initialization
 

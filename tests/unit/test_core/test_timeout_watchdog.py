@@ -180,7 +180,7 @@ class TestTimeoutWatchdogTimeoutDetection:
 
         # Create a mock task that is timed out
         mock_task = MagicMock()
-        mock_task.research_id = "test-timeout-1"
+        mock_task.task_id = "test-timeout-1"
         mock_task.status = MagicMock()
         mock_task.status.name = "RUNNING"
         mock_task.is_timed_out = True
@@ -213,7 +213,7 @@ class TestTimeoutWatchdogTimeoutDetection:
         watchdog = TimeoutWatchdog(poll_interval=0.01)
 
         mock_task = MagicMock()
-        mock_task.research_id = "test-timeout-2"
+        mock_task.task_id = "test-timeout-2"
         mock_task.is_timed_out = True
         mock_task.is_stale = MagicMock(return_value=False)
         mock_task.elapsed_ms = 5000
@@ -248,7 +248,7 @@ class TestTimeoutWatchdogStalenessDetection:
         watchdog = TimeoutWatchdog(poll_interval=0.01, stale_threshold=0.05, on_stale=on_stale)
 
         mock_task = MagicMock()
-        mock_task.research_id = "test-stale-1"
+        mock_task.task_id = "test-stale-1"
         mock_task.is_timed_out = False
         mock_task.is_stale = MagicMock(return_value=True)
         mock_task.last_activity = 0  # Long time ago
@@ -290,13 +290,13 @@ class TestTimeoutWatchdogTaskFiltering:
         from foundry_mcp.core.background_task import TaskStatus
 
         running_task = MagicMock()
-        running_task.research_id = "running-1"
+        running_task.task_id = "running-1"
         running_task.status = TaskStatus.RUNNING
         running_task.is_timed_out = False
         running_task.is_stale = MagicMock(return_value=False)
 
         completed_task = MagicMock()
-        completed_task.research_id = "completed-1"
+        completed_task.task_id = "completed-1"
         completed_task.status = TaskStatus.COMPLETED
         # These should not be checked
         completed_task.is_timed_out = True  # Would trigger if checked
@@ -325,7 +325,7 @@ class TestTimeoutWatchdogConcurrentTimeouts:
         timeout_ids = []
 
         def on_timeout(task):
-            timeout_ids.append(task.research_id)
+            timeout_ids.append(task.task_id)
 
         watchdog = TimeoutWatchdog(poll_interval=0.01, on_timeout=on_timeout)
 
@@ -334,7 +334,7 @@ class TestTimeoutWatchdogConcurrentTimeouts:
         tasks = {}
         for i in range(5):
             t = MagicMock()
-            t.research_id = f"concurrent-{i}"
+            t.task_id = f"concurrent-{i}"
             t.status = TaskStatus.RUNNING
             t.is_timed_out = True
             t.is_stale = MagicMock(return_value=False)
@@ -362,17 +362,17 @@ class TestTimeoutWatchdogConcurrentTimeouts:
         stale_ids = []
 
         def on_timeout(task):
-            timeout_ids.append(task.research_id)
+            timeout_ids.append(task.task_id)
 
         def on_stale(task):
-            stale_ids.append(task.research_id)
+            stale_ids.append(task.task_id)
 
         watchdog = TimeoutWatchdog(poll_interval=0.01, on_timeout=on_timeout, on_stale=on_stale)
 
         from foundry_mcp.core.background_task import TaskStatus
 
         timed_out_task = MagicMock()
-        timed_out_task.research_id = "timeout-1"
+        timed_out_task.task_id = "timeout-1"
         timed_out_task.status = TaskStatus.RUNNING
         timed_out_task.is_timed_out = True
         timed_out_task.elapsed_ms = 10000
@@ -382,7 +382,7 @@ class TestTimeoutWatchdogConcurrentTimeouts:
         timed_out_task.mark_timeout = MagicMock()
 
         stale_task = MagicMock()
-        stale_task.research_id = "stale-1"
+        stale_task.task_id = "stale-1"
         stale_task.status = TaskStatus.RUNNING
         stale_task.is_timed_out = False
         stale_task.is_stale = MagicMock(return_value=True)
@@ -390,7 +390,7 @@ class TestTimeoutWatchdogConcurrentTimeouts:
         stale_task.elapsed_ms = 50000
 
         healthy_task = MagicMock()
-        healthy_task.research_id = "healthy-1"
+        healthy_task.task_id = "healthy-1"
         healthy_task.status = TaskStatus.RUNNING
         healthy_task.is_timed_out = False
         healthy_task.is_stale = MagicMock(return_value=False)
@@ -414,10 +414,10 @@ class TestTimeoutWatchdogConcurrentTimeouts:
         stale_ids = []
 
         def on_timeout(task):
-            timeout_ids.append(task.research_id)
+            timeout_ids.append(task.task_id)
 
         def on_stale(task):
-            stale_ids.append(task.research_id)
+            stale_ids.append(task.task_id)
 
         watchdog = TimeoutWatchdog(poll_interval=0.01, on_timeout=on_timeout, on_stale=on_stale)
 
@@ -425,7 +425,7 @@ class TestTimeoutWatchdogConcurrentTimeouts:
 
         # Task is both timed out and stale
         task = MagicMock()
-        task.research_id = "both-1"
+        task.task_id = "both-1"
         task.status = TaskStatus.RUNNING
         task.is_timed_out = True
         task.is_stale = MagicMock(return_value=True)
@@ -478,7 +478,7 @@ class TestTimeoutWatchdogPollLoopResilience:
         from foundry_mcp.core.background_task import TaskStatus
 
         task = MagicMock()
-        task.research_id = "cancel-error-1"
+        task.task_id = "cancel-error-1"
         task.status = TaskStatus.RUNNING
         task.is_timed_out = True
         task.elapsed_ms = 5000
@@ -508,7 +508,7 @@ class TestTimeoutWatchdogPollLoopResilience:
         from foundry_mcp.core.background_task import TaskStatus
 
         task1 = MagicMock()
-        task1.research_id = "cb-err-1"
+        task1.task_id = "cb-err-1"
         task1.status = TaskStatus.RUNNING
         task1.is_timed_out = True
         task1.elapsed_ms = 5000
@@ -518,7 +518,7 @@ class TestTimeoutWatchdogPollLoopResilience:
         task1.mark_timeout = MagicMock()
 
         task2 = MagicMock()
-        task2.research_id = "cb-err-2"
+        task2.task_id = "cb-err-2"
         task2.status = TaskStatus.RUNNING
         task2.is_timed_out = True
         task2.elapsed_ms = 8000
@@ -551,7 +551,7 @@ class TestTimeoutWatchdogPollLoopResilience:
         from foundry_mcp.core.background_task import TaskStatus
 
         task = MagicMock()
-        task.research_id = "stale-cb-err"
+        task.task_id = "stale-cb-err"
         task.status = TaskStatus.RUNNING
         task.is_timed_out = False
         task.is_stale = MagicMock(return_value=True)
@@ -637,7 +637,7 @@ class TestTimeoutWatchdogTaskStatusFiltering:
         tasks = {}
         for i, status in enumerate(terminal_statuses):
             t = MagicMock()
-            t.research_id = f"terminal-{i}"
+            t.task_id = f"terminal-{i}"
             t.status = status
             # These would trigger if status filter didn't work
             t.is_timed_out = True
@@ -795,7 +795,7 @@ class TestTimeoutWatchdogAuditEvents:
         from foundry_mcp.core.background_task import TaskStatus
 
         task = MagicMock()
-        task.research_id = "audit-timeout-1"
+        task.task_id = "audit-timeout-1"
         task.status = TaskStatus.RUNNING
         task.is_timed_out = True
         task.elapsed_ms = 5000
@@ -825,7 +825,7 @@ class TestTimeoutWatchdogAuditEvents:
         from foundry_mcp.core.background_task import TaskStatus
 
         task = MagicMock()
-        task.research_id = "audit-stale-1"
+        task.task_id = "audit-stale-1"
         task.status = TaskStatus.RUNNING
         task.is_timed_out = False
         task.is_stale = MagicMock(return_value=True)
@@ -848,7 +848,7 @@ class TestTimeoutWatchdogAuditEvents:
         watchdog = TimeoutWatchdog(poll_interval=0.01)
 
         task = MagicMock()
-        task.research_id = "audit-fail-1"
+        task.task_id = "audit-fail-1"
         task.elapsed_ms = 5000
         task.timeout = 1.0
         task.timed_out_at = None

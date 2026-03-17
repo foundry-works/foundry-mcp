@@ -42,8 +42,6 @@ def _live_routers():
     from foundry_mcp.tools.unified.journal import _JOURNAL_ROUTER
     from foundry_mcp.tools.unified.lifecycle import _LIFECYCLE_ROUTER
     from foundry_mcp.tools.unified.plan import _PLAN_ROUTER
-    from foundry_mcp.tools.unified.provider import _PROVIDER_ROUTER
-    from foundry_mcp.tools.unified.research import _RESEARCH_ROUTER
     from foundry_mcp.tools.unified.review import _REVIEW_ROUTER
     from foundry_mcp.tools.unified.server import _SERVER_ROUTER
     from foundry_mcp.tools.unified.spec import _SPEC_ROUTER
@@ -56,23 +54,17 @@ def _live_routers():
         "error": _ERROR_ROUTER,
         "journal": _JOURNAL_ROUTER,
         "authoring": _AUTHORING_ROUTER,
-        "provider": _PROVIDER_ROUTER,
         "environment": _ENVIRONMENT_ROUTER,
         "lifecycle": _LIFECYCLE_ROUTER,
         "verification": _VERIFICATION_ROUTER,
         "task": _TASK_ROUTER,
         "spec": _SPEC_ROUTER,
         "review": _REVIEW_ROUTER,
-        "research": _RESEARCH_ROUTER,
         "server": _SERVER_ROUTER,
     }
 
 
-MANIFEST_EXCLUDED_ROUTERS: set[str] = {
-    # research_handlers is the module name used in dispatch baselines;
-    # the corresponding tool name "research" is covered by LIVE_ROUTERS.
-    "research_handlers",
-}
+MANIFEST_EXCLUDED_ROUTERS: set[str] = set()
 
 LIVE_ROUTERS = _live_routers()
 TOOL_NAMES = sorted(LIVE_ROUTERS.keys())
@@ -108,14 +100,12 @@ EXPECTED_CATEGORIES = {
     "error": "observability",
     "journal": "journal",
     "authoring": "specs",
-    "provider": "providers",
     "environment": "environment",
     "lifecycle": "lifecycle",
     "verification": "verification",
     "task": "tasks",
     "spec": "specs",
     "review": "review",
-    "research": "research",
     "server": "server",
 }
 

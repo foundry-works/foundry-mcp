@@ -40,7 +40,7 @@ Research workflows emit structured warnings when token budget management affects
 {
   "success": true,
   "data": {
-    "research_id": "research-001",
+    "task_id": "task-001",
     "report": "..."
   },
   "error": null,

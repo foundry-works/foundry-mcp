@@ -44,15 +44,6 @@ from foundry_mcp.core.errors.resilience import (
     TimeBudgetExceededError,
     TimeoutException,
 )
-from foundry_mcp.core.errors.search import (
-    AuthenticationError as SearchAuthenticationError,
-)
-from foundry_mcp.core.errors.search import (
-    RateLimitError as SearchRateLimitError,
-)
-from foundry_mcp.core.errors.search import (
-    SearchProviderError,
-)
 from foundry_mcp.core.errors.storage import (
     CursorError,
     MigrationError,
@@ -76,10 +67,6 @@ ERROR_MAPPINGS: Dict[Type[Exception], Tuple[ErrorCode, ErrorType]] = {
     InvalidRequestError: (ErrorCode.VALIDATION_ERROR, ErrorType.VALIDATION),
     ModelNotFoundError: (ErrorCode.AI_NO_PROVIDER, ErrorType.NOT_FOUND),
     ContentFilterError: (ErrorCode.FORBIDDEN, ErrorType.AI_PROVIDER),
-    # --- Search provider errors ---
-    SearchProviderError: (ErrorCode.AI_PROVIDER_ERROR, ErrorType.AI_PROVIDER),
-    SearchRateLimitError: (ErrorCode.RATE_LIMIT_EXCEEDED, ErrorType.RATE_LIMIT),
-    SearchAuthenticationError: (ErrorCode.UNAUTHORIZED, ErrorType.AUTHENTICATION),
     # --- Storage / concurrency errors ---
     CursorError: (ErrorCode.INVALID_FORMAT, ErrorType.VALIDATION),
     VersionConflictError: (ErrorCode.VERSION_CONFLICT, ErrorType.CONFLICT),

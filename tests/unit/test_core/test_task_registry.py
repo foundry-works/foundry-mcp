@@ -46,7 +46,7 @@ class TestTaskRegistryBasicOperations:
 
     def test_register_and_get(self):
         """Should register and retrieve a task."""
-        task = BackgroundTask(research_id="test-1")
+        task = BackgroundTask(task_id="test-1")
 
         register(task)
         retrieved = get("test-1")
@@ -61,7 +61,7 @@ class TestTaskRegistryBasicOperations:
 
     def test_remove_returns_task(self):
         """Should remove and return a task."""
-        task = BackgroundTask(research_id="test-1")
+        task = BackgroundTask(task_id="test-1")
         register(task)
 
         removed = remove("test-1")
@@ -77,8 +77,8 @@ class TestTaskRegistryBasicOperations:
 
     def test_reset_clears_all_tasks(self):
         """Should clear all tasks from registry."""
-        task1 = BackgroundTask(research_id="test-1")
-        task2 = BackgroundTask(research_id="test-2")
+        task1 = BackgroundTask(task_id="test-1")
+        task2 = BackgroundTask(task_id="test-2")
         register(task1)
         register(task2)
 
@@ -89,7 +89,7 @@ class TestTaskRegistryBasicOperations:
 
     def test_get_task_registry_returns_dict(self):
         """Should return the registry dictionary."""
-        task = BackgroundTask(research_id="test-1")
+        task = BackgroundTask(task_id="test-1")
         register(task)
 
         registry = get_task_registry()
@@ -104,7 +104,7 @@ class TestTaskRegistryAsyncOperations:
     @pytest.mark.asyncio
     async def test_register_and_get_async(self):
         """Should register and retrieve a task asynchronously."""
-        task = BackgroundTask(research_id="test-async-1")
+        task = BackgroundTask(task_id="test-async-1")
 
         await register_async(task)
         retrieved = await get_async("test-async-1")
@@ -121,7 +121,7 @@ class TestTaskRegistryAsyncOperations:
     @pytest.mark.asyncio
     async def test_remove_async_returns_task(self):
         """Should remove and return a task asynchronously."""
-        task = BackgroundTask(research_id="test-async-1")
+        task = BackgroundTask(task_id="test-async-1")
         await register_async(task)
 
         removed = await remove_async("test-async-1")
@@ -132,8 +132,8 @@ class TestTaskRegistryAsyncOperations:
     @pytest.mark.asyncio
     async def test_reset_async_clears_all_tasks(self):
         """Should clear all tasks from registry asynchronously."""
-        task1 = BackgroundTask(research_id="test-async-1")
-        task2 = BackgroundTask(research_id="test-async-2")
+        task1 = BackgroundTask(task_id="test-async-1")
+        task2 = BackgroundTask(task_id="test-async-2")
         await register_async(task1)
         await register_async(task2)
 
@@ -145,7 +145,7 @@ class TestTaskRegistryAsyncOperations:
     @pytest.mark.asyncio
     async def test_get_task_registry_async_returns_dict(self):
         """Should return the registry dictionary asynchronously."""
-        task = BackgroundTask(research_id="test-async-1")
+        task = BackgroundTask(task_id="test-async-1")
         await register_async(task)
 
         registry = await get_task_registry_async()
@@ -160,7 +160,7 @@ class TestTaskRegistryThreadConcurrency:
     def test_concurrent_register(self):
         """Should handle concurrent registrations without data loss."""
         num_tasks = 100
-        tasks = [BackgroundTask(research_id=f"concurrent-{i}") for i in range(num_tasks)]
+        tasks = [BackgroundTask(task_id=f"concurrent-{i}") for i in range(num_tasks)]
 
         def register_task(task):
             register(task)
@@ -176,7 +176,7 @@ class TestTaskRegistryThreadConcurrency:
 
     def test_concurrent_get(self):
         """Should handle concurrent reads without errors."""
-        task = BackgroundTask(research_id="shared-task")
+        task = BackgroundTask(task_id="shared-task")
         register(task)
 
         results = []
@@ -208,7 +208,7 @@ class TestTaskRegistryThreadConcurrency:
         def register_tasks():
             for i in range(50):
                 task_id = f"task-{i}"
-                task = BackgroundTask(research_id=task_id)
+                task = BackgroundTask(task_id=task_id)
                 register(task)
                 with lock:
                     registered_ids.add(task_id)
@@ -244,7 +244,7 @@ class TestTaskRegistryThreadConcurrency:
         """Should handle mixed concurrent operations correctly."""
         # Pre-register some tasks
         for i in range(20):
-            task = BackgroundTask(research_id=f"preexist-{i}")
+            task = BackgroundTask(task_id=f"preexist-{i}")
             register(task)
 
         operations_completed = []
@@ -255,7 +255,7 @@ class TestTaskRegistryThreadConcurrency:
             try:
                 for i in range(10):
                     # Register
-                    task = BackgroundTask(research_id=f"worker-{worker_id}-{i}")
+                    task = BackgroundTask(task_id=f"worker-{worker_id}-{i}")
                     register(task)
 
                     # Get (may or may not exist)
@@ -289,7 +289,7 @@ class TestTaskRegistryAsyncConcurrency:
         num_tasks = 50
 
         async def register_task(i):
-            task = BackgroundTask(research_id=f"async-concurrent-{i}")
+            task = BackgroundTask(task_id=f"async-concurrent-{i}")
             await register_async(task)
 
         await asyncio.gather(*[register_task(i) for i in range(num_tasks)])
@@ -301,7 +301,7 @@ class TestTaskRegistryAsyncConcurrency:
     @pytest.mark.asyncio
     async def test_concurrent_async_get(self):
         """Should handle concurrent async reads."""
-        task = BackgroundTask(research_id="async-shared-task")
+        task = BackgroundTask(task_id="async-shared-task")
         await register_async(task)
 
         async def get_task():
@@ -316,13 +316,13 @@ class TestTaskRegistryAsyncConcurrency:
         """Should handle mixed concurrent async operations."""
         # Pre-register some tasks
         for i in range(10):
-            task = BackgroundTask(research_id=f"async-preexist-{i}")
+            task = BackgroundTask(task_id=f"async-preexist-{i}")
             await register_async(task)
 
         async def worker(worker_id):
             for i in range(5):
                 # Register
-                task = BackgroundTask(research_id=f"async-worker-{worker_id}-{i}")
+                task = BackgroundTask(task_id=f"async-worker-{worker_id}-{i}")
                 await register_async(task)
 
                 # Get
@@ -343,13 +343,13 @@ class TestTaskRegistryCleanup:
     def test_cleanup_stale_tasks_removes_old_completed(self):
         """Should remove old completed tasks."""
         # Create a completed task with old timestamp
-        task = BackgroundTask(research_id="old-task")
+        task = BackgroundTask(task_id="old-task")
         task.mark_completed(result="done")
         task.completed_at = time.time() - 400  # 400 seconds ago
         register(task)
 
         # Create a recent completed task
-        recent_task = BackgroundTask(research_id="recent-task")
+        recent_task = BackgroundTask(task_id="recent-task")
         recent_task.mark_completed(result="done")
         register(recent_task)
 
@@ -363,7 +363,7 @@ class TestTaskRegistryCleanup:
     def test_cleanup_stale_tasks_keeps_running_tasks(self):
         """Should not remove running tasks regardless of age."""
         # Create a running task (not completed)
-        task = BackgroundTask(research_id="running-task")
+        task = BackgroundTask(task_id="running-task")
         # started_at is old but task is still running
         task.started_at = time.time() - 1000
         register(task)
@@ -383,7 +383,7 @@ class TestTaskRegistryCleanup:
     async def test_cleanup_stale_tasks_async(self):
         """Should remove old completed tasks asynchronously."""
         # Create an old completed task
-        task = BackgroundTask(research_id="async-old-task")
+        task = BackgroundTask(task_id="async-old-task")
         task.mark_completed(result="done")
         task.completed_at = time.time() - 400
         await register_async(task)
@@ -395,7 +395,7 @@ class TestTaskRegistryCleanup:
 
     def test_cleanup_preserves_failed_tasks_within_threshold(self):
         """Should preserve recent failed tasks."""
-        task = BackgroundTask(research_id="failed-task")
+        task = BackgroundTask(task_id="failed-task")
         task.mark_completed(error="Something failed")
         register(task)
 
@@ -414,7 +414,7 @@ class TestTaskRegistryCleanup:
         thread = threading.Thread(target=worker, daemon=True)
         thread.start()
 
-        task = BackgroundTask(research_id="cancelled-task", thread=thread)
+        task = BackgroundTask(task_id="cancelled-task", thread=thread)
         thread.join()  # Wait for thread to finish
         task.status = TaskStatus.CANCELLED
         task.completed_at = time.time() - 400
@@ -431,8 +431,8 @@ class TestTaskRegistryEdgeCases:
 
     def test_register_overwrites_existing(self):
         """Should overwrite existing task with same ID."""
-        task1 = BackgroundTask(research_id="same-id")
-        task2 = BackgroundTask(research_id="same-id")
+        task1 = BackgroundTask(task_id="same-id")
+        task2 = BackgroundTask(task_id="same-id")
 
         register(task1)
         register(task2)
@@ -445,7 +445,7 @@ class TestTaskRegistryEdgeCases:
         results = []
 
         def overwrite_task(value):
-            task = BackgroundTask(research_id="overwrite-target")
+            task = BackgroundTask(task_id="overwrite-target")
             task.result = value  # Tag to identify which task won
             register(task)
             results.append(value)

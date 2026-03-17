@@ -23,7 +23,7 @@ class TestBackgroundTaskStateTransitions:
 
     def test_initial_state_is_running(self):
         """Task starts in RUNNING state."""
-        task = BackgroundTask(research_id="test-1")
+        task = BackgroundTask(task_id="test-1")
         assert task.status == TaskStatus.RUNNING
 
     def test_thread_cancel_transitions_to_cancelled(self):
@@ -38,7 +38,7 @@ class TestBackgroundTaskStateTransitions:
         thread = threading.Thread(target=worker, daemon=True)
         thread.start()
 
-        task = BackgroundTask(research_id="test-1", thread=thread)
+        task = BackgroundTask(task_id="test-1", thread=thread)
         assert task.status == TaskStatus.RUNNING
 
         # Cancel with short timeout (worker will stop quickly via stop_event)
@@ -64,7 +64,7 @@ class TestBackgroundTaskStateTransitions:
             event_set_time = time.time()
             status_when_event_set = task.status
 
-        task = BackgroundTask(research_id="test-1")
+        task = BackgroundTask(task_id="test-1")
         thread = threading.Thread(target=worker, args=(task,), daemon=True)
         thread.start()
         task.thread = thread
@@ -92,7 +92,7 @@ class TestBackgroundTaskStateTransitions:
                     return  # Cooperative shutdown
                 time.sleep(0.01)
 
-        task = BackgroundTask(research_id="test-1")
+        task = BackgroundTask(task_id="test-1")
         thread = threading.Thread(target=cooperative_worker, args=(task,), daemon=True)
         thread.start()
         task.thread = thread
@@ -119,7 +119,7 @@ class TestBackgroundTaskStateTransitions:
         thread.start()
         thread.join()  # Wait for completion
 
-        task = BackgroundTask(research_id="test-1", thread=thread)
+        task = BackgroundTask(task_id="test-1", thread=thread)
 
         # Try to cancel already-completed task
         result = task.cancel(timeout=0.1)
@@ -134,7 +134,7 @@ class TestBackgroundTaskStateTransitions:
             # Deliberately ignores cancellation event
             time.sleep(10)
 
-        task = BackgroundTask(research_id="test-1")
+        task = BackgroundTask(task_id="test-1")
         thread = threading.Thread(target=stubborn_worker, args=(task,), daemon=True)
         thread.start()
         task.thread = thread
@@ -159,7 +159,7 @@ class TestBackgroundTaskAsyncCancellation:
             await asyncio.sleep(10)
 
         asyncio_task = asyncio.create_task(async_worker())
-        task = BackgroundTask(research_id="test-1", task=asyncio_task)
+        task = BackgroundTask(task_id="test-1", task=asyncio_task)
 
         assert task.status == TaskStatus.RUNNING
 
@@ -185,7 +185,7 @@ class TestBackgroundTaskAsyncCancellation:
                 await asyncio.sleep(0.01)
             return "shutdown"
 
-        task = BackgroundTask(research_id="test-1")
+        task = BackgroundTask(task_id="test-1")
         asyncio_task = asyncio.create_task(async_worker(task))
         task.task = asyncio_task
 
@@ -204,7 +204,7 @@ class TestBackgroundTaskMarkMethods:
 
     def test_mark_completed_sets_status_and_timestamp(self):
         """mark_completed sets COMPLETED status and completed_at."""
-        task = BackgroundTask(research_id="test-1")
+        task = BackgroundTask(task_id="test-1")
         result = MagicMock()
 
         task.mark_completed(result)
@@ -215,7 +215,7 @@ class TestBackgroundTaskMarkMethods:
 
     def test_mark_completed_with_error_sets_failed_status(self):
         """mark_completed with error sets FAILED status and error message."""
-        task = BackgroundTask(research_id="test-1")
+        task = BackgroundTask(task_id="test-1")
 
         task.mark_completed(error="Something went wrong")
 
@@ -225,7 +225,7 @@ class TestBackgroundTaskMarkMethods:
 
     def test_mark_timeout_sets_status(self):
         """mark_timeout sets TIMEOUT status."""
-        task = BackgroundTask(research_id="test-1")
+        task = BackgroundTask(task_id="test-1")
 
         task.mark_timeout()
 
@@ -234,7 +234,7 @@ class TestBackgroundTaskMarkMethods:
 
     def test_mark_completed_does_not_override_timeout(self):
         """mark_completed preserves TIMEOUT status and ignores late results."""
-        task = BackgroundTask(research_id="test-1")
+        task = BackgroundTask(task_id="test-1")
 
         task.mark_timeout()
         completed_at = task.completed_at
@@ -247,7 +247,7 @@ class TestBackgroundTaskMarkMethods:
 
     def test_mark_completed_does_not_override_cancelled(self):
         """mark_completed preserves CANCELLED status and ignores late results."""
-        task = BackgroundTask(research_id="test-1")
+        task = BackgroundTask(task_id="test-1")
         task.status = TaskStatus.CANCELLED
         task.completed_at = time.time()
         completed_at = task.completed_at
@@ -264,7 +264,7 @@ class TestBackgroundTaskProperties:
 
     def test_elapsed_ms_increases_while_running(self):
         """elapsed_ms increases while task is running."""
-        task = BackgroundTask(research_id="test-1")
+        task = BackgroundTask(task_id="test-1")
 
         time.sleep(0.05)
         elapsed1 = task.elapsed_ms
@@ -277,7 +277,7 @@ class TestBackgroundTaskProperties:
 
     def test_elapsed_ms_frozen_after_completion(self):
         """elapsed_ms is frozen after task completes."""
-        task = BackgroundTask(research_id="test-1")
+        task = BackgroundTask(task_id="test-1")
 
         time.sleep(0.05)
         task.mark_completed(None)
@@ -290,7 +290,7 @@ class TestBackgroundTaskProperties:
 
     def test_is_timed_out_respects_timeout(self):
         """is_timed_out returns True when timeout exceeded."""
-        task = BackgroundTask(research_id="test-1", timeout=0.05)
+        task = BackgroundTask(task_id="test-1", timeout=0.05)
 
         assert not task.is_timed_out
 
@@ -300,7 +300,7 @@ class TestBackgroundTaskProperties:
 
     def test_is_timed_out_false_without_timeout(self):
         """is_timed_out is False when no timeout set."""
-        task = BackgroundTask(research_id="test-1", timeout=None)
+        task = BackgroundTask(task_id="test-1", timeout=None)
 
         time.sleep(0.05)
 
@@ -315,7 +315,7 @@ class TestBackgroundTaskProperties:
         thread = threading.Thread(target=quick_worker, daemon=True)
         thread.start()
 
-        task = BackgroundTask(research_id="test-1", thread=thread)
+        task = BackgroundTask(task_id="test-1", thread=thread)
 
         # Thread is running
         assert not task.is_done
@@ -333,7 +333,7 @@ class TestBackgroundTaskProperties:
             await asyncio.sleep(0.01)
 
         asyncio_task = asyncio.create_task(quick_worker())
-        task = BackgroundTask(research_id="test-1", task=asyncio_task)
+        task = BackgroundTask(task_id="test-1", task=asyncio_task)
 
         # Task is running
         assert not task.is_done
@@ -345,7 +345,7 @@ class TestBackgroundTaskProperties:
 
     def test_is_stale_respects_threshold(self):
         """is_stale returns True when task inactive beyond threshold."""
-        task = BackgroundTask(research_id="test-1")
+        task = BackgroundTask(task_id="test-1")
 
         # Task just started, not stale
         assert not task.is_stale(stale_threshold=0.05)
@@ -358,7 +358,7 @@ class TestBackgroundTaskProperties:
 
     def test_touch_resets_staleness(self):
         """touch() resets last_activity, preventing staleness."""
-        task = BackgroundTask(research_id="test-1")
+        task = BackgroundTask(task_id="test-1")
 
         # Wait to become stale
         time.sleep(0.06)
@@ -372,7 +372,7 @@ class TestBackgroundTaskProperties:
 
     def test_is_stale_false_when_not_running(self):
         """is_stale returns False for non-RUNNING tasks."""
-        task = BackgroundTask(research_id="test-1")
+        task = BackgroundTask(task_id="test-1")
 
         # Wait to become stale
         time.sleep(0.06)
@@ -390,7 +390,7 @@ class TestBackgroundTaskTimeoutMetadata:
 
     def test_mark_timeout_persists_metadata(self):
         """mark_timeout sets timed_out_at and timeout_elapsed_seconds."""
-        task = BackgroundTask(research_id="test-1", timeout=0.05)
+        task = BackgroundTask(task_id="test-1", timeout=0.05)
 
         # Wait for timeout
         time.sleep(0.06)
@@ -406,7 +406,7 @@ class TestBackgroundTaskTimeoutMetadata:
 
     def test_timeout_metadata_not_set_for_completed_task(self):
         """Timeout metadata remains None for normally completed tasks."""
-        task = BackgroundTask(research_id="test-1", timeout=10.0)
+        task = BackgroundTask(task_id="test-1", timeout=10.0)
 
         task.mark_completed(result="done")
 

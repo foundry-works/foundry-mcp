@@ -28,8 +28,6 @@ the workflow is organized, and how to use the CLI and MCP tools.
 | [Foundry Philosophy](concepts/foundry-philosophy.md) | Why spec-driven development matters |
 | [Spec Schema](concepts/spec-schema.md) | JSON structure of specification files |
 | [Response Envelope](concepts/response-envelope.md) | Standard response format for all tools |
-| [Deep Research Workflow](concepts/deep_research_workflow.md) | Multi-phase research workflow |
-
 ## Guides
 
 | Doc | Description |
@@ -42,8 +40,6 @@ the workflow is organized, and how to use the CLI and MCP tools.
 | Doc | Description |
 |-----|-------------|
 | [First Run Example](examples/first-run.md) | Minimal CLI walkthrough |
-| [Deep Research Examples](examples/deep-research/README.md) | Sample sessions and reports |
-
 ---
 
 ## Find by Task
@@ -98,7 +94,6 @@ docs/
 │   ├── foundry-philosophy.md   # Foundry philosophy
 │   ├── spec-schema.md          # Spec JSON structure
 │   ├── response-envelope.md    # Response format
-│   └── deep_research_workflow.md
 │
 ├── guides/
 │   ├── llm-configuration.md    # LLM setup
@@ -106,7 +101,6 @@ docs/
 │
 ├── examples/
 │   ├── first-run.md            # First run walkthrough
-│   └── deep-research/          # Research examples
 │
 └── reference/
     └── error-codes.md          # Error codes reference

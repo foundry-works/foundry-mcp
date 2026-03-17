@@ -1,6 +1,6 @@
 """Background task lifecycle management with cooperative cancellation.
 
-Provides centralized task tracking for background research operations,
+Provides centralized task tracking for background operations,
 supporting both thread-based and asyncio-based execution modes with
 unified cancellation, timeout handling, and status tracking.
 
@@ -50,7 +50,7 @@ class BackgroundTask:
     lifecycle management, cooperative cancellation, and timeout handling.
 
     Attributes:
-        research_id: Unique identifier for the task/research session.
+        task_id: Unique identifier for the background task.
         task: Optional asyncio task running the workflow.
         thread: Optional thread running the workflow.
         timeout: Optional timeout in seconds.
@@ -63,7 +63,7 @@ class BackgroundTask:
 
     def __init__(
         self,
-        research_id: str,
+        task_id: str,
         task: Optional[asyncio.Task[Any]] = None,
         thread: Optional[threading.Thread] = None,
         timeout: Optional[float] = None,
@@ -71,7 +71,7 @@ class BackgroundTask:
         """Initialize background task.
 
         Args:
-            research_id: ID of the research session or task.
+            task_id: Unique identifier for the background task.
             task: Optional asyncio task running the workflow.
             thread: Optional thread running the workflow (preferred for MCP handlers).
             timeout: Optional timeout in seconds. None means no timeout.
@@ -79,7 +79,7 @@ class BackgroundTask:
         Raises:
             ValueError: If both task and thread are provided.
         """
-        self.research_id = research_id
+        self.task_id = task_id
         self.task = task
         self.thread = thread
         self.timeout = timeout

@@ -30,19 +30,16 @@ def _generate_task_id(parent_id: str, existing_children: List[str], task_type: s
     For verify IDs:
     - Same pattern but with "verify-" prefix
 
-    For research IDs:
-    - Same pattern but with "research-" prefix
-
     Args:
         parent_id: Parent node ID
         existing_children: List of existing child IDs
-        task_type: Type of task (task, subtask, verify, research)
+        task_type: Type of task (task, subtask, verify)
 
     Returns:
         New task ID string
     """
     # Map task_type to ID prefix
-    prefix_map = {"verify": "verify", "research": "research"}
+    prefix_map = {"verify": "verify"}
     prefix = prefix_map.get(task_type, "task")
 
     # Extract numeric parts from parent
@@ -114,15 +111,11 @@ def add_task(
     position: Optional[int] = None,
     file_path: Optional[str] = None,
     specs_dir: Optional[Path] = None,
-    # Research-specific parameters
-    research_type: Optional[str] = None,
-    blocking_mode: Optional[str] = None,
-    query: Optional[str] = None,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
     Add a new task to a specification's hierarchy.
 
-    Creates a new task, subtask, verify, or research node under the specified parent.
+    Creates a new task, subtask, or verify node under the specified parent.
     Automatically generates the task ID and updates ancestor task counts.
 
     Args:
@@ -130,14 +123,11 @@ def add_task(
         parent_id: Parent node ID (phase or task).
         title: Task title.
         description: Optional task description.
-        task_type: Type of task (task, subtask, verify, research). Default: task.
+        task_type: Type of task (task, subtask, verify). Default: task.
         estimated_hours: Optional estimated hours.
         position: Optional position in parent's children list (0-based).
         file_path: Optional file path associated with this task.
         specs_dir: Path to specs directory (auto-detected if not provided).
-        research_type: For research nodes - workflow type (chat, consensus, etc).
-        blocking_mode: For research nodes - blocking behavior (none, soft, hard).
-        query: For research nodes - the research question/topic.
 
     Returns:
         Tuple of (result_dict, error_message).
@@ -147,21 +137,6 @@ def add_task(
     # Validate task_type
     if task_type not in TASK_TYPES:
         return None, f"Invalid task_type '{task_type}'. Must be one of: {', '.join(TASK_TYPES)}"
-
-    # Validate research-specific parameters
-    if task_type == "research":
-        from foundry_mcp.core.validation.constants import RESEARCH_BLOCKING_MODES, VALID_RESEARCH_TYPES
-
-        if research_type and research_type not in VALID_RESEARCH_TYPES:
-            return (
-                None,
-                f"Invalid research_type '{research_type}'. Must be one of: {', '.join(sorted(VALID_RESEARCH_TYPES))}",
-            )
-        if blocking_mode and blocking_mode not in RESEARCH_BLOCKING_MODES:
-            return (
-                None,
-                f"Invalid blocking_mode '{blocking_mode}'. Must be one of: {', '.join(sorted(RESEARCH_BLOCKING_MODES))}",
-            )
 
     # Validate title
     if not title or not title.strip():
@@ -213,15 +188,6 @@ def add_task(
         metadata["estimated_hours"] = estimated_hours
     if file_path:
         metadata["file_path"] = file_path.strip()
-
-    # Add research-specific metadata
-    if task_type == "research":
-        metadata["research_type"] = research_type or "consensus"  # Default to consensus
-        metadata["blocking_mode"] = blocking_mode or "soft"  # Default to soft blocking
-        if query:
-            metadata["query"] = query.strip()
-        metadata["research_history"] = []  # Empty history initially
-        metadata["findings"] = {}  # Empty findings initially
 
     # Create the task node
     task_node = {
