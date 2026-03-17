@@ -37,7 +37,7 @@ class TestCooperativeCancellationTiming:
             worker_stopped.set()
 
         # Create task with thread
-        task = BackgroundTask(research_id="coop-test-1")
+        task = BackgroundTask(task_id="coop-test-1")
         thread = threading.Thread(target=cooperative_worker, args=(task,), daemon=True)
         thread.start()
         task.thread = thread
@@ -67,7 +67,7 @@ class TestCooperativeCancellationTiming:
                 time.sleep(0.01)
             # Exit immediately on cancel
 
-        task = BackgroundTask(research_id="quick-coop-test")
+        task = BackgroundTask(task_id="quick-coop-test")
         thread = threading.Thread(target=quick_worker, args=(task,), daemon=True)
         thread.start()
         task.thread = thread
@@ -99,7 +99,7 @@ class TestCooperativeCancellationTiming:
                 iterations_completed.append(i)
                 time.sleep(0.1)
 
-        task = BackgroundTask(research_id="boundary-test")
+        task = BackgroundTask(task_id="boundary-test")
         thread = threading.Thread(target=iteration_worker, args=(task,), daemon=True)
         thread.start()
         task.thread = thread
@@ -131,7 +131,7 @@ class TestCooperativeCancellationTiming:
                     return
                 await asyncio.sleep(0.05)
 
-        task = BackgroundTask(research_id="async-coop-test")
+        task = BackgroundTask(task_id="async-coop-test")
         asyncio_task = asyncio.create_task(async_worker(task))
         task.task = asyncio_task
 
@@ -163,7 +163,7 @@ class TestForcedCancellationTiming:
             # Intentionally ignores task.is_cancelled
             time.sleep(10)  # Long sleep
 
-        task = BackgroundTask(research_id="forced-test")
+        task = BackgroundTask(task_id="forced-test")
         thread = threading.Thread(target=stubborn_worker, args=(task,), daemon=True)
         thread.start()
         task.thread = thread
@@ -193,7 +193,7 @@ class TestForcedCancellationTiming:
                     return
                 time.sleep(0.1)
 
-        task = BackgroundTask(research_id="immediate-force-test")
+        task = BackgroundTask(task_id="immediate-force-test")
         thread = threading.Thread(target=slow_worker, args=(task,), daemon=True)
         thread.start()
         task.thread = thread
@@ -235,7 +235,7 @@ class TestCancellationTimingWithMockProvider:
             if result is None:
                 return  # Cancelled
 
-        task = BackgroundTask(research_id="provider-cancel-test")
+        task = BackgroundTask(task_id="provider-cancel-test")
         thread = threading.Thread(target=workflow_worker, args=(task,), daemon=True)
         thread.start()
         task.thread = thread
@@ -271,7 +271,7 @@ class TestCancellationTimingWithMockProvider:
                 result = mock_provider(task, i)
                 calls_made.append(result)
 
-        task = BackgroundTask(research_id="multi-provider-test")
+        task = BackgroundTask(task_id="multi-provider-test")
         thread = threading.Thread(target=multi_call_workflow, args=(task,), daemon=True)
         thread.start()
         task.thread = thread
@@ -309,7 +309,7 @@ class TestForcedCancellationWithBlockingProvider:
             # This provider doesn't check cancellation
             return blocking_provider()
 
-        task = BackgroundTask(research_id="blocking-provider-test")
+        task = BackgroundTask(task_id="blocking-provider-test")
         thread = threading.Thread(target=workflow_with_blocking_provider, args=(task,), daemon=True)
         thread.start()
         task.thread = thread
@@ -336,7 +336,7 @@ class TestForcedCancellationWithBlockingProvider:
             while True:
                 time.sleep(0.1)
 
-        task = BackgroundTask(research_id="infinite-worker-test")
+        task = BackgroundTask(task_id="infinite-worker-test")
         thread = threading.Thread(target=infinite_worker, args=(task,), daemon=True)
         thread.start()
         task.thread = thread
@@ -367,7 +367,7 @@ class TestForcedCancellationWithBlockingProvider:
             time.sleep(10)  # Very slow cleanup
             cleanup_completed.set()
 
-        task = BackgroundTask(research_id="slow-cleanup-test")
+        task = BackgroundTask(task_id="slow-cleanup-test")
         thread = threading.Thread(target=slow_cleanup_worker, args=(task,), daemon=True)
         thread.start()
         task.thread = thread
@@ -392,7 +392,7 @@ class TestForcedCancellationWithBlockingProvider:
             """Worker that completely ignores cancellation."""
             time.sleep(60)  # Would run for 60s
 
-        task = BackgroundTask(research_id="stubborn-test")
+        task = BackgroundTask(task_id="stubborn-test")
         thread = threading.Thread(target=stubborn_worker, args=(task,), daemon=True)
         thread.start()
         task.thread = thread
@@ -423,7 +423,7 @@ class TestCancellationTimingEdgeCases:
         thread.start()
         thread.join()  # Wait for completion
 
-        task = BackgroundTask(research_id="completed-test", thread=thread)
+        task = BackgroundTask(task_id="completed-test", thread=thread)
 
         start_time = time.time()
         result = task.cancel(timeout=5.0)
@@ -434,7 +434,7 @@ class TestCancellationTimingEdgeCases:
 
     def test_cancel_without_thread_or_task(self):
         """Should handle cancellation of task without thread/asyncio task."""
-        task = BackgroundTask(research_id="no-executor-test")
+        task = BackgroundTask(task_id="no-executor-test")
 
         result = task.cancel(timeout=5.0)
 
@@ -449,7 +449,7 @@ class TestCancellationTimingEdgeCases:
                 time.sleep(0.01)
             cancel_count.append(1)
 
-        task = BackgroundTask(research_id="multi-cancel-test")
+        task = BackgroundTask(task_id="multi-cancel-test")
         thread = threading.Thread(target=worker, args=(task,), daemon=True)
         thread.start()
         task.thread = thread

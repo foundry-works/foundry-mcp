@@ -35,8 +35,6 @@ ROUTER_BASELINES = [
     ("journal", "journal", None, False, False),
     ("lifecycle", "lifecycle", "lifecycle", True, False),
     ("plan", "plan", None, False, False),
-    ("provider", "provider", "provider", True, False),
-    ("research", "research", None, False, True),
     ("review", "review", None, False, False),
     ("server", "server", "unified_tools.server", True, False),
     ("spec", "spec", None, False, False),
@@ -83,7 +81,6 @@ _DISPATCH_SIGNATURES: dict[str, dict] = {
     "error": {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
     "journal": {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
     "lifecycle": {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
-    "provider": {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
     "review": {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
     "server": {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
     "spec": {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
@@ -93,7 +90,6 @@ _DISPATCH_SIGNATURES: dict[str, dict] = {
     "plan": {"action": "nonexistent-action", "payload": {}},
     # Unique signatures
     "health": {"action": "nonexistent-action"},
-    "research": {"action": "nonexistent-action"},
 }
 
 # Dispatch functions that use **keyword-only** arguments
@@ -103,7 +99,6 @@ _KEYWORD_ONLY_DISPATCH = {
     "error",
     "journal",
     "lifecycle",
-    "provider",
     "review",
     "server",
     "spec",
@@ -123,8 +118,6 @@ def _call_dispatch(module_name: str):
     elif module_name == "plan":
         return dispatch_fn(sig["action"], sig["payload"])
     elif module_name == "health":
-        return dispatch_fn(sig["action"])
-    elif module_name == "research":
         return dispatch_fn(sig["action"])
     else:
         return dispatch_fn(**sig)
@@ -216,9 +209,9 @@ class TestRequestIdInvariants:
         assert fn is None, f"{module_name} should NOT define _request_id()"
 
     def test_request_id_router_count(self):
-        """Exactly 7 routers define local _request_id helpers."""
-        assert len(_ROUTERS_WITH_REQUEST_ID) == 7, (
-            f"Expected 7 routers with _request_id, got {len(_ROUTERS_WITH_REQUEST_ID)}: "
+        """Exactly 6 routers define local _request_id helpers."""
+        assert len(_ROUTERS_WITH_REQUEST_ID) == 6, (
+            f"Expected 6 routers with _request_id, got {len(_ROUTERS_WITH_REQUEST_ID)}: "
             f"{sorted(_ROUTERS_WITH_REQUEST_ID)}"
         )
 
@@ -261,15 +254,15 @@ class TestDetailsInclusionInvariants:
         )
 
     def test_details_router_count(self):
-        """Exactly 2 routers include details in ActionRouterError envelopes."""
-        assert len(_ROUTERS_WITH_DETAILS) == 2, (
-            f"Expected 2 routers with include_details_in_router_error, "
+        """Exactly 1 router includes details in ActionRouterError envelopes."""
+        assert len(_ROUTERS_WITH_DETAILS) == 1, (
+            f"Expected 1 router with include_details_in_router_error, "
             f"got {len(_ROUTERS_WITH_DETAILS)}: {sorted(_ROUTERS_WITH_DETAILS)}"
         )
 
-    def test_details_routers_are_health_and_research(self):
-        """The details routers are exactly health and research."""
-        assert _ROUTERS_WITH_DETAILS == {"health", "research"}
+    def test_details_routers_are_health(self):
+        """The details router is exactly health."""
+        assert _ROUTERS_WITH_DETAILS == {"health"}
 
 
 # ---------------------------------------------------------------------------
@@ -293,6 +286,6 @@ class TestDispatchToolNameInvariants:
             f"{module_name} dispatch error should mention tool_name '{expected_tool_name}', got: {result['error']}"
         )
 
-    def test_all_14_routers_covered(self):
-        """Baseline table covers all 14 routers."""
-        assert len(ROUTER_BASELINES) == 14, f"Expected 14 router baselines, got {len(ROUTER_BASELINES)}"
+    def test_all_12_routers_covered(self):
+        """Baseline table covers all 12 routers."""
+        assert len(ROUTER_BASELINES) == 12, f"Expected 12 router baselines, got {len(ROUTER_BASELINES)}"

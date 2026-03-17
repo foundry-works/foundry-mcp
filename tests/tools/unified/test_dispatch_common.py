@@ -23,7 +23,7 @@ import pytest
 #   dispatch_fn_name,   -- e.g. "_dispatch_authoring_action"
 #   router_const_name,  -- e.g. "_AUTHORING_ROUTER"
 #   tool_name,          -- string passed to dispatch_with_standard_errors
-#   call_style,         -- "kw" (keyword-only) | "pos" (positional) | "health" | "research"
+#   call_style,         -- "kw" (keyword-only) | "pos" (positional) | "health"
 #   valid_action,       -- a real action name for the internal-error test
 # )
 
@@ -35,8 +35,6 @@ DISPATCH_BASELINES = [
     ("journal", "_dispatch_journal_action", "_JOURNAL_ROUTER", "journal", "kw", "add"),
     ("lifecycle", "_dispatch_lifecycle_action", "_LIFECYCLE_ROUTER", "lifecycle", "kw", "move"),
     ("plan", "_dispatch_plan_action", "_PLAN_ROUTER", "plan", "pos", "create"),
-    ("provider", "_dispatch_provider_action", "_PROVIDER_ROUTER", "provider", "kw", "list"),
-    ("research_handlers", "_dispatch_research_action", "_RESEARCH_ROUTER", "research", "research", "chat"),
     ("review", "_dispatch_review_action", "_REVIEW_ROUTER", "review", "kw", "spec"),
     ("server", "_dispatch_server_action", "_SERVER_ROUTER", "server", "kw", "tools"),
     ("spec", "_dispatch_spec_action", "_SPEC_ROUTER", "spec", "kw", "list"),
@@ -78,8 +76,6 @@ def _call_dispatch(module_name, dispatch_fn_name, call_style, action, mock_confi
         return fn(action, {}, config=mock_config)
     elif call_style == "health":
         return fn(action=action, config=mock_config)
-    elif call_style == "research":
-        return fn(action=action)
     else:
         raise ValueError(f"Unknown call_style: {call_style}")
 
@@ -153,12 +149,12 @@ class TestUnsupportedActionEnvelope:
         # Error message references the tool name
         assert tool_name in result["error"]
 
-    def test_all_14_routers_covered(self):
-        assert len(DISPATCH_BASELINES) == 14
+    def test_all_12_routers_covered(self):
+        assert len(DISPATCH_BASELINES) == 12
 
 
 # ---------------------------------------------------------------------------
-# 2. Parametrized internal-error tests (all 14 routers)
+# 2. Parametrized internal-error tests (all 12 routers)
 # ---------------------------------------------------------------------------
 
 
@@ -347,22 +343,6 @@ class TestEnvelopeSnapshots:
         assert result["data"]["details"]["error_type"] == "ValueError"
         # Remediation present
         assert isinstance(result["data"].get("remediation"), str)
-
-    def test_research_unsupported_action_snapshot_with_details(self):
-        """Research: full envelope includes details for unsupported action."""
-        result = _call_dispatch(
-            "research",
-            "_dispatch_research_action",
-            "research",
-            "nonexistent-action",
-            None,
-        )
-        assert result["success"] is False
-        assert result["data"]["error_code"] == "VALIDATION_ERROR"
-        # Research uses include_details_in_router_error=True
-        details = result["data"]["details"]
-        assert details["action"] == "nonexistent-action"
-        assert isinstance(details["allowed_actions"], list)
 
     def test_task_internal_error_snapshot(self, mock_config):
         """Task: full envelope for internal error with empty exception message."""

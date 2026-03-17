@@ -1,7 +1,7 @@
-"""Task registry for tracking background research tasks.
+"""Task registry for tracking background tasks.
 
 Provides a global singleton registry for storing and retrieving
-background research tasks with thread-safe access.
+background tasks with thread-safe access.
 """
 
 import threading
@@ -21,7 +21,7 @@ def get_task_registry() -> Dict[str, "BackgroundTask"]:
 
     Returns a dictionary mapping task IDs to BackgroundTask instances.
     The registry is thread-safe and maintains in-memory tracking of
-    all active background research tasks.
+    all active background tasks.
 
     Returns:
         Dictionary of task_id -> BackgroundTask
@@ -48,7 +48,7 @@ async def get_task_registry_async() -> Dict[str, "BackgroundTask"]:
     Async-safe version of get_task_registry() for use in async contexts.
     Returns a dictionary mapping task IDs to BackgroundTask instances.
     The registry is async-locked and maintains in-memory tracking of
-    all active background research tasks.
+    all active background tasks.
 
     Returns:
         Dictionary of task_id -> BackgroundTask
@@ -73,25 +73,25 @@ async def reset_task_registry_async() -> None:
 def register(task: "BackgroundTask") -> None:
     """Register a background task in the global registry.
 
-    Stores the task in the registry using its research_id as the key.
+    Stores the task in the registry using its task_id as the key.
     The operation is thread-safe and uses the global registry lock.
 
     Args:
-        task: BackgroundTask instance to register. Must have research_id attribute.
+        task: BackgroundTask instance to register. Must have task_id attribute.
     """
     global _registry
     with _registry_lock:
-        _registry[task.research_id] = task
+        _registry[task.task_id] = task
 
 
 async def register_async(task: "BackgroundTask") -> None:
     """Register a background task in the global registry (async version).
 
     Async-safe version of register() for use in async contexts.
-    Stores the task in the registry using its research_id as the key.
+    Stores the task in the registry using its task_id as the key.
 
     Args:
-        task: BackgroundTask instance to register. Must have research_id attribute.
+        task: BackgroundTask instance to register. Must have task_id attribute.
     """
     import asyncio
 
@@ -105,7 +105,7 @@ def get(task_id: str) -> "BackgroundTask | None":
     is not found. The operation is thread-safe.
 
     Args:
-        task_id: The research_id of the task to retrieve.
+        task_id: The ID of the task to retrieve.
 
     Returns:
         BackgroundTask instance if found, None otherwise.
@@ -123,7 +123,7 @@ async def get_async(task_id: str) -> "BackgroundTask | None":
     is not found.
 
     Args:
-        task_id: The research_id of the task to retrieve.
+        task_id: The ID of the task to retrieve.
 
     Returns:
         BackgroundTask instance if found, None otherwise.
@@ -140,7 +140,7 @@ def remove(task_id: str) -> "BackgroundTask | None":
     found, returns None. The operation is thread-safe.
 
     Args:
-        task_id: The research_id of the task to remove.
+        task_id: The ID of the task to remove.
 
     Returns:
         BackgroundTask instance if found and removed, None otherwise.
@@ -158,7 +158,7 @@ async def remove_async(task_id: str) -> "BackgroundTask | None":
     found, returns None.
 
     Args:
-        task_id: The research_id of the task to remove.
+        task_id: The ID of the task to remove.
 
     Returns:
         BackgroundTask instance if found and removed, None otherwise.

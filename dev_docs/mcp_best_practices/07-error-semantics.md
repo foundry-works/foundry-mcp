@@ -166,7 +166,7 @@ Use this table to determine whether an issue should be a warning (success=true) 
 {
     "success": true,
     "data": {
-        "research_id": "research-001",
+        "task_id": "task-001",
         "findings": [...],
         "total_findings": 15,
         "returned_findings": 10

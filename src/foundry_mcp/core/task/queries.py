@@ -29,11 +29,6 @@ def is_unblocked(spec_data: Dict[str, Any], task_id: str, task_data: Dict[str, A
     1. Any of its direct task dependencies are not completed, OR
     2. Its parent phase is blocked by an incomplete phase
 
-    Research nodes have special blocking behavior based on blocking_mode:
-    - "none": Research doesn't block dependents
-    - "soft": Research is informational, doesn't block (default)
-    - "hard": Research must complete before dependents can start
-
     Args:
         spec_data: JSON spec file data
         task_id: Task identifier
@@ -50,14 +45,6 @@ def is_unblocked(spec_data: Dict[str, Any], task_id: str, task_data: Dict[str, A
         blocker = hierarchy.get(blocker_id)
         if not blocker:
             continue
-
-        # Special handling for research nodes based on blocking_mode
-        if blocker.get("type") == "research":
-            blocking_mode = blocker.get("metadata", {}).get("blocking_mode", "soft")
-            if blocking_mode in ("none", "soft"):
-                # Research with "none" or "soft" blocking mode doesn't block
-                continue
-            # "hard" mode falls through to standard completion check
 
         if blocker.get("status") != "completed":
             return False

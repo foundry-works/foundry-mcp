@@ -49,7 +49,7 @@ structured = true
 # Disable tools to reduce context window usage
 # Available: health, plan, error, journal, authoring, review,
 #            spec, task, provider, environment, lifecycle, verification,
-#            server, research
+#            server
 disabled_tools = ["error", "health"]
 
 [workflow]
@@ -66,24 +66,6 @@ parallel = false  # --parallel: run subagents concurrently (implies delegate)
 [consultation]
 # priority = []  # Appended by setup based on detected providers
 default_timeout = 360
-
-[research]
-# Research tool configuration (chat, consensus, thinkdeep, ideate, deep)
-# default_provider = "[cli]provider:model"  # Appended by setup
-# consensus_providers = []  # Appended by setup (same as consultation.priority)
-max_retries = 2
-retry_delay = 5.0
-fallback_enabled = true
-cache_ttl = 3600
-
-[research.deep]
-# Deep research workflow settings
-max_iterations = 3
-max_sub_queries = 5
-max_sources_per_query = 5
-follow_links = true
-max_concurrent = 3
-timeout_per_operation = 360
 
 [consultation.workflows.fidelity_review]
 min_models = 2

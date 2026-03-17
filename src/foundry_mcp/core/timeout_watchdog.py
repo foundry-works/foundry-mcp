@@ -198,7 +198,7 @@ class TimeoutWatchdog:
         elapsed_seconds = task.elapsed_ms / 1000
         logger.warning(
             "Task %s timed out after %.1fs (timeout=%.1fs)",
-            task.research_id,
+            task.task_id,
             elapsed_seconds,
             task.timeout,
         )
@@ -207,9 +207,9 @@ class TimeoutWatchdog:
         # Use force_cancel since the task has already exceeded its timeout
         try:
             task.force_cancel()
-            logger.debug("Cancellation triggered for timed-out task %s", task.research_id)
+            logger.debug("Cancellation triggered for timed-out task %s", task.task_id)
         except Exception as e:
-            logger.exception("Error triggering cancellation for task %s: %s", task.research_id, e)
+            logger.exception("Error triggering cancellation for task %s: %s", task.task_id, e)
 
         # Mark the task as timed out (sets status to TIMEOUT)
         task.mark_timeout()
@@ -222,7 +222,7 @@ class TimeoutWatchdog:
             try:
                 self.on_timeout(task)
             except Exception as e:
-                logger.exception("Error in on_timeout callback for task %s: %s", task.research_id, e)
+                logger.exception("Error in on_timeout callback for task %s: %s", task.task_id, e)
 
     def _emit_timeout_audit_event(self, task: "BackgroundTask", elapsed_seconds: float) -> None:
         """Emit a task.timeout audit event.
@@ -236,7 +236,7 @@ class TimeoutWatchdog:
 
             audit_log(
                 "task_timeout",
-                task_id=task.research_id,
+                task_id=task.task_id,
                 elapsed_seconds=round(elapsed_seconds, 2),
                 configured_timeout=task.timeout,
                 timed_out_at=task.timed_out_at,
@@ -258,7 +258,7 @@ class TimeoutWatchdog:
         inactive_seconds = time.time() - task.last_activity
         logger.warning(
             "Task %s is stale (no activity for %.1fs, threshold=%.1fs)",
-            task.research_id,
+            task.task_id,
             inactive_seconds,
             self.stale_threshold,
         )
@@ -271,7 +271,7 @@ class TimeoutWatchdog:
             try:
                 self.on_stale(task)
             except Exception as e:
-                logger.exception("Error in on_stale callback for task %s: %s", task.research_id, e)
+                logger.exception("Error in on_stale callback for task %s: %s", task.task_id, e)
 
     def _emit_stale_audit_event(self, task: "BackgroundTask", inactive_seconds: float) -> None:
         """Emit a task.stale audit event.
@@ -285,7 +285,7 @@ class TimeoutWatchdog:
 
             audit_log(
                 "task_stale",
-                task_id=task.research_id,
+                task_id=task.task_id,
                 inactive_seconds=round(inactive_seconds, 2),
                 stale_threshold=self.stale_threshold,
                 last_activity=task.last_activity,

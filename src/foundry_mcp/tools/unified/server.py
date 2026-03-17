@@ -117,8 +117,6 @@ def _build_unified_manifest_tools() -> list[Dict[str, Any]]:
     from foundry_mcp.tools.unified.journal import _JOURNAL_ROUTER
     from foundry_mcp.tools.unified.lifecycle import _LIFECYCLE_ROUTER
     from foundry_mcp.tools.unified.plan import _PLAN_ROUTER
-    from foundry_mcp.tools.unified.provider import _PROVIDER_ROUTER
-    from foundry_mcp.tools.unified.research import _RESEARCH_ROUTER
     from foundry_mcp.tools.unified.review import _REVIEW_ROUTER
     from foundry_mcp.tools.unified.spec import _SPEC_ROUTER
     from foundry_mcp.tools.unified.task_handlers import _TASK_ROUTER
@@ -130,14 +128,12 @@ def _build_unified_manifest_tools() -> list[Dict[str, Any]]:
         "error": _ERROR_ROUTER,
         "journal": _JOURNAL_ROUTER,
         "authoring": _AUTHORING_ROUTER,
-        "provider": _PROVIDER_ROUTER,
         "environment": _ENVIRONMENT_ROUTER,
         "lifecycle": _LIFECYCLE_ROUTER,
         "verification": _VERIFICATION_ROUTER,
         "task": _TASK_ROUTER,
         "spec": _SPEC_ROUTER,
         "review": _REVIEW_ROUTER,
-        "research": _RESEARCH_ROUTER,
         "server": _SERVER_ROUTER,
     }
 
@@ -147,14 +143,12 @@ def _build_unified_manifest_tools() -> list[Dict[str, Any]]:
         "error": "observability",
         "journal": "journal",
         "authoring": "specs",
-        "provider": "providers",
         "environment": "environment",
         "lifecycle": "lifecycle",
         "verification": "verification",
         "task": "tasks",
         "spec": "specs",
         "review": "review",
-        "research": "research",
         "server": "server",
     }
 
@@ -164,14 +158,12 @@ def _build_unified_manifest_tools() -> list[Dict[str, Any]]:
         "error": "Error collection query and cleanup.",
         "journal": "Journaling add/list helpers.",
         "authoring": "Spec authoring mutations (phases, assumptions, revisions).",
-        "provider": "LLM provider discovery and execution.",
         "environment": "Workspace init + environment verification.",
         "lifecycle": "Spec lifecycle transitions.",
         "verification": "Verification definition + execution.",
         "task": "Task preparation, mutation, and listing.",
         "spec": "Spec discovery, validation, and analysis.",
         "review": "LLM-assisted review workflows.",
-        "research": "AI-powered research workflows (chat, consensus, thinkdeep, ideate, deep research).",
         "server": "Tool discovery, schemas, context, and capabilities.",
     }
 

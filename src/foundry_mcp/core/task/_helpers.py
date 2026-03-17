@@ -3,7 +3,7 @@
 from typing import Any, Dict, Optional
 
 # Valid task types for add_task
-TASK_TYPES = ("task", "subtask", "verify", "research")
+TASK_TYPES = ("task", "subtask", "verify")
 
 # Valid requirement types for update_task_requirements
 REQUIREMENT_TYPES = ("acceptance", "technical", "constraint")

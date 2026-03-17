@@ -27,7 +27,6 @@ from foundry_mcp.config.domains import (
     TestConfig,
 )
 from foundry_mcp.config.loader import _ServerConfigLoader
-from foundry_mcp.config.research import ResearchConfig
 
 
 def _get_version() -> str:
@@ -50,8 +49,6 @@ class ServerConfig(_ServerConfigLoader):
     # Workspace configuration
     workspace_roots: List[Path] = field(default_factory=list)
     specs_dir: Optional[Path] = None
-    research_dir: Optional[Path] = None  # Research state storage (default: specs/.research)
-
     # Logging configuration
     log_level: str = "INFO"
     structured_logging: bool = True
@@ -81,9 +78,6 @@ class ServerConfig(_ServerConfigLoader):
 
     # Test runner configuration
     test: TestConfig = field(default_factory=TestConfig)
-
-    # Research workflows configuration
-    research: ResearchConfig = field(default_factory=ResearchConfig)
 
     # Autonomy security configuration
     autonomy_security: AutonomySecurityConfig = field(default_factory=AutonomySecurityConfig)
@@ -116,28 +110,6 @@ class ServerConfig(_ServerConfigLoader):
             return False
 
         return key in self.api_keys
-
-    def get_research_dir(self, specs_dir: Optional[Path] = None) -> Path:
-        """
-        Get the resolved research directory path.
-
-        Priority:
-        1. Explicitly configured research_dir (from TOML or env var)
-        2. Default: specs_dir/.research (where specs_dir is resolved)
-
-        Args:
-            specs_dir: Optional specs directory to use for default path.
-                      If not provided, uses self.specs_dir or "./specs"
-
-        Returns:
-            Path to research directory
-        """
-        if self.research_dir is not None:
-            return self.research_dir.expanduser()
-
-        # Fall back to default: specs/.research
-        base_specs = specs_dir or self.specs_dir or Path("./specs")
-        return base_specs / ".research"
 
     def setup_logging(self) -> None:
         """Configure logging based on settings."""

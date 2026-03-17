@@ -47,8 +47,6 @@ from foundry_mcp.config.parsing import (
     _parse_bool,
     _try_parse_bool,
 )
-from foundry_mcp.config.research import ResearchConfig
-
 logger = logging.getLogger(__name__)
 
 
@@ -65,7 +63,6 @@ class _ServerConfigLoader:
 
         workspace_roots: List[Path]
         specs_dir: Optional[Path]
-        research_dir: Optional[Path]
         log_level: str
         structured_logging: bool
         api_keys: List[str]
@@ -79,7 +76,6 @@ class _ServerConfigLoader:
         error_collection: ErrorCollectionConfig
         metrics_persistence: MetricsPersistenceConfig
         test: TestConfig
-        research: ResearchConfig
         autonomy_posture: Any
         autonomy_session_defaults: AutonomySessionDefaultsConfig
         autonomy_security: AutonomySecurityConfig
@@ -156,8 +152,6 @@ class _ServerConfigLoader:
                     self.workspace_roots = [Path(p) for p in ws["roots"]]
                 if "specs_dir" in ws:
                     self.specs_dir = Path(ws["specs_dir"])
-                if "research_dir" in ws:
-                    self.research_dir = Path(ws["research_dir"])
 
             # Logging settings
             if "logging" in data:
@@ -223,10 +217,6 @@ class _ServerConfigLoader:
             # Test runner settings
             if "test" in data:
                 self.test = TestConfig.from_toml_dict(data["test"])
-
-            # Research workflows settings
-            if "research" in data:
-                self.research = ResearchConfig.from_toml_dict(data["research"])
 
             # Autonomy posture profile (applies defaults that direct sections can override)
             if "autonomy_posture" in data:
@@ -298,10 +288,6 @@ class _ServerConfigLoader:
         # Specs directory
         if specs := os.environ.get("FOUNDRY_MCP_SPECS_DIR"):
             self.specs_dir = Path(specs)
-
-        # Research directory (research state storage)
-        if research := os.environ.get("FOUNDRY_MCP_RESEARCH_DIR"):
-            self.research_dir = Path(research)
 
         # Log level
         if level := os.environ.get("FOUNDRY_MCP_LOG_LEVEL"):
@@ -431,19 +417,6 @@ class _ServerConfigLoader:
                 pass
         if persist_list := os.environ.get("FOUNDRY_MCP_METRICS_PERSIST_METRICS"):
             self.metrics_persistence.persist_metrics = [m.strip() for m in persist_list.split(",") if m.strip()]
-
-        # Search provider API keys (direct env vars, no FOUNDRY_MCP_ prefix)
-        # These use standard env var names that match provider documentation
-        if tavily_key := os.environ.get("TAVILY_API_KEY"):
-            self.research.tavily_api_key = tavily_key
-        if perplexity_key := os.environ.get("PERPLEXITY_API_KEY"):
-            self.research.perplexity_api_key = perplexity_key
-        if google_key := os.environ.get("GOOGLE_API_KEY"):
-            self.research.google_api_key = google_key
-        if google_cse := os.environ.get("GOOGLE_CSE_ID"):
-            self.research.google_cse_id = google_cse
-        if semantic_scholar_key := os.environ.get("SEMANTIC_SCHOLAR_API_KEY"):
-            self.research.semantic_scholar_api_key = semantic_scholar_key
 
         # Disabled tools (comma-separated list)
         if disabled := os.environ.get("FOUNDRY_MCP_DISABLED_TOOLS"):

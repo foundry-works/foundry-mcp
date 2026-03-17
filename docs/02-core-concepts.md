@@ -57,4 +57,3 @@ See [Configuration](06-configuration.md) for the supported settings.
 ## Go deeper
 
 - Foundry motivation and philosophy: [Foundry Philosophy](concepts/foundry-philosophy.md)
-- Deep research architecture: [Deep Research Workflow](concepts/deep_research_workflow.md)

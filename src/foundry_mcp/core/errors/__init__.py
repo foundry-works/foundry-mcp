@@ -7,8 +7,8 @@ Usage:
     # Import from domain modules for specificity
     from foundry_mcp.core.errors.llm import LLMError, RateLimitError
 
-    # Or import from the package with qualified aliases for disambiguation
-    from foundry_mcp.core.errors import LLMRateLimitError, SearchRateLimitError
+    # Or import from the package with qualified aliases
+    from foundry_mcp.core.errors import LLMRateLimitError
 
     # Registry helper
     from foundry_mcp.core.errors import error_to_response
@@ -53,36 +53,12 @@ from foundry_mcp.core.errors.provider import (
     ValidationError,
 )
 
-# --- Research errors ---
-from foundry_mcp.core.errors.research import (
-    InvalidPDFError,
-    PDFSecurityError,
-    PDFSizeError,
-    ProtectedContentOverflowError,
-    ProviderExhaustedError,
-    SSRFError,
-    SummarizationError,
-    SummarizationValidationError,
-    UrlValidationError,
-)
-
 # --- Resilience errors ---
 from foundry_mcp.core.errors.resilience import (
     CircuitBreakerError,
     RateLimitWaitError,
     TimeBudgetExceededError,
     TimeoutException,
-)
-
-# --- Search provider errors ---
-from foundry_mcp.core.errors.search import (
-    AuthenticationError as SearchAuthenticationError,
-)
-from foundry_mcp.core.errors.search import (
-    RateLimitError as SearchRateLimitError,
-)
-from foundry_mcp.core.errors.search import (
-    SearchProviderError,
 )
 
 # --- Storage errors ---
@@ -111,20 +87,6 @@ __all__ = [
     "ProviderTimeoutError",
     "ContextWindowError",
     "ValidationError",
-    # Search provider errors (qualified aliases)
-    "SearchProviderError",
-    "SearchRateLimitError",
-    "SearchAuthenticationError",
-    # Research errors
-    "PDFSecurityError",
-    "SSRFError",
-    "InvalidPDFError",
-    "PDFSizeError",
-    "SummarizationError",
-    "ProviderExhaustedError",
-    "SummarizationValidationError",
-    "ProtectedContentOverflowError",
-    "UrlValidationError",
     # Resilience errors
     "TimeoutException",
     "CircuitBreakerError",

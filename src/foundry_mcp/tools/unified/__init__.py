@@ -11,8 +11,6 @@ from .health import register_unified_health_tool
 from .journal import register_unified_journal_tool
 from .lifecycle import register_unified_lifecycle_tool
 from .plan import register_unified_plan_tool
-from .provider import register_unified_provider_tool
-from .research import register_unified_research_tool
 from .review import register_unified_review_tool
 from .server import register_unified_server_tool
 from .spec import register_unified_spec_tool
@@ -48,8 +46,6 @@ def register_unified_tools(mcp: "FastMCP", config: "ServerConfig") -> None:
     if "task" not in disabled:
         _task_router = import_module("foundry_mcp.tools.unified.task_handlers")
         _task_router.register_unified_task_tool(mcp, config)
-    if "provider" not in disabled:
-        register_unified_provider_tool(mcp, config)
     if "environment" not in disabled:
         register_unified_environment_tool(mcp, config)
     if "lifecycle" not in disabled:
@@ -58,8 +54,6 @@ def register_unified_tools(mcp: "FastMCP", config: "ServerConfig") -> None:
         register_unified_verification_tool(mcp, config)
     if "server" not in disabled:
         register_unified_server_tool(mcp, config)
-    if "research" not in disabled:
-        register_unified_research_tool(mcp, config)
 
 
 __all__ = [
@@ -71,10 +65,8 @@ __all__ = [
     "register_unified_authoring_tool",
     "register_unified_review_tool",
     "register_unified_spec_tool",
-    "register_unified_provider_tool",
     "register_unified_environment_tool",
     "register_unified_lifecycle_tool",
     "register_unified_verification_tool",
     "register_unified_server_tool",
-    "register_unified_research_tool",
 ]

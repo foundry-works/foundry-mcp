@@ -339,9 +339,6 @@ structured = false
 
 [tools]
 disabled_tools = ["health", "error"]
-
-[research]
-default_timeout = 500.0
 """)
 
         project_dir = tmp_path / "project"
@@ -363,7 +360,6 @@ level = "INFO"
                     assert config.log_level == "INFO"
                     # Home values preserved
                     assert config.structured_logging is False
-                    assert config.research.default_timeout == 500.0
                     assert set(config.disabled_tools) == {"health", "error"}
                 finally:
                     os.chdir(original_cwd)

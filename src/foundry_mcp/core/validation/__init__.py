@@ -10,11 +10,8 @@ Security Note:
 from foundry_mcp.core.validation.application import apply_fixes
 from foundry_mcp.core.validation.constants import (
     FIELD_NAME_SUGGESTIONS,
-    RESEARCH_BLOCKING_MODES,
     STATUS_FIELDS,
     VALID_NODE_TYPES,
-    VALID_RESEARCH_RESULTS,
-    VALID_RESEARCH_TYPES,
     VALID_STATUSES,
     VALID_TASK_CATEGORIES,
     VALID_VERIFICATION_TYPES,
@@ -40,11 +37,8 @@ from foundry_mcp.core.validation.verification import (
 __all__ = [
     # Constants
     "FIELD_NAME_SUGGESTIONS",
-    "RESEARCH_BLOCKING_MODES",
     "STATUS_FIELDS",
     "VALID_NODE_TYPES",
-    "VALID_RESEARCH_RESULTS",
-    "VALID_RESEARCH_TYPES",
     "VALID_STATUSES",
     "VALID_TASK_CATEGORIES",
     "VALID_VERIFICATION_TYPES",

@@ -5,7 +5,6 @@ continue to use ``from foundry_mcp.config import ServerConfig`` etc.
 
 Sub-modules:
     parsing    – Boolean/provider-spec parsing helpers
-    research   – ResearchConfig dataclass
     domains    – GitSettings, ObservabilityConfig, HealthConfig, ErrorCollectionConfig,
                  MetricsPersistenceConfig, RunnerConfig, TestConfig
     autonomy   – AutonomySecurityConfig, AutonomySessionDefaultsConfig,
@@ -54,7 +53,6 @@ from foundry_mcp.config.parsing import (  # noqa: F401
     _parse_provider_spec,
     _try_parse_bool,
 )
-from foundry_mcp.config.research import ResearchConfig  # noqa: F401
 from foundry_mcp.config.server import (  # noqa: F401
     _PACKAGE_VERSION,
     ServerConfig,

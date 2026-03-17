@@ -263,7 +263,6 @@ Task categories help classify work:
 | `implementation` | Code implementation |
 | `refactoring` | Code improvement |
 | `decision` | Decision point |
-| `research` | External research |
 | `documentation` | Documentation work |
 | `testing` | Test creation |
 

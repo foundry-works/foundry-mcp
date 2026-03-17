@@ -391,9 +391,7 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
         )
 
     # Validate each task in the array
-    valid_task_types = set(TASK_TYPES)  # task, subtask, verify, research
-    valid_blocking_modes = {"none", "soft", "hard"}
-    valid_research_types = {"chat", "consensus", "thinkdeep", "ideate", "deep-research"}
+    valid_task_types = set(TASK_TYPES)
     for idx, task_def in enumerate(tasks):
         if not isinstance(task_def, dict):
             return _validation_error(
@@ -422,37 +420,6 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
                 request_id=request_id,
                 code=ErrorCode.MISSING_REQUIRED,
             )
-
-        # Validate research-specific parameters when type is "research"
-        if task_type == "research":
-            blocking_mode = task_def.get("blocking_mode")
-            if blocking_mode is not None and blocking_mode not in valid_blocking_modes:
-                return _validation_error(
-                    field=f"tasks[{idx}].blocking_mode",
-                    action=action,
-                    message=f"blocking_mode must be one of: {', '.join(sorted(valid_blocking_modes))}",
-                    remediation="Set blocking_mode to 'none', 'soft', or 'hard'",
-                    request_id=request_id,
-                )
-
-            research_type = task_def.get("research_type")
-            if research_type is not None and research_type not in valid_research_types:
-                return _validation_error(
-                    field=f"tasks[{idx}].research_type",
-                    action=action,
-                    message=f"research_type must be one of: {', '.join(sorted(valid_research_types))}",
-                    remediation="Set research_type to 'chat', 'consensus', 'thinkdeep', 'ideate', or 'deep-research'",
-                    request_id=request_id,
-                )
-
-            query = task_def.get("query")
-            if query is not None and not isinstance(query, str):
-                return _validation_error(
-                    field=f"tasks[{idx}].query",
-                    action=action,
-                    message="query must be a string",
-                    request_id=request_id,
-                )
 
     # Validate optional phase metadata (from phase object)
     description = phase_obj.get("description")
